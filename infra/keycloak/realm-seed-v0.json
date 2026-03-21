@@ -1,0 +1,88 @@
+{
+  "realm": "seed-v0",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "clients": [
+    {
+      "clientId": "seed-frontend",
+      "name": "Seed Frontend",
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": ["http://localhost:5173/*"],
+      "webOrigins": ["http://localhost:5173"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    },
+    {
+      "clientId": "seed-services",
+      "name": "Seed Services (confidential)",
+      "publicClient": false,
+      "secret": "seed-services-secret",
+      "protocol": "openid-connect",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": true
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "seed-admin",         "description": "Administrateur ISRA — supervision globale" },
+      { "name": "seed-selector",      "description": "Sélectionneur — crée G0, transfère G1 à UPSemCL" },
+      { "name": "seed-upseml",        "description": "UPSemCL — gère G1→G2→G3, transfère G3 aux multiplicateurs" },
+      { "name": "seed-multiplicator", "description": "Multiplicateur — reçoit G3, produit G4→R1→R2" },
+      { "name": "seed-quotataire",    "description": "Quotataire/OP — consulte et commande R2" }
+    ]
+  },
+  "users": [
+    {
+      "username": "admin",
+      "enabled": true,
+      "email": "admin@seed.local",
+      "firstName": "Admin",
+      "lastName": "ISRA",
+      "credentials": [{ "type": "password", "value": "admin123", "temporary": false }],
+      "realmRoles": ["seed-admin"]
+    },
+    {
+      "username": "selecteur",
+      "enabled": true,
+      "email": "selecteur@seed.local",
+      "firstName": "Ibrahima",
+      "lastName": "Sélectionneur",
+      "credentials": [{ "type": "password", "value": "select123", "temporary": false }],
+      "realmRoles": ["seed-selector"]
+    },
+    {
+      "username": "upseml",
+      "enabled": true,
+      "email": "upseml@seed.local",
+      "firstName": "Fatou",
+      "lastName": "UPSemCL",
+      "credentials": [{ "type": "password", "value": "upseml123", "temporary": false }],
+      "realmRoles": ["seed-upseml"]
+    },
+    {
+      "username": "multiplicateur",
+      "enabled": true,
+      "email": "multi@seed.local",
+      "firstName": "Moussa",
+      "lastName": "Multiplicateur",
+      "credentials": [{ "type": "password", "value": "multi123", "temporary": false }],
+      "realmRoles": ["seed-multiplicator"]
+    },
+    {
+      "username": "quotataire",
+      "enabled": true,
+      "email": "quotataire@seed.local",
+      "firstName": "Aminata",
+      "lastName": "Quotataire",
+      "credentials": [{ "type": "password", "value": "quota123", "temporary": false }],
+      "realmRoles": ["seed-quotataire"]
+    }
+  ]
+}

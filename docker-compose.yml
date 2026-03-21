@@ -1,0 +1,212 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: seed-postgres
+    environment:
+      POSTGRES_DB: seed
+      POSTGRES_USER: seed
+      POSTGRES_PASSWORD: seed
+    ports:
+      - "5432:5432"
+    volumes:
+      - seed_pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U seed -d seed"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:25.0.4
+    container_name: seed-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_DB: dev-file
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8080
+
+      # ✅ rend l'issuer stable (évite mismatch entre localhost vs keycloak)
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_PROXY: "edge"
+      KC_HTTP_ENABLED: "true"
+      # Option A (simple): Keycloak va accepter plusieurs hostnames en dev
+      # Option B (plus strict): fixe URL publique (si tu veux)
+      # KC_HOSTNAME_URL: "http://localhost:18080"
+      # KC_HOSTNAME_ADMIN_URL: "http://localhost:18080"
+
+    ports:
+      - "18080:8080"
+    volumes:
+      - ./infra/keycloak:/opt/keycloak/data/import:ro
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: seed-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: seed-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "19092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:19092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: seed-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "18085:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: seed
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+
+  # ✅ Base env commun (optionnel mais propre)
+  catalog-service:
+    build: ./services/catalog-service
+    container_name: seed-catalog
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seed
+      SPRING_DATASOURCE_USERNAME: seed
+      SPRING_DATASOURCE_PASSWORD: seed
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:18080/realms/seed-v0
+    ports:
+      - "18081:8080"
+
+  lot-service:
+    build: ./services/lot-service
+    container_name: seed-lot
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seed
+      SPRING_DATASOURCE_USERNAME: seed
+      SPRING_DATASOURCE_PASSWORD: seed
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:18080/realms/seed-v0
+    ports:
+      - "18082:8080"
+
+  stock-service:
+    build: ./services/stock-service
+    container_name: seed-stock
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seed
+      SPRING_DATASOURCE_USERNAME: seed
+      SPRING_DATASOURCE_PASSWORD: seed
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:18080/realms/seed-v0
+    ports:
+      - "18083:8080"
+
+  order-service:
+    build: ./services/order-service
+    container_name: seed-order
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+    environment:
+      SERVER_PORT: "8080"
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seed
+      SPRING_DATASOURCE_USERNAME: seed
+      SPRING_DATASOURCE_PASSWORD: seed
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:18080/realms/seed-v0
+    ports:
+      - "18084:8080"
+
+  frontend:
+    build: ./frontend
+    container_name: seed-frontend
+    depends_on:
+      - keycloak
+      - catalog-service
+      - lot-service
+      - stock-service
+      - order-service
+    environment:
+      VITE_API_BASE: http://localhost
+      VITE_KEYCLOAK_URL: http://localhost:18080
+      VITE_KEYCLOAK_REALM: seed-v0
+      VITE_KEYCLOAK_CLIENT_ID: seed-frontend
+    ports:
+      - "5173:5173"
+
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: seed-prometheus
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+    ports:
+      - "19090:9090"
+    depends_on:
+      - catalog-service
+      - lot-service
+      - stock-service
+      - order-service
+
+  grafana:
+    image: grafana/grafana:10.4.3
+    container_name: seed-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./infra/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infra/grafana/provisioning/dashboards:/var/lib/grafana/dashboards:ro
+      - seed_grafana_data:/var/lib/grafana
+    ports:
+      - "13000:3000"
+    depends_on:
+      - prometheus
+
+volumes:
+  seed_pgdata:
+  seed_grafana_data:
