@@ -16,7 +16,11 @@ CREATE TABLE IF NOT EXISTS variete (
   annee_creation INT,
   cycle_jours INT,
   statut_variete VARCHAR(30) DEFAULT 'DIFFUSEE',
-  date_creation TIMESTAMP DEFAULT now()
+  date_creation TIMESTAMP DEFAULT now(),
+  -- Archivage (soft-delete traçable)
+  commentaire_archivage TEXT,
+  date_archivage TIMESTAMP,
+  archive_par VARCHAR(150)
 );
 
 CREATE TABLE IF NOT EXISTS generation_semence (

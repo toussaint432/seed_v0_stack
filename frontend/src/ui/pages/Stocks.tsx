@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { Database, RefreshCw, Plus, MapPin, Scale, TrendingUp, X, Filter } from 'lucide-react'
 import { api } from '../../lib/api'
+import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -23,7 +24,7 @@ export function Stocks({ roleKey }: Props) {
 
   async function fetchStocks(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
-    const url = site ? "http://localhost:18083/api/stocks?site=" + site : 'http://localhost:18083/api/stocks'
+    const url = site ? `${endpoints.stocks}?site=${site}` : endpoints.stocks
     api.get(url).then(r => setStocks(r.data)).catch(() => setStocks([]))
       .finally(() => { setLoading(false); setRefreshing(false) })
   }
@@ -37,7 +38,7 @@ export function Stocks({ roleKey }: Props) {
   async function submitStock(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
-      await api.post('http://localhost:18083/api/stocks', { idLot: Number(stockForm.idLot), siteCode: stockForm.siteCode, quantite: Number(stockForm.quantite), unite: stockForm.unite })
+      await api.post(endpoints.stocks, { idLot: Number(stockForm.idLot), siteCode: stockForm.siteCode, quantite: Number(stockForm.quantite), unite: stockForm.unite })
       setToast({ msg: "Stock enregistre pour lot " + stockForm.idLot, type: 'success' })
       setShowStockForm(false); setStockForm({ idLot: '', siteCode: '', quantite: '', unite: 'kg' }); fetchStocks(true)
     } catch (err: any) {
@@ -48,7 +49,7 @@ export function Stocks({ roleKey }: Props) {
   async function submitMvt(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
-      await api.post('http://localhost:18083/api/movements', { idLot: Number(mvtForm.idLot), type: mvtForm.type, siteSourceCode: mvtForm.siteSourceCode || undefined, siteDestinationCode: mvtForm.siteDestinationCode || undefined, quantite: Number(mvtForm.quantite), unite: mvtForm.unite, reference: mvtForm.reference || undefined })
+      await api.post(endpoints.movements, { idLot: Number(mvtForm.idLot), type: mvtForm.type, siteSourceCode: mvtForm.siteSourceCode || undefined, siteDestinationCode: mvtForm.siteDestinationCode || undefined, quantite: Number(mvtForm.quantite), unite: mvtForm.unite, reference: mvtForm.reference || undefined })
       setToast({ msg: "Mouvement " + mvtForm.type + " enregistre", type: 'success' })
       setShowMvtForm(false); setMvtForm({ idLot: '', type: 'IN', siteSourceCode: '', siteDestinationCode: '', quantite: '', unite: 'kg', reference: '' }); fetchStocks(true)
     } catch (err: any) {
@@ -157,10 +158,10 @@ export function Stocks({ roleKey }: Props) {
               </Field>
             </FormRow>
             {(mvtForm.type === 'IN' || mvtForm.type === 'TRANSFER') && (
-              <Field label="Site destination" required hint="Site qui recoit les semences"><FormInput value={mvtForm.siteDestinationCode} onChange={e => setMvtForm(f => ({ ...f, siteDestinationCode: e.target.value.toUpperCase() }))} placeholder="MAG-KAOLACK" required={mvtForm.type !== 'OUT'} /></Field>
+              <Field label="Site destination" required hint="Site qui recoit les semences"><FormInput value={mvtForm.siteDestinationCode} onChange={e => setMvtForm(f => ({ ...f, siteDestinationCode: e.target.value.toUpperCase() }))} placeholder="MAG-KAOLACK" required /></Field>
             )}
             {(mvtForm.type === 'OUT' || mvtForm.type === 'TRANSFER') && (
-              <Field label="Site source" required hint="Site d'ou partent les semences"><FormInput value={mvtForm.siteSourceCode} onChange={e => setMvtForm(f => ({ ...f, siteSourceCode: e.target.value.toUpperCase() }))} placeholder="MAG-THIES" required={mvtForm.type !== 'IN'} /></Field>
+              <Field label="Site source" required hint="Site d'ou partent les semences"><FormInput value={mvtForm.siteSourceCode} onChange={e => setMvtForm(f => ({ ...f, siteSourceCode: e.target.value.toUpperCase() }))} placeholder="MAG-THIES" required /></Field>
             )}
             <FormRow>
               <Field label="Quantite" required>

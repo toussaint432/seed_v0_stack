@@ -1,6 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { ShoppingCart, RefreshCw, Plus, Settings2, CheckCircle2, Clock, XCircle, PackageCheck, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  ShoppingCart, RefreshCw, Plus, Settings2, Clock, XCircle, PackageCheck,
+  Search, X, ChevronLeft, ChevronRight,
+} from 'lucide-react'
 import { api } from '../../lib/api'
+import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -28,6 +32,7 @@ export function Orders({ roleKey }: Props) {
   const [showOrderForm, setShowOrderForm] = useState(false)
   const [showAllocForm, setShowAllocForm] = useState(false)
   const [saving, setSaving] = useState(false)
+
   const canCreate = roleKey === 'seed-quotataire'
   const canManage = ['seed-admin','seed-upseml'].includes(roleKey)
 
@@ -39,7 +44,7 @@ export function Orders({ roleKey }: Props) {
 
   async function fetchOrders() {
     setLoading(true)
-    api.get('http://localhost:18084/api/orders').then(r => setOrders(r.data)).catch(() => setOrders([]))
+    api.get(endpoints.orders).then(r => setOrders(r.data)).catch(() => setOrders([]))
       .finally(() => setLoading(false))
   }
 
@@ -75,7 +80,7 @@ export function Orders({ roleKey }: Props) {
   async function submitOrder(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
-      await api.post('http://localhost:18084/api/orders', {
+      await api.post(endpoints.orders, {
         codeCommande: orderForm.codeCommande, client: orderForm.client,
         lignes: orderForm.lignes.map(l => ({ idVariete: Number(l.idVariete), idGeneration: Number(l.idGeneration), quantite: Number(l.quantite), unite: l.unite }))
       })
@@ -91,7 +96,7 @@ export function Orders({ roleKey }: Props) {
   async function submitAlloc(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
-      await api.post('http://localhost:18084/api/orders/allocate', { idLigne: Number(allocForm.idLigne), idLot: Number(allocForm.idLot), quantite: Number(allocForm.quantite) })
+      await api.post(endpoints.orderAllocate, { idLigne: Number(allocForm.idLigne), idLot: Number(allocForm.idLot), quantite: Number(allocForm.quantite) })
       setToast({ msg: "Allocation enregistree avec succes", type: 'success' })
       setShowAllocForm(false); setAllocForm({ idLigne: '', idLot: '', quantite: '' }); fetchOrders()
     } catch (err: any) {

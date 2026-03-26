@@ -93,7 +93,7 @@ services:
       SPRING_DATASOURCE_USERNAME: seed
       SPRING_DATASOURCE_PASSWORD: seed
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:18080/realms/seed-v0
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
     ports:
       - "18081:8080"
 
@@ -113,7 +113,7 @@ services:
       SPRING_DATASOURCE_USERNAME: seed
       SPRING_DATASOURCE_PASSWORD: seed
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:18080/realms/seed-v0
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
     ports:
       - "18082:8080"
 
@@ -133,7 +133,7 @@ services:
       SPRING_DATASOURCE_USERNAME: seed
       SPRING_DATASOURCE_PASSWORD: seed
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:18080/realms/seed-v0
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
     ports:
       - "18083:8080"
 
@@ -153,7 +153,7 @@ services:
       SPRING_DATASOURCE_USERNAME: seed
       SPRING_DATASOURCE_PASSWORD: seed
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: http://localhost:18080/realms/seed-v0
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
     ports:
       - "18084:8080"
 

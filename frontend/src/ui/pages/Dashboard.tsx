@@ -5,6 +5,7 @@ import {
   AlertCircle, CheckCircle2, Clock, XCircle
 } from 'lucide-react'
 import { api } from '../../lib/api'
+import { endpoints } from '../../lib/endpoints'
 
 interface Props { roleKey: string }
 
@@ -98,10 +99,10 @@ export function Dashboard({ roleKey }: Props) {
     isRefresh ? setRefreshing(true) : setLoading(true)
 
     const results = await Promise.allSettled([
-      api.get('http://localhost:18082/api/lots'),
-      api.get('http://localhost:18083/api/stocks'),
-      api.get('http://localhost:18084/api/orders'),
-      api.get('http://localhost:18081/api/varieties'),
+      api.get(endpoints.lots),
+      api.get(endpoints.stocks),
+      api.get(endpoints.orders),
+      api.get(endpoints.varieties),
     ])
 
     const lots      = results[0].status === 'fulfilled' ? results[0].value.data : []
@@ -225,28 +226,28 @@ export function Dashboard({ roleKey }: Props) {
       {/* Quick actions */}
       <div className="quick-actions">
         {['seed-admin','seed-selector','seed-upseml','seed-multiplicator'].includes(roleKey) && (
-          <a href="http://localhost:18082/swagger-ui/index.html" target="_blank" rel="noopener noreferrer">
+          <a href={endpoints.swagger.lot} target="_blank" rel="noopener noreferrer">
             <button className="btn btn-primary">
               <Plus size={14} /> Nouveau lot
             </button>
           </a>
         )}
         {['seed-admin','seed-selector'].includes(roleKey) && (
-          <a href="http://localhost:18081/swagger-ui/index.html" target="_blank" rel="noopener noreferrer">
+          <a href={endpoints.swagger.catalog} target="_blank" rel="noopener noreferrer">
             <button className="btn btn-secondary">
               <Leaf size={13} /> Nouvelle variété
             </button>
           </a>
         )}
         {['seed-quotataire'].includes(roleKey) && (
-          <a href="http://localhost:18084/swagger-ui/index.html" target="_blank" rel="noopener noreferrer">
+          <a href={endpoints.swagger.order} target="_blank" rel="noopener noreferrer">
             <button className="btn btn-primary">
               <ShoppingCart size={14} /> Passer une commande
             </button>
           </a>
         )}
         {['seed-admin','seed-upseml','seed-multiplicator'].includes(roleKey) && (
-          <a href="http://localhost:18083/swagger-ui/index.html" target="_blank" rel="noopener noreferrer">
+          <a href={endpoints.swagger.stock} target="_blank" rel="noopener noreferrer">
             <button className="btn btn-secondary">
               <Database size={13} /> Mouvement stock
             </button>

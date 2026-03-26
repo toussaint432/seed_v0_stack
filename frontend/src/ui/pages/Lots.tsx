@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye } from 'lucide-react'
 import { api } from '../../lib/api'
+import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -39,7 +40,7 @@ function LineageModal({ lot, onClose }: { lot: any; onClose: () => void }) {
                   <div>Purete: {node.puretePhysique}%</div>
                 </div>
               </div>
-              {!isLast && <div style={{ display: 'flex', alignItems: 'center', padding: '0 3px', color: '#9ca3af', fontSize: 18, flexShrink: 0 }}>{">"}</div>}
+              {!isLast && <div style={{ display: 'flex', alignItems: 'center', padding: '0 3px', color: '#9ca3af', flexShrink: 0 }}><ChevronRight size={16} /></div>}
             </React.Fragment>
           )
         })}
@@ -77,7 +78,7 @@ export function Lots({ roleKey }: Props) {
 
   async function fetchLots() {
     setLoading(true)
-    const url = generation ? "http://localhost:18082/api/lots?generation=" + generation : 'http://localhost:18082/api/lots'
+    const url = generation ? `${endpoints.lots}?generation=${generation}` : endpoints.lots
     api.get(url).then(r => {
       let data = r.data
       if (roleKey !== 'seed-admin') data = data.filter((l: any) => allowedGens.includes(l.generation?.codeGeneration))
@@ -87,29 +88,20 @@ export function Lots({ roleKey }: Props) {
 
   useEffect(() => {
     fetchLots()
+    api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {})
   }, [generation])
-
-  useEffect(() => {
-    // Charge les varietes une seule fois au montage
-    const loadVarieties = async () => {
-      try {
-        const r = await api.get('http://localhost:18081/api/varieties')
-        setVarieties(r.data)
-      } catch {
-        setTimeout(loadVarieties, 2000)
-      }
-    }
-    loadVarieties()
-  }, [])
 
   const genCounts = lots.reduce((acc: Record<string, number>, l) => {
     const g = l.generation?.codeGeneration || 'N/A'; acc[g] = (acc[g] || 0) + 1; return acc
   }, {})
 
+  const varietyMap: Record<number, { codeVariete: string; nomVariete: string }> =
+    Object.fromEntries(varieties.map(v => [v.id, v]))
+
   async function submitNewLot(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
-      await api.post('http://localhost:18082/api/lots', {
+      await api.post(endpoints.lots, {
         codeLot: newLotForm.codeLot, idVariete: Number(newLotForm.idVariete),
         generation: { id: GEN_IDS[newLotForm.generationCode] || 1 },
         campagne: newLotForm.campagne, dateProduction: newLotForm.dateProduction || undefined,
@@ -122,14 +114,14 @@ export function Lots({ roleKey }: Props) {
       setNewLotForm({ codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE' })
       fetchLots()
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || (err?.response?.status === 500 ? 'Code lot deja existant — utilisez un code unique' : 'Erreur lors de la creation'), type: 'error' })
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la creation', type: 'error' })
     } finally { setSaving(false) }
   }
 
   async function submitChildLot(e: React.FormEvent) {
     e.preventDefault(); if (!parentLot) return; setSaving(true)
     try {
-      await api.post("http://localhost:18082/api/lots/" + parentLot.id + "/child", {
+      await api.post(endpoints.lotChild(parentLot.id), {
         codeLot: childForm.codeLot, idVariete: parentLot.idVariete, generationCode: childForm.generationCode,
         campagne: childForm.campagne, dateProduction: childForm.dateProduction || undefined,
         quantiteNette: Number(childForm.quantiteNette), unite: childForm.unite,
@@ -146,7 +138,7 @@ export function Lots({ roleKey }: Props) {
   async function submitTransfer(e: React.FormEvent) {
     e.preventDefault(); if (!parentLot) return; setSaving(true)
     try {
-      await api.post("http://localhost:18082/api/lots/" + parentLot.id + "/transfer", { generationCible: transferForm.generationCible, observations: transferForm.observations })
+      await api.post(endpoints.lotTransfer(parentLot.id), { generationCible: transferForm.generationCible, observations: transferForm.observations })
       setToast({ msg: "Lot " + parentLot.codeLot + " transfere vers " + transferForm.generationCible, type: 'success' })
       setShowTransfer(false); fetchLots()
     } catch (err: any) {
@@ -156,7 +148,7 @@ export function Lots({ roleKey }: Props) {
 
   async function showLineage(lot: any) {
     setLineageLoading(lot.id)
-    try { const r = await api.get("http://localhost:18082/api/lots/" + lot.id); setLineageLot(r.data) }
+    try { const r = await api.get(endpoints.lotById(lot.id)); setLineageLot(r.data) }
     catch { setLineageLot(lot) }
     finally { setLineageLoading(null) }
   }
@@ -219,7 +211,16 @@ export function Lots({ roleKey }: Props) {
                 return (
                   <tr key={l.id}>
                     <td><span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span></td>
-                    <td style={{ fontSize: 12 }}>{varieties.find((v:any) => v.id === l.idVariete)?.nomVariete || varieties.find((v:any) => v.id === l.idVariete)?.codeVariete || l.idVariete || 'N/A'}</td>
+                    <td>
+                      {varietyMap[l.idVariete] ? (
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{varietyMap[l.idVariete].nomVariete}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{varietyMap[l.idVariete].codeVariete}</div>
+                        </div>
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>—</span>
+                      )}
+                    </td>
                     <td><span className={"badge " + (GEN_COLORS[gen] || 'badge-gray')}>{gen}</span></td>
                     <td>{l.lotParent?.codeLot ? <span className="td-mono" style={{ fontSize: 11 }}>{l.lotParent.codeLot}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                     <td><span style={{ fontWeight: 600 }}>{Number(l.quantiteNette).toLocaleString('fr-FR')}</span><span style={{ color: 'var(--text-muted)', marginLeft: 3, fontSize: 12 }}>{l.unite}</span></td>
@@ -227,7 +228,7 @@ export function Lots({ roleKey }: Props) {
                     <td><span className={"badge " + (l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray')} style={{ fontSize: 11 }}>{l.statutLot}</span></td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11 }} onClick={() => showLineage(l)} disabled={lineageLoading === l.id} title="Voir tracabilite">{lineageLoading === l.id ? '...' : 'Voir'}</button>
+                        <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} onClick={() => showLineage(l)} disabled={lineageLoading === l.id} title="Voir traçabilité">{lineageLoading === l.id ? <RefreshCw size={11} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Eye size={12} />}</button>
                         {canChild && <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} title="Lot enfant" onClick={() => { setParentLot(l); setChildForm({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '' }); setShowChildLot(true) }}><GitBranch size={12} /></button>}
                         {canTransfer && <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} title="Transferer" onClick={() => { setParentLot(l); setTransferForm({ generationCible: '', observations: '' }); setShowTransfer(true) }}><ArrowRightLeft size={12} /></button>}
                       </div>

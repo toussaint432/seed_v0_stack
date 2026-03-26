@@ -1,17 +1,29 @@
 import React, { useEffect, useState } from 'react'
 import {
-  LayoutDashboard, Leaf, Package, FlaskConical, BarChart3,
-  Users, Settings, Bell, Search, Menu, LogOut, ChevronRight,
-  Activity, Database, ShoppingCart
+  LayoutDashboard, Leaf, Package, BarChart3,
+  Users as UsersIcon, CircleUser, Bell, Search, Menu, LogOut, ChevronRight,
+  Activity, Warehouse, ShoppingCart, ArrowRightLeft, Shield,
+  Calendar, MapPin, Building2, Workflow, Server
 } from 'lucide-react'
 import { initKeycloak, keycloak } from '../lib/keycloak'
-import { Varieties } from './pages/Varieties'
-import { Lots }      from './pages/Lots'
-import { Stocks }    from './pages/Stocks'
-import { Orders }    from './pages/Orders'
-import { Dashboard } from './pages/Dashboard'
+import { Varieties }      from './pages/Varieties'
+import { Lots }           from './pages/Lots'
+import { Stocks }         from './pages/Stocks'
+import { Orders }         from './pages/Orders'
+import { Dashboard }      from './pages/Dashboard'
+import { Certifications } from './pages/Certifications'
+import { Transfers }      from './pages/Transfers'
+import { Campagnes }      from './pages/Campagnes'
+import { Sites }          from './pages/Sites'
+import { Organisations }  from './pages/Organisations'
+import { Programs }       from './pages/Programs'
+import { Profile }        from './pages/Profile'
+import { Users }          from './pages/Users'
 
-type Page = 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
+type Page =
+  | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
+  | 'certifications' | 'transfers' | 'campagnes' | 'sites'
+  | 'organisations' | 'programs' | 'profile' | 'users'
 
 /* ── Auth helpers ── */
 function getUserRoles(): string[] {
@@ -36,38 +48,86 @@ function getUserInfo() {
   return { name, role: roleInfo.label, roleColor: roleInfo.color, initials: name.slice(0, 2).toUpperCase(), roleKey }
 }
 
-/* ── Nav config ── */
+/* ── Nav config par rôle ── */
+type NavSection = { section: string; items: NavItem[] }
 type NavItem = { id: Page; label: string; icon: React.ElementType; badge?: string }
 
-function getNavItems(roleKey: string): NavItem[] {
-  const dashboard: NavItem = { id: 'dashboard', label: 'Tableau de bord', icon: LayoutDashboard }
-  const varieties: NavItem = { id: 'varieties', label: 'Variétés',         icon: Leaf }
-  const lots:      NavItem = { id: 'lots',      label: 'Lots & générations',icon: Package }
-  const stocks:    NavItem = { id: 'stocks',    label: 'Stock',             icon: Database }
-  const orders:    NavItem = { id: 'orders',    label: 'Commandes',         icon: ShoppingCart }
+function getNavSections(roleKey: string): NavSection[] {
+  // Éléments communs
+  const dashboard:      NavItem = { id: 'dashboard',      label: 'Tableau de bord',        icon: LayoutDashboard }
+  const varieties:      NavItem = { id: 'varieties',      label: 'Variétés & Espèces',     icon: Leaf }
+  const lots:           NavItem = { id: 'lots',           label: 'Lots semenciers',         icon: Package }
+  const stocks:         NavItem = { id: 'stocks',         label: 'Stock',                   icon: Warehouse }
+  const orders:         NavItem = { id: 'orders',         label: 'Commandes',               icon: ShoppingCart }
+  const certifications: NavItem = { id: 'certifications', label: 'Qualité & Certif.',       icon: Shield }
+  const transfers:      NavItem = { id: 'transfers',      label: 'Transferts',              icon: ArrowRightLeft }
+  const programs:       NavItem = { id: 'programs',       label: 'Programmes',              icon: Workflow }
+  const campagnes:      NavItem = { id: 'campagnes',      label: 'Campagnes',               icon: Calendar }
+  const sites:          NavItem = { id: 'sites',          label: 'Sites',                   icon: MapPin }
+  const organisations:  NavItem = { id: 'organisations',  label: 'Organisations',           icon: Building2 }
+
+  const users:          NavItem = { id: 'users',          label: 'Utilisateurs',            icon: UsersIcon }
 
   switch (roleKey) {
     case 'seed-admin':
-      return [dashboard, varieties, lots, stocks, orders]
+      return [
+        { section: 'Général', items: [dashboard] },
+        { section: 'Catalogue', items: [varieties, { ...lots, label: 'Lots & Générations' }] },
+        { section: 'Production', items: [programs, certifications, transfers] },
+        { section: 'Logistique', items: [stocks, orders] },
+        { section: 'Référentiels', items: [campagnes, sites, organisations] },
+        { section: 'Administration', items: [users] },
+      ]
+
     case 'seed-selector':
-      return [dashboard, varieties, { ...lots, label: 'Lots G0/G1' }]
+      return [
+        { section: 'Général', items: [dashboard] },
+        { section: 'Recherche', items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
+        { section: 'Transferts', items: [transfers, certifications] },
+      ]
+
     case 'seed-upseml':
-      return [dashboard, { ...lots, label: 'Lots G1→G3' }, stocks]
+      return [
+        { section: 'Général', items: [dashboard] },
+        { section: 'Multiplication', items: [{ ...lots, label: 'Lots G1→G3' }, programs] },
+        { section: 'Gestion', items: [stocks, certifications, transfers] },
+      ]
+
     case 'seed-multiplicator':
-      return [dashboard, { ...lots, label: 'Lots G3→R2' }, stocks]
+      return [
+        { section: 'Général', items: [dashboard] },
+        { section: 'Production', items: [{ ...lots, label: 'Lots G3→R2' }, programs] },
+        { section: 'Gestion', items: [stocks, certifications] },
+      ]
+
     case 'seed-quotataire':
-      return [dashboard, { ...varieties, label: 'Catalogue' }, orders]
+      return [
+        { section: 'Général', items: [dashboard] },
+        { section: 'Catalogue', items: [{ ...varieties, label: 'Catalogue semences' }] },
+        { section: 'Commandes', items: [orders] },
+      ]
+
     default:
-      return [dashboard, varieties, lots, stocks, orders]
+      return [
+        { section: 'Navigation', items: [dashboard, varieties, lots, stocks, orders] },
+      ]
   }
 }
 
 const pageTitle: Record<Page, { title: string; sub: string }> = {
-  dashboard: { title: 'Tableau de bord',     sub: "Vue d'ensemble de la campagne" },
-  varieties: { title: 'Variétés & Espèces',  sub: 'Catalogue des semences certifiées' },
-  lots:      { title: 'Lots de semences',     sub: 'Suivi des générations G0 → R2' },
-  stocks:    { title: 'Inventaire stock',     sub: 'Disponibilité par site de stockage' },
-  orders:    { title: 'Commandes',            sub: 'Suivi et gestion des commandes' },
+  dashboard:      { title: 'Tableau de bord',           sub: "Vue d'ensemble de la campagne" },
+  varieties:      { title: 'Variétés & Espèces',        sub: 'Catalogue des semences certifiées' },
+  lots:           { title: 'Lots de semences',           sub: 'Suivi des générations G0 → R2' },
+  stocks:         { title: 'Inventaire stock',           sub: 'Disponibilité par site de stockage' },
+  orders:         { title: 'Commandes',                  sub: 'Suivi et gestion des commandes' },
+  certifications: { title: 'Qualité & Certifications',   sub: 'Contrôles qualité et certification des lots' },
+  transfers:      { title: 'Transferts',                 sub: 'Transferts inter-organisations de semences' },
+  campagnes:      { title: 'Campagnes agricoles',        sub: 'Gestion des campagnes de production' },
+  sites:          { title: 'Sites',                      sub: 'Sites de stockage et production' },
+  organisations:  { title: 'Organisations',              sub: 'Acteurs de la chaîne semencière' },
+  programs:       { title: 'Programmes de multiplication', sub: 'Planification et suivi des multiplications' },
+  profile:        { title: 'Mon profil',                   sub: 'Informations et paramètres de votre compte' },
+  users:          { title: 'Gestion des utilisateurs',     sub: 'Comptes et rôles de la plateforme' },
 }
 
 const roleDescriptions: Record<string, string> = {
@@ -80,9 +140,9 @@ const roleDescriptions: Record<string, string> = {
 
 /* ── Monitoring links for admin ── */
 const adminTools = [
-  { href: 'http://localhost:19090/targets', icon: Activity,  label: 'Prometheus', badge: 'Live' },
-  { href: 'http://localhost:13000',          icon: BarChart3, label: 'Grafana' },
-  { href: 'http://localhost:18085',          icon: Users,     label: 'Kafka UI' },
+  { href: 'http://localhost:19090/targets', icon: Activity,   label: 'Prometheus', badge: 'Live' },
+  { href: 'http://localhost:13000',          icon: BarChart3,  label: 'Grafana' },
+  { href: 'http://localhost:18085',          icon: Server,     label: 'Kafka UI' },
 ]
 
 export function App() {
@@ -104,9 +164,10 @@ export function App() {
     )
   }
 
-  const user      = getUserInfo()
-  const navItems  = getNavItems(user.roleKey)
-  const validPage: Page = navItems.find(n => n.id === page) ? page : (navItems[0]?.id || 'dashboard')
+  const user        = getUserInfo()
+  const navSections = getNavSections(user.roleKey)
+  const allNavItems = navSections.flatMap(s => s.items)
+  const validPage: Page = (page === 'profile' || allNavItems.find(n => n.id === page)) ? page : (allNavItems[0]?.id || 'dashboard')
 
   return (
     <div className="layout">
@@ -127,17 +188,22 @@ export function App() {
 
         {/* Nav */}
         <nav className="sidebar-nav">
-          <div className="nav-section-label">Navigation</div>
-          {navItems.map(({ id, label, icon: Icon }) => (
-            <button
-              key={id}
-              className={`nav-item ${validPage === id ? 'active' : ''}`}
-              onClick={() => setPage(id)}
-              title={collapsed ? label : undefined}
-            >
-              <span className="nav-icon"><Icon size={16} /></span>
-              <span className="nav-label">{label}</span>
-            </button>
+          {navSections.map(({ section, items }) => (
+            <React.Fragment key={section}>
+              <div className="nav-section-label">{section}</div>
+              {items.map(({ id, label, icon: Icon, badge }) => (
+                <button
+                  key={id}
+                  className={`nav-item ${validPage === id ? 'active' : ''}`}
+                  onClick={() => setPage(id)}
+                  title={collapsed ? label : undefined}
+                >
+                  <span className="nav-icon"><Icon size={16} /></span>
+                  <span className="nav-label">{label}</span>
+                  {badge && <span className="nav-badge">{badge}</span>}
+                </button>
+              ))}
+            </React.Fragment>
           ))}
 
           {user.roleKey === 'seed-admin' && (
@@ -161,9 +227,13 @@ export function App() {
           )}
 
           <div className="nav-section-label">Compte</div>
-          <button className="nav-item" title={collapsed ? 'Paramètres' : undefined}>
-            <span className="nav-icon"><Settings size={16} /></span>
-            <span className="nav-label">Paramètres</span>
+          <button
+            className={`nav-item ${validPage === 'profile' ? 'active' : ''}`}
+            onClick={() => setPage('profile')}
+            title={collapsed ? 'Mon profil' : undefined}
+          >
+            <span className="nav-icon"><CircleUser size={16} /></span>
+            <span className="nav-label">Mon profil</span>
           </button>
         </nav>
 
@@ -227,6 +297,27 @@ export function App() {
               <Bell size={15} />
               <span className="notif-dot" />
             </button>
+            {/* Avatar cliquable → profil */}
+            <button
+              onClick={() => setPage('profile')}
+              title={`${user.name} — Mon profil`}
+              style={{
+                width: 34, height: 34, borderRadius: '50%', border: 'none',
+                background: `linear-gradient(135deg, ${user.roleColor}, #0c1f15)`,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
+                boxShadow: '0 0 0 2px var(--border)',
+                overflow: 'hidden',
+              }}
+            >
+              {(() => {
+                const storedPhoto = (window as any).__profilePhoto ||
+                  localStorage.getItem(`seed-avatar-${(keycloak.tokenParsed as any)?.sub}`)
+                return storedPhoto
+                  ? <img src={storedPhoto} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : user.initials
+              })()}
+            </button>
           </div>
         </header>
 
@@ -248,11 +339,19 @@ export function App() {
 
         {/* Page */}
         <main className="page-content" key={validPage}>
-          {validPage === 'dashboard' && <Dashboard roleKey={user.roleKey} />}
-          {validPage === 'varieties' && <Varieties roleKey={user.roleKey} />}
-          {validPage === 'lots'      && <Lots      roleKey={user.roleKey} />}
-          {validPage === 'stocks'    && <Stocks    roleKey={user.roleKey} />}
-          {validPage === 'orders'    && <Orders    roleKey={user.roleKey} />}
+          {validPage === 'dashboard'      && <Dashboard      roleKey={user.roleKey} />}
+          {validPage === 'varieties'      && <Varieties      roleKey={user.roleKey} />}
+          {validPage === 'lots'           && <Lots           roleKey={user.roleKey} />}
+          {validPage === 'stocks'         && <Stocks         roleKey={user.roleKey} />}
+          {validPage === 'orders'         && <Orders         roleKey={user.roleKey} />}
+          {validPage === 'certifications' && <Certifications roleKey={user.roleKey} />}
+          {validPage === 'transfers'      && <Transfers      roleKey={user.roleKey} />}
+          {validPage === 'campagnes'      && <Campagnes      roleKey={user.roleKey} />}
+          {validPage === 'sites'          && <Sites          roleKey={user.roleKey} />}
+          {validPage === 'organisations'  && <Organisations  roleKey={user.roleKey} />}
+          {validPage === 'programs'       && <Programs       roleKey={user.roleKey} />}
+          {validPage === 'profile'        && <Profile        roleKey={user.roleKey} />}
+          {validPage === 'users'          && <Users          roleKey={user.roleKey} />}
         </main>
       </div>
     </div>

@@ -86,11 +86,20 @@ export function FormRow({ children }: { children: React.ReactNode }) {
   return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>{children}</div>
 }
 
-export function FormActions({ onCancel, loading, submitLabel = 'Enregistrer' }: { onCancel: () => void; loading?: boolean; submitLabel?: string }) {
+export function FormActions({
+  onCancel, loading,
+  submitLabel = 'Enregistrer',
+  submitClassName = 'btn-primary',
+}: {
+  onCancel: () => void
+  loading?: boolean
+  submitLabel?: string
+  submitClassName?: string
+}) {
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
       <button type="button" onClick={onCancel} className="btn btn-secondary">Annuler</button>
-      <button type="submit" className="btn btn-primary" disabled={loading}>
+      <button type="submit" className={`btn ${submitClassName}`} disabled={loading}>
         {loading ? 'Enregistrement…' : submitLabel}
       </button>
     </div>

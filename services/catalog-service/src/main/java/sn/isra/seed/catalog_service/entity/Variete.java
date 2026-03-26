@@ -39,4 +39,14 @@ public class Variete {
 
   @Column(name="date_creation")
   private Instant dateCreation;
+
+  /** Renseigné lors de l'archivage (soft-delete) */
+  @Column(name="commentaire_archivage", columnDefinition="TEXT")
+  private String commentaireArchivage;
+
+  @Column(name="date_archivage")
+  private Instant dateArchivage;
+
+  @Column(name="archive_par", length=150)
+  private String archivePar;
 }
