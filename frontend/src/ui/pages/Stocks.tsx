@@ -9,7 +9,9 @@ interface Props { roleKey: string }
 const TYPES_MOUVEMENT = ['IN', 'OUT', 'TRANSFER']
 
 export function Stocks({ roleKey }: Props) {
-  const [stocks, setStocks] = useState<any[]>([])
+  const [stocks,    setStocks]    = useState<any[]>([])
+  const [lots,      setLots]      = useState<any[]>([])
+  const [varieties, setVarieties] = useState<any[]>([])
   const [site, setSite] = useState('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -29,11 +31,19 @@ export function Stocks({ roleKey }: Props) {
       .finally(() => { setLoading(false); setRefreshing(false) })
   }
 
-  useEffect(() => { fetchStocks() }, [])
+  useEffect(() => {
+    fetchStocks()
+    api.get(endpoints.lots).then(r => setLots(r.data)).catch(() => {})
+    api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {})
+  }, [])
 
   const totalQty = stocks.reduce((sum, s) => sum + (parseFloat(s.quantiteDisponible) || 0), 0)
-  const sites = [...new Set(stocks.map((s: any) => s.site?.codeSite).filter(Boolean))]
-  const maxQty = Math.max(...stocks.map((s: any) => parseFloat(s.quantiteDisponible) || 0), 1)
+  const sites    = [...new Set(stocks.map((s: any) => s.site?.codeSite).filter(Boolean))]
+  const maxQty   = Math.max(...stocks.map((s: any) => parseFloat(s.quantiteDisponible) || 0), 1)
+
+  /* Lookups lot → variété → espèce */
+  const varMap: Record<number, any> = Object.fromEntries(varieties.map(v => [v.id, v]))
+  const lotMap: Record<number, any> = Object.fromEntries(lots.map(l => [l.id, l]))
 
   async function submitStock(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
@@ -100,20 +110,58 @@ export function Stocks({ roleKey }: Props) {
 
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Lot ID</th><th>Site</th><th>Quantite disponible</th><th>Unite</th><th style={{ width: 160 }}>Niveau</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Site</th>
+                <th>Espèce</th>
+                <th>Variété</th>
+                <th>Génération</th>
+                <th>Code Lot</th>
+                <th>Quantité disponible</th>
+                <th style={{ width: 150 }}>Niveau</th>
+              </tr>
+            </thead>
             <tbody>
-              {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={5}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
-               stocks.length === 0 ? <tr><td colSpan={5}><div className="empty-state"><div className="empty-icon"><Database size={20} /></div><div className="empty-title">Aucun stock</div>{canManage && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowMvtForm(true)}>+ Enregistrer un mouvement</button>}</div></td></tr> :
+              {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={7}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
+               stocks.length === 0 ? <tr><td colSpan={7}><div className="empty-state"><div className="empty-icon"><Database size={20} /></div><div className="empty-title">Aucun stock</div>{canManage && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowMvtForm(true)}>+ Enregistrer un mouvement</button>}</div></td></tr> :
                stocks.map(s => {
-                const qty = parseFloat(s.quantiteDisponible || 0)
-                const pct = Math.min(100, Math.round((qty / maxQty) * 100))
+                const qty     = parseFloat(s.quantiteDisponible || 0)
+                const pct     = Math.min(100, Math.round((qty / maxQty) * 100))
                 const barColor = pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'
+                const lot     = lotMap[s.idLot]
+                const variete = lot ? varMap[lot.idVariete] : null
+                const gen     = lot?.generation?.codeGeneration || '—'
+                const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', R1: 'badge-blue', R2: 'badge-green' }
                 return (
                   <tr key={s.id}>
-                    <td><span className="td-mono">{s.idLot}</span></td>
                     <td><span className="badge badge-blue" style={{ gap: 4 }}><MapPin size={10} />{s.site?.codeSite || '—'}</span></td>
-                    <td><span style={{ fontWeight: 700, fontSize: 15 }}>{qty.toLocaleString('fr-FR')}</span></td>
-                    <td><span style={{ color: 'var(--text-muted)', fontSize: 13 }}>{s.unite || 'kg'}</span></td>
+                    <td>
+                      {variete?.espece ? (
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{variete.espece.nomCommun}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{variete.espece.codeEspece}</div>
+                        </div>
+                      ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
+                    </td>
+                    <td>
+                      {variete ? (
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{variete.nomVariete}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{variete.codeVariete}</div>
+                        </div>
+                      ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
+                    </td>
+                    <td>
+                      {gen !== '—'
+                        ? <span className={`badge ${GEN_COLORS[gen] || 'badge-gray'}`}>{gen}</span>
+                        : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+                    <td>
+                      {lot
+                        ? <span className="td-mono" style={{ fontSize: 11 }}>{lot.codeLot}</span>
+                        : <span className="td-mono" style={{ color: 'var(--text-muted)' }}>#{s.idLot}</span>}
+                    </td>
+                    <td><span style={{ fontWeight: 700, fontSize: 15 }}>{qty.toLocaleString('fr-FR')}</span><span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 12 }}>{s.unite || 'kg'}</span></td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <div style={{ flex: 1, height: 6, background: 'var(--surface-3)', borderRadius: 99, overflow: 'hidden' }}>

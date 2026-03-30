@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import {
   Leaf, Sprout, CheckCircle2, Plus, Search, X,
   RefreshCw, Edit2, FlaskConical, ChevronRight,
-  Archive, Trash2, AlertTriangle, Eye, EyeOff, MessageSquare
+  Archive, Trash2, AlertTriangle, Eye, EyeOff, MessageSquare, MapPin
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -42,6 +42,12 @@ export function Varieties({ roleKey }: Props) {
 
   // Afficher / masquer les archivées
   const [showArchived, setShowArchived] = useState(false)
+
+  // Zones agro-écologiques
+  const [allZones,      setAllZones]      = useState<any[]>([])
+  const [zonesTarget,   setZonesTarget]   = useState<any>(null)
+  const [zonesRows,     setZonesRows]     = useState<{ idZone: string; niveauAdaptation: string }[]>([])
+  const [savingZones,   setSavingZones]   = useState(false)
 
   const [especeForm, setEspeceForm] = useState({
     codeEspece: '', nomCommun: '', nomScientifique: '',
@@ -194,6 +200,40 @@ export function Varieties({ roleKey }: Props) {
       statutVariete: 'DIFFUSEE',
     })
     setShowVarieteForm(true)
+  }
+
+  /* ── Zones agro-écologiques ── */
+  async function openZones(v: any) {
+    setZonesTarget(v)
+    setZonesRows([])
+    const [zonesRes, assignedRes] = await Promise.allSettled([
+      api.get(endpoints.zones),
+      api.get(endpoints.varietyZones(v.id)),
+    ])
+    if (zonesRes.status === 'fulfilled')   setAllZones(zonesRes.value.data)
+    if (assignedRes.status === 'fulfilled') {
+      const assigned: any[] = assignedRes.value.data
+      setZonesRows(assigned.map((z: any) => ({
+        idZone: String(z.zone?.id ?? z.idZone ?? ''),
+        niveauAdaptation: z.niveauAdaptation ?? 'OPTIMAL',
+      })))
+    }
+  }
+
+  async function saveZones(e: React.FormEvent) {
+    e.preventDefault()
+    if (!zonesTarget) return
+    setSavingZones(true)
+    try {
+      const payload = zonesRows
+        .filter(r => r.idZone)
+        .map(r => ({ idZone: Number(r.idZone), niveauAdaptation: r.niveauAdaptation }))
+      await api.put(endpoints.varietyZones(zonesTarget.id), payload)
+      setToast({ msg: `Zones mises à jour pour ${zonesTarget.nomVariete}`, type: 'success' })
+      setZonesTarget(null)
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la sauvegarde', type: 'error' })
+    } finally { setSavingZones(false) }
   }
 
   /* ── Render ── */
@@ -497,6 +537,9 @@ export function Varieties({ roleKey }: Props) {
                                     <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} onClick={() => openEdit(v)} title="Modifier le statut">
                                       <Edit2 size={12} />
                                     </button>
+                                    <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', color: 'var(--primary)' }} onClick={() => openZones(v)} title="Zones agro-écologiques">
+                                      <MapPin size={12} />
+                                    </button>
                                     {canArchive && (
                                       <button
                                         className="btn btn-ghost"
@@ -779,6 +822,65 @@ export function Varieties({ roleKey }: Props) {
       )}
 
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+
+      {/* ── Modal Zones agro-écologiques ── */}
+      {zonesTarget && (
+        <Modal
+          title="Zones recommandées"
+          subtitle={`${zonesTarget.codeVariete} — ${zonesTarget.nomVariete}`}
+          onClose={() => setZonesTarget(null)}
+        >
+          <form onSubmit={saveZones}>
+            <div className="zone-section">
+              <div className="zone-section-title">
+                <MapPin size={14} /> Zones agro-écologiques du Sénégal
+              </div>
+              <div className="zone-assignment-list">
+                {zonesRows.map((row, i) => (
+                  <div key={i} className="zone-assignment-row">
+                    <select
+                      value={row.idZone}
+                      onChange={e => setZonesRows(rows => rows.map((r, j) => j === i ? { ...r, idZone: e.target.value } : r))}
+                      style={{ flex: 2 }}
+                    >
+                      <option value="">— Zone —</option>
+                      {allZones.map(z => (
+                        <option key={z.id} value={z.id}>{z.code} — {z.nom}</option>
+                      ))}
+                    </select>
+                    <select
+                      value={row.niveauAdaptation}
+                      onChange={e => setZonesRows(rows => rows.map((r, j) => j === i ? { ...r, niveauAdaptation: e.target.value } : r))}
+                      style={{ flex: 1 }}
+                    >
+                      <option value="OPTIMAL">Optimal</option>
+                      <option value="ACCEPTABLE">Acceptable</option>
+                      <option value="MARGINALE">Marginale</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="zone-remove-btn"
+                      onClick={() => setZonesRows(rows => rows.filter((_, j) => j !== i))}
+                      title="Retirer cette zone"
+                    >✕</button>
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                className="zone-add-btn"
+                style={{ marginTop: 10 }}
+                onClick={() => setZonesRows(rows => [...rows, { idZone: '', niveauAdaptation: 'OPTIMAL' }])}
+              >+ Ajouter une zone</button>
+            </div>
+            <FormActions
+              onCancel={() => setZonesTarget(null)}
+              loading={savingZones}
+              submitLabel="Enregistrer les zones"
+            />
+          </form>
+        </Modal>
+      )}
     </div>
   )
 }

@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   LayoutDashboard, Leaf, Package, BarChart3,
   Users as UsersIcon, CircleUser, Bell, Search, Menu, LogOut, ChevronRight,
   Activity, Warehouse, ShoppingCart, ArrowRightLeft, Shield,
-  Calendar, MapPin, Building2, Workflow, Server
+  Calendar, MapPin, Building2, Workflow, Server, Store, MessageCircle,
 } from 'lucide-react'
 import { initKeycloak, keycloak } from '../lib/keycloak'
 import { Varieties }      from './pages/Varieties'
@@ -17,13 +17,16 @@ import { Campagnes }      from './pages/Campagnes'
 import { Sites }          from './pages/Sites'
 import { Organisations }  from './pages/Organisations'
 import { Programs }       from './pages/Programs'
-import { Profile }        from './pages/Profile'
-import { Users }          from './pages/Users'
+import { Profile }          from './pages/Profile'
+import { Users }            from './pages/Users'
+import { CataloguePublic }  from './pages/CataloguePublic'
+import { Messages }          from './pages/Messages'
 
 type Page =
   | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
   | 'certifications' | 'transfers' | 'campagnes' | 'sites'
-  | 'organisations' | 'programs' | 'profile' | 'users'
+  | 'organisations' | 'programs' | 'profile' | 'users' | 'catalogue'
+  | 'messages'
 
 /* ── Auth helpers ── */
 function getUserRoles(): string[] {
@@ -84,6 +87,7 @@ function getNavSections(roleKey: string): NavSection[] {
         { section: 'Général', items: [dashboard] },
         { section: 'Recherche', items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
         { section: 'Transferts', items: [transfers, certifications] },
+        { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
     case 'seed-upseml':
@@ -91,20 +95,23 @@ function getNavSections(roleKey: string): NavSection[] {
         { section: 'Général', items: [dashboard] },
         { section: 'Multiplication', items: [{ ...lots, label: 'Lots G1→G3' }, programs] },
         { section: 'Gestion', items: [stocks, certifications, transfers] },
+        { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
     case 'seed-multiplicator':
       return [
         { section: 'Général', items: [dashboard] },
         { section: 'Production', items: [{ ...lots, label: 'Lots G3→R2' }, programs] },
-        { section: 'Gestion', items: [stocks, certifications] },
+        { section: 'Gestion', items: [stocks, certifications, orders] },
+        { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
     case 'seed-quotataire':
       return [
-        { section: 'Général', items: [dashboard] },
-        { section: 'Catalogue', items: [{ ...varieties, label: 'Catalogue semences' }] },
-        { section: 'Commandes', items: [orders] },
+        { section: 'Général',   items: [dashboard] },
+        { section: 'Catalogue', items: [{ id: 'catalogue' as Page, label: 'Catalogue R1/R2', icon: Store }] },
+        { section: 'Commandes', items: [orders, { id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
+        { section: 'Réceptions', items: [{ ...lots, label: 'Semences R2 reçues' }] },
       ]
 
     default:
@@ -128,6 +135,8 @@ const pageTitle: Record<Page, { title: string; sub: string }> = {
   programs:       { title: 'Programmes de multiplication', sub: 'Planification et suivi des multiplications' },
   profile:        { title: 'Mon profil',                   sub: 'Informations et paramètres de votre compte' },
   users:          { title: 'Gestion des utilisateurs',     sub: 'Comptes et rôles de la plateforme' },
+  catalogue:      { title: 'Catalogue des semences',       sub: 'Stocks R1/R2 disponibles chez les multiplicateurs' },
+  messages:       { title: 'Messagerie',                   sub: 'Conversations directes avec vos partenaires' },
 }
 
 const roleDescriptions: Record<string, string> = {
@@ -150,8 +159,26 @@ export function App() {
   const [page,      setPage]      = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [search,    setSearch]    = useState('')
+  const [unread,    setUnread]    = useState(0)
+  const unreadTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => { initKeycloak().then(() => setReady(true)) }, [])
+
+  // Polling badge non-lus (toutes les 30s, démarré après login)
+  useEffect(() => {
+    if (!ready) return
+    async function fetchUnread() {
+      try {
+        const { api } = await import('../lib/api')
+        const { endpoints } = await import('../lib/endpoints')
+        const r = await api.get(endpoints.chatUnread)
+        setUnread(r.data?.count || 0)
+      } catch { /* ignoré */ }
+    }
+    fetchUnread()
+    unreadTimer.current = setInterval(fetchUnread, 30_000)
+    return () => { if (unreadTimer.current) clearInterval(unreadTimer.current) }
+  }, [ready])
 
   if (!ready) {
     return (
@@ -201,6 +228,7 @@ export function App() {
                   <span className="nav-icon"><Icon size={16} /></span>
                   <span className="nav-label">{label}</span>
                   {badge && <span className="nav-badge">{badge}</span>}
+                  {id === 'messages' && unread > 0 && <span className="nav-badge">{unread}</span>}
                 </button>
               ))}
             </React.Fragment>
@@ -352,6 +380,8 @@ export function App() {
           {validPage === 'programs'       && <Programs       roleKey={user.roleKey} />}
           {validPage === 'profile'        && <Profile        roleKey={user.roleKey} />}
           {validPage === 'users'          && <Users          roleKey={user.roleKey} />}
+          {validPage === 'catalogue'      && <CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => setPage('messages')} />}
+          {validPage === 'messages'       && <Messages roleKey={user.roleKey} username={user.name} />}
         </main>
       </div>
     </div>

@@ -3,8 +3,11 @@ package sn.isra.seed.order_service.api;
 import sn.isra.seed.order_service.entity.Organisation;
 import sn.isra.seed.order_service.repo.OrganisationRepo;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -16,9 +19,13 @@ public class OrganisationController {
     private final OrganisationRepo organisationRepo;
 
     @GetMapping
-    public List<Organisation> list(@RequestParam(required = false) String type) {
+    public List<Organisation> list(
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) String region) {
         if (type != null && !type.isBlank())
             return organisationRepo.findByTypeOrganisation(type.toUpperCase());
+        if (region != null && !region.isBlank())
+            return organisationRepo.findByRegion(region);
         return organisationRepo.findAll();
     }
 
@@ -29,27 +36,45 @@ public class OrganisationController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/code/{code}")
+    public ResponseEntity<Organisation> getByCode(@PathVariable String code) {
+        return organisationRepo.findByCodeOrganisation(code)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @PreAuthorize("hasAuthority('ROLE_seed-admin')")
     @PostMapping
     public Organisation create(@RequestBody Organisation organisation) {
         return organisationRepo.save(organisation);
     }
 
+    @PreAuthorize("hasAuthority('ROLE_seed-admin')")
     @PutMapping("/{id}")
     public ResponseEntity<Organisation> update(@PathVariable Long id, @RequestBody Organisation body) {
         return organisationRepo.findById(id).map(o -> {
-            o.setCodeOrganisation(body.getCodeOrganisation());
-            o.setNomOrganisation(body.getNomOrganisation());
-            o.setTypeOrganisation(body.getTypeOrganisation());
-            o.setRegion(body.getRegion());
-            o.setContact(body.getContact());
+            if (body.getCodeOrganisation() != null) o.setCodeOrganisation(body.getCodeOrganisation());
+            if (body.getNomOrganisation() != null) o.setNomOrganisation(body.getNomOrganisation());
+            if (body.getTypeOrganisation() != null) o.setTypeOrganisation(body.getTypeOrganisation());
+            if (body.getRegion() != null) o.setRegion(body.getRegion());
+            if (body.getLocalite() != null) o.setLocalite(body.getLocalite());
+            if (body.getTelephone() != null) o.setTelephone(body.getTelephone());
+            if (body.getEmail() != null) o.setEmail(body.getEmail());
+            if (body.getLatitude() != null) o.setLatitude(body.getLatitude());
+            if (body.getLongitude() != null) o.setLongitude(body.getLongitude());
+            if (body.getActive() != null) o.setActive(body.getActive());
             return ResponseEntity.ok(organisationRepo.save(o));
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasAuthority('ROLE_seed-admin')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
-        if (!organisationRepo.existsById(id)) return ResponseEntity.notFound().build();
-        organisationRepo.deleteById(id);
+        Organisation o = organisationRepo.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+        // Soft delete : on désactive au lieu de supprimer
+        o.setActive(false);
+        organisationRepo.save(o);
         return ResponseEntity.noContent().build();
     }
 }

@@ -19,6 +19,17 @@ public class Commande {
 
   private String statut;
 
+  @Column(name="username_acheteur")
+  private String usernameAcheteur;
+
+  @Column(name="id_organisation_acheteur")
+  private Long idOrganisationAcheteur;
+
+  @Column(name="id_organisation_fournisseur")
+  private Long idOrganisationFournisseur;
+
+  private String observations;
+
   @Column(name="created_at")
   private Instant createdAt;
 }

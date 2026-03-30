@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react'
 import {
   User, Mail, Shield, Calendar, LogOut, Key,
-  Camera, Edit3, Check, X, Lock, Eye, EyeOff, RefreshCw,
+  Camera, Edit3, Check, X, Lock, Eye, EyeOff, RefreshCw, Trash2,
 } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { Modal, Field, FormInput, FormRow, FormActions, Toast } from '../components/Modal'
@@ -68,6 +68,12 @@ export function Profile({ roleKey }: Props) {
       setToast({ msg: 'Photo de profil mise à jour', type: 'success' })
     }
     reader.readAsDataURL(file)
+  }
+
+  function deletePhoto() {
+    localStorage.removeItem(`seed-avatar-${userId}`)
+    setPhotoUrl(null)
+    setToast({ msg: 'Photo de profil supprimée', type: 'success' })
   }
 
   function cancelEdit() {
@@ -143,27 +149,54 @@ export function Profile({ roleKey }: Props) {
 
       {/* ── Hero ── */}
       <div className="card" style={{ marginBottom: 20, overflow: 'hidden' }}>
-        {/* Cover */}
-        <div style={{
-          height: 96,
-          background: role
-            ? `linear-gradient(135deg, ${role.color}cc 0%, #0c1f15 100%)`
-            : 'linear-gradient(135deg, #1e3a2f, #0c1f15)',
-        }} />
 
-        <div style={{ padding: '0 28px 26px', marginTop: -48 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+        {/* Bannière */}
+        <div style={{
+          height: 110,
+          background: role
+            ? `linear-gradient(135deg, ${role.color}ee 0%, #0c1f15 100%)`
+            : 'linear-gradient(135deg, #1e3a2f, #0c1f15)',
+          position: 'relative',
+        }}>
+          {/* Motif décoratif */}
+          <div style={{
+            position: 'absolute', inset: 0, opacity: 0.07,
+            backgroundImage: 'radial-gradient(circle at 20% 50%, #fff 1px, transparent 1px), radial-gradient(circle at 80% 20%, #fff 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
+          }} />
+          {/* Boutons en haut à droite */}
+          <div style={{ position: 'absolute', top: 14, right: 20, display: 'flex', gap: 8 }}>
+            {!editing && (
+              <button className="btn btn-secondary" onClick={() => setEditing(true)}
+                style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', backdropFilter: 'blur(4px)' }}>
+                <Edit3 size={13} /> Modifier le profil
+              </button>
+            )}
+            <button className="btn btn-secondary"
+              style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', backdropFilter: 'blur(4px)' }}
+              onClick={() => keycloak.logout({ redirectUri: window.location.origin })}>
+              <LogOut size={13} /> Déconnexion
+            </button>
+          </div>
+        </div>
+
+        {/* Corps */}
+        <div style={{ padding: '0 28px 24px' }}>
+
+          {/* Ligne avatar + identité */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: -46 }}>
 
             {/* Avatar */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <div style={{
-                width: 92, height: 92, borderRadius: '50%',
+                width: 96, height: 96, borderRadius: '50%',
                 background: role
                   ? `linear-gradient(135deg, ${role.color}, #0c1f15)`
                   : 'linear-gradient(135deg, #6b7280, #374151)',
                 border: '4px solid var(--surface)',
+                boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 30, fontWeight: 700, color: '#fff',
+                fontSize: 32, fontWeight: 700, color: '#fff',
                 overflow: 'hidden', userSelect: 'none',
               }}>
                 {photoUrl
@@ -171,65 +204,107 @@ export function Profile({ roleKey }: Props) {
                   : initials
                 }
               </div>
-              <button
-                onClick={() => fileRef.current?.click()}
-                title="Changer la photo"
-                style={{
-                  position: 'absolute', bottom: 2, right: 2,
-                  width: 28, height: 28, borderRadius: '50%',
-                  background: 'var(--green-600)', border: '3px solid var(--surface)',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', transition: 'background 0.15s',
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'var(--green-700)')}
-                onMouseLeave={e => (e.currentTarget.style.background = 'var(--green-600)')}
-              >
-                <Camera size={13} />
+              <button onClick={() => fileRef.current?.click()} title="Changer la photo" style={{
+                position: 'absolute', bottom: 3, right: 3,
+                width: 26, height: 26, borderRadius: '50%',
+                background: 'var(--green-600)', border: '3px solid var(--surface)',
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff',
+              }}>
+                <Camera size={12} />
               </button>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
             </div>
 
-            {/* Nom + rôle */}
-            <div style={{ flex: 1, paddingBottom: 6 }}>
-              <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{displayName}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>@{username}</div>
+            {/* Nom + identité */}
+            <div style={{ paddingBottom: 6, flex: 1 }}>
+              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+                {displayName}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 5, flexWrap: 'wrap' }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontSize: 12, color: 'var(--text-muted)',
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  borderRadius: 6, padding: '2px 8px', fontFamily: 'DM Mono, monospace',
+                }}>
+                  <User size={11} /> {username}
+                </span>
+                {token.email && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    <Mail size={11} /> {token.email}
+                  </span>
+                )}
+              </div>
               {role && (
                 <span style={{
                   display: 'inline-block', marginTop: 8,
                   background: role.color, color: '#fff',
-                  borderRadius: 20, padding: '3px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.03em',
+                  borderRadius: 20, padding: '3px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                  boxShadow: `0 2px 8px ${role.color}55`,
                 }}>
                   {role.label}
                 </span>
               )}
             </div>
-
-            {/* Boutons */}
-            <div style={{ display: 'flex', gap: 8, paddingBottom: 6 }}>
-              {!editing && (
-                <button className="btn btn-secondary" onClick={() => setEditing(true)}>
-                  <Edit3 size={13} /> Modifier le profil
-                </button>
-              )}
-              <button
-                className="btn btn-secondary"
-                style={{ color: 'var(--red-600)' }}
-                onClick={() => keycloak.logout({ redirectUri: window.location.origin })}
-              >
-                <LogOut size={13} /> Déconnexion
-              </button>
-            </div>
           </div>
 
+          {/* Description du rôle */}
           {role && (
             <div style={{
-              marginTop: 18,
+              marginTop: 16,
               background: `${role.color}0d`, border: `1px solid ${role.color}28`,
               borderRadius: 8, padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)',
             }}>
               {role.description}
             </div>
           )}
+
+          {/* ── Gestion photo — toujours visible ── */}
+          <div style={{
+            marginTop: 16, paddingTop: 14,
+            borderTop: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {photoUrl
+                ? <div style={{
+                    width: 36, height: 36, borderRadius: '50%', overflow: 'hidden',
+                    border: '2px solid var(--border)',
+                  }}>
+                    <img src={photoUrl} alt="miniature" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                : <div style={{
+                    width: 36, height: 36, borderRadius: '50%',
+                    background: 'var(--surface-2)', border: '2px dashed var(--border)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <User size={15} style={{ color: 'var(--text-muted)' }} />
+                  </div>
+              }
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Photo de profil</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                  {photoUrl ? 'Visible par vos contacts' : 'Aucune photo — initiales affichées'}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="btn btn-secondary"
+                onClick={() => fileRef.current?.click()}
+                style={{ fontSize: 12 }}>
+                <Camera size={13} /> {photoUrl ? 'Modifier' : 'Ajouter une photo'}
+              </button>
+              {photoUrl && (
+                <button type="button" className="btn btn-secondary"
+                  onClick={deletePhoto}
+                  style={{ fontSize: 12, color: '#dc2626', borderColor: '#fca5a5' }}>
+                  <Trash2 size={13} /> Supprimer
+                </button>
+              )}
+            </div>
+          </div>
+
         </div>
       </div>
 

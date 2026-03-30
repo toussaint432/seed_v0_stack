@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye, Building2, MoreVertical, Download } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
@@ -10,34 +10,82 @@ const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef
 const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', G4: '#e5e7eb', R1: '#bfdbfe', R2: '#bbf7d0' }
 const ALL_GENS = ['G0','G1','G2','G3','G4','R1','R2']
 const GEN_IDS: Record<string, number> = { G0: 1, G1: 2, G2: 3, G3: 4, G4: 5, R1: 6, R2: 7 }
-const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upseml': ['G1','G2','G3'], 'seed-multiplicator': ['G3','G4','R1','R2'] }
+const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upseml': ['G1','G2','G3'], 'seed-multiplicator': ['G3','G4','R1','R2'], 'seed-quotataire': ['R2'] }
 
-function flattenLineage(lot: any): any[] {
-  const chain: any[] = []; let cur = lot
-  while (cur) { chain.unshift(cur); cur = cur.lotParent }
-  return chain
+/* ── Couleurs nœud généalogie par rôle acteur ── */
+const ROLE_NODE_COLORS: Record<string, { bg: string; border: string; label: string }> = {
+  'seed-selector':      { bg: '#e8f5e9', border: '#1B5E20', label: 'Sélectionneur' },
+  'seed-upseml':        { bg: '#e8f5e9', border: '#388E3C', label: 'UPSemCL' },
+  'seed-multiplicator': { bg: '#f1f8e9', border: '#66BB6A', label: 'Multiplicateur' },
+  'seed-admin':         { bg: '#f3e5f5', border: '#7c3aed', label: 'Admin' },
 }
 
-function LineageModal({ lot, onClose }: { lot: any; onClose: () => void }) {
-  const chain = flattenLineage(lot)
+function DropdownItem({ icon, label, onClick, highlight }: { icon: React.ReactNode; label: string; onClick: () => void; highlight?: boolean }) {
+  const [hov, setHov] = React.useState(false)
   return (
-    <Modal title={"Tracabilite : " + lot.codeLot} subtitle={"Chaine generationnelle : " + chain.length + " generation(s)"} onClose={onClose} size="lg">
+    <button
+      type="button"
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        width: '100%', background: hov ? 'var(--surface-2)' : 'none',
+        border: 'none', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 9,
+        padding: '9px 14px', fontSize: 13,
+        color: highlight ? 'var(--green-700)' : 'var(--text-primary)',
+        fontWeight: highlight ? 600 : 400,
+        textAlign: 'left',
+      }}
+    >
+      {icon} {label}
+    </button>
+  )
+}
+
+function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: string; onClose: () => void }) {
+  return (
+    <Modal title={"Traçabilité : " + codeLot} subtitle={"Chaîne générationnelle : " + chain.length + " génération(s)"} onClose={onClose} size="lg">
       <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, overflowX: 'auto', paddingBottom: 8 }}>
         {chain.map((node, i) => {
-          const gen = node.generation?.codeGeneration || '?'; const isLast = i === chain.length - 1
+          const gen = node.generation || '?'
+          const isLast = i === chain.length - 1
+          const roleColors = ROLE_NODE_COLORS[node.responsableRole] || { bg: '#f9fafb', border: '#e5e7eb', label: '' }
           return (
-            <React.Fragment key={node.id}>
-              <div style={{ background: GEN_BG[gen] || '#f9fafb', border: "2px solid " + (GEN_BORDER[gen] || '#e5e7eb'), borderRadius: 10, padding: '14px 16px', minWidth: 148, flex: '0 0 auto', boxShadow: isLast ? '0 4px 12px rgba(0,0,0,0.1)' : 'none' }}>
+            <React.Fragment key={node.lotId || i}>
+              <div style={{
+                background: GEN_BG[gen] || '#f9fafb',
+                border: `2px solid ${node.responsableRole ? roleColors.border : (GEN_BORDER[gen] || '#e5e7eb')}`,
+                borderRadius: 10, padding: '14px 16px', minWidth: 170, flex: '0 0 auto',
+                boxShadow: isLast ? '0 4px 12px rgba(0,0,0,0.1)' : 'none'
+              }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                   <span className={"badge " + (GEN_COLORS[gen] || 'badge-gray')} style={{ fontSize: 11 }}>{gen}</span>
                   {isLast && <span style={{ fontSize: 9, color: '#16a34a', fontWeight: 700, textTransform: 'uppercase' }}>Actuel</span>}
                 </div>
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, wordBreak: 'break-all' }}>{node.codeLot}</div>
+
+                {/* Phase 1 : Informations acteur */}
+                {node.responsableNom && (
+                  <div style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 6, padding: '6px 8px', marginBottom: 6, border: '1px solid rgba(0,0,0,0.06)' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Building2 size={10} />
+                      {node.responsableNom}
+                    </div>
+                    {node.responsableRole && (
+                      <div style={{ fontSize: 10, color: roleColors.border, fontWeight: 600, marginTop: 2 }}>
+                        {roleColors.label || node.responsableRole}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                  {node.campagne && <div>Campagne: {node.campagne}</div>}
                   <div>Date: {node.dateProduction || 'N/A'}</div>
-                  <div>Qte: {node.quantiteNette ? Number(node.quantiteNette).toLocaleString('fr-FR') : 'N/A'} {node.unite}</div>
-                  <div>Germ: {node.tauxGermination}%</div>
-                  <div>Purete: {node.puretePhysique}%</div>
+                  <div>Qté: {node.quantiteNette ? Number(node.quantiteNette).toLocaleString('fr-FR') : 'N/A'} {node.unite}</div>
+                  <div>Germ: {node.tauxGermination != null ? node.tauxGermination + '%' : 'N/A'}</div>
+                  <div>Pureté: {node.puretePhysique != null ? node.puretePhysique + '%' : 'N/A'}</div>
                 </div>
               </div>
               {!isLast && <div style={{ display: 'flex', alignItems: 'center', padding: '0 3px', color: '#9ca3af', flexShrink: 0 }}><ChevronRight size={16} /></div>}
@@ -46,9 +94,22 @@ function LineageModal({ lot, onClose }: { lot: any; onClose: () => void }) {
         })}
       </div>
       <div style={{ marginTop: 20, padding: '14px 18px', background: '#f8faf8', borderRadius: 8, display: 'flex', gap: 28, flexWrap: 'wrap' }}>
-        <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Generations</div><div style={{ fontSize: 22, fontWeight: 700 }}>{chain.length}</div></div>
+        <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Générations</div><div style={{ fontSize: 22, fontWeight: 700 }}>{chain.length}</div></div>
         <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Lot origine</div><div style={{ fontSize: 12, fontWeight: 600 }}>{chain[0]?.codeLot}</div></div>
-        <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Germination finale</div><div style={{ fontSize: 22, fontWeight: 700 }}>{lot.tauxGermination}%</div></div>
+        <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Germination finale</div><div style={{ fontSize: 22, fontWeight: 700 }}>{chain[chain.length - 1]?.tauxGermination ?? 'N/A'}%</div></div>
+        {chain[0]?.responsableNom && (
+          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Producteur initial</div><div style={{ fontSize: 12, fontWeight: 600 }}>{chain[0].responsableNom}</div></div>
+        )}
+      </div>
+
+      {/* Légende */}
+      <div style={{ marginTop: 14, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 10, color: 'var(--text-muted)' }}>
+        {Object.entries(ROLE_NODE_COLORS).filter(([_, v]) => v.label).map(([_, v]) => (
+          <div key={v.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, border: `2px solid ${v.border}`, background: v.bg }} />
+            <span>{v.label}</span>
+          </div>
+        ))}
       </div>
     </Modal>
   )
@@ -60,21 +121,27 @@ export function Lots({ roleKey }: Props) {
   const [generation, setGeneration] = useState('')
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ msg: string; type: 'success'|'error' } | null>(null)
-  const [lineageLot, setLineageLot] = useState<any>(null)
+  const [lineageChain, setLineageChain] = useState<any[] | null>(null)
+  const [lineageLotCode, setLineageLotCode] = useState('')
   const [lineageLoading, setLineageLoading] = useState<number|null>(null)
   const [showNewLot, setShowNewLot] = useState(false)
   const [showChildLot, setShowChildLot] = useState(false)
   const [showTransfer, setShowTransfer] = useState(false)
   const [parentLot, setParentLot] = useState<any>(null)
   const [saving, setSaving] = useState(false)
+  const [openMenuId,    setOpenMenuId]    = useState<number | null>(null)
+  const [showReception, setShowReception] = useState(false)
+  const [receptionForm, setReceptionForm] = useState({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' })
   const allowedGens = ROLE_GENERATIONS[roleKey] || ALL_GENS
-  const canCreate = ['seed-admin','seed-selector','seed-upseml','seed-multiplicator'].includes(roleKey)
+  const canCreate   = ['seed-admin','seed-selector','seed-upseml','seed-multiplicator'].includes(roleKey)
   const canTransfer = ['seed-selector','seed-upseml'].includes(roleKey)
-  const canChild = ['seed-admin','seed-upseml','seed-multiplicator'].includes(roleKey)
+  const canChild    = ['seed-admin','seed-upseml','seed-multiplicator'].includes(roleKey)
+  const canReception = roleKey === 'seed-quotataire'
 
   const [newLotForm, setNewLotForm] = useState({ codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE' })
   const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '' })
-  const [transferForm, setTransferForm] = useState({ generationCible: '', observations: '' })
+  const [transferForm, setTransferForm] = useState({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
+  const [membres, setMembres] = useState<any[]>([])
 
   async function fetchLots() {
     setLoading(true)
@@ -89,6 +156,7 @@ export function Lots({ roleKey }: Props) {
   useEffect(() => {
     fetchLots()
     api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {})
+    api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {})
   }, [generation])
 
   const genCounts = lots.reduce((acc: Record<string, number>, l) => {
@@ -109,12 +177,12 @@ export function Lots({ roleKey }: Props) {
         tauxGermination: Number(newLotForm.tauxGermination), puretePhysique: Number(newLotForm.puretePhysique),
         statutLot: newLotForm.statutLot,
       })
-      setToast({ msg: "Lot " + newLotForm.codeLot + " cree avec succes", type: 'success' })
+      setToast({ msg: "Lot " + newLotForm.codeLot + " créé avec succès", type: 'success' })
       setShowNewLot(false)
       setNewLotForm({ codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE' })
       fetchLots()
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la creation', type: 'error' })
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la création', type: 'error' })
     } finally { setSaving(false) }
   }
 
@@ -128,7 +196,7 @@ export function Lots({ roleKey }: Props) {
         tauxGermination: childForm.tauxGermination ? Number(childForm.tauxGermination) : undefined,
         puretePhysique: childForm.puretePhysique ? Number(childForm.puretePhysique) : undefined,
       })
-      setToast({ msg: "Lot enfant " + childForm.codeLot + " cree", type: 'success' })
+      setToast({ msg: "Lot enfant " + childForm.codeLot + " créé", type: 'success' })
       setShowChildLot(false); fetchLots()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
@@ -138,29 +206,70 @@ export function Lots({ roleKey }: Props) {
   async function submitTransfer(e: React.FormEvent) {
     e.preventDefault(); if (!parentLot) return; setSaving(true)
     try {
-      await api.post(endpoints.lotTransfer(parentLot.id), { generationCible: transferForm.generationCible, observations: transferForm.observations })
-      setToast({ msg: "Lot " + parentLot.codeLot + " transfere vers " + transferForm.generationCible, type: 'success' })
+      await api.post(endpoints.lotTransfer(parentLot.id), {
+        usernameDestinataire: transferForm.usernameDestinataire,
+        roleDestinataire: transferForm.roleDestinataire,
+        quantite: transferForm.quantite ? Number(transferForm.quantite) : undefined,
+        observations: transferForm.observations,
+      })
+      setToast({ msg: "Lot " + parentLot.codeLot + " transféré vers " + transferForm.usernameDestinataire, type: 'success' })
       setShowTransfer(false); fetchLots()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur lors du transfert', type: 'error' })
     } finally { setSaving(false) }
   }
 
+  async function submitReception(e: React.FormEvent) {
+    e.preventDefault(); if (!parentLot) return; setSaving(true)
+    try {
+      await api.post(endpoints.movements, {
+        idLot: parentLot.id,
+        type: 'IN',
+        siteDestinationCode: receptionForm.siteCode,
+        quantite: Number(receptionForm.quantite),
+        unite: receptionForm.unite,
+        reference: `RECEP-R2-${parentLot.codeLot}-${receptionForm.dateReception || new Date().toISOString().slice(0,10)}`,
+      })
+      setToast({ msg: `Réception de ${receptionForm.quantite} ${receptionForm.unite} enregistrée`, type: 'success' })
+      setShowReception(false)
+      setReceptionForm({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' })
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la réception', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  /* Phase 1 : appel du endpoint /lineage enrichi avec noms d'acteurs */
   async function showLineage(lot: any) {
     setLineageLoading(lot.id)
-    try { const r = await api.get(endpoints.lotById(lot.id)); setLineageLot(r.data) }
-    catch { setLineageLot(lot) }
+    try {
+      const r = await api.get(endpoints.lotLineage(lot.id))
+      setLineageChain(r.data)
+      setLineageLotCode(lot.codeLot)
+    } catch {
+      // Fallback : construire la chaîne depuis le lot avec lotParent
+      const chain: any[] = []; let cur = lot
+      while (cur) { chain.unshift(cur); cur = cur.lotParent }
+      setLineageChain(chain.map(n => ({
+        lotId: n.id, codeLot: n.codeLot,
+        generation: n.generation?.codeGeneration, campagne: n.campagne,
+        dateProduction: n.dateProduction, quantiteNette: n.quantiteNette,
+        unite: n.unite, tauxGermination: n.tauxGermination,
+        puretePhysique: n.puretePhysique, statutLot: n.statutLot,
+        responsableNom: n.responsableNom, responsableRole: n.responsableRole,
+      })))
+      setLineageLotCode(lot.codeLot)
+    }
     finally { setLineageLoading(null) }
   }
 
   return (
     <div>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
-      {lineageLot && <LineageModal lot={lineageLot} onClose={() => setLineageLot(null)} />}
+      {lineageChain && <LineageModal chain={lineageChain} codeLot={lineageLotCode} onClose={() => setLineageChain(null)} />}
 
       {roleKey === 'seed-admin' && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px 20px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
-          <span style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>Chaine :</span>
+          <span style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>Chaîne :</span>
           {ALL_GENS.map((g, i, arr) => (
             <React.Fragment key={g}>
               <span className={"badge " + (GEN_COLORS[g] || 'badge-gray')} style={{ cursor: 'pointer' }} onClick={() => setGeneration(generation === g ? '' : g)}>
@@ -190,7 +299,7 @@ export function Lots({ roleKey }: Props) {
         </div>
         <div className="filters-bar">
           <div className="filter-group">
-            <label className="filter-label">Generation</label>
+            <label className="filter-label">Génération</label>
             <select className="input" value={generation} onChange={e => setGeneration(e.target.value)} style={{ width: 140 }}>
               <option value="">Toutes</option>
               {allowedGens.map(g => <option key={g} value={g}>{g}</option>)}
@@ -201,11 +310,11 @@ export function Lots({ roleKey }: Props) {
         </div>
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Code Lot</th><th>Variete</th><th>Generation</th><th>Lot Parent</th><th>Quantite</th><th>Campagne</th><th>Statut</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Code Lot</th><th>Variété</th><th>Génération</th><th>Lot Parent</th><th>Quantité</th><th>Campagne</th><th>Producteur</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody>
-              {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={8}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
+              {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
                lots.length === 0 ? (
-                <tr><td colSpan={8}><div className="empty-state"><div className="empty-icon"><Package size={20} /></div><div className="empty-title">Aucun lot</div>{canCreate && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Creer un lot</button>}</div></td></tr>
+                <tr><td colSpan={9}><div className="empty-state"><div className="empty-icon"><Package size={20} /></div><div className="empty-title">Aucun lot</div>{canCreate && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}</div></td></tr>
                ) : lots.map(l => {
                 const gen = l.generation?.codeGeneration || 'N/A'
                 return (
@@ -217,21 +326,64 @@ export function Lots({ roleKey }: Props) {
                           <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{varietyMap[l.idVariete].nomVariete}</div>
                           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{varietyMap[l.idVariete].codeVariete}</div>
                         </div>
-                      ) : (
-                        <span style={{ color: 'var(--text-muted)' }}>—</span>
-                      )}
+                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
                     <td><span className={"badge " + (GEN_COLORS[gen] || 'badge-gray')}>{gen}</span></td>
                     <td>{l.lotParent?.codeLot ? <span className="td-mono" style={{ fontSize: 11 }}>{l.lotParent.codeLot}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                     <td><span style={{ fontWeight: 600 }}>{Number(l.quantiteNette).toLocaleString('fr-FR')}</span><span style={{ color: 'var(--text-muted)', marginLeft: 3, fontSize: 12 }}>{l.unite}</span></td>
                     <td style={{ fontSize: 12 }}>{l.campagne || '—'}</td>
-                    <td><span className={"badge " + (l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray')} style={{ fontSize: 11 }}>{l.statutLot}</span></td>
+                    {/* Phase 1 : colonne Producteur */}
                     <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} onClick={() => showLineage(l)} disabled={lineageLoading === l.id} title="Voir traçabilité">{lineageLoading === l.id ? <RefreshCw size={11} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Eye size={12} />}</button>
-                        {canChild && <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} title="Lot enfant" onClick={() => { setParentLot(l); setChildForm({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '' }); setShowChildLot(true) }}><GitBranch size={12} /></button>}
-                        {canTransfer && <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} title="Transferer" onClick={() => { setParentLot(l); setTransferForm({ generationCible: '', observations: '' }); setShowTransfer(true) }}><ArrowRightLeft size={12} /></button>}
-                      </div>
+                      {l.responsableNom ? (
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 500 }}>{l.responsableNom}</div>
+                          {l.responsableRole && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{ROLE_NODE_COLORS[l.responsableRole]?.label || l.responsableRole}</div>}
+                        </div>
+                      ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
+                    </td>
+                    <td><span className={"badge " + (l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray')} style={{ fontSize: 11 }}>{l.statutLot}</span></td>
+                    <td style={{ position: 'relative' }}>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ height: 28, fontSize: 12, padding: '0 10px', gap: 5 }}
+                        onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === l.id ? null : l.id) }}
+                      >
+                        <MoreVertical size={13} /> Actions
+                      </button>
+                      {openMenuId === l.id && (
+                        <>
+                          <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setOpenMenuId(null)} />
+                          <div style={{ position: 'absolute', right: 0, top: '100%', zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', minWidth: 195, padding: '4px 0', overflow: 'hidden' }}>
+                            <DropdownItem
+                              icon={lineageLoading === l.id ? <RefreshCw size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Eye size={13} />}
+                              label="Voir traçabilité"
+                              onClick={() => { showLineage(l); setOpenMenuId(null) }}
+                            />
+                            {canChild && (
+                              <DropdownItem
+                                icon={<GitBranch size={13} />}
+                                label="Créer un Lot Enfant"
+                                onClick={() => { setParentLot(l); setChildForm({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '' }); setShowChildLot(true); setOpenMenuId(null) }}
+                              />
+                            )}
+                            {canTransfer && (
+                              <DropdownItem
+                                icon={<ArrowRightLeft size={13} />}
+                                label="Transférer un Lot"
+                                onClick={() => { setParentLot(l); setTransferForm({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' }); setShowTransfer(true); setOpenMenuId(null) }}
+                              />
+                            )}
+                            {canReception && gen === 'R2' && (
+                              <DropdownItem
+                                icon={<Download size={13} />}
+                                label="Réceptionner"
+                                onClick={() => { setParentLot(l); setReceptionForm({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' }); setShowReception(true); setOpenMenuId(null) }}
+                                highlight
+                              />
+                            )}
+                          </div>
+                        </>
+                      )}
                     </td>
                   </tr>
                 )
@@ -242,19 +394,19 @@ export function Lots({ roleKey }: Props) {
       </div>
 
       {showNewLot && (
-        <Modal title="Nouveau Lot Semencier" subtitle="Enregistrer un nouveau lot dans la chaine semenciere" onClose={() => setShowNewLot(false)}>
+        <Modal title="Nouveau Lot Semencier" subtitle="Enregistrer un nouveau lot dans la chaîne semencière" onClose={() => setShowNewLot(false)}>
           <form onSubmit={submitNewLot}>
             <FormRow>
               <Field label="Code lot" required hint="Ex: G0-MIL-SOUNA3-2026"><FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G0-MIL-SOUNA3-2026" required /></Field>
-              <Field label="Variete" required>
+              <Field label="Variété" required>
                 <FormSelect value={newLotForm.idVariete} onChange={e => setNewLotForm(f => ({ ...f, idVariete: e.target.value }))} required>
-                  <option value="">-- Choisir une variete --</option>
+                  <option value="">-- Choisir une variété --</option>
                   {varieties.map(v => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
                 </FormSelect>
               </Field>
             </FormRow>
             <FormRow>
-              <Field label="Generation" required>
+              <Field label="Génération" required>
                 <FormSelect value={newLotForm.generationCode} onChange={e => setNewLotForm(f => ({ ...f, generationCode: e.target.value }))} required>
                   {allowedGens.map(g => <option key={g} value={g}>{g}</option>)}
                 </FormSelect>
@@ -263,7 +415,7 @@ export function Lots({ roleKey }: Props) {
             </FormRow>
             <FormRow>
               <Field label="Date de production"><FormInput type="date" value={newLotForm.dateProduction} onChange={e => setNewLotForm(f => ({ ...f, dateProduction: e.target.value }))} /></Field>
-              <Field label="Quantite nette" required>
+              <Field label="Quantité nette" required>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <FormInput type="number" value={newLotForm.quantiteNette} onChange={e => setNewLotForm(f => ({ ...f, quantiteNette: e.target.value }))} placeholder="50" min="0" step="0.01" required style={{ flex: 1 }} />
                   <FormSelect value={newLotForm.unite} onChange={e => setNewLotForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}><option value="kg">kg</option><option value="t">t</option><option value="g">g</option></FormSelect>
@@ -272,29 +424,29 @@ export function Lots({ roleKey }: Props) {
             </FormRow>
             <FormRow>
               <Field label="Taux germination (%)" required><FormInput type="number" value={newLotForm.tauxGermination} onChange={e => setNewLotForm(f => ({ ...f, tauxGermination: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" required /></Field>
-              <Field label="Purete physique (%)" required><FormInput type="number" value={newLotForm.puretePhysique} onChange={e => setNewLotForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="99.5" min="0" max="100" step="0.1" required /></Field>
+              <Field label="Pureté physique (%)" required><FormInput type="number" value={newLotForm.puretePhysique} onChange={e => setNewLotForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="99.5" min="0" max="100" step="0.1" required /></Field>
             </FormRow>
             <Field label="Statut">
               <FormSelect value={newLotForm.statutLot} onChange={e => setNewLotForm(f => ({ ...f, statutLot: e.target.value }))}>
                 <option value="DISPONIBLE">DISPONIBLE</option><option value="EN_PRODUCTION">EN_PRODUCTION</option><option value="TRANSFERE">TRANSFERE</option><option value="EPUISE">EPUISE</option>
               </FormSelect>
             </Field>
-            <FormActions onCancel={() => setShowNewLot(false)} loading={saving} submitLabel="Creer le lot" />
+            <FormActions onCancel={() => setShowNewLot(false)} loading={saving} submitLabel="Créer le lot" />
           </form>
         </Modal>
       )}
 
       {showChildLot && parentLot && (
-        <Modal title="Creer un Lot Enfant" subtitle={"Lot parent : " + parentLot.codeLot + " — " + parentLot.generation?.codeGeneration} onClose={() => setShowChildLot(false)}>
+        <Modal title="Créer un Lot Enfant" subtitle={"Lot parent : " + parentLot.codeLot + " — " + parentLot.generation?.codeGeneration} onClose={() => setShowChildLot(false)}>
           <div style={{ background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: 'var(--green-800)' }}>
-            Ce lot sera lie au lot parent et aura la generation cible selectionnee.
+            Ce lot sera lié au lot parent et aura la génération cible sélectionnée.
           </div>
           <form onSubmit={submitChildLot}>
             <FormRow>
               <Field label="Code du lot enfant" required><FormInput value={childForm.codeLot} onChange={e => setChildForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G1-MIL-SOUNA3-2026" required /></Field>
-              <Field label="Generation cible" required hint="G1, G2, G3, G4, R1, R2...">
+              <Field label="Génération cible" required>
                 <FormSelect value={childForm.generationCode} onChange={e => setChildForm(f => ({ ...f, generationCode: e.target.value }))} required>
-                  <option value="">-- Selectionner --</option>
+                  <option value="">-- Sélectionner --</option>
                   {ALL_GENS.map(g => <option key={g} value={g}>{g}</option>)}
                 </FormSelect>
               </Field>
@@ -304,7 +456,7 @@ export function Lots({ roleKey }: Props) {
               <Field label="Date de production"><FormInput type="date" value={childForm.dateProduction} onChange={e => setChildForm(f => ({ ...f, dateProduction: e.target.value }))} /></Field>
             </FormRow>
             <FormRow>
-              <Field label="Quantite nette" required>
+              <Field label="Quantité nette" required>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <FormInput type="number" value={childForm.quantiteNette} onChange={e => setChildForm(f => ({ ...f, quantiteNette: e.target.value }))} placeholder="500" min="0" step="0.01" required style={{ flex: 1 }} />
                   <FormSelect value={childForm.unite} onChange={e => setChildForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}><option value="kg">kg</option><option value="t">t</option></FormSelect>
@@ -312,31 +464,100 @@ export function Lots({ roleKey }: Props) {
               </Field>
               <Field label="Taux germination (%)"><FormInput type="number" value={childForm.tauxGermination} onChange={e => setChildForm(f => ({ ...f, tauxGermination: e.target.value }))} placeholder="97.0" min="0" max="100" step="0.1" /></Field>
             </FormRow>
-            <Field label="Purete physique (%)"><FormInput type="number" value={childForm.puretePhysique} onChange={e => setChildForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" /></Field>
-            <FormActions onCancel={() => setShowChildLot(false)} loading={saving} submitLabel="Creer le lot enfant" />
+            <Field label="Pureté physique (%)"><FormInput type="number" value={childForm.puretePhysique} onChange={e => setChildForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" /></Field>
+            <FormActions onCancel={() => setShowChildLot(false)} loading={saving} submitLabel="Créer le lot enfant" />
           </form>
         </Modal>
       )}
 
-      {showTransfer && parentLot && (
-        <Modal title="Transferer un Lot" subtitle={"Transferer " + parentLot.codeLot + " vers la prochaine generation"} onClose={() => setShowTransfer(false)} size="sm">
-          <div style={{ background: 'var(--amber-50)', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92660a' }}>
-            Cette action changera le statut du lot en TRANSFERE.
+      {showReception && parentLot && (
+        <Modal
+          title="Réceptionner des semences R2"
+          subtitle={`Lot : ${parentLot.codeLot} — Enregistrer la réception dans votre stock`}
+          onClose={() => setShowReception(false)}
+          size="sm"
+        >
+          <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#166534' }}>
+            Cette action enregistre l'arrivée physique des semences R2 achetées dans votre site de stockage.
           </div>
-          <form onSubmit={submitTransfer}>
-            <Field label="Generation cible" required hint="Vers quelle generation transferez-vous ?">
-              <FormSelect value={transferForm.generationCible} onChange={e => setTransferForm(f => ({ ...f, generationCible: e.target.value }))} required>
-                <option value="">-- Selectionner --</option>
-                {ALL_GENS.map(g => <option key={g} value={g}>{g}</option>)}
-              </FormSelect>
+          <form onSubmit={submitReception}>
+            <Field label="Site de réception" required hint="Code du site où vous stockez les semences">
+              <FormInput
+                value={receptionForm.siteCode}
+                onChange={e => setReceptionForm(f => ({ ...f, siteCode: e.target.value.toUpperCase() }))}
+                placeholder="Ex : DEPOT-DAKAR-01"
+                required
+              />
             </Field>
-            <Field label="Observations">
-              <textarea value={transferForm.observations} onChange={e => setTransferForm(f => ({ ...f, observations: e.target.value }))} placeholder="Notes sur le transfert..." style={{ width: '100%', minHeight: 80, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
-            </Field>
-            <FormActions onCancel={() => setShowTransfer(false)} loading={saving} submitLabel="Confirmer le transfert" />
+            <FormRow>
+              <Field label="Quantité reçue" required>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <FormInput
+                    type="number"
+                    value={receptionForm.quantite}
+                    onChange={e => setReceptionForm(f => ({ ...f, quantite: e.target.value }))}
+                    placeholder="500"
+                    min="0" step="0.01" required
+                    style={{ flex: 1 }}
+                  />
+                  <FormSelect value={receptionForm.unite} onChange={e => setReceptionForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}>
+                    <option value="kg">kg</option>
+                    <option value="t">t</option>
+                    <option value="g">g</option>
+                  </FormSelect>
+                </div>
+              </Field>
+              <Field label="Date de réception">
+                <FormInput
+                  type="date"
+                  value={receptionForm.dateReception}
+                  onChange={e => setReceptionForm(f => ({ ...f, dateReception: e.target.value }))}
+                />
+              </Field>
+            </FormRow>
+            <FormActions onCancel={() => setShowReception(false)} loading={saving} submitLabel="Confirmer la réception" />
           </form>
         </Modal>
       )}
+
+      {showTransfer && parentLot && (() => {
+        const destRole = roleKey === 'seed-selector' ? 'seed-upseml' : roleKey === 'seed-upseml' ? 'seed-multiplicator' : ''
+        const eligibles = membres.filter((m: any) => m.roleDansOrg === destRole || m.roleKeycloak === destRole)
+        return (
+          <Modal title="Transférer un Lot" subtitle={`${parentLot.codeLot} — ${parentLot.generation?.codeGeneration || ''}`} onClose={() => setShowTransfer(false)} size="sm">
+            <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e' }}>
+              <strong>Flux autorisé :</strong> {roleKey === 'seed-selector' ? 'Sélectionneur → UPSemCL (G0/G1)' : 'UPSemCL → Multiplicateur (G2/G3)'}
+            </div>
+            <form onSubmit={submitTransfer}>
+              <Field label="Destinataire" required hint={destRole ? `Rôle cible : ${destRole}` : 'Rôle non autorisé'}>
+                <FormSelect
+                  value={transferForm.usernameDestinataire}
+                  onChange={e => {
+                    const m = eligibles.find((x: any) => x.keycloakUsername === e.target.value)
+                    setTransferForm(f => ({ ...f, usernameDestinataire: e.target.value, roleDestinataire: m?.roleDansOrg || destRole }))
+                  }}
+                  required
+                >
+                  <option value="">— Sélectionner un destinataire —</option>
+                  {eligibles.length === 0
+                    ? <option disabled value="">Aucun destinataire disponible</option>
+                    : eligibles.map((m: any) => (
+                      <option key={m.id} value={m.keycloakUsername}>{m.keycloakUsername} — {m.organisation?.nomOrganisation || ''}</option>
+                    ))
+                  }
+                </FormSelect>
+              </Field>
+              <Field label="Quantité (kg)" hint="Optionnel">
+                <FormInput type="number" value={transferForm.quantite} onChange={e => setTransferForm(f => ({ ...f, quantite: e.target.value }))} placeholder="500" min="0" step="0.01" />
+              </Field>
+              <Field label="Observations">
+                <textarea value={transferForm.observations} onChange={e => setTransferForm(f => ({ ...f, observations: e.target.value }))} placeholder="Notes sur le transfert…" style={{ width: '100%', minHeight: 70, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+              </Field>
+              <FormActions onCancel={() => setShowTransfer(false)} loading={saving} submitLabel="Envoyer le transfert" />
+            </form>
+          </Modal>
+        )
+      })()}
     </div>
   )
 }

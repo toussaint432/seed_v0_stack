@@ -57,14 +57,23 @@ export function Transfers({ roleKey }: Props) {
     observations: '',
   })
 
+  const [recus, setRecus] = useState<any[]>([])
+  const [refusModal, setRefusModal] = useState<any>(null)
+  const [motifRefus, setMotifRefus] = useState('')
+  const [membres, setMembres] = useState<any[]>([])
+
   async function fetchAll() {
     setLoading(true)
-    const [tRes, lRes] = await Promise.allSettled([
-      api.get(endpoints.transfers),
+    const [tRes, lRes, rRes, mRes] = await Promise.allSettled([
+      api.get(endpoints.transfertsLot),
       api.get(endpoints.lots),
+      api.get(endpoints.transfertsRecus),
+      api.get(endpoints.membres),
     ])
     setTransfers(tRes.status === 'fulfilled' ? tRes.value.data : [])
     setLots(lRes.status === 'fulfilled' ? lRes.value.data : [])
+    setRecus(rRes.status === 'fulfilled' ? rRes.value.data : [])
+    setMembres(mRes.status === 'fulfilled' ? mRes.value.data : [])
     setLoading(false)
   }
 
@@ -73,17 +82,46 @@ export function Transfers({ roleKey }: Props) {
   const filtered = transfers.filter(t => {
     const matchSearch = !search ||
       t.codeTransfert?.toLowerCase().includes(search.toLowerCase()) ||
-      String(t.idLot).includes(search)
-    const matchStatus = !filterStatus || t.statutTransfert === filterStatus
+      t.usernameEmetteur?.toLowerCase().includes(search.toLowerCase()) ||
+      t.usernameDestinataire?.toLowerCase().includes(search.toLowerCase())
+    const matchStatus = !filterStatus || t.statut === filterStatus
     return matchSearch && matchStatus
   })
 
   const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
-  // Stats
   const byStatus = transfers.reduce((acc: Record<string, number>, t: any) => {
-    acc[t.statutTransfert] = (acc[t.statutTransfert] || 0) + 1; return acc
+    acc[t.statut] = (acc[t.statut] || 0) + 1; return acc
   }, {})
+
+  // Membres éligibles selon le rôle de l'émetteur
+  const destRole = roleKey === 'seed-selector' ? 'seed-upseml'
+                 : roleKey === 'seed-upseml'   ? 'seed-multiplicator' : ''
+  const membresEligibles = membres.filter((m: any) => m.roleDansOrg === destRole || m.roleKeycloak === destRole)
+
+  async function accepter(id: number) {
+    try {
+      await api.put(endpoints.transfertAccepter(id), {})
+      setToast({ msg: 'Transfert accepté', type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
+    }
+  }
+
+  async function refuser(e: React.FormEvent) {
+    e.preventDefault()
+    if (!refusModal) return
+    setSaving(true)
+    try {
+      await api.put(endpoints.transfertRefuser(refusModal.id), { motif: motifRefus })
+      setToast({ msg: 'Transfert refusé', type: 'success' })
+      setRefusModal(null); setMotifRefus('')
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
+    } finally { setSaving(false) }
+  }
 
   async function submitTransfer(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
@@ -130,10 +168,43 @@ export function Transfers({ roleKey }: Props) {
       {/* KPIs */}
       <div className="stats-grid">
         <div className="stat-card"><div className="stat-icon blue"><ArrowRightLeft size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : transfers.length}</div><div className="stat-label">Total transferts</div></div></div>
-        <div className="stat-card"><div className="stat-icon gold"><Clock size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : byStatus['DEMANDE'] || 0}</div><div className="stat-label">En attente</div></div></div>
-        <div className="stat-card"><div className="stat-icon violet"><Truck size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : byStatus['EXPEDIE'] || 0}</div><div className="stat-label">En transit</div></div></div>
-        <div className="stat-card"><div className="stat-icon green"><CheckCircle2 size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : byStatus['RECEPTIONNE'] || 0}</div><div className="stat-label">Réceptionnés</div></div></div>
+        <div className="stat-card"><div className="stat-icon gold"><Clock size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : (byStatus['EN_ATTENTE'] || byStatus['DEMANDE'] || 0)}</div><div className="stat-label">En attente</div></div></div>
+        <div className="stat-card"><div className="stat-icon violet"><Truck size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : byStatus['ACCEPTE'] || 0}</div><div className="stat-label">Acceptés</div></div></div>
+        <div className="stat-card"><div className="stat-icon green"><CheckCircle2 size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : byStatus['REFUSE'] || 0}</div><div className="stat-label">Refusés</div></div></div>
       </div>
+
+      {/* Transferts à traiter — section urgente */}
+      {recus.length > 0 && (
+        <div className="card" style={{ border: '1px solid #fbbf24', background: '#fffbeb', marginBottom: 16 }}>
+          <div className="card-header">
+            <span className="card-title" style={{ color: '#92400e' }}>
+              <span className="card-title-icon" style={{ background: '#fef3c7' }}><Clock size={15} color="#92400e" /></span>
+              {recus.length} transfert{recus.length > 1 ? 's' : ''} en attente de votre réponse
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 20px 16px' }}>
+            {recus.map((t: any) => (
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fff', border: '1px solid #fde68a', borderRadius: 8 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, fontFamily: 'DM Mono, monospace' }}>{t.codeTransfert}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                    De <strong>{t.usernameEmetteur}</strong> ({t.roleEmetteur}) · Lot #{t.idLot} · {t.generationTransferee}
+                    {t.quantite && <> · {Number(t.quantite).toLocaleString('fr-FR')} kg</>}
+                  </div>
+                  {t.observations && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{t.observations}</div>}
+                </div>
+                <button className="btn btn-primary" style={{ height: 30, fontSize: 12 }} onClick={() => accepter(t.id)}>
+                  <CheckCircle2 size={12} /> Accepter
+                </button>
+                <button className="btn btn-ghost" style={{ height: 30, fontSize: 12, color: '#ef4444', borderColor: '#fca5a5' }}
+                  onClick={() => { setRefusModal(t); setMotifRefus('') }}>
+                  Refuser
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Workflow */}
       <div className="gen-pipeline">
@@ -185,7 +256,7 @@ export function Transfers({ roleKey }: Props) {
 
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Code</th><th>Lot</th><th>Source → Destination</th><th>Quantité</th><th>Demande</th><th>Statut</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Code</th><th>Lot</th><th>Émetteur → Destinataire</th><th>Génération</th><th>Demande</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody>
               {loading ? [0, 1, 2, 3].map(i => <tr key={i}><td colSpan={7}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
                 pageItems.length === 0 ? (
@@ -193,26 +264,23 @@ export function Transfers({ roleKey }: Props) {
                 ) : pageItems.map((t: any) => (
                   <tr key={t.id}>
                     <td><span className="td-mono" style={{ fontWeight: 700 }}>{t.codeTransfert}</span></td>
-                    <td><span className="td-mono">{getLotLabel(t.idLot)}</span></td>
+                    <td><span className="td-mono">{getLotLabel(t.idLot) || `#${t.idLot}`}</span></td>
                     <td style={{ fontSize: 12.5 }}>
-                      <span style={{ fontWeight: 500 }}>{t.organisationSource || t.siteSource || '—'}</span>
+                      <span style={{ fontWeight: 500 }}>{t.usernameEmetteur || t.organisationSource || '—'}</span>
                       <span style={{ color: 'var(--text-muted)', margin: '0 6px' }}>→</span>
-                      <span style={{ fontWeight: 500 }}>{t.organisationDestination || t.siteDestination || '—'}</span>
+                      <span style={{ fontWeight: 500 }}>{t.usernameDestinataire || t.organisationDestination || '—'}</span>
                     </td>
-                    <td><span style={{ fontWeight: 700 }}>{Number(t.quantiteTransferee).toLocaleString('fr-FR')}</span> <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>kg</span></td>
+                    <td><span className="badge badge-generation">{t.generationTransferee || '—'}</span></td>
                     <td style={{ fontSize: 12.5 }}>{t.dateDemande ? new Date(t.dateDemande).toLocaleDateString('fr-FR') : '—'}</td>
-                    <td><StatusBadge status={t.statutTransfert} showIcon /></td>
+                    <td><StatusBadge status={t.statut || t.statutTransfert} showIcon /></td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11 }} onClick={() => setShowDetail(t)}><Eye size={12} /></button>
-                        {canValidate && t.statutTransfert === 'DEMANDE' && (
-                          <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#1d4ed8' }} onClick={() => updateStatus(t.id, 'VALIDE')} title="Valider"><CheckCircle2 size={12} /></button>
-                        )}
-                        {canValidate && t.statutTransfert === 'VALIDE' && (
-                          <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#6d28d9' }} onClick={() => updateStatus(t.id, 'EXPEDIE')} title="Marquer expédié"><Truck size={12} /></button>
-                        )}
-                        {canValidate && t.statutTransfert === 'EXPEDIE' && (
-                          <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#15803d' }} onClick={() => updateStatus(t.id, 'RECEPTIONNE')} title="Confirmer réception"><Package size={12} /></button>
+                        {t.statut === 'EN_ATTENTE' && t.usernameDestinataire && (
+                          <>
+                            <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#15803d' }} onClick={() => accepter(t.id)} title="Accepter"><CheckCircle2 size={12} /></button>
+                            <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#ef4444' }} onClick={() => { setRefusModal(t); setMotifRefus('') }} title="Refuser"><Send size={12} style={{ transform: 'rotate(180deg)' }} /></button>
+                          </>
                         )}
                       </div>
                     </td>
@@ -226,21 +294,40 @@ export function Transfers({ roleKey }: Props) {
 
       {/* Detail Modal */}
       {showDetail && (
-        <Modal title={`Transfert — ${showDetail.codeTransfert}`} subtitle={`Lot : ${getLotLabel(showDetail.idLot)}`} onClose={() => setShowDetail(null)}>
+        <Modal title={`Transfert — ${showDetail.codeTransfert}`} subtitle={`Lot #${showDetail.idLot} · ${showDetail.generationTransferee || ''}`} onClose={() => setShowDetail(null)}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Organisation source</div><div style={{ fontSize: 13, fontWeight: 500 }}>{showDetail.organisationSource || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Organisation destination</div><div style={{ fontSize: 13, fontWeight: 500 }}>{showDetail.organisationDestination || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Site source</div><div style={{ fontSize: 13 }}>{showDetail.siteSource || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Site destination</div><div style={{ fontSize: 13 }}>{showDetail.siteDestination || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Quantité transférée</div><div style={{ fontSize: 20, fontWeight: 700 }}>{Number(showDetail.quantiteTransferee).toLocaleString('fr-FR')} kg</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Statut</div><StatusBadge status={showDetail.statutTransfert} showIcon size="md" /></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Émetteur</div><div style={{ fontSize: 13, fontWeight: 500 }}>{showDetail.usernameEmetteur || showDetail.organisationSource || '—'}</div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Destinataire</div><div style={{ fontSize: 13, fontWeight: 500 }}>{showDetail.usernameDestinataire || showDetail.organisationDestination || '—'}</div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Génération transférée</div><span className="badge badge-generation">{showDetail.generationTransferee || '—'}</span></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Quantité</div><div style={{ fontSize: 20, fontWeight: 700 }}>{showDetail.quantite ? Number(showDetail.quantite).toLocaleString('fr-FR') + ' kg' : '—'}</div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Statut</div><StatusBadge status={showDetail.statut || showDetail.statutTransfert} showIcon size="md" /></div>
             <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date demande</div><div style={{ fontSize: 13 }}>{showDetail.dateDemande || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date validation</div><div style={{ fontSize: 13 }}>{showDetail.dateValidation || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date réception</div><div style={{ fontSize: 13 }}>{showDetail.dateReception || '—'}</div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date acceptation</div><div style={{ fontSize: 13 }}>{showDetail.dateAcceptation || '—'}</div></div>
+            {showDetail.motifRefus && (
+              <div style={{ gridColumn: '1 / -1' }}><div style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', marginBottom: 4 }}>Motif de refus</div><div style={{ fontSize: 13, color: '#ef4444' }}>{showDetail.motifRefus}</div></div>
+            )}
             {showDetail.observations && (
               <div style={{ gridColumn: '1 / -1' }}><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Observations</div><div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{showDetail.observations}</div></div>
             )}
           </div>
+        </Modal>
+      )}
+
+      {/* Modal Refus */}
+      {refusModal && (
+        <Modal title="Refuser le transfert" subtitle={refusModal.codeTransfert} onClose={() => setRefusModal(null)} size="sm">
+          <form onSubmit={refuser}>
+            <Field label="Motif du refus" required>
+              <textarea
+                value={motifRefus}
+                onChange={e => setMotifRefus(e.target.value)}
+                placeholder="Indiquer la raison du refus…"
+                required
+                style={{ width: '100%', minHeight: 80, padding: '9px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+              />
+            </Field>
+            <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer le refus" submitClassName="btn-danger" />
+          </form>
         </Modal>
       )}
 

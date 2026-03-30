@@ -6,6 +6,8 @@ import java.util.List;
 public record CreateOrderRequest(
   String codeCommande,
   String client,
+  Long idOrganisationFournisseur,
+  String observations,
   List<Line> lignes
 ) {
   public record Line(Long idVariete, Long idGeneration, BigDecimal quantite, String unite) {}

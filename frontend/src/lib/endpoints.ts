@@ -1,5 +1,6 @@
 /* ══════════════════════════════════════════════════════════════
    Endpoints centralisés — évite les URLs hardcodées partout
+   V1.5 — Phase 2 : zones agro-écologiques + catalogue quotataire
    ══════════════════════════════════════════════════════════════ */
 
 const CATALOG  = 'http://localhost:18081/api'
@@ -21,6 +22,7 @@ export const endpoints = {
   lotById:          (id: number) => `${LOT}/lots/${id}`,
   lotChild:         (id: number) => `${LOT}/lots/${id}/child`,
   lotTransfer:      (id: number) => `${LOT}/lots/${id}/transfer`,
+  lotLineage:       (id: number) => `${LOT}/lots/${id}/lineage`,
   generations:      `${LOT}/generations`,
   campagnes:        `${LOT}/campagnes`,
   certifications:         `${LOT}/certifications`,
@@ -32,6 +34,16 @@ export const endpoints = {
   programs:         `${LOT}/programs`,
   programById:      (id: number) => `${LOT}/programs/${id}`,
 
+  // ── Catalog Service — Zones agro-écologiques (Phase 2) ──
+  zones:            `${CATALOG}/zones`,
+  varietyZones:     (id: number) => `${CATALOG}/varieties/${id}/zones`,
+
+  // ── Lot Service — Transferts de lots (Phase 2bis) ──
+  transfertsLot:          `${LOT}/transferts`,
+  transfertsRecus:        `${LOT}/transferts/recus`,
+  transfertAccepter: (id: number) => `${LOT}/transferts/${id}/accepter`,
+  transfertRefuser:  (id: number) => `${LOT}/transferts/${id}/refuser`,
+
   // ── Stock Service (18083) ──
   stocks:     `${STOCK}/stocks`,
   stockById:        (id: number) => `${STOCK}/stocks/${id}`,
@@ -40,13 +52,29 @@ export const endpoints = {
   siteById:         (id: number) => `${STOCK}/sites/${id}`,
   transfers:  `${STOCK}/transfers`,
   transferById:     (id: number) => `${STOCK}/transfers/${id}`,
+  catalogue:        `${STOCK}/stocks/catalogue`,
+  catalogueProximite: `${STOCK}/stocks/catalogue/proximite`,
 
   // ── Order Service (18084) ──
-  orders:     `${ORDER}/orders`,
-  orderById:        (id: number) => `${ORDER}/orders/${id}`,
-  orderAllocate:    `${ORDER}/orders/allocate`,
+  orders:              `${ORDER}/orders`,
+  orderById:           (id: number) => `${ORDER}/orders/${id}`,
+  orderAllocate:       `${ORDER}/orders/allocate`,
+  ordersMesCommandes:  `${ORDER}/orders/mes-commandes`,
+  ordersATraiter:      `${ORDER}/orders/a-traiter`,
+  orderStatut:         (id: number) => `${ORDER}/orders/${id}/statut`,
   organisations:    `${ORDER}/organisations`,
   organisationById: (id: number) => `${ORDER}/organisations/${id}`,
+
+  // Phase 1 : Membres (liaison Keycloak ↔ organisation)
+  membres:                `${ORDER}/membres`,
+  membreByUsername:  (username: string) => `${ORDER}/membres/username/${username}`,
+  membresByOrg:     (orgId: number) => `${ORDER}/membres/organisation/${orgId}`,
+
+  // ── Chat / Messagerie (order-service :18084) — Phase 6 ──
+  chatConversations:  `${ORDER}/chat/conversations`,
+  chatMessages:       (convId: number) => `${ORDER}/chat/conversations/${convId}/messages`,
+  chatUpload:         (convId: number) => `${ORDER}/chat/conversations/${convId}/messages/upload`,
+  chatUnread:         `${ORDER}/chat/unread-count`,
 
   // ── Swagger UI links ──
   swagger: {

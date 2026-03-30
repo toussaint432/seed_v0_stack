@@ -16,7 +16,10 @@ public class SiteController {
     private final SiteRepo siteRepo;
 
     @GetMapping
-    public List<Site> list() {
+    public List<Site> list(
+            @RequestParam(required = false) String region,
+            @RequestParam(required = false) Long idOrganisation) {
+        // Phase 3 : filtres additionnels à ajouter ici
         return siteRepo.findAll();
     }
 
@@ -35,11 +38,15 @@ public class SiteController {
     @PutMapping("/{id}")
     public ResponseEntity<Site> update(@PathVariable Long id, @RequestBody Site body) {
         return siteRepo.findById(id).map(s -> {
-            s.setCodeSite(body.getCodeSite());
-            s.setNomSite(body.getNomSite());
-            s.setTypeSite(body.getTypeSite());
-            s.setLocalite(body.getLocalite());
-            s.setRegion(body.getRegion());
+            if (body.getCodeSite() != null) s.setCodeSite(body.getCodeSite());
+            if (body.getNomSite() != null) s.setNomSite(body.getNomSite());
+            if (body.getTypeSite() != null) s.setTypeSite(body.getTypeSite());
+            if (body.getLocalite() != null) s.setLocalite(body.getLocalite());
+            if (body.getRegion() != null) s.setRegion(body.getRegion());
+            // Phase 1 : GPS + organisation
+            if (body.getLatitude() != null) s.setLatitude(body.getLatitude());
+            if (body.getLongitude() != null) s.setLongitude(body.getLongitude());
+            if (body.getIdOrganisation() != null) s.setIdOrganisation(body.getIdOrganisation());
             return ResponseEntity.ok(siteRepo.save(s));
         }).orElse(ResponseEntity.notFound().build());
     }
