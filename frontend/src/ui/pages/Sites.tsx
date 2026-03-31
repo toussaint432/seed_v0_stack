@@ -36,7 +36,7 @@ export function Sites({ roleKey }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [saving, setSaving] = useState(false)
 
-  const canManage = ['seed-admin', 'seed-upseml', 'seed-multiplicator'].includes(roleKey)
+  const canManage = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
 
   const [form, setForm] = useState({
     codeSite: '', nomSite: '', typeSite: 'MAGASIN', localite: '',

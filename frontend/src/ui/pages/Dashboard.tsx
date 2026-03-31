@@ -39,7 +39,7 @@ const GEN_LABELS: Record<string, string> = {
 const roleGreetings: Record<string, { title: string; sub: string }> = {
   'seed-admin':         { title: 'Vue d\'ensemble complète',      sub: 'Supervision de toute la chaîne semencière G0→R2' },
   'seed-selector':      { title: 'Vos lots G0 et G1',             sub: 'Gérez les semences génétiques avant transfert' },
-  'seed-upseml':        { title: 'Centre de multiplication',       sub: 'Suivez les lots G1→G3 et vos stocks' },
+  'seed-upsemcl':        { title: 'Centre de multiplication',       sub: 'Suivez les lots G1→G3 et vos stocks' },
   'seed-multiplicator': { title: 'Production G3→R2',              sub: 'Vos lots en cours et stocks disponibles' },
   'seed-quotataire':    { title: 'Catalogue semences',            sub: 'Consultez les disponibilités et passez vos commandes' },
 }
@@ -140,8 +140,8 @@ export function Dashboard({ roleKey }: Props) {
   const greeting = roleGreetings[roleKey] || { title: 'Tableau de bord', sub: "Vue d'ensemble" }
 
   const showStats = (r: string) => !['seed-quotataire'].includes(r)
-  const showOrders = ['seed-admin','seed-upseml','seed-quotataire'].includes(roleKey)
-  const showPipeline = ['seed-admin','seed-selector','seed-upseml'].includes(roleKey)
+  const showOrders = ['seed-admin','seed-upsemcl','seed-quotataire'].includes(roleKey)
+  const showPipeline = ['seed-admin','seed-selector','seed-upsemcl'].includes(roleKey)
 
   return (
     <div>
@@ -225,7 +225,7 @@ export function Dashboard({ roleKey }: Props) {
 
       {/* Quick actions */}
       <div className="quick-actions">
-        {['seed-admin','seed-selector','seed-upseml','seed-multiplicator'].includes(roleKey) && (
+        {['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey) && (
           <a href={endpoints.swagger.lot} target="_blank" rel="noopener noreferrer">
             <button className="btn btn-primary">
               <Plus size={14} /> Nouveau lot
@@ -246,7 +246,7 @@ export function Dashboard({ roleKey }: Props) {
             </button>
           </a>
         )}
-        {['seed-admin','seed-upseml','seed-multiplicator'].includes(roleKey) && (
+        {['seed-admin','seed-upsemcl','seed-multiplicator'].includes(roleKey) && (
           <a href={endpoints.swagger.stock} target="_blank" rel="noopener noreferrer">
             <button className="btn btn-secondary">
               <Database size={13} /> Mouvement stock
@@ -259,7 +259,7 @@ export function Dashboard({ roleKey }: Props) {
       <div className="grid-2">
 
         {/* Recent lots */}
-        {['seed-admin','seed-selector','seed-upseml','seed-multiplicator'].includes(roleKey) && (
+        {['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey) && (
           <div className="card">
             <div className="card-header">
               <span className="card-title">

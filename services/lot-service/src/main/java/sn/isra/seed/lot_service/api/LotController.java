@@ -35,8 +35,8 @@ public class LotController {
     private final ObjectMapper om = new ObjectMapper();
 
     private static final Map<String, String> FLUX_RULES = Map.of(
-        "seed-selector", "seed-upseml",
-        "seed-upseml",   "seed-multiplicator"
+        "seed-selector", "seed-upsemcl",
+        "seed-upsemcl",   "seed-multiplicator"
     );
 
     // ── Liste tous les lots avec filtre optionnel génération ──
@@ -171,7 +171,7 @@ public class LotController {
 
         String gen = lot.getGeneration() != null ? lot.getGeneration().getCodeGeneration() : "";
         boolean genOk = ("seed-selector".equals(roleEmetteur) && List.of("G0","G1").contains(gen))
-                     || ("seed-upseml".equals(roleEmetteur)   && List.of("G2","G3").contains(gen));
+                     || ("seed-upsemcl".equals(roleEmetteur)   && List.of("G2","G3").contains(gen));
         if (!genOk)
             return ResponseEntity.badRequest().body(Map.of("message", "Génération " + gen + " non transférable pour " + roleEmetteur));
 
@@ -217,7 +217,7 @@ public class LotController {
     }
 
     private String detectSeedRole(List<String> roles) {
-        for (String r : List.of("seed-admin", "seed-selector", "seed-upseml",
+        for (String r : List.of("seed-admin", "seed-selector", "seed-upsemcl",
                                  "seed-multiplicator", "seed-quotataire")) {
             if (roles.contains(r)) return r;
         }

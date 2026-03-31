@@ -19,7 +19,7 @@ export function Stocks({ roleKey }: Props) {
   const [showStockForm, setShowStockForm] = useState(false)
   const [showMvtForm, setShowMvtForm] = useState(false)
   const [saving, setSaving] = useState(false)
-  const canManage = ['seed-admin','seed-upseml','seed-multiplicator'].includes(roleKey)
+  const canManage = ['seed-admin','seed-upsemcl','seed-multiplicator'].includes(roleKey)
 
   const [stockForm, setStockForm] = useState({ idLot: '', siteCode: '', quantite: '', unite: 'kg' })
   const [mvtForm, setMvtForm] = useState({ idLot: '', type: 'IN', siteSourceCode: '', siteDestinationCode: '', quantite: '', unite: 'kg', reference: '' })

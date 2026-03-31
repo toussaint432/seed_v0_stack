@@ -15,7 +15,7 @@ const PAGE_SIZE = 10
 /* ── Règles métier : générations autorisées et destination fixe par rôle ── */
 const TRANSFER_RULES: Record<string, { allowedGens: string[]; source: string; destination: string; destRole: string }> = {
   'seed-selector':      { allowedGens: ['G1'],       source: 'ISRA/CNRA',      destination: 'UPSemCL',       destRole: 'UPSemCL' },
-  'seed-upseml':        { allowedGens: ['G3'],        source: 'UPSemCL',        destination: 'Multiplicateur', destRole: 'Multiplicateur' },
+  'seed-upsemcl':        { allowedGens: ['G3'],        source: 'UPSemCL',        destination: 'Multiplicateur', destRole: 'Multiplicateur' },
   'seed-multiplicator': { allowedGens: ['R1', 'R2'],  source: 'Multiplicateur', destination: 'Quotataire/OP',  destRole: 'Quotataire/OP' },
 }
 
@@ -39,8 +39,8 @@ export function Transfers({ roleKey }: Props) {
   const [showDetail, setShowDetail] = useState<any>(null)
   const [saving, setSaving] = useState(false)
 
-  const canCreate = ['seed-admin', 'seed-selector', 'seed-upseml', 'seed-multiplicator'].includes(roleKey)
-  const canValidate = ['seed-admin', 'seed-upseml'].includes(roleKey)
+  const canCreate = ['seed-admin', 'seed-selector', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
+  const canValidate = ['seed-admin', 'seed-upsemcl'].includes(roleKey)
   const rule = TRANSFER_RULES[roleKey]
 
   // Lots filtrés selon les générations autorisées pour ce rôle
@@ -95,8 +95,8 @@ export function Transfers({ roleKey }: Props) {
   }, {})
 
   // Membres éligibles selon le rôle de l'émetteur
-  const destRole = roleKey === 'seed-selector' ? 'seed-upseml'
-                 : roleKey === 'seed-upseml'   ? 'seed-multiplicator' : ''
+  const destRole = roleKey === 'seed-selector' ? 'seed-upsemcl'
+                 : roleKey === 'seed-upsemcl'   ? 'seed-multiplicator' : ''
   const membresEligibles = membres.filter((m: any) => m.roleDansOrg === destRole || m.roleKeycloak === destRole)
 
   async function accepter(id: number) {

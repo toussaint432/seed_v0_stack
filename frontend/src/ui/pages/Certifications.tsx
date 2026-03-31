@@ -51,7 +51,7 @@ export function Certifications({ roleKey }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: number; label: string } | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const canCreate = ['seed-admin', 'seed-upseml'].includes(roleKey)
+  const canCreate = ['seed-admin', 'seed-upsemcl'].includes(roleKey)
   const canCertify = ['seed-admin'].includes(roleKey)
   const [uploadingId, setUploadingId] = useState<number | null>(null)
 

@@ -14,7 +14,7 @@ const REALM         = 'seed-v0'
 const ROLE_INFO: Record<string, { label: string; color: string; description: string }> = {
   'seed-admin':         { label: 'Administrateur ISRA', color: '#7c3aed', description: 'Supervision globale — accès complet à toute la plateforme' },
   'seed-selector':      { label: 'Sélectionneur',       color: '#0369a1', description: 'Gestion des variétés · création des lots G0/G1 · transfert vers UPSemCL' },
-  'seed-upseml':        { label: 'UPSemCL',             color: '#0f766e', description: 'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs' },
+  'seed-upsemcl':        { label: 'UPSemCL',             color: '#0f766e', description: 'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs' },
   'seed-multiplicator': { label: 'Multiplicateur',      color: '#15803d', description: 'Réception G3 → production G4→R1→R2 pour commercialisation' },
   'seed-quotataire':    { label: 'Quotataire / OP',     color: '#b45309', description: 'Consultation du catalogue et passation de commandes de semences R2' },
 }

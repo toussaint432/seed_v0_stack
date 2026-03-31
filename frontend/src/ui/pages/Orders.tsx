@@ -379,7 +379,7 @@ function VueMultiplicateur({ setToast }: { toast: any; setToast: any }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   VUE ADMIN / UPSEML — toutes les commandes + allocation
+   VUE ADMIN / UPSEMCL — toutes les commandes + allocation
    ══════════════════════════════════════════════════════════════ */
 function VueAdmin({ setToast }: { toast: any; setToast: any }) {
   const [orders, setOrders]       = useState<any[]>([])

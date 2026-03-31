@@ -41,13 +41,17 @@ interface MembreInfo {
   organisation: { id: number; nomOrganisation: string }
 }
 
+const MAX_MSG_LENGTH  = 2000   // caractères max par message
+const MAX_FILE_SIZE   = 5 * 1024 * 1024   // 5 Mo (images)
+const MAX_AUDIO_SIZE  = 2 * 1024 * 1024   // 2 Mo (audio)
+
 /* Destinataires autorisés selon le rôle */
 const DEST_ROLES: Record<string, string[]> = {
   'seed-quotataire':    ['seed-multiplicator'],
-  'seed-multiplicator': ['seed-quotataire', 'seed-upseml'],
-  'seed-upseml':        ['seed-multiplicator', 'seed-selector'],
-  'seed-selector':      ['seed-upseml'],
-  'seed-admin':         ['seed-quotataire','seed-multiplicator','seed-upseml','seed-selector','seed-admin'],
+  'seed-multiplicator': ['seed-quotataire', 'seed-upsemcl'],
+  'seed-upsemcl':        ['seed-multiplicator', 'seed-selector'],
+  'seed-selector':      ['seed-upsemcl'],
+  'seed-admin':         ['seed-quotataire','seed-multiplicator','seed-upsemcl','seed-selector','seed-admin'],
 }
 
 function initiales(nom: string) {
@@ -201,6 +205,11 @@ export function Messages({ roleKey, username }: Props) {
   async function uploadFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !selectedConv) return
+    if (file.size > MAX_FILE_SIZE) {
+      setToast({ msg: 'Image trop lourde (max 5 Mo)', type: 'error' })
+      e.target.value = ''
+      return
+    }
     const formData = new FormData()
     formData.append('file', file)
     try {
@@ -216,6 +225,10 @@ export function Messages({ roleKey, username }: Props) {
   /* ── Upload audio ── */
   async function sendAudio(blob: Blob, mimeType: string) {
     if (!selectedConv) return
+    if (blob.size > MAX_AUDIO_SIZE) {
+      setToast({ msg: 'Message vocal trop long (max 2 Mo)', type: 'error' })
+      return
+    }
     const ext = mimeType.includes('mp4') ? '.mp4' : mimeType.includes('ogg') ? '.ogg' : '.webm'
     const file = new File([blob], `audio_${Date.now()}${ext}`, { type: mimeType })
     const formData = new FormData()
@@ -398,8 +411,17 @@ export function Messages({ roleKey, username }: Props) {
                     onChange={onTextChange}
                     onKeyDown={onKeyDown}
                     rows={1}
+                    maxLength={MAX_MSG_LENGTH}
                     disabled={sending}
                   />
+                  {text.length > MAX_MSG_LENGTH * 0.8 && (
+                    <span style={{
+                      position: 'absolute', bottom: 4, right: 44,
+                      fontSize: 10, color: text.length >= MAX_MSG_LENGTH ? '#dc2626' : 'var(--text-muted)'
+                    }}>
+                      {text.length}/{MAX_MSG_LENGTH}
+                    </span>
+                  )}
                   <button type="button" className="chat-btn-icon secondary" onClick={() => fileInputRef.current?.click()} title="Envoyer une image">
                     <Image size={14} />
                   </button>

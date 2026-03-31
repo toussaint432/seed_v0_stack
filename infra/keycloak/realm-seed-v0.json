@@ -33,7 +33,7 @@
     "realm": [
       { "name": "seed-admin",         "description": "Administrateur ISRA — supervision globale" },
       { "name": "seed-selector",      "description": "Sélectionneur — crée G0, transfère G1 à UPSemCL" },
-      { "name": "seed-upseml",        "description": "UPSemCL — gère G1→G2→G3, transfère G3 aux multiplicateurs" },
+      { "name": "seed-upsemcl",        "description": "UPSemCL — gère G1→G2→G3, transfère G3 aux multiplicateurs" },
       { "name": "seed-multiplicator", "description": "Multiplicateur — reçoit G3, produit G4→R1→R2" },
       { "name": "seed-quotataire",    "description": "Quotataire/OP — consulte et commande R2" }
     ]
@@ -58,13 +58,13 @@
       "realmRoles": ["seed-selector"]
     },
     {
-      "username": "upseml",
+      "username": "upsemcl",
       "enabled": true,
-      "email": "upseml@seed.local",
+      "email": "upsemcl@seed.local",
       "firstName": "Fatou",
       "lastName": "UPSemCL",
-      "credentials": [{ "type": "password", "value": "upseml123", "temporary": false }],
-      "realmRoles": ["seed-upseml"]
+      "credentials": [{ "type": "password", "value": "upsemcl123", "temporary": false }],
+      "realmRoles": ["seed-upsemcl"]
     },
     {
       "username": "multiplicateur",

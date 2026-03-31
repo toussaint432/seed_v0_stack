@@ -7,6 +7,7 @@ import java.util.Optional;
 
 public interface MembreOrganisationRepo extends JpaRepository<MembreOrganisation, Long> {
     Optional<MembreOrganisation> findByKeycloakUsername(String keycloakUsername);
+    boolean existsByKeycloakUsername(String keycloakUsername);
     List<MembreOrganisation> findByOrganisation_Id(Long organisationId);
     List<MembreOrganisation> findByKeycloakRole(String keycloakRole);
 }

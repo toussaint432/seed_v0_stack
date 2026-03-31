@@ -37,8 +37,8 @@ export function Programs({ roleKey }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [saving, setSaving] = useState(false)
 
-  const canCreate = ['seed-admin', 'seed-upseml'].includes(roleKey)
-  const canManage = ['seed-admin', 'seed-upseml', 'seed-multiplicator'].includes(roleKey)
+  const canCreate = ['seed-admin', 'seed-upsemcl'].includes(roleKey)
+  const canManage = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
 
   const [form, setForm] = useState({
     codeProgramme: '', idLotSource: '', generationCible: 'G3',

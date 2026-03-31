@@ -42,7 +42,7 @@ function getUserInfo() {
   const roleMap: Record<string, { label: string; color: string }> = {
     'seed-admin':         { label: 'Administrateur ISRA', color: '#7c3aed' },
     'seed-selector':      { label: 'Sélectionneur',       color: '#0369a1' },
-    'seed-upseml':        { label: 'UPSemCL',             color: '#0f766e' },
+    'seed-upsemcl':        { label: 'UPSemCL',             color: '#0f766e' },
     'seed-multiplicator': { label: 'Multiplicateur',      color: '#15803d' },
     'seed-quotataire':    { label: 'Quotataire / OP',     color: '#b45309' },
   }
@@ -90,7 +90,7 @@ function getNavSections(roleKey: string): NavSection[] {
         { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
-    case 'seed-upseml':
+    case 'seed-upsemcl':
       return [
         { section: 'Général', items: [dashboard] },
         { section: 'Multiplication', items: [{ ...lots, label: 'Lots G1→G3' }, programs] },
@@ -142,7 +142,7 @@ const pageTitle: Record<Page, { title: string; sub: string }> = {
 const roleDescriptions: Record<string, string> = {
   'seed-admin':         'Supervision globale — accès complet à toute la plateforme',
   'seed-selector':      'Gestion des variétés · création des lots G0 / G1 · transfert vers UPSemCL',
-  'seed-upseml':        'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs',
+  'seed-upsemcl':        'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs',
   'seed-multiplicator': 'Réception G3 → production G4→R1→R2 pour commercialisation',
   'seed-quotataire':    'Consultation du catalogue et passation de commandes de semences R2',
 }

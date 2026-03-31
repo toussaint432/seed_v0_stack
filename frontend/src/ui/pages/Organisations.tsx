@@ -11,7 +11,7 @@ const PAGE_SIZE = 10
 
 const TYPES_ORG = [
   { value: 'ISRA',           label: 'ISRA — Centre de recherche' },
-  { value: 'UPSEML',         label: 'UPSemCL — Unité de production' },
+  { value: 'UPSEMCL',         label: 'UPSemCL — Unité de production' },
   { value: 'MULTIPLICATEUR', label: 'Multiplicateur agréé' },
   { value: 'OP',             label: 'Organisation de producteurs' },
   { value: 'COOPERATIVE',    label: 'Coopérative' },
@@ -134,7 +134,7 @@ export function Organisations({ roleKey }: Props) {
 
   const typeBadge = (type: string) => {
     const map: Record<string, string> = {
-      'ISRA': 'badge-blue', 'UPSEML': 'badge-teal', 'MULTIPLICATEUR': 'badge-green',
+      'ISRA': 'badge-blue', 'UPSEMCL': 'badge-teal', 'MULTIPLICATEUR': 'badge-green',
       'OP': 'badge-gold', 'COOPERATIVE': 'badge-gray',
     }
     return map[type] || 'badge-gray'

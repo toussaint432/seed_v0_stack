@@ -32,10 +32,10 @@ public class ChatController {
     /* ── Canaux autorisés (bidirectionnels) ── */
     private static final Map<String, Set<String>> CANAUX = Map.of(
         "seed-quotataire",    Set.of("seed-multiplicator"),
-        "seed-multiplicator", Set.of("seed-quotataire", "seed-upseml"),
-        "seed-upseml",        Set.of("seed-multiplicator", "seed-selector"),
-        "seed-selector",      Set.of("seed-upseml"),
-        "seed-admin",         Set.of("seed-quotataire","seed-multiplicator","seed-upseml","seed-selector","seed-admin")
+        "seed-multiplicator", Set.of("seed-quotataire", "seed-upsemcl"),
+        "seed-upsemcl",        Set.of("seed-multiplicator", "seed-selector"),
+        "seed-selector",      Set.of("seed-upsemcl"),
+        "seed-admin",         Set.of("seed-quotataire","seed-multiplicator","seed-upsemcl","seed-selector","seed-admin")
     );
 
     private static final Path UPLOAD_DIR = Paths.get("/app/uploads/chat");
@@ -141,15 +141,24 @@ public class ChatController {
         if (conv == null || !estParticipant(conv, me))
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
+        // Validation contenu
+        String type = req.type() != null ? req.type() : "TEXT";
+        if ("TEXT".equals(type) || "COMMANDE".equals(type)) {
+            if (req.contenu() == null || req.contenu().isBlank())
+                return ResponseEntity.badRequest().build();
+            if (req.contenu().length() > 2000)
+                return ResponseEntity.status(HttpStatus.PAYLOAD_TOO_LARGE).build();
+        }
+
         Message msg = new Message();
         msg.setIdConversation(id);
         msg.setExpediteur(me);
-        msg.setType(req.type() != null ? req.type() : "TEXT");
-        msg.setContenu(req.contenu());
+        msg.setType(type);
+        msg.setContenu(req.contenu() != null ? req.contenu().strip() : null);
 
         // Si c'est une COMMANDE, créer aussi l'entrée dans commande
-        if ("COMMANDE".equals(msg.getType()) && req.contenu() != null) {
-            creerCommandeDepuisMessage(me, conv, req.contenu());
+        if ("COMMANDE".equals(msg.getType()) && msg.getContenu() != null) {
+            creerCommandeDepuisMessage(me, conv, msg.getContenu());
         }
 
         Message saved = msgRepo.save(msg);

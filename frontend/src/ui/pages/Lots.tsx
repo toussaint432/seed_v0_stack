@@ -10,12 +10,12 @@ const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef
 const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', G4: '#e5e7eb', R1: '#bfdbfe', R2: '#bbf7d0' }
 const ALL_GENS = ['G0','G1','G2','G3','G4','R1','R2']
 const GEN_IDS: Record<string, number> = { G0: 1, G1: 2, G2: 3, G3: 4, G4: 5, R1: 6, R2: 7 }
-const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upseml': ['G1','G2','G3'], 'seed-multiplicator': ['G3','G4','R1','R2'], 'seed-quotataire': ['R2'] }
+const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upsemcl': ['G1','G2','G3'], 'seed-multiplicator': ['G3','G4','R1','R2'], 'seed-quotataire': ['R2'] }
 
 /* ── Couleurs nœud généalogie par rôle acteur ── */
 const ROLE_NODE_COLORS: Record<string, { bg: string; border: string; label: string }> = {
   'seed-selector':      { bg: '#e8f5e9', border: '#1B5E20', label: 'Sélectionneur' },
-  'seed-upseml':        { bg: '#e8f5e9', border: '#388E3C', label: 'UPSemCL' },
+  'seed-upsemcl':        { bg: '#e8f5e9', border: '#388E3C', label: 'UPSemCL' },
   'seed-multiplicator': { bg: '#f1f8e9', border: '#66BB6A', label: 'Multiplicateur' },
   'seed-admin':         { bg: '#f3e5f5', border: '#7c3aed', label: 'Admin' },
 }
@@ -133,9 +133,9 @@ export function Lots({ roleKey }: Props) {
   const [showReception, setShowReception] = useState(false)
   const [receptionForm, setReceptionForm] = useState({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' })
   const allowedGens = ROLE_GENERATIONS[roleKey] || ALL_GENS
-  const canCreate   = ['seed-admin','seed-selector','seed-upseml','seed-multiplicator'].includes(roleKey)
-  const canTransfer = ['seed-selector','seed-upseml'].includes(roleKey)
-  const canChild    = ['seed-admin','seed-upseml','seed-multiplicator'].includes(roleKey)
+  const canCreate   = ['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey)
+  const canTransfer = ['seed-selector','seed-upsemcl'].includes(roleKey)
+  const canChild    = ['seed-admin','seed-upsemcl','seed-multiplicator'].includes(roleKey)
   const canReception = roleKey === 'seed-quotataire'
 
   const [newLotForm, setNewLotForm] = useState({ codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE' })
@@ -521,7 +521,7 @@ export function Lots({ roleKey }: Props) {
       )}
 
       {showTransfer && parentLot && (() => {
-        const destRole = roleKey === 'seed-selector' ? 'seed-upseml' : roleKey === 'seed-upseml' ? 'seed-multiplicator' : ''
+        const destRole = roleKey === 'seed-selector' ? 'seed-upsemcl' : roleKey === 'seed-upsemcl' ? 'seed-multiplicator' : ''
         const eligibles = membres.filter((m: any) => m.roleDansOrg === destRole || m.roleKeycloak === destRole)
         return (
           <Modal title="Transférer un Lot" subtitle={`${parentLot.codeLot} — ${parentLot.generation?.codeGeneration || ''}`} onClose={() => setShowTransfer(false)} size="sm">
