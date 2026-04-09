@@ -3,9 +3,17 @@ apiVersion: 1
 providers:
   - name: 'seed-dashboards'
     orgId: 1
-    folder: 'Seed'
+    folder: 'SEED Platform — ISRA/CNRA'
+    folderUid: 'seed-folder'
     type: file
     disableDeletion: false
     updateIntervalSeconds: 30
+    allowUiUpdates: true
     options:
       path: /var/lib/grafana/dashboards
+      # Dashboards disponibles :
+      # seed-platform-overview.json  → Vue d'ensemble + KPIs (HOME)
+      # seed-jvm-metrics.json        → JVM microservices Spring Boot
+      # seed-infra.json              → Keycloak · PostgreSQL (infrastructure)
+      # seed-kafka.json              → Kafka Broker · Consumer Lag · JMX
+      # seed-slo.json                → SLO · Alertes · Blackbox probes

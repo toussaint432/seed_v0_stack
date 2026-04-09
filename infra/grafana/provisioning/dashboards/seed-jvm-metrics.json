@@ -1,0 +1,814 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Métriques JVM détaillées par microservice — CPU, Mémoire Heap/Non-Heap, Threads, Garbage Collection — SEED Platform ISRA/CNRA",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": ["seed", "overview"],
+      "targetBlank": false,
+      "title": "Vue d'Ensemble Plateforme",
+      "type": "dashboards"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"background: linear-gradient(135deg, #0c1445 0%, #1e1b4b 40%, #1e3a5f 100%); padding: 22px 28px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(99,102,241,0.25); box-shadow: 0 4px 24px rgba(0,0,0,0.4);\"><div style=\"display: flex; align-items: center; gap: 18px;\"><div style=\"width: 52px; height: 52px; border-radius: 12px; background: linear-gradient(135deg, #4f46e5, #7c3aed); display: flex; align-items: center; justify-content: center; font-size: 26px; box-shadow: 0 4px 12px rgba(99,102,241,0.4);\">⚙️</div><div><h1 style=\"color: #e0e7ff; font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.03em; font-family: sans-serif;\">Métriques JVM — Microservices SEED</h1><p style=\"color: #a5b4fc; font-size: 13px; margin: 5px 0 0; font-family: sans-serif; font-weight: 400;\">Analyse détaillée : CPU · Mémoire Heap/Non-Heap · Threads · Garbage Collection · Actuator Spring Boot</p></div></div><div style=\"text-align: right;\"><div style=\"display: grid; grid-template-columns: 1fr 1fr; gap: 6px;\"><div style=\"background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); border-radius: 6px; padding: 5px 10px; text-align: center;\"><span style=\"color: #86efac; font-size: 11px; font-weight: 600; font-family: sans-serif;\">🟢 catalog</span></div><div style=\"background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); border-radius: 6px; padding: 5px 10px; text-align: center;\"><span style=\"color: #93c5fd; font-size: 11px; font-weight: 600; font-family: sans-serif;\">🔵 lot</span></div><div style=\"background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); border-radius: 6px; padding: 5px 10px; text-align: center;\"><span style=\"color: #fcd34d; font-size: 11px; font-weight: 600; font-family: sans-serif;\">🟡 stock</span></div><div style=\"background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.3); border-radius: 6px; padding: 5px 10px; text-align: center;\"><span style=\"color: #d8b4fe; font-size: 11px; font-weight: 600; font-family: sans-serif;\">🟣 order</span></div></div></div></div>"
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "CPU moyen — Tous services",
+      "description": "Utilisation CPU process moyenne agrégée sur les 4 microservices",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "avg(process_cpu_usage{job=~\"catalog-service|lot-service|stock-service|order-service\"}) * 100",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "#4f46e5", "value": null },
+              { "color": "#7c3aed", "value": 30 },
+              { "color": "#f59e0b", "value": 60 },
+              { "color": "#ef4444", "value": 80 }
+            ]
+          },
+          "unit": "percent",
+          "decimals": 1,
+          "noValue": "N/A"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Threads actifs — Total",
+      "description": "Nombre total de threads JVM vivants sur l'ensemble des microservices",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_threads_live_threads{job=~\"catalog-service|lot-service|stock-service|order-service\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "yellow", "value": 200 },
+              { "color": "red", "value": 400 }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0,
+          "noValue": "N/A"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Heap JVM — Total consommé",
+      "description": "Mémoire Heap JVM totale utilisée par les 4 services",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=~\"catalog-service|lot-service|stock-service|order-service\", area=\"heap\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 400000000 },
+              { "color": "orange", "value": 600000000 },
+              { "color": "red", "value": 700000000 }
+            ]
+          },
+          "unit": "bytes",
+          "noValue": "N/A"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Taux GC — Pauses/min",
+      "description": "Nombre de pauses Garbage Collection par minute — toutes générations confondues",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(rate(jvm_gc_pause_seconds_count{job=~\"catalog-service|lot-service|stock-service|order-service\"}[1m])) * 60",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 30 }
+            ]
+          },
+          "unit": "short",
+          "decimals": 1,
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "Utilisation CPU — Par Service",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "panels": []
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "CPU Process — Utilisation par microservice (%)",
+      "description": "Pourcentage d'utilisation CPU par le processus JVM. Une valeur élevée persistante indique une saturation ou une boucle infinie.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 10 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "process_cpu_usage{job=\"catalog-service\"} * 100",
+          "legendFormat": "Catalog",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "process_cpu_usage{job=\"lot-service\"} * 100",
+          "legendFormat": "Lot",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "process_cpu_usage{job=\"stock-service\"} * 100",
+          "legendFormat": "Stock",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "process_cpu_usage{job=\"order-service\"} * 100",
+          "legendFormat": "Order",
+          "refId": "D"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "system_cpu_usage * 100",
+          "legendFormat": "Système (host)",
+          "refId": "E"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "% CPU",
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 4,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "rgba(239,68,68,0.4)", "value": 80 }
+            ]
+          },
+          "unit": "percent",
+          "min": 0,
+          "max": 100
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Catalog" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stock" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Order" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] },
+          {
+            "matcher": { "id": "byName", "options": "Système (host)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#6b7280", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "dash": [6, 3], "fill": "dash" } },
+              { "id": "custom.lineWidth", "value": 1 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "type": "row",
+      "title": "Mémoire JVM — Heap & Non-Heap",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 19 },
+      "panels": []
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Mémoire Heap — Utilisé vs Capacité max",
+      "description": "Heap JVM used (traits pleins) vs. heap max allouée (pointillés). L'écart représente la marge de sécurité.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 20 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"catalog-service\", area=\"heap\"})",
+          "legendFormat": "Catalog — utilisé",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_max_bytes{job=\"catalog-service\", area=\"heap\"})",
+          "legendFormat": "Catalog — max",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"lot-service\", area=\"heap\"})",
+          "legendFormat": "Lot — utilisé",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_max_bytes{job=\"lot-service\", area=\"heap\"})",
+          "legendFormat": "Lot — max",
+          "refId": "D"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"stock-service\", area=\"heap\"})",
+          "legendFormat": "Stock — utilisé",
+          "refId": "E"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"order-service\", area=\"heap\"})",
+          "legendFormat": "Order — utilisé",
+          "refId": "F"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*— max" }, "properties": [{ "id": "custom.lineStyle", "value": { "dash": [8, 4], "fill": "dash" } }, { "id": "custom.lineWidth", "value": 1 }, { "id": "custom.fillOpacity", "value": 0 }] },
+          { "matcher": { "id": "byName", "options": "Catalog — utilisé" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Catalog — max" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot — utilisé" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot — max" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stock — utilisé" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Order — utilisé" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Mémoire Non-Heap — Metaspace & Code Cache",
+      "description": "Mémoire Non-Heap : classes chargées (Metaspace) et bytecode compilé (Code Cache). Un Metaspace saturé provoque une OutOfMemoryError.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 20 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"catalog-service\", area=\"nonheap\"})",
+          "legendFormat": "Catalog",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"lot-service\", area=\"nonheap\"})",
+          "legendFormat": "Lot",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"stock-service\", area=\"nonheap\"})",
+          "legendFormat": "Stock",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"order-service\", area=\"nonheap\"})",
+          "legendFormat": "Order",
+          "refId": "D"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Catalog" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stock" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Order" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 11,
+      "type": "row",
+      "title": "Garbage Collection & Threads",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 29 },
+      "panels": []
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Pauses GC — Durée par action (ms/s)",
+      "description": "Débit des pauses GC : temps passé en GC par seconde. G1GC : Young GC fréquent et rapide est normal. Old GC rare mais long est un signal d'alerte.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 30 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"catalog-service\"}[$__rate_interval]) * 1000",
+          "legendFormat": "Catalog — {{action}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"lot-service\"}[$__rate_interval]) * 1000",
+          "legendFormat": "Lot — {{action}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"stock-service\"}[$__rate_interval]) * 1000",
+          "legendFormat": "Stock — {{action}}",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(jvm_gc_pause_seconds_sum{job=\"order-service\"}[$__rate_interval]) * 1000",
+          "legendFormat": "Order — {{action}}",
+          "refId": "D"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "ms/s",
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "ms"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Threads JVM — Live, Daemon & Peak",
+      "description": "Threads vivants par service. Un nombre élevé et croissant de threads non-daemon indique une fuite de threads ou un pool mal dimensionné.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 30 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_threads_live_threads{job=\"catalog-service\"}",
+          "legendFormat": "Catalog — live",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_threads_live_threads{job=\"lot-service\"}",
+          "legendFormat": "Lot — live",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_threads_live_threads{job=\"stock-service\"}",
+          "legendFormat": "Stock — live",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_threads_live_threads{job=\"order-service\"}",
+          "legendFormat": "Order — live",
+          "refId": "D"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_threads_peak_threads{job=~\"catalog-service|lot-service|stock-service|order-service\"}",
+          "legendFormat": "{{job}} — peak",
+          "refId": "E"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "threads",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*peak" }, "properties": [{ "id": "custom.lineStyle", "value": { "dash": [8, 4], "fill": "dash" } }, { "id": "custom.lineWidth", "value": 1 }, { "id": "custom.fillOpacity", "value": 0 }] },
+          { "matcher": { "id": "byName", "options": "Catalog — live" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot — live" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stock — live" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Order — live" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 14,
+      "type": "row",
+      "title": "Classes & Uptime",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 39 },
+      "panels": []
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Uptime — catalog-service",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 40 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "process_uptime_seconds{job=\"catalog-service\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#22c55e", "mode": "fixed" },
+          "unit": "s",
+          "noValue": "Arrêté"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Uptime — lot-service",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 40 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "process_uptime_seconds{job=\"lot-service\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#3b82f6", "mode": "fixed" },
+          "unit": "s",
+          "noValue": "Arrêté"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "Uptime — stock-service",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 40 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "process_uptime_seconds{job=\"stock-service\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#f59e0b", "mode": "fixed" },
+          "unit": "s",
+          "noValue": "Arrêté"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "Uptime — order-service",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 40 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "process_uptime_seconds{job=\"order-service\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#a855f7", "mode": "fixed" },
+          "unit": "s",
+          "noValue": "Arrêté"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Classes JVM chargées — Par service",
+      "description": "Nombre de classes Java chargées par la JVM. Une croissance continue après le démarrage peut indiquer une fuite de classloaders.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 44 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_classes_loaded_classes{job=\"catalog-service\"}",
+          "legendFormat": "Catalog",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_classes_loaded_classes{job=\"lot-service\"}",
+          "legendFormat": "Lot",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_classes_loaded_classes{job=\"stock-service\"}",
+          "legendFormat": "Stock",
+          "refId": "C"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "jvm_classes_loaded_classes{job=\"order-service\"}",
+          "legendFormat": "Order",
+          "refId": "D"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "axisLabel": "classes",
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Catalog" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stock" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Order" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["seed", "isra", "cnra", "jvm", "spring-boot"],
+  "templating": { "list": [] },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SEED — Métriques JVM Microservices",
+  "uid": "seed-jvm",
+  "version": 1,
+  "weekStart": ""
+}

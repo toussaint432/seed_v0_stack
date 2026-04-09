@@ -5,17 +5,19 @@ import sn.isra.seed.lot_service.api.dto.LineageNode;
 import sn.isra.seed.lot_service.entity.Generation;
 import sn.isra.seed.lot_service.entity.LotSemencier;
 import sn.isra.seed.lot_service.entity.TransfertLot;
+import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.kafka.LotEventProducer;
 import sn.isra.seed.lot_service.repo.GenerationRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -35,11 +37,11 @@ public class LotController {
     private final ObjectMapper om = new ObjectMapper();
 
     private static final Map<String, String> FLUX_RULES = Map.of(
-        "seed-selector", "seed-upsemcl",
-        "seed-upsemcl",   "seed-multiplicator"
+        "seed-selector",    "seed-upsemcl",
+        "seed-upsemcl",     "seed-multiplicator"
     );
 
-    // ── Liste tous les lots avec filtre optionnel génération ──
+    // ── Liste tous les lots avec filtre optionnel ─────────────
     @GetMapping
     public List<LotSemencier> list(
             @RequestParam(required = false) String generation,
@@ -63,27 +65,16 @@ public class LotController {
     @PostMapping
     public LotSemencier create(@RequestBody LotSemencier lot,
                                 @AuthenticationPrincipal Jwt jwt) throws Exception {
-        // Phase 1 : extraire le username du JWT et stocker la traçabilité
         if (jwt != null) {
             String username = jwt.getClaimAsString("preferred_username");
-            if (lot.getUsernameCreateur() == null) {
-                lot.setUsernameCreateur(username);
-            }
-            // Le responsable_nom et responsable_role peuvent être envoyés
-            // par le frontend (qui les a résolus via order-service)
-            // ou remplis par défaut depuis le JWT
+            if (lot.getUsernameCreateur() == null) lot.setUsernameCreateur(username);
             if (lot.getResponsableNom() == null) {
-                String firstName = jwt.getClaimAsString("given_name");
-                String lastName = jwt.getClaimAsString("family_name");
-                lot.setResponsableNom(
-                    (firstName != null ? firstName : "") + " " +
-                    (lastName != null ? lastName : "")
-                );
+                String fn = jwt.getClaimAsString("given_name");
+                String ln = jwt.getClaimAsString("family_name");
+                lot.setResponsableNom((fn != null ? fn : "") + " " + (ln != null ? ln : ""));
             }
-            if (lot.getResponsableRole() == null) {
-                List<String> roles = extractRealmRoles(jwt);
-                lot.setResponsableRole(detectSeedRole(roles));
-            }
+            if (lot.getResponsableRole() == null)
+                lot.setResponsableRole(detectSeedRole(extractRealmRoles(jwt)));
         }
         LotSemencier saved = lotRepo.save(lot);
         producer.lotCreated(om.writeValueAsString(saved));
@@ -109,9 +100,8 @@ public class LotController {
         child.setUnite(req.unite() == null ? "kg" : req.unite());
         child.setTauxGermination(req.tauxGermination());
         child.setPuretePhysique(req.puretePhysique());
-        child.setStatutLot("DISPONIBLE");
+        child.setStatutLot(StatutLot.DISPONIBLE);
 
-        // Phase 1 : traçabilité acteur
         if (jwt != null) {
             child.setUsernameCreateur(jwt.getClaimAsString("preferred_username"));
             if (req.responsableNom() != null) {
@@ -136,8 +126,18 @@ public class LotController {
     @PatchMapping("/{id}/statut")
     public ResponseEntity<LotSemencier> updateStatut(@PathVariable Long id,
                                                        @RequestBody Map<String, String> body) {
+        String statutStr = body.get("statut");
+        if (statutStr == null || statutStr.isBlank())
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le champ 'statut' est obligatoire");
+        StatutLot nouveauStatut;
+        try {
+            nouveauStatut = StatutLot.valueOf(statutStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Statut invalide : " + statutStr);
+        }
         return lotRepo.findById(id).map(lot -> {
-            lot.setStatutLot(body.get("statut"));
+            lot.setStatutLot(nouveauStatut);
             return ResponseEntity.ok(lotRepo.save(lot));
         }).orElse(ResponseEntity.notFound().build());
     }
@@ -167,13 +167,15 @@ public class LotController {
 
         String destAttendu = FLUX_RULES.get(roleEmetteur);
         if (!destAttendu.equals(roleDestinataire))
-            return ResponseEntity.badRequest().body(Map.of("message", "Flux non autorisé : " + roleEmetteur + " → " + roleDestinataire));
+            return ResponseEntity.badRequest().body(
+                Map.of("message", "Flux non autorisé : " + roleEmetteur + " → " + roleDestinataire));
 
         String gen = lot.getGeneration() != null ? lot.getGeneration().getCodeGeneration() : "";
         boolean genOk = ("seed-selector".equals(roleEmetteur) && List.of("G0","G1").contains(gen))
                      || ("seed-upsemcl".equals(roleEmetteur)   && List.of("G2","G3").contains(gen));
         if (!genOk)
-            return ResponseEntity.badRequest().body(Map.of("message", "Génération " + gen + " non transférable pour " + roleEmetteur));
+            return ResponseEntity.badRequest().body(
+                Map.of("message", "Génération " + gen + " non transférable pour " + roleEmetteur));
 
         TransfertLot t = new TransfertLot();
         t.setCodeTransfert("TL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
@@ -190,7 +192,7 @@ public class LotController {
         return ResponseEntity.status(201).body(saved);
     }
 
-    // ── Arbre généalogique G0→R2 enrichi avec acteurs ────────
+    // ── Arbre généalogique G0→R2 ──────────────────────────────
     @GetMapping("/{id}/lineage")
     public ResponseEntity<List<LineageNode>> lineage(@PathVariable Long id) {
         List<LineageNode> chain = new ArrayList<>();

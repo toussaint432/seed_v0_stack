@@ -35,7 +35,7 @@ public record LineageNode(
             lot.getUnite(),
             lot.getTauxGermination(),
             lot.getPuretePhysique(),
-            lot.getStatutLot(),
+            lot.getStatutLot() != null ? lot.getStatutLot().name() : null,
             lot.getResponsableNom(),
             lot.getResponsableRole(),
             lot.getIdOrgProducteur(),

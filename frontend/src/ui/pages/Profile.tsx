@@ -150,30 +150,60 @@ export function Profile({ roleKey }: Props) {
       {/* ── Hero ── */}
       <div className="card" style={{ marginBottom: 20, overflow: 'hidden' }}>
 
-        {/* Bannière */}
+        {/* Bannière — hauteur augmentée, gradient riche, motifs géométriques */}
         <div style={{
-          height: 110,
+          height: 160,
           background: role
-            ? `linear-gradient(135deg, ${role.color}ee 0%, #0c1f15 100%)`
-            : 'linear-gradient(135deg, #1e3a2f, #0c1f15)',
+            ? `linear-gradient(135deg, ${role.color} 0%, ${role.color}bb 40%, #0a1628 100%)`
+            : 'linear-gradient(135deg, #1b4332 0%, #0a1628 100%)',
           position: 'relative',
+          overflow: 'hidden',
         }}>
-          {/* Motif décoratif */}
+          {/* Cercles décoratifs */}
           <div style={{
-            position: 'absolute', inset: 0, opacity: 0.07,
-            backgroundImage: 'radial-gradient(circle at 20% 50%, #fff 1px, transparent 1px), radial-gradient(circle at 80% 20%, #fff 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
+            position: 'absolute', top: -40, right: -40,
+            width: 220, height: 220, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.06)',
           }} />
+          <div style={{
+            position: 'absolute', bottom: -60, right: 120,
+            width: 160, height: 160, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.04)',
+          }} />
+          <div style={{
+            position: 'absolute', top: 20, left: '40%',
+            width: 80, height: 80, borderRadius: '50%',
+            background: 'rgba(255,255,255,0.03)',
+          }} />
+
+          {/* Logo ISRA/CNRA en watermark */}
+          <div style={{
+            position: 'absolute', left: 28, bottom: 16,
+            fontSize: 11, fontWeight: 700, letterSpacing: '0.18em',
+            color: 'rgba(255,255,255,0.22)', fontFamily: 'DM Mono, monospace',
+            userSelect: 'none',
+          }}>
+            ISRA · CNRA · BAMBEY
+          </div>
+
           {/* Boutons en haut à droite */}
-          <div style={{ position: 'absolute', top: 14, right: 20, display: 'flex', gap: 8 }}>
+          <div style={{ position: 'absolute', top: 16, right: 20, display: 'flex', gap: 8 }}>
             {!editing && (
               <button className="btn btn-secondary" onClick={() => setEditing(true)}
-                style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', backdropFilter: 'blur(4px)' }}>
+                style={{
+                  background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.28)',
+                  color: '#fff', backdropFilter: 'blur(8px)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+                }}>
                 <Edit3 size={13} /> Modifier le profil
               </button>
             )}
             <button className="btn btn-secondary"
-              style={{ background: 'rgba(255,255,255,0.15)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', backdropFilter: 'blur(4px)' }}
+              style={{
+                background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.28)',
+                color: '#fff', backdropFilter: 'blur(8px)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+              }}
               onClick={() => keycloak.logout({ redirectUri: window.location.origin })}>
               <LogOut size={13} /> Déconnexion
             </button>
@@ -181,23 +211,25 @@ export function Profile({ roleKey }: Props) {
         </div>
 
         {/* Corps */}
-        <div style={{ padding: '0 28px 24px' }}>
+        <div style={{ padding: '0 32px 28px' }}>
 
           {/* Ligne avatar + identité */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 20, marginTop: -46 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginTop: -56 }}>
 
-            {/* Avatar */}
+            {/* Avatar — plus grand, anneau coloré */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <div style={{
-                width: 96, height: 96, borderRadius: '50%',
+                width: 112, height: 112, borderRadius: '50%',
                 background: role
-                  ? `linear-gradient(135deg, ${role.color}, #0c1f15)`
-                  : 'linear-gradient(135deg, #6b7280, #374151)',
-                border: '4px solid var(--surface)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+                  ? `linear-gradient(145deg, ${role.color}, ${role.color}88)`
+                  : 'linear-gradient(145deg, #374151, #1f2937)',
+                border: `4px solid white`,
+                outline: `3px solid ${role?.color || '#374151'}`,
+                boxShadow: `0 8px 24px rgba(0,0,0,0.22), 0 0 0 1px ${role?.color || '#374151'}33`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 32, fontWeight: 700, color: '#fff',
+                fontSize: 38, fontWeight: 800, color: '#fff',
                 overflow: 'hidden', userSelect: 'none',
+                letterSpacing: '-0.02em',
               }}>
                 {photoUrl
                   ? <img src={photoUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -205,58 +237,79 @@ export function Profile({ roleKey }: Props) {
                 }
               </div>
               <button onClick={() => fileRef.current?.click()} title="Changer la photo" style={{
-                position: 'absolute', bottom: 3, right: 3,
-                width: 26, height: 26, borderRadius: '50%',
-                background: 'var(--green-600)', border: '3px solid var(--surface)',
+                position: 'absolute', bottom: 4, right: 4,
+                width: 30, height: 30, borderRadius: '50%',
+                background: role?.color || 'var(--green-600)',
+                border: '3px solid white',
                 cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff',
+                color: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
               }}>
-                <Camera size={12} />
+                <Camera size={13} />
               </button>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
             </div>
 
             {/* Nom + identité */}
-            <div style={{ paddingBottom: 6, flex: 1 }}>
-              <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', lineHeight: 1.2 }}>
+            <div style={{ paddingBottom: 8, flex: 1 }}>
+              {/* Badge rôle au-dessus du nom */}
+              {role && (
+                <div style={{ marginBottom: 6 }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    background: role.color, color: '#fff',
+                    borderRadius: 20, padding: '4px 14px',
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+                    boxShadow: `0 2px 10px ${role.color}55`,
+                    textTransform: 'uppercase',
+                  }}>
+                    <Shield size={10} />
+                    {role.label}
+                  </span>
+                </div>
+              )}
+              {/* Nom complet */}
+              <div style={{
+                fontSize: 26, fontWeight: 800, color: 'var(--text-primary)',
+                letterSpacing: '-0.03em', lineHeight: 1.1,
+              }}>
                 {displayName}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 5, flexWrap: 'wrap' }}>
+              {/* Username + email sur une ligne */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
                 <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 4,
-                  fontSize: 12, color: 'var(--text-muted)',
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 12.5, color: 'var(--text-secondary)',
                   background: 'var(--surface-2)', border: '1px solid var(--border)',
-                  borderRadius: 6, padding: '2px 8px', fontFamily: 'DM Mono, monospace',
+                  borderRadius: 6, padding: '3px 10px', fontFamily: 'DM Mono, monospace',
                 }}>
                   <User size={11} /> {username}
                 </span>
                 {token.email && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontSize: 12.5, color: 'var(--text-muted)',
+                  }}>
                     <Mail size={11} /> {token.email}
                   </span>
                 )}
               </div>
-              {role && (
-                <span style={{
-                  display: 'inline-block', marginTop: 8,
-                  background: role.color, color: '#fff',
-                  borderRadius: 20, padding: '3px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                  boxShadow: `0 2px 8px ${role.color}55`,
-                }}>
-                  {role.label}
-                </span>
-              )}
             </div>
           </div>
 
-          {/* Description du rôle */}
+          {/* Description du rôle — bandeau distinct */}
           {role && (
             <div style={{
-              marginTop: 16,
-              background: `${role.color}0d`, border: `1px solid ${role.color}28`,
-              borderRadius: 8, padding: '10px 16px', fontSize: 13, color: 'var(--text-secondary)',
+              marginTop: 20,
+              display: 'flex', alignItems: 'center', gap: 12,
+              background: `linear-gradient(90deg, ${role.color}15, ${role.color}05)`,
+              border: `1px solid ${role.color}30`,
+              borderLeft: `4px solid ${role.color}`,
+              borderRadius: 8, padding: '10px 16px',
             }}>
-              {role.description}
+              <Shield size={15} color={role.color} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                {role.description}
+              </span>
             </div>
           )}
 

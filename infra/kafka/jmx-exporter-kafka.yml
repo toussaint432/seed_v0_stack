@@ -1,0 +1,143 @@
+# =============================================================================
+#  SEED Platform — JMX Exporter Configuration for Apache Kafka
+#  Collecte les métriques broker Kafka via JMX (port 9999)
+#  Compatible avec confluentinc/cp-kafka:7.x
+#  Référence : https://kafka.apache.org/documentation/#monitoring
+# =============================================================================
+
+startDelaySeconds: 30
+hostPort: kafka:9999
+username:
+password:
+ssl: false
+
+# Noms en minuscules — cohérence avec les conventions Prometheus
+lowercaseOutputName: true
+lowercaseOutputLabelNames: true
+
+rules:
+
+  # ── Broker Throughput — Bytes In / Out / Messages ──────────────────────────
+  - pattern: >-
+      kafka.server<type=BrokerTopicMetrics, name=(BytesInPerSec|BytesOutPerSec|MessagesInPerSec|BytesRejectedPerSec)><>(OneMinuteRate|FiveMinuteRate|MeanRate|Count)
+    name: kafka_server_brokertopicmetrics_$1_$2
+    labels:
+      topic: "all"
+    type: GAUGE
+    help: "Kafka broker throughput metric $1 ($2)"
+
+  # Par topic (BytesIn/Out/Messages avec label topic)
+  - pattern: >-
+      kafka.server<type=BrokerTopicMetrics, name=(BytesInPerSec|BytesOutPerSec|MessagesInPerSec|BytesRejectedPerSec|FailedProduceRequestsPerSec|FailedFetchRequestsPerSec), topic=(.+)><>(OneMinuteRate|FiveMinuteRate|MeanRate|Count)
+    name: kafka_server_brokertopicmetrics_$1_$3
+    labels:
+      topic: "$2"
+    type: GAUGE
+    help: "Kafka broker topic metric $1 for topic $2 ($3)"
+
+  # ── Replica Manager — Santé du broker ─────────────────────────────────────
+  - pattern: >-
+      kafka.server<type=ReplicaManager, name=(LeaderCount|PartitionCount|UnderReplicatedPartitions|UnderMinIsrPartitionCount|AtMinIsrPartitionCount|IsrShrinksPerSec|IsrExpandsPerSec)><>(Value|OneMinuteRate)
+    name: kafka_server_replicamanager_$1_$2
+    type: GAUGE
+    help: "Kafka replica manager $1"
+
+  # ── Controller — État du cluster ───────────────────────────────────────────
+  - pattern: >-
+      kafka.controller<type=KafkaController, name=(ActiveControllerCount|OfflinePartitionsCount|PreferredReplicaImbalanceCount|GlobalTopicCount|GlobalPartitionCount)><>Value
+    name: kafka_controller_$1
+    type: GAUGE
+    help: "Kafka controller metric $1"
+
+  # ── Network Request Metrics — Latence et débit des requêtes ───────────────
+  - pattern: >-
+      kafka.network<type=RequestMetrics, name=(RequestsPerSec|TotalTimeMs|RequestQueueTimeMs|LocalTimeMs|ResponseQueueTimeMs|ResponseSendTimeMs), request=(Produce|FetchConsumer|FetchFollower|Metadata|ListOffsets)><>(OneMinuteRate|50thPercentile|95thPercentile|99thPercentile|999thPercentile|Mean|Count)
+    name: kafka_network_requestmetrics_$1_$3
+    labels:
+      request: "$2"
+    type: GAUGE
+    help: "Kafka network request metric $1 for request type $2 ($3)"
+
+  # ── Log — Flush et rétention ───────────────────────────────────────────────
+  - pattern: >-
+      kafka.log<type=LogFlushStats, name=LogFlushRateAndTimeMs><>(Count|OneMinuteRate|Mean|50thPercentile|95thPercentile|99thPercentile)
+    name: kafka_log_flush_$1
+    type: GAUGE
+    help: "Kafka log flush rate and time ($1)"
+
+  - pattern: >-
+      kafka.log<type=Log, name=(Size|NumLogSegments|LogStartOffset|LogEndOffset), topic=(.+), partition=(.+)><>Value
+    name: kafka_log_$1
+    labels:
+      topic: "$2"
+      partition: "$3"
+    type: GAUGE
+    help: "Kafka log $1 for topic $2 partition $3"
+
+  # ── Purgatory — Files d'attente en cours ──────────────────────────────────
+  - pattern: >-
+      kafka.server<type=DelayedOperationPurgatory, name=PurgatorySize, delayedOperation=(Produce|Fetch|ElectLeader|DeleteRecords)><>Value
+    name: kafka_server_delayedoperationpurgatory_size
+    labels:
+      operation: "$1"
+    type: GAUGE
+    help: "Kafka delayed operation purgatory size for $1"
+
+  # ── Fetch Session — Cache et performances consommateurs ───────────────────
+  - pattern: >-
+      kafka.server<type=FetchSessionCache, name=(NumIncrementalFetchSessions|NumIncrementalFetchPartitionsCached|IncrementalFetchSessionEvictionMs)><>(Value|OneMinuteRate|Mean)
+    name: kafka_server_fetchsessioncache_$1_$2
+    type: GAUGE
+
+  # ── JVM — Mémoire Heap/NonHeap ────────────────────────────────────────────
+  - pattern: 'java.lang<type=Memory><HeapMemoryUsage>used'
+    name: kafka_jvm_heap_memory_used_bytes
+    type: GAUGE
+    help: "Kafka JVM Heap memory used in bytes"
+
+  - pattern: 'java.lang<type=Memory><HeapMemoryUsage>max'
+    name: kafka_jvm_heap_memory_max_bytes
+    type: GAUGE
+    help: "Kafka JVM Heap memory max in bytes"
+
+  - pattern: 'java.lang<type=Memory><NonHeapMemoryUsage>used'
+    name: kafka_jvm_nonheap_memory_used_bytes
+    type: GAUGE
+    help: "Kafka JVM NonHeap memory used in bytes"
+
+  # ── JVM — Garbage Collection ───────────────────────────────────────────────
+  - pattern: 'java.lang<type=GarbageCollector, name=(.+)><>CollectionCount'
+    name: kafka_jvm_gc_collection_count_total
+    labels:
+      gc: "$1"
+    type: COUNTER
+    help: "Kafka JVM GC collection count for $1"
+
+  - pattern: 'java.lang<type=GarbageCollector, name=(.+)><>CollectionTime'
+    name: kafka_jvm_gc_collection_time_ms_total
+    labels:
+      gc: "$1"
+    type: COUNTER
+    help: "Kafka JVM GC collection time in ms for $1"
+
+  # ── JVM — Threads ──────────────────────────────────────────────────────────
+  - pattern: 'java.lang<type=Threading><>ThreadCount'
+    name: kafka_jvm_threads_live
+    type: GAUGE
+    help: "Kafka JVM live threads"
+
+  - pattern: 'java.lang<type=Threading><>PeakThreadCount'
+    name: kafka_jvm_threads_peak
+    type: GAUGE
+    help: "Kafka JVM peak threads"
+
+  # ── JVM — CPU ──────────────────────────────────────────────────────────────
+  - pattern: 'java.lang<type=OperatingSystem><>ProcessCpuLoad'
+    name: kafka_jvm_process_cpu_load
+    type: GAUGE
+    help: "Kafka JVM process CPU load (0-1)"
+
+  - pattern: 'java.lang<type=OperatingSystem><>SystemCpuLoad'
+    name: kafka_jvm_system_cpu_load
+    type: GAUGE
+    help: "Kafka JVM system CPU load (0-1)"

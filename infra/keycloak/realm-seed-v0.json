@@ -16,7 +16,24 @@
       "webOrigins": ["http://localhost:5173"],
       "attributes": {
         "pkce.code.challenge.method": "S256"
-      }
+      },
+      "protocolMappers": [
+        {
+          "name": "specialisation",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "specialisation",
+            "claim.name": "specialisation",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "false",
+            "aggregate.attrs": "false"
+          }
+        }
+      ]
     },
     {
       "clientId": "seed-services",
@@ -54,7 +71,28 @@
       "email": "selecteur@seed.local",
       "firstName": "Ibrahima",
       "lastName": "Sélectionneur",
+      "attributes": { "specialisation": ["RIZ"] },
       "credentials": [{ "type": "password", "value": "select123", "temporary": false }],
+      "realmRoles": ["seed-selector"]
+    },
+    {
+      "username": "selecteur_mil",
+      "enabled": true,
+      "email": "selecteur.mil@seed.local",
+      "firstName": "Mamadou",
+      "lastName": "Sélect-MIL",
+      "attributes": { "specialisation": ["MIL"] },
+      "credentials": [{ "type": "password", "value": "selectmil123", "temporary": false }],
+      "realmRoles": ["seed-selector"]
+    },
+    {
+      "username": "selecteur_ara",
+      "enabled": true,
+      "email": "selecteur.ara@seed.local",
+      "firstName": "Aminata",
+      "lastName": "Sélect-ARA",
+      "attributes": { "specialisation": ["ARA"] },
+      "credentials": [{ "type": "password", "value": "selectara123", "temporary": false }],
       "realmRoles": ["seed-selector"]
     },
     {

@@ -1,6 +1,7 @@
 package sn.isra.seed.order_service.entity;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
 import lombok.*;
 import java.time.Instant;
 
@@ -18,20 +19,34 @@ public class Organisation {
     @Column(name = "nom_organisation", nullable = false)
     private String nomOrganisation;
 
-    @Column(name = "type_organisation", nullable = false)
-    private String typeOrganisation;
+    @NotNull(message = "Le type d'organisation est obligatoire")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type_organisation", nullable = false, length = 30)
+    private sn.isra.seed.order_service.entity.enums.TypeOrganisation typeOrganisation;
 
+    @Size(max = 100)
     private String region;
+
+    @Size(max = 100)
     private String localite;
+
+    @Size(max = 150)
     private String contact;
+
+    @Size(max = 50)
     private String telephone;
+
+    @Email(message = "Format email invalide")
+    @Size(max = 150)
     private String email;
 
     private Boolean active;
 
+    @DecimalMin(value = "-90.0") @DecimalMax(value = "90.0")
     @Column(precision = 10, scale = 6)
     private java.math.BigDecimal latitude;
 
+    @DecimalMin(value = "-180.0") @DecimalMax(value = "180.0")
     @Column(precision = 10, scale = 6)
     private java.math.BigDecimal longitude;
 

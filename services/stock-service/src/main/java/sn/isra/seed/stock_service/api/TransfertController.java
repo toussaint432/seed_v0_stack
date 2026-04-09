@@ -1,10 +1,13 @@
 package sn.isra.seed.stock_service.api;
 
 import sn.isra.seed.stock_service.entity.Transfert;
+import sn.isra.seed.stock_service.entity.enums.StatutTransfert;
 import sn.isra.seed.stock_service.repo.TransfertRepo;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -42,8 +45,15 @@ public class TransfertController {
     public ResponseEntity<Transfert> updateStatut(
             @PathVariable Long id,
             @RequestParam String statut) {
+        StatutTransfert nouveauStatut;
+        try {
+            nouveauStatut = StatutTransfert.valueOf(statut.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Statut invalide : " + statut + ". Valeurs acceptées : EN_ATTENTE, ACCEPTE, REJETE, ANNULE");
+        }
         return transfertRepo.findById(id).map(t -> {
-            t.setStatut(statut.toUpperCase());
+            t.setStatut(nouveauStatut);
             return ResponseEntity.ok(transfertRepo.save(t));
         }).orElse(ResponseEntity.notFound().build());
     }

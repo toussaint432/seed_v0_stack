@@ -1,0 +1,343 @@
+{
+  "annotations": { "list": [{ "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0,211,255,1)", "name": "Annotations & Alerts", "type": "dashboard" }] },
+  "description": "SLO, Disponibilité et état des alertes — Plateforme SEED ISRA/CNRA Bambey",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    { "asDropdown": false, "icon": "dashboard", "keepTime": true, "tags": ["seed","overview"], "title": "Vue d'Ensemble", "type": "dashboards" },
+    { "asDropdown": false, "icon": "dashboard", "keepTime": true, "tags": ["seed","infrastructure"], "title": "Infrastructure", "type": "dashboards" }
+  ],
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "", "transparent": true,
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"background:linear-gradient(135deg,#1c0a2e 0%,#3b0764 40%,#1e1b4b 100%);padding:22px 28px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(168,85,247,0.25);box-shadow:0 4px 24px rgba(0,0,0,0.4);\"><div style=\"display:flex;align-items:center;gap:18px;\"><div style=\"width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#7c3aed,#ec4899);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 12px rgba(124,58,237,0.4);\">🎯</div><div><h1 style=\"color:#faf5ff;font-size:22px;font-weight:800;margin:0;letter-spacing:-0.03em;font-family:sans-serif;\">SLO & Alertes — Plateforme SEED</h1><p style=\"color:#d8b4fe;font-size:13px;margin:5px 0 0;font-family:sans-serif;\">Service Level Objectives · Disponibilité · Blackbox Probes · État Alertmanager</p></div></div><div style=\"display:flex;flex-direction:column;align-items:flex-end;gap:8px;\"><div style=\"display:flex;gap:8px;\"><div style=\"background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.35);border-radius:6px;padding:6px 12px;\"><span style=\"color:#86efac;font-size:11px;font-weight:700;font-family:sans-serif;\">SLO CIBLE : 99.5 %</span></div><div style=\"background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);border-radius:6px;padding:6px 12px;\"><span style=\"color:#d8b4fe;font-size:11px;font-weight:700;font-family:sans-serif;\">20 règles d'alerte actives</span></div></div><p style=\"color:#a78bfa;font-size:11px;margin:0;font-family:sans-serif;\">Prometheus · Alertmanager · Blackbox Exporter · Recording Rules</p></div></div>"
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+
+    { "id": 50, "type": "row", "title": "SLO — Indicateurs Exécutifs", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 }, "panels": [] },
+
+    {
+      "id": 2, "type": "stat",
+      "title": "SLO — Score global (%)",
+      "description": "Pourcentage de requêtes réussies (non-5xx) sur la fenêtre sélectionnée. Objectif : > 99.5 %",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 5 },
+      "targets": [{ "expr": "seed:slo_http_success:ratio5m * 100", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "value_and_name" },
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "Taux de succès",
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 95 }, { "color": "yellow", "value": 99 }, { "color": "green", "value": 99.5 }] },
+          "unit": "percent", "decimals": 3, "noValue": "N/A",
+          "mappings": []
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 3, "type": "stat",
+      "title": "Disponibilité Plateforme",
+      "description": "Ratio de services Spring Boot opérationnels",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 6, "w": 4, "x": 6, "y": 5 },
+      "targets": [{ "expr": "seed:platform_availability:ratio * 100", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 50 }, { "color": "yellow", "value": 75 }, { "color": "green", "value": 100 }] },
+          "unit": "percent", "decimals": 0, "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 4, "type": "stat",
+      "title": "Latence p95 max",
+      "description": "SLO : p95 < 500ms sur tous les services",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 6, "w": 4, "x": 10, "y": 5 },
+      "targets": [{ "expr": "max(seed:http_latency_p95:5m) * 1000", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 300 }, { "color": "orange", "value": 500 }, { "color": "red", "value": 1000 }] },
+          "unit": "ms", "decimals": 0, "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 5, "type": "stat",
+      "title": "Taux d'erreurs global",
+      "description": "SLO : < 0.5% d'erreurs 5xx",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 6, "w": 4, "x": 14, "y": 5 },
+      "targets": [{ "expr": "seed:http_error_rate5xx_total:ratio5m * 100", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "orange", "value": 1 }, { "color": "red", "value": 5 }] },
+          "unit": "percent", "decimals": 3, "noValue": "0 %"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 6, "type": "stat",
+      "title": "Services surveillés",
+      "description": "Nombre total de cibles Prometheus actives (microservices + infra)",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 6, "w": 3, "x": 18, "y": 5 },
+      "targets": [{ "expr": "seed:monitored_services:count", "refId": "A", "instant": true }],
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": { "color": { "fixedColor": "#a855f7", "mode": "fixed" }, "unit": "short", "noValue": "0" }, "overrides": []
+      }
+    },
+    {
+      "id": 7, "type": "stat",
+      "title": "Consumer Lag Kafka",
+      "description": "Lag total tous consumer groups. Cible : 0.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 6, "w": 3, "x": 21, "y": 5 },
+      "targets": [{ "expr": "seed:kafka_consumer_lag_total:sum", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "red", "value": 500 }] },
+          "unit": "short", "noValue": "0"
+        }, "overrides": []
+      }
+    },
+
+    { "id": 51, "type": "row", "title": "Tendance SLO — Évolution dans le temps", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 11 }, "panels": [] },
+
+    {
+      "id": 10, "type": "timeseries",
+      "title": "Score SLO Global — Taux de succès HTTP (%)",
+      "description": "Évolution du SLO global. Chaque chute en dessous de 99.5% est un incident. La zone rouge représente la violation du SLO.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 12 },
+      "targets": [
+        { "expr": "seed:slo_http_success:ratio5m * 100", "legendFormat": "Taux de succès (%)", "refId": "A" },
+        { "expr": "seed:platform_availability:ratio * 100", "legendFormat": "Disponibilité services (%)", "refId": "B" }
+      ],
+      "options": { "legend": { "calcs": ["mean","min","lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 15, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line+area" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "rgba(239,68,68,0.15)", "value": null }, { "color": "transparent", "value": 99.5 }] },
+          "unit": "percent", "min": 90, "max": 100.5, "decimals": 3
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Taux de succès (%)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Disponibilité services (%)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }, { "id": "custom.lineStyle", "value": { "dash": [6,3], "fill": "dash" } }, { "id": "custom.lineWidth", "value": 1 }] }
+        ]
+      }
+    },
+
+    { "id": 52, "type": "row", "title": "Blackbox Probes — Disponibilité HTTP des endpoints", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 21 }, "panels": [] },
+
+    {
+      "id": 20, "type": "stat",
+      "title": "Health — catalog-service",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 22 },
+      "targets": [{ "expr": "probe_success{target=~\".*catalog.*health.*\"}", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN ✕", "color": "red", "index": 0 }, "1": { "text": "UP ✓", "color": "green", "index": 1 } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 21, "type": "stat",
+      "title": "Health — lot-service",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 22 },
+      "targets": [{ "expr": "probe_success{target=~\".*lot.*health.*\"}", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN ✕", "color": "red", "index": 0 }, "1": { "text": "UP ✓", "color": "green", "index": 1 } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 22, "type": "stat",
+      "title": "Health — stock-service",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 22 },
+      "targets": [{ "expr": "probe_success{target=~\".*stock.*health.*\"}", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN ✕", "color": "red", "index": 0 }, "1": { "text": "UP ✓", "color": "green", "index": 1 } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 23, "type": "stat",
+      "title": "Health — order-service",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 22 },
+      "targets": [{ "expr": "probe_success{target=~\".*order.*health.*\"}", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN ✕", "color": "red", "index": 0 }, "1": { "text": "UP ✓", "color": "green", "index": 1 } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 24, "type": "stat",
+      "title": "Health — Keycloak (ready)",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 22 },
+      "targets": [{ "expr": "probe_success{target=~\".*keycloak.*ready.*\"}", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN ✕", "color": "red", "index": 0 }, "1": { "text": "UP ✓", "color": "green", "index": 1 } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 25, "type": "stat",
+      "title": "Health — Keycloak (live)",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 22 },
+      "targets": [{ "expr": "probe_success{target=~\".*keycloak.*live.*\"}", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN ✕", "color": "red", "index": 0 }, "1": { "text": "UP ✓", "color": "green", "index": 1 } } }], "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] }, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 30, "type": "timeseries",
+      "title": "Durée des probes HTTP — Temps de réponse par endpoint (ms)",
+      "description": "Durée mesurée par le Blackbox Exporter pour chaque probe HTTP. Une valeur croissante indique une dégradation de la réactivité.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 14, "x": 0, "y": 26 },
+      "targets": [
+        { "expr": "probe_duration_seconds{probe_type=\"health\"} * 1000", "legendFormat": "{{service_name}}", "refId": "A" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 10, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }, { "color": "rgba(239,68,68,0.3)", "value": 500 }] },
+          "unit": "ms"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 31, "type": "timeseries",
+      "title": "Disponibilité Probes — Historique (1 = UP, 0 = DOWN)",
+      "description": "Historique de disponibilité par endpoint sondé. Toute valeur à 0 est un incident de disponibilité.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 10, "x": 14, "y": 26 },
+      "targets": [
+        { "expr": "probe_success{probe_type=\"health\"}", "legendFormat": "{{service_name}}", "refId": "A" },
+        { "expr": "probe_success{probe_type=\"health\",target=~\".*keycloak.*\"}", "legendFormat": "keycloak — {{target}}", "refId": "B" }
+      ],
+      "options": { "legend": { "calcs": ["min","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "none" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 30, "gradientMode": "none", "lineInterpolation": "stepAfter", "lineWidth": 2, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" } },
+          "unit": "short", "min": -0.1, "max": 1.5,
+          "mappings": [{ "type": "value", "options": { "0": { "text": "DOWN", "index": 0 }, "1": { "text": "UP", "index": 1 } } }]
+        }, "overrides": []
+      }
+    },
+
+    { "id": 53, "type": "row", "title": "Keycloak — Heap OOM Watch", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 35 }, "panels": [] },
+
+    {
+      "id": 40, "type": "timeseries",
+      "title": "Keycloak JVM Heap — Surveillance OOM (limite 512MB)",
+      "description": "Évolution du Heap Keycloak. La zone rouge = danger OOM (exit 137). Maintenir en dessous de 75% (384MB). Redémarrer si > 90%.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 14, "x": 0, "y": 36 },
+      "targets": [
+        { "expr": "seed:keycloak_heap_usage:ratio * 100", "legendFormat": "Heap utilisé (%)", "refId": "A" },
+        { "expr": "sum(jvm_memory_used_bytes{job=\"keycloak\",area=\"heap\"})", "legendFormat": "Heap absolu (bytes)", "refId": "B" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 20, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line+area" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }, { "color": "rgba(251,146,60,0.15)", "value": 75 }, { "color": "rgba(239,68,68,0.25)", "value": 90 }] },
+          "unit": "percent", "min": 0, "max": 100
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Heap absolu (bytes)" }, "properties": [{ "id": "unit", "value": "bytes" }, { "id": "custom.axisPlacement", "value": "right" }, { "id": "custom.lineStyle", "value": { "dash": [6,3], "fill": "dash" } }, { "id": "custom.lineWidth", "value": 1 }] },
+          { "matcher": { "id": "byName", "options": "Heap utilisé (%)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f97316", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 41, "type": "gauge",
+      "title": "Keycloak Heap — État actuel",
+      "description": "Jauge temps réel. Rouge > 90% = OOM imminent → restart requis.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 5, "x": 14, "y": 36 },
+      "targets": [{ "expr": "seed:keycloak_heap_usage:ratio * 100", "refId": "A", "instant": true }],
+      "options": { "minVizHeight": 75, "minVizWidth": 75, "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": true, "showThresholdMarkers": true },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "#22c55e", "value": null }, { "color": "#eab308", "value": 60 }, { "color": "#f97316", "value": 75 }, { "color": "#ef4444", "value": 90 }] }, "unit": "percent", "decimals": 1, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 42, "type": "text",
+      "title": "Procédure OOM Keycloak",
+      "transparent": false,
+      "gridPos": { "h": 9, "w": 5, "x": 19, "y": 36 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"padding:12px;font-family:sans-serif;\"><h3 style=\"color:#f97316;font-size:13px;font-weight:700;margin:0 0 10px;text-transform:uppercase;letter-spacing:0.05em;\">⚠️ Procédure OOM Keycloak</h3><div style=\"display:flex;flex-direction:column;gap:8px;\"><div style=\"background:rgba(34,197,94,0.1);border-left:3px solid #22c55e;padding:8px 10px;border-radius:0 4px 4px 0;\"><span style=\"color:#86efac;font-size:11px;font-weight:700;\">< 75%</span><p style=\"color:#d1fae5;font-size:11px;margin:3px 0 0;\">Normal — aucune action</p></div><div style=\"background:rgba(234,179,8,0.1);border-left:3px solid #eab308;padding:8px 10px;border-radius:0 4px 4px 0;\"><span style=\"color:#fde047;font-size:11px;font-weight:700;\">75% – 90%</span><p style=\"color:#fef9c3;font-size:11px;margin:3px 0 0;\">Surveiller · Préparer restart</p></div><div style=\"background:rgba(239,68,68,0.1);border-left:3px solid #ef4444;padding:8px 10px;border-radius:0 4px 4px 0;\"><span style=\"color:#fca5a5;font-size:11px;font-weight:700;\">> 90% 🚨</span><p style=\"color:#fee2e2;font-size:11px;margin:3px 0 0;\">Redémarrage immédiat :</p><code style=\"color:#f87171;font-size:10px;display:block;margin-top:4px;\">docker compose restart keycloak</code></div></div></div>"
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+
+    { "id": 54, "type": "row", "title": "PostgreSQL & Kafka — KPIs Temps Réel", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 45 }, "panels": [] },
+
+    {
+      "id": 60, "type": "timeseries",
+      "title": "PostgreSQL — Cache hit ratio (%) & Connexions actives",
+      "description": "Cache hit > 90% = bon. Connexions > 80 = saturation du pool JDBC.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 46 },
+      "targets": [
+        { "expr": "seed:pg_cache_hit:ratio * 100", "legendFormat": "Cache hit ratio (%)", "refId": "A" },
+        { "expr": "seed:pg_connections_active:count", "legendFormat": "Connexions actives", "refId": "B" }
+      ],
+      "options": { "legend": { "calcs": ["mean","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 12, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false }, "unit": "percent" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Cache hit ratio (%)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }, { "id": "custom.thresholdsStyle", "value": { "mode": "line" } }, { "id": "thresholds", "value": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }, { "color": "rgba(239,68,68,0.3)", "value": 0 }, { "color": "transparent", "value": 90 }] } }] },
+          { "matcher": { "id": "byName", "options": "Connexions actives" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }, { "id": "unit", "value": "short" }, { "id": "custom.axisPlacement", "value": "right" }] }
+        ]
+      }
+    },
+    {
+      "id": 61, "type": "timeseries",
+      "title": "Kafka — Consumer Lag par groupe",
+      "description": "Lag = messages en attente non consommés. Cible : 0. Lag croissant = microservice consommateur en retard.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 46 },
+      "targets": [
+        { "expr": "seed:kafka_consumer_lag_by_group:sum", "legendFormat": "{{consumergroup}}", "refId": "A" }
+      ],
+      "options": { "legend": { "calcs": ["max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 20, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }, { "color": "rgba(234,179,8,0.3)", "value": 100 }] },
+          "unit": "short", "min": 0
+        }, "overrides": []
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["seed","isra","cnra","slo","alertes","blackbox"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SEED — SLO & Alertes",
+  "uid": "seed-slo",
+  "version": 1,
+  "weekStart": ""
+}

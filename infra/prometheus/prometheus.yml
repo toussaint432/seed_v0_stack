@@ -1,24 +1,243 @@
-global:
-  scrape_interval: 15s
-  evaluation_interval: 15s
+# =============================================================================
+#  SEED Platform — Configuration Prometheus v2.52
+#  Institut Sénégalais de Recherches Agricoles (ISRA) / CNRA Bambey
+#  Supervision complète : Microservices · Keycloak · PostgreSQL · Kafka · HTTP
+# =============================================================================
 
+global:
+  # Fréquence de collecte des métriques (toutes les 15s)
+  scrape_interval:     15s
+  # Fréquence d'évaluation des règles d'alerte
+  evaluation_interval: 15s
+  # Timeout par cible (doit être < scrape_interval)
+  scrape_timeout:      10s
+
+  # Labels ajoutés à toutes les métriques — identifient l'environnement
+  external_labels:
+    platform:    "seed"
+    environment: "development"
+    region:      "sn-dakar"
+    team:        "isra-cnra"
+
+# =============================================================================
+#  RÈGLES — Alertes & Recording
+# =============================================================================
+rule_files:
+  - "/etc/prometheus/rules/recording_rules.yml"
+  - "/etc/prometheus/rules/alerts_microservices.yml"
+  - "/etc/prometheus/rules/alerts_infrastructure.yml"
+
+# =============================================================================
+#  ALERTMANAGER
+# =============================================================================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
+      timeout: 5s
+
+# =============================================================================
+#  SCRAPE CONFIGS
+# =============================================================================
 scrape_configs:
+
+  # ── Prometheus lui-même (auto-monitoring) ──────────────────────────────────
+  - job_name: 'prometheus'
+    honor_labels: true
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          component: 'observability'
+          layer:     'monitoring'
+
+  # ============================================================================
+  #  MICROSERVICES SPRING BOOT — Actuator/Micrometer
+  # ============================================================================
+
   - job_name: 'catalog-service'
     metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
     static_configs:
       - targets: ['catalog-service:8080']
+        labels:
+          component:   'microservice'
+          layer:       'application'
+          domain:      'catalog'
+          description: 'Gestion des variétés et espèces semencières'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'catalog-service'
 
   - job_name: 'lot-service'
     metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
     static_configs:
       - targets: ['lot-service:8080']
+        labels:
+          component:   'microservice'
+          layer:       'application'
+          domain:      'lot'
+          description: 'Lots semenciers, certifications et programmes'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'lot-service'
 
   - job_name: 'stock-service'
     metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
     static_configs:
       - targets: ['stock-service:8080']
+        labels:
+          component:   'microservice'
+          layer:       'application'
+          domain:      'stock'
+          description: 'Sites de production, stocks et transferts physiques'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'stock-service'
 
   - job_name: 'order-service'
     metrics_path: '/actuator/prometheus'
+    scrape_interval: 15s
     static_configs:
       - targets: ['order-service:8080']
+        labels:
+          component:   'microservice'
+          layer:       'application'
+          domain:      'order'
+          description: 'Commandes quotataires et organisations'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'order-service'
+
+  # ============================================================================
+  #  KEYCLOAK IAM — Port management 9000 (Keycloak 25+)
+  # ============================================================================
+
+  - job_name: 'keycloak'
+    metrics_path: '/metrics'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['keycloak:9000']
+        labels:
+          component:   'iam'
+          layer:       'security'
+          description: 'Authentification JWT, sessions et realms seed-v0'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'keycloak'
+
+  # ============================================================================
+  #  POSTGRESQL — postgres_exporter v0.15
+  # ============================================================================
+
+  - job_name: 'postgresql'
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+        labels:
+          component:   'database'
+          layer:       'data'
+          engine:      'postgresql-16'
+          db_name:     'seed'
+          description: 'Base de données principale — 10+ tables semencières'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'postgres-seed'
+
+  # ============================================================================
+  #  KAFKA — Deux exporters complémentaires
+  #  kafka-exporter  : consumer lag, offsets, topics (niveau cluster)
+  #  kafka-jmx       : broker internals (JVM, throughput, réseau, réplication)
+  # ============================================================================
+
+  - job_name: 'kafka'
+    scrape_interval: 15s
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+        labels:
+          component:   'message-broker'
+          layer:       'messaging'
+          metric_type: 'consumer'
+          broker_id:   '1'
+          description: 'Consumer lag, offsets et topics — SEED messaging bus'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'kafka-seed'
+
+  - job_name: 'kafka-jmx'
+    scrape_interval: 15s
+    scrape_timeout:  12s
+    static_configs:
+      - targets: ['kafka-jmx-exporter:5556']
+        labels:
+          component:   'message-broker'
+          layer:       'messaging'
+          metric_type: 'broker-jmx'
+          description: 'Broker internals — JVM, bytes in/out, réplication, requêtes'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  instance
+        replacement:   'kafka-broker'
+
+  # ============================================================================
+  #  BLACKBOX EXPORTER — Probe HTTP/HTTPS (disponibilité endpoints publics)
+  # ============================================================================
+
+  # Probe HTTP 200 sur les healthchecks Spring Boot Actuator
+  - job_name: 'blackbox-actuator-health'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'http://catalog-service:8080/actuator/health'
+          - 'http://lot-service:8080/actuator/health'
+          - 'http://stock-service:8080/actuator/health'
+          - 'http://order-service:8080/actuator/health'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  __param_target
+      - source_labels: [__param_target]
+        target_label:  target
+      - target_label:  __address__
+        replacement:   'blackbox-exporter:9115'
+      # Extraire le nom du service depuis l'URL
+      - source_labels: [target]
+        regex:         'http://([^:]+):.*'
+        target_label:  service_name
+        replacement:   '$1'
+      - target_label: component
+        replacement:   'microservice'
+      - target_label: probe_type
+        replacement:   'health'
+
+  # Probe HTTP 200 sur Keycloak realm discovery
+  - job_name: 'blackbox-keycloak-health'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    scrape_interval: 30s
+    static_configs:
+      - targets:
+          - 'http://keycloak:9000/health/ready'
+          - 'http://keycloak:9000/health/live'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label:  __param_target
+      - source_labels: [__param_target]
+        target_label:  target
+      - target_label:  __address__
+        replacement:   'blackbox-exporter:9115'
+      - target_label: component
+        replacement:   'iam'
+      - target_label: probe_type
+        replacement:   'health'

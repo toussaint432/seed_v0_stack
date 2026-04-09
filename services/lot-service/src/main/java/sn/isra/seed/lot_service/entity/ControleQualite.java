@@ -1,53 +1,67 @@
 package sn.isra.seed.lot_service.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
+import lombok.*;
+
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "controle_qualite")
+@Table(name = "controle_qualite",
+    indexes = @Index(name = "idx_ctrl_lot", columnList = "id_lot"))
 @Getter @Setter @NoArgsConstructor
 public class ControleQualite {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotNull(message = "Le lot est obligatoire")
     @Column(name = "id_lot", nullable = false)
     private Long idLot;
 
-    @Column(name = "type_controle", nullable = false)
-    private String typeControle;
+    @NotNull(message = "Le type de contrôle est obligatoire")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type_controle", nullable = false, length = 30)
+    private sn.isra.seed.lot_service.entity.enums.TypeControle typeControle;
 
+    @NotNull(message = "La date de contrôle est obligatoire")
     @Column(name = "date_controle", nullable = false)
     @JsonSerialize(using = LocalDateSerializer.class)
     @JsonDeserialize(using = LocalDateDeserializer.class)
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate dateControle;
 
-    @Column(name = "taux_germination")
+    @DecimalMin(value = "0.0") @DecimalMax(value = "100.0")
+    @Column(name = "taux_germination", precision = 5, scale = 2)
     private BigDecimal tauxGermination;
 
-    @Column(name = "taux_humidite")
+    @DecimalMin(value = "0.0") @DecimalMax(value = "100.0")
+    @Column(name = "taux_humidite", precision = 5, scale = 2)
     private BigDecimal tauxHumidite;
 
-    @Column(name = "purete_physique")
+    @DecimalMin(value = "0.0") @DecimalMax(value = "100.0")
+    @Column(name = "purete_physique", precision = 5, scale = 2)
     private BigDecimal puretePhysique;
 
-    @Column(name = "purete_specifique")
+    @DecimalMin(value = "0.0") @DecimalMax(value = "100.0")
+    @Column(name = "purete_specifique", precision = 5, scale = 2)
     private BigDecimal pureteSpecifique;
 
-    @Column(name = "conformite_varietale")
+    @Column(name = "conformite_varietale", length = 30)
     private String conformiteVarietale;
 
-    @Column(name = "resultat", nullable = false)
-    private String resultat;
+    @NotNull(message = "Le résultat est obligatoire")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "resultat", nullable = false, length = 30)
+    private sn.isra.seed.lot_service.entity.enums.ResultatControle resultat;
 
     @Column(name = "controleur")
     private String controleur;

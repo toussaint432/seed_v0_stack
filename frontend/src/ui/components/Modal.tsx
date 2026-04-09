@@ -6,10 +6,11 @@ interface Props {
   subtitle?: string
   onClose: () => void
   children: React.ReactNode
+  footer?: React.ReactNode
   size?: 'sm' | 'md' | 'lg'
 }
 
-export function Modal({ title, subtitle, onClose, children, size = 'md' }: Props) {
+export function Modal({ title, subtitle, onClose, children, footer, size = 'md' }: Props) {
   const widths = { sm: 480, md: 600, lg: 780 }
   return (
     <div style={{
@@ -22,7 +23,7 @@ export function Modal({ title, subtitle, onClose, children, size = 'md' }: Props
         boxShadow: '0 24px 64px rgba(0,0,0,0.18)',
       }} onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexShrink: 0 }}>
           <div>
             <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{title}</h2>
             {subtitle && <p style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 3 }}>{subtitle}</p>}
@@ -35,6 +36,12 @@ export function Modal({ title, subtitle, onClose, children, size = 'md' }: Props
         <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1 }}>
           {children}
         </div>
+        {/* Footer — toujours visible, non scrollable */}
+        {footer && (
+          <div style={{ padding: '14px 24px', borderTop: '1px solid var(--border)', flexShrink: 0, background: 'var(--surface)' }}>
+            {footer}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -107,7 +114,7 @@ export function FormActions({
 }
 
 export function Toast({ message, type, onClose }: { message: string; type: 'success' | 'error'; onClose: () => void }) {
-  React.useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t) }, [])
+  React.useEffect(() => { const t = setTimeout(onClose, 4000); return () => clearTimeout(t) }, [onClose])
   return (
     <div style={{
       position: 'fixed', bottom: 24, right: 24, zIndex: 3000,

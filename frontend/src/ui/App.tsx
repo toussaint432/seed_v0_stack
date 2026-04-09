@@ -4,6 +4,7 @@ import {
   Users as UsersIcon, CircleUser, Bell, Search, Menu, LogOut, ChevronRight,
   Activity, Warehouse, ShoppingCart, ArrowRightLeft, Shield,
   Calendar, MapPin, Building2, Workflow, Server, Store, MessageCircle,
+  Sun, Moon, Monitor, X,
 } from 'lucide-react'
 import { initKeycloak, keycloak } from '../lib/keycloak'
 import { Varieties }      from './pages/Varieties'
@@ -36,7 +37,7 @@ function getUserRoles(): string[] {
 
 function getUserInfo() {
   const token = keycloak.tokenParsed as any
-  if (!token) return { name: 'Utilisateur', role: 'Connecté', initials: 'U', roleKey: '', roleColor: '#6b7280' }
+  if (!token) return { name: 'Utilisateur', role: 'Connecté', initials: 'U', roleKey: '', roleColor: '#6b7280', userSpecialisation: null as string | null }
   const name  = token.preferred_username || token.name || 'Utilisateur'
   const roles = getUserRoles()
   const roleMap: Record<string, { label: string; color: string }> = {
@@ -48,7 +49,8 @@ function getUserInfo() {
   }
   const roleKey  = Object.keys(roleMap).find(r => roles.includes(r)) || ''
   const roleInfo = roleMap[roleKey] || { label: 'Utilisateur', color: '#6b7280' }
-  return { name, role: roleInfo.label, roleColor: roleInfo.color, initials: name.slice(0, 2).toUpperCase(), roleKey }
+  const userSpecialisation: string | null = token.specialisation ?? null
+  return { name, role: roleInfo.label, roleColor: roleInfo.color, initials: name.slice(0, 2).toUpperCase(), roleKey, userSpecialisation }
 }
 
 /* ── Nav config par rôle ── */
@@ -158,11 +160,62 @@ export function App() {
   const [ready,     setReady]     = useState(false)
   const [page,      setPage]      = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
-  const [search,    setSearch]    = useState('')
   const [unread,    setUnread]    = useState(0)
   const unreadTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [theme,     setTheme]     = useState<'system' | 'light' | 'dark'>(() => (localStorage.getItem('seed-theme') as any) || 'system')
+  const [notifOpen, setNotifOpen] = useState(false)
+  const [cmdOpen,   setCmdOpen]   = useState(false)
+  const [cmdQuery,  setCmdQuery]  = useState('')
+  const [cmdIdx,    setCmdIdx]    = useState(0)
+  const notifRef  = useRef<HTMLDivElement>(null)
+  const searchRef = useRef<HTMLDivElement>(null)
+  const inputRef  = useRef<HTMLInputElement>(null)
 
   useEffect(() => { initKeycloak().then(() => setReady(true)) }, [])
+
+  // ── Thème ──
+  useEffect(() => {
+    const root = document.documentElement
+    const applyTheme = (t: 'light' | 'dark') => root.setAttribute('data-theme', t)
+
+    localStorage.setItem('seed-theme', theme)
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      applyTheme(mq.matches ? 'dark' : 'light')
+      const handler = (e: MediaQueryListEvent) => applyTheme(e.matches ? 'dark' : 'light')
+      mq.addEventListener('change', handler)
+      return () => mq.removeEventListener('change', handler)
+    } else {
+      applyTheme(theme)
+    }
+  }, [theme])
+
+  // ── Raccourcis clavier ──
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCmdOpen(true); setCmdQuery(''); setCmdIdx(0)
+        setTimeout(() => inputRef.current?.focus(), 0)
+      }
+      if (e.key === 'Escape') { setCmdOpen(false); setNotifOpen(false); setCmdQuery('') }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  // ── Fermer search ou notif si clic à l'extérieur ──
+  useEffect(() => {
+    if (!cmdOpen && !notifOpen) return
+    const handler = (e: MouseEvent) => {
+      if (cmdOpen   && searchRef.current && !searchRef.current.contains(e.target as Node))
+        { setCmdOpen(false); setCmdQuery('') }
+      if (notifOpen && notifRef.current  && !notifRef.current.contains(e.target as Node))
+        setNotifOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [cmdOpen, notifOpen])
 
   // Polling badge non-lus (toutes les 30s, démarré après login)
   useEffect(() => {
@@ -196,7 +249,34 @@ export function App() {
   const allNavItems = navSections.flatMap(s => s.items)
   const validPage: Page = (page === 'profile' || allNavItems.find(n => n.id === page)) ? page : (allNavItems[0]?.id || 'dashboard')
 
+  // Palette de commandes — pages filtrées
+  const profileItem: NavItem = { id: 'profile', label: 'Mon profil', icon: CircleUser }
+  const paletteItems: NavItem[] = [...allNavItems, profileItem]
+  const cmdResults = cmdQuery.trim()
+    ? paletteItems.filter(n =>
+        n.label.toLowerCase().includes(cmdQuery.toLowerCase()) ||
+        pageTitle[n.id]?.sub?.toLowerCase().includes(cmdQuery.toLowerCase())
+      )
+    : paletteItems
+
+  function goPage(id: Page) { setPage(id); setCmdOpen(false); setCmdQuery('') }
+
+  // Icône & libellé du bouton thème
+  const THEME_CYCLE: Array<'system' | 'light' | 'dark'> = ['system', 'light', 'dark']
+  const nextTheme = THEME_CYCLE[(THEME_CYCLE.indexOf(theme) + 1) % 3]
+  const ThemeIcon  = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
+  const themeTitle = theme === 'light' ? 'Mode clair — cliquez pour mode nuit' : theme === 'dark' ? 'Mode nuit — cliquez pour mode auto' : 'Mode auto — cliquez pour mode clair'
+
+  // Notifications simulées (messages non-lus + alertes plateforme)
+  const notifications: Array<{ id: number; type: 'message' | 'transfer' | 'system'; title: string; sub: string; time: string; read: boolean }> = [
+    ...(unread > 0 ? [{ id: 1, type: 'message' as const, title: `${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''}`, sub: 'Messagerie plateforme', time: 'maintenant', read: false }] : []),
+    { id: 2, type: 'transfer' as const, title: 'Transfert en attente de validation', sub: 'Un lot G3 attend votre approbation', time: 'il y a 2h', read: false },
+    { id: 3, type: 'system' as const, title: 'Plateforme SEED opérationnelle', sub: 'Tous les services sont actifs', time: 'il y a 5h', read: true },
+  ]
+  const unreadNotif = notifications.filter(n => !n.read).length
+
   return (
+    <>
     <div className="layout">
 
       {/* ── Sidebar ── */}
@@ -313,18 +393,118 @@ export function App() {
           </div>
 
           <div className="topbar-right">
-            <div className="topbar-search">
-              <Search size={13} color="var(--text-placeholder)" />
-              <input
-                placeholder="Rechercher…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-              />
+
+            {/* ── Search inline (Cmd+K) ── */}
+            <div className={`topbar-search-wrap ${cmdOpen ? 'topbar-search-wrap--open' : ''}`} ref={searchRef}>
+              <div
+                className={`topbar-search ${cmdOpen ? 'topbar-search--active' : ''}`}
+                onClick={() => { setCmdOpen(true); setTimeout(() => inputRef.current?.focus(), 0) }}
+              >
+                <Search size={13} color="var(--text-placeholder)" />
+                {cmdOpen ? (
+                  <input
+                    ref={inputRef}
+                    className="topbar-search-input"
+                    placeholder="Rechercher une page…"
+                    value={cmdQuery}
+                    onChange={e => { setCmdQuery(e.target.value); setCmdIdx(0) }}
+                    onKeyDown={e => {
+                      if (e.key === 'ArrowDown') { e.preventDefault(); setCmdIdx(i => Math.min(i + 1, cmdResults.length - 1)) }
+                      if (e.key === 'ArrowUp')   { e.preventDefault(); setCmdIdx(i => Math.max(i - 1, 0)) }
+                      if (e.key === 'Enter' && cmdResults[cmdIdx]) goPage(cmdResults[cmdIdx].id)
+                    }}
+                    autoComplete="off"
+                  />
+                ) : (
+                  <>
+                    <span className="topbar-search-label">Rechercher…</span>
+                    <span className="topbar-search-kbd">⌘K</span>
+                  </>
+                )}
+                {cmdOpen && cmdQuery && (
+                  <button className="topbar-search-clear" onClick={e => { e.stopPropagation(); setCmdQuery('') }}>
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {cmdOpen && (
+                <div className="search-dropdown">
+                  {cmdResults.length === 0 ? (
+                    <div className="search-dropdown-empty">Aucune page trouvée pour « {cmdQuery} »</div>
+                  ) : (
+                    cmdResults.map((item, i) => {
+                      const Icon = item.icon
+                      return (
+                        <button
+                          key={item.id}
+                          className={`search-dropdown-item ${i === cmdIdx ? 'search-dropdown-item--active' : ''}`}
+                          onMouseEnter={() => setCmdIdx(i)}
+                          onClick={() => goPage(item.id)}
+                        >
+                          <span className="search-dropdown-icon"><Icon size={14} /></span>
+                          <div className="search-dropdown-body">
+                            <span className="search-dropdown-label">{item.label}</span>
+                            <span className="search-dropdown-sub">{pageTitle[item.id]?.sub}</span>
+                          </div>
+                          {validPage === item.id && <span className="search-dropdown-current">actuelle</span>}
+                        </button>
+                      )
+                    })
+                  )}
+                  <div className="search-dropdown-footer">
+                    <span>↑↓ naviguer</span><span>↵ ouvrir</span><span>Esc fermer</span>
+                  </div>
+                </div>
+              )}
             </div>
-            <button className="notif-btn" title="Notifications">
-              <Bell size={15} />
-              <span className="notif-dot" />
+
+            {/* Bouton thème */}
+            <button
+              className="topbar-icon-btn"
+              data-active={theme !== 'system' ? 'true' : undefined}
+              title={themeTitle}
+              onClick={() => setTheme(nextTheme)}
+            >
+              <ThemeIcon size={15} />
             </button>
+
+            {/* Cloche notifications */}
+            <div className="notif-wrapper" ref={notifRef}>
+              <button
+                className="notif-btn"
+                title="Notifications"
+                onClick={() => setNotifOpen(o => !o)}
+              >
+                <Bell size={15} />
+                {unreadNotif > 0 && <span className="notif-badge">{unreadNotif}</span>}
+              </button>
+
+              {notifOpen && (
+                <div className="notif-panel">
+                  <div className="notif-panel-header">
+                    <span className="notif-panel-title">Notifications</span>
+                    {unreadNotif > 0 && <span className="notif-panel-count">{unreadNotif} non lu{unreadNotif > 1 ? 's' : ''}</span>}
+                  </div>
+                  <div className="notif-panel-list">
+                    {notifications.map(n => (
+                      <div key={n.id} className={`notif-item ${n.read ? 'notif-item--read' : ''}`}>
+                        <div className={`notif-item-dot notif-item-dot--${n.type}`} />
+                        <div className="notif-item-body">
+                          <div className="notif-item-title">{n.title}</div>
+                          <div className="notif-item-sub">{n.sub}</div>
+                        </div>
+                        <div className="notif-item-time">{n.time}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <button className="notif-panel-footer" onClick={() => { setPage('messages'); setNotifOpen(false) }}>
+                    Voir tous les messages
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Avatar cliquable → profil */}
             <button
               onClick={() => setPage('profile')}
@@ -367,9 +547,9 @@ export function App() {
 
         {/* Page */}
         <main className="page-content" key={validPage}>
-          {validPage === 'dashboard'      && <Dashboard      roleKey={user.roleKey} />}
-          {validPage === 'varieties'      && <Varieties      roleKey={user.roleKey} />}
-          {validPage === 'lots'           && <Lots           roleKey={user.roleKey} />}
+          {validPage === 'dashboard'      && <Dashboard      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />}
+          {validPage === 'varieties'      && <Varieties      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />}
+          {validPage === 'lots'           && <Lots           roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />}
           {validPage === 'stocks'         && <Stocks         roleKey={user.roleKey} />}
           {validPage === 'orders'         && <Orders         roleKey={user.roleKey} />}
           {validPage === 'certifications' && <Certifications roleKey={user.roleKey} />}
@@ -385,5 +565,7 @@ export function App() {
         </main>
       </div>
     </div>
+
+    </>
   )
 }

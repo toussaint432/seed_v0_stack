@@ -8,7 +8,7 @@ import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 
-interface Props { roleKey: string }
+interface Props { roleKey: string; userSpecialisation?: string | null }
 
 const STATUT_CONFIG: Record<string, { label: string; cls: string }> = {
   DIFFUSEE: { label: 'Diffusée',  cls: 'badge-green' },
@@ -17,7 +17,7 @@ const STATUT_CONFIG: Record<string, { label: string; cls: string }> = {
   ARCHIVEE: { label: 'Archivée',  cls: 'badge-gray'  },
 }
 
-export function Varieties({ roleKey }: Props) {
+export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [species,   setSpecies]   = useState<any[]>([])
   const [varieties, setVarieties] = useState<any[]>([])
   const [search,    setSearch]    = useState('')
@@ -58,9 +58,22 @@ export function Varieties({ roleKey }: Props) {
     statutVariete: 'DIFFUSEE',
   })
 
-  const canCreate  = ['seed-admin', 'seed-selector'].includes(roleKey)
-  const canEdit    = ['seed-admin', 'seed-selector'].includes(roleKey)
-  const canArchive = ['seed-admin', 'seed-selector'].includes(roleKey)
+  const isAdminOrSelector = ['seed-admin', 'seed-selector'].includes(roleKey)
+
+  // Renvoie true si l'utilisateur peut modifier les variétés de cette espèce.
+  // Admin → toujours. Sélectionneur → uniquement sa spécialisation.
+  function canEdit(codeEspece?: string): boolean {
+    if (roleKey === 'seed-admin') return true
+    if (roleKey === 'seed-selector') {
+      if (!userSpecialisation) return true          // pas de restriction si attribut absent
+      if (!codeEspece) return false                 // espèce inconnue → refus par défaut
+      return codeEspece.toUpperCase() === userSpecialisation.toUpperCase()
+    }
+    return false
+  }
+
+  const canCreate  = isAdminOrSelector
+  const canArchive = isAdminOrSelector
 
   /* ── Fetch ── */
   async function fetchData(isRefresh = false) {
@@ -463,14 +476,14 @@ export function Varieties({ roleKey }: Props) {
                   <th>Espèce</th>
                   <th>Cycle</th>
                   <th>Statut</th>
-                  {canEdit && <th style={{ width: 80 }}></th>}
+                  {isAdminOrSelector && <th style={{ width: 80 }}></th>}
                 </tr>
               </thead>
               <tbody>
                 {loading
                   ? [0, 1, 2, 3, 4].map(i => (
                       <tr key={i}>
-                        <td colSpan={canEdit ? 6 : 5}>
+                        <td colSpan={isAdminOrSelector ? 6 : 5}>
                           <div className="skeleton" style={{ height: 14, borderRadius: 4 }} />
                         </td>
                       </tr>
@@ -478,7 +491,7 @@ export function Varieties({ roleKey }: Props) {
                   : filtered.length === 0
                   ? (
                       <tr>
-                        <td colSpan={canEdit ? 6 : 5}>
+                        <td colSpan={isAdminOrSelector ? 6 : 5}>
                           <div className="empty-state" style={{ padding: '40px 0' }}>
                             <div className="empty-icon"><Sprout size={20} /></div>
                             <div className="empty-title">
@@ -499,6 +512,9 @@ export function Varieties({ roleKey }: Props) {
                   : filtered.map(v => {
                       const isArchived = v.statutVariete === 'ARCHIVEE'
                       const st = STATUT_CONFIG[v.statutVariete] ?? { label: v.statutVariete, cls: 'badge-gray' }
+                      const allowed   = canEdit(v.espece?.codeEspece)
+                      const dTitle    = `Non autorisé — votre spécialisation est ${userSpecialisation ?? 'N/A'}`
+                      const dStyle    = !allowed ? { opacity: 0.4, cursor: 'not-allowed' as const } : {}
                       return (
                         <tr key={v.id} style={{ opacity: isArchived ? 0.55 : 1 }}>
                           <td>
@@ -529,30 +545,38 @@ export function Varieties({ roleKey }: Props) {
                               : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                           </td>
                           <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
-                          {canEdit && (
+                          {isAdminOrSelector && (
                             <td>
                               <div style={{ display: 'flex', gap: 4 }}>
                                 {!isArchived && (
                                   <>
-                                    <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} onClick={() => openEdit(v)} title="Modifier le statut">
+                                    <button
+                                      className="btn btn-ghost"
+                                      style={{ height: 26, padding: '0 8px', ...dStyle }}
+                                      onClick={() => { if (allowed) openEdit(v) }}
+                                      title={allowed ? 'Modifier le statut' : dTitle}
+                                    >
                                       <Edit2 size={12} />
                                     </button>
-                                    <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', color: 'var(--primary)' }} onClick={() => openZones(v)} title="Zones agro-écologiques">
+                                    <button
+                                      className="btn btn-ghost"
+                                      style={{ height: 26, padding: '0 8px', color: allowed ? 'var(--primary)' : undefined, ...dStyle }}
+                                      onClick={() => { if (allowed) openZones(v) }}
+                                      title={allowed ? 'Zones agro-écologiques' : dTitle}
+                                    >
                                       <MapPin size={12} />
                                     </button>
-                                    {canArchive && (
-                                      <button
-                                        className="btn btn-ghost"
-                                        style={{ height: 26, padding: '0 8px', color: 'var(--gold-dark)' }}
-                                        onClick={() => { setArchiveTarget(v); setArchiveComment('') }}
-                                        title="Archiver cette variété"
-                                      >
-                                        <Archive size={12} />
-                                      </button>
-                                    )}
+                                    <button
+                                      className="btn btn-ghost"
+                                      style={{ height: 26, padding: '0 8px', color: allowed ? 'var(--gold-dark)' : undefined, ...dStyle }}
+                                      onClick={() => { if (allowed) { setArchiveTarget(v); setArchiveComment('') } }}
+                                      title={allowed ? 'Archiver cette variété' : dTitle}
+                                    >
+                                      <Archive size={12} />
+                                    </button>
                                   </>
                                 )}
-                                {isArchived && canArchive && (
+                                {isArchived && allowed && (
                                   <button
                                     className="btn btn-ghost"
                                     style={{ height: 26, padding: '0 8px', color: 'var(--red-600)' }}

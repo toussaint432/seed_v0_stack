@@ -1,0 +1,226 @@
+# =============================================================================
+#  SEED Platform — Alertes Infrastructure
+#  Keycloak IAM · PostgreSQL · Kafka · Blackbox HTTP probes
+# =============================================================================
+groups:
+
+  # ---------------------------------------------------------------------------
+  #  Keycloak — IAM & Authentification
+  # ---------------------------------------------------------------------------
+  - name: seed.keycloak
+    interval: 30s
+    rules:
+
+      - alert: KeycloakDown
+        expr: up{job="keycloak"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team:     isra-cnra
+          component: iam
+        annotations:
+          summary:     "CRITIQUE — Keycloak IAM inaccessible"
+          description: >
+            **Keycloak** ne répond plus depuis 1 minute.
+            Aucun utilisateur (sélectionneur, UPSemCL, multiplicateur) ne peut
+            se connecter à la plateforme SEED. Vérifier : `docker logs seed-keycloak`.
+
+      - alert: KeycloakHealthNotReady
+        expr: probe_success{target=~".*keycloak.*health.*"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          team:     isra-cnra
+          component: iam
+        annotations:
+          summary:     "Keycloak health/ready KO"
+          description: >
+            Le endpoint `/health/ready` de Keycloak répond en erreur.
+            Keycloak est peut-être en cours de démarrage (boot ~2min) ou en état dégradé.
+
+      - alert: KeycloakHeapWarning
+        expr: >
+          sum(jvm_memory_used_bytes{job="keycloak", area="heap"})
+          /
+          sum(jvm_memory_max_bytes{job="keycloak", area="heap"})
+          > 0.75
+        for: 10m
+        labels:
+          severity: warning
+          team:     isra-cnra
+          component: iam
+        annotations:
+          summary:     "Keycloak Heap > 75% — risque OOM"
+          description: >
+            La JVM Keycloak utilise {{ $value | humanizePercentage }} de sa Heap (limite : 512MB).
+            Précurseur des crashes OOM (exit 137) observés. Surveiller de près.
+
+      - alert: KeycloakHeapCritical
+        expr: >
+          sum(jvm_memory_used_bytes{job="keycloak", area="heap"})
+          /
+          sum(jvm_memory_max_bytes{job="keycloak", area="heap"})
+          > 0.90
+        for: 3m
+        labels:
+          severity: critical
+          team:     isra-cnra
+          component: iam
+        annotations:
+          summary:     "CRITIQUE — Keycloak Heap > 90% — OOM imminent"
+          description: >
+            Keycloak est à {{ $value | humanizePercentage }} de Heap.
+            Un crash OOM (exit 137) est imminent — tous les utilisateurs seront déconnectés.
+            Action : `docker compose restart keycloak`.
+
+      - alert: KeycloakLoginFailureSpike
+        expr: >
+          rate(keycloak_failed_login_attempts_total{realm="seed-v0"}[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team:     isra-cnra
+          component: iam
+        annotations:
+          summary:     "Pic d'échecs de connexion Keycloak — realm seed-v0"
+          description: >
+            Plus de 30 échecs de connexion par minute sur le realm **seed-v0**.
+            Possible tentative de brute force ou erreur de configuration client.
+            Erreur : {{ $labels.error }}.
+
+  # ---------------------------------------------------------------------------
+  #  PostgreSQL — Base de données
+  # ---------------------------------------------------------------------------
+  - name: seed.postgresql
+    interval: 30s
+    rules:
+
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team:     isra-cnra
+          component: database
+        annotations:
+          summary:     "CRITIQUE — PostgreSQL seed inaccessible"
+          description: >
+            **PostgreSQL** (base seed) ne répond plus.
+            Tous les microservices Spring Boot perdront leurs connexions.
+            Vérifier : `docker logs seed-postgres`.
+
+      - alert: PostgreSQLTooManyConnections
+        expr: >
+          sum(pg_stat_database_numbackends{datname="seed"})
+          > 80
+        for: 5m
+        labels:
+          severity: warning
+          team:     isra-cnra
+          component: database
+        annotations:
+          summary:     "PostgreSQL — trop de connexions ({{ $value }}/100)"
+          description: >
+            La base **seed** a {{ $value }} connexions actives (seuil : 80/100 max).
+            Les microservices utilisent HikariCP — vérifier la taille des pools JDBC.
+
+      - alert: PostgreSQLDeadlock
+        expr: >
+          increase(pg_stat_database_deadlocks{datname="seed"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          team:     isra-cnra
+          component: database
+        annotations:
+          summary:     "Deadlock PostgreSQL détecté — base seed"
+          description: >
+            {{ $value }} deadlock(s) détecté(s) sur la base **seed** dans les 5 dernières minutes.
+            Les deadlocks indiquent des transactions concurrentes sur les mêmes lignes.
+            Vérifier les logs PostgreSQL et les requêtes lentes.
+
+      - alert: PostgreSQLHighRollbackRate
+        expr: >
+          rate(pg_stat_database_xact_rollback{datname="seed"}[5m])
+          /
+          (rate(pg_stat_database_xact_commit{datname="seed"}[5m]) + rate(pg_stat_database_xact_rollback{datname="seed"}[5m]))
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+          team:     isra-cnra
+          component: database
+        annotations:
+          summary:     "Taux de rollbacks élevé — PostgreSQL seed"
+          description: >
+            {{ $value | humanizePercentage }} des transactions sont annulées (rollback).
+            Seuil acceptable : < 5%. Indique des erreurs applicatives fréquentes côté
+            microservices (contraintes, validations, timeouts).
+
+      - alert: PostgreSQLLowCacheHitRatio
+        expr: >
+          rate(pg_stat_database_blks_hit{datname="seed"}[5m])
+          /
+          (rate(pg_stat_database_blks_hit{datname="seed"}[5m]) + rate(pg_stat_database_blks_read{datname="seed"}[5m]) + 0.001)
+          < 0.90
+        for: 15m
+        labels:
+          severity: warning
+          team:     isra-cnra
+          component: database
+        annotations:
+          summary:     "Cache hit ratio PostgreSQL bas ({{ $value | humanizePercentage }})"
+          description: >
+            Le ratio de lecture depuis le cache partagé est de {{ $value | humanizePercentage }}.
+            Cible : > 90%. En dessous, PostgreSQL lit fréquemment depuis le disque,
+            dégradant les performances. Envisager d'augmenter `shared_buffers`.
+
+  # ---------------------------------------------------------------------------
+  #  Kafka — Bus de messages
+  # ---------------------------------------------------------------------------
+  - name: seed.kafka
+    interval: 30s
+    rules:
+
+      - alert: KafkaBrokerDown
+        expr: kafka_brokers == 0
+        for: 1m
+        labels:
+          severity: critical
+          team:     isra-cnra
+          component: message-broker
+        annotations:
+          summary:     "CRITIQUE — Aucun broker Kafka actif"
+          description: >
+            Kafka n'a plus aucun broker actif.
+            Les événements inter-services (lots créés, transferts, commandes) ne
+            sont plus publiés ni consommés. Impact sur la traçabilité des semences.
+
+      - alert: KafkaConsumerLagHigh
+        expr: >
+          sum(kafka_consumergroup_lag) by (consumergroup, topic) > 100
+        for: 10m
+        labels:
+          severity: warning
+          team:     isra-cnra
+          component: message-broker
+        annotations:
+          summary:     "Consumer lag élevé — {{ $labels.consumergroup }} / {{ $labels.topic }}"
+          description: >
+            Le consumer group **{{ $labels.consumergroup }}** a {{ $value }} messages
+            en attente sur le topic **{{ $labels.topic }}**.
+            Les microservices consommateurs sont en retard — vérifier leur état.
+
+      - alert: KafkaConsumerLagCritical
+        expr: >
+          sum(kafka_consumergroup_lag) by (consumergroup) > 1000
+        for: 5m
+        labels:
+          severity: critical
+          team:     isra-cnra
+          component: message-broker
+        annotations:
+          summary:     "CRITIQUE — Consumer lag > 1000 — {{ $labels.consumergroup }}"
+          description: >
+            **{{ $labels.consumergroup }}** accumule {{ $value }} messages non traités.
+            La cohérence des données (stocks, transferts de lots) est compromise.

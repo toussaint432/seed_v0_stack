@@ -1,0 +1,404 @@
+{
+  "annotations": { "list": [{ "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0,211,255,1)", "name": "Annotations & Alerts", "type": "dashboard" }] },
+  "description": "Supervision complète Apache Kafka — Broker · Consumer Lag · Throughput · JVM · Réplication — Plateforme SEED ISRA/CNRA",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    { "asDropdown": false, "icon": "dashboard", "keepTime": true, "tags": ["seed","overview"], "title": "Vue d'Ensemble", "type": "dashboards" },
+    { "asDropdown": false, "icon": "dashboard", "keepTime": true, "tags": ["seed","infrastructure"], "title": "Infrastructure", "type": "dashboards" }
+  ],
+  "panels": [
+
+    {
+      "id": 1, "type": "text", "title": "", "transparent": true,
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"background:linear-gradient(135deg,#1c1400 0%,#3d2b00 40%,#1a1f00 100%);padding:22px 28px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(234,179,8,0.25);box-shadow:0 4px 24px rgba(0,0,0,0.4);\"><div style=\"display:flex;align-items:center;gap:18px;\"><div style=\"width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#d97706,#eab308);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 12px rgba(234,179,8,0.4);\">📨</div><div><h1 style=\"color:#fefce8;font-size:22px;font-weight:800;margin:0;letter-spacing:-0.03em;font-family:sans-serif;\">Apache Kafka — Supervision Broker & Messaging</h1><p style=\"color:#fcd34d;font-size:13px;margin:5px 0 0;font-family:sans-serif;\">Bus de messages asynchrone SEED · Confluent Kafka 7.6 · ZooKeeper · JMX Exporter · kafka-exporter</p></div></div><div style=\"display:flex;flex-direction:column;align-items:flex-end;gap:8px;\"><div style=\"display:flex;gap:8px;\"><div style=\"background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.35);border-radius:6px;padding:6px 12px;\"><span style=\"color:#fde047;font-size:11px;font-weight:700;font-family:sans-serif;\">📊 Consumer Lag</span></div><div style=\"background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.35);border-radius:6px;padding:6px 12px;\"><span style=\"color:#fde047;font-size:11px;font-weight:700;font-family:sans-serif;\">⚡ Broker JMX</span></div><div style=\"background:rgba(234,179,8,0.15);border:1px solid rgba(234,179,8,0.35);border-radius:6px;padding:6px 12px;\"><span style=\"color:#fde047;font-size:11px;font-weight:700;font-family:sans-serif;\">🔄 Réplication</span></div></div><p style=\"color:#a16207;font-size:11px;margin:0;font-family:sans-serif;\">G1GC · Heap 256MB-512MB · 3 partitions par défaut · Rétention 7j/1GB</p></div></div>"
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+
+    { "id": 50, "type": "row", "title": "État du Cluster — KPIs Temps Réel", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 }, "panels": [] },
+
+    {
+      "id": 2, "type": "stat", "title": "Brokers actifs",
+      "description": "Nombre de brokers Kafka opérationnels dans le cluster. Cible : 1 (dev single-node).",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 0, "y": 5 },
+      "targets": [{ "expr": "kafka_brokers", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [{ "type": "value", "options": { "0": { "text": "OFFLINE ✕", "color": "red", "index": 0 }, "1": { "text": "1 / 1 ✓", "color": "green", "index": 1 } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] },
+          "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 3, "type": "stat", "title": "Consumer Lag total",
+      "description": "Lag total toutes partitions et tous consumer groups. Cible : 0. Toute valeur > 0 indique un retard de traitement.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 4, "y": 5 },
+      "targets": [{ "expr": "seed:kafka_consumer_lag_total:sum", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "orange", "value": 200 }, { "color": "red", "value": 1000 }] },
+          "unit": "short", "noValue": "0"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 4, "type": "stat", "title": "Messages produits / min",
+      "description": "Débit de messages entrants sur le broker (JMX — OneMinuteRate).",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 8, "y": 5 },
+      "targets": [{ "expr": "seed:kafka_messages_in:rate1m", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#eab308", "mode": "fixed" },
+          "unit": "short", "decimals": 1, "noValue": "0"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 5, "type": "stat", "title": "Topics actifs",
+      "description": "Nombre de topics applicatifs (topics internes __ exclus).",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 12, "y": 5 },
+      "targets": [{ "expr": "count(count(kafka_topic_partition_current_offset{topic!~\"__.*\"}) by (topic))", "refId": "A", "instant": true }],
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": { "color": { "fixedColor": "#eab308", "mode": "fixed" }, "unit": "short", "noValue": "0" }, "overrides": []
+      }
+    },
+    {
+      "id": 6, "type": "stat", "title": "Consumer Groups",
+      "description": "Nombre de consumer groups actifs consommant des topics.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 16, "y": 5 },
+      "targets": [{ "expr": "count(count(kafka_consumergroup_current_offset) by (consumergroup))", "refId": "A", "instant": true }],
+      "options": { "colorMode": "value", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": { "color": { "fixedColor": "#f59e0b", "mode": "fixed" }, "unit": "short", "noValue": "0" }, "overrides": []
+      }
+    },
+    {
+      "id": 7, "type": "stat", "title": "Partitions sous-répliquées",
+      "description": "Nombre de partitions dont les réplicas ne sont pas synchronisés (ISR). Doit être 0 en permanence.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 20, "y": 5 },
+      "targets": [{ "expr": "seed:kafka_under_replicated_partitions:count", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [{ "type": "value", "options": { "0": { "text": "0 ✓ OK", "color": "green", "index": 0 } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+          "unit": "short", "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+
+    { "id": 51, "type": "row", "title": "Consumer Lag — Analyse détaillée par groupe et topic", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 10 }, "panels": [] },
+
+    {
+      "id": 10, "type": "timeseries",
+      "title": "Consumer Lag — Par groupe de consommateurs",
+      "description": "Évolution du lag par consumer group. Un lag croissant indique que le microservice consommateur ne suit pas le rythme de production. Cible : 0 en permanence.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 10, "w": 14, "x": 0, "y": 11 },
+      "targets": [
+        { "expr": "seed:kafka_consumer_lag_by_group:sum", "legendFormat": "{{consumergroup}}", "refId": "A" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 25, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line+area" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }, { "color": "rgba(234,179,8,0.2)", "value": 50 }, { "color": "rgba(239,68,68,0.2)", "value": 500 }] },
+          "unit": "short", "min": 0
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 11, "type": "bargauge",
+      "title": "Lag actuel — Classement par groupe",
+      "description": "Snapshot du consumer lag actuel. Le groupe avec le lag le plus élevé est en tête.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 10, "w": 10, "x": 14, "y": 11 },
+      "targets": [{ "expr": "seed:kafka_consumer_lag_by_group:sum", "legendFormat": "{{consumergroup}}", "refId": "A", "instant": true }],
+      "options": { "displayMode": "lcd", "minVizHeight": 10, "minVizWidth": 0, "namePlacement": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"] }, "showUnfilled": true, "valueMode": "color" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 50 }, { "color": "orange", "value": 200 }, { "color": "red", "value": 1000 }] },
+          "unit": "short", "min": 0, "noValue": "0"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 12, "type": "timeseries",
+      "title": "Consumer Lag — Par topic",
+      "description": "Lag agrégé par topic. Permet d'identifier quel sujet de messages est en retard (ex : lot-created, transfert-validé, commande-créée).",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 21 },
+      "targets": [
+        { "expr": "seed:kafka_consumer_lag_by_topic:sum", "legendFormat": "{{topic}}", "refId": "A" }
+      ],
+      "options": { "legend": { "calcs": ["max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 15, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false },
+          "unit": "short", "min": 0
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 13, "type": "timeseries",
+      "title": "Offset courant — Par topic (progression des messages)",
+      "description": "Position du dernier message produit par topic. Une courbe plate indique l'absence d'activité. Une pente régulière = activité normale.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 21 },
+      "targets": [
+        { "expr": "sum(kafka_topic_partition_current_offset{topic!~\"__.*\"}) by (topic)", "legendFormat": "{{topic}}", "refId": "A" }
+      ],
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 8, "gradientMode": "none", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never", "spanNulls": false },
+          "unit": "short"
+        }, "overrides": []
+      }
+    },
+
+    { "id": 52, "type": "row", "title": "Throughput Broker — Bytes & Messages (JMX)", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 }, "panels": [] },
+
+    {
+      "id": 20, "type": "timeseries",
+      "title": "Bytes entrants / sortants par seconde — Global broker",
+      "description": "Débit réseau du broker Kafka (JMX BrokerTopicMetrics). Un pic de bytes-in sans bytes-out correspondant peut indiquer une accumulation non consommée.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 14, "x": 0, "y": 31 },
+      "targets": [
+        { "expr": "seed:kafka_bytes_in:rate1m", "legendFormat": "Bytes In / s", "refId": "A" },
+        { "expr": "seed:kafka_bytes_out:rate1m", "legendFormat": "Bytes Out / s", "refId": "B" },
+        { "expr": "rate(kafka_server_brokertopicmetrics_bytesrejectedpersec_onemimuterate{topic!~\"__.*\"}[1m])", "legendFormat": "Bytes Rejetés / s", "refId": "C" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 15, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" } },
+          "unit": "Bps"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Bytes In / s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Bytes Out / s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Bytes Rejetés / s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } }, { "id": "custom.fillOpacity", "value": 25 }] }
+        ]
+      }
+    },
+    {
+      "id": 21, "type": "timeseries",
+      "title": "Messages produits / s — Par topic",
+      "description": "Taux de production de messages par topic (JMX MessagesInPerSec OneMinuteRate). Reflète l'activité métier de chaque service SEED.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 10, "x": 14, "y": 31 },
+      "targets": [
+        { "expr": "kafka_server_brokertopicmetrics_messagesinpersec_onemimuterate{topic!~\"__.*\"}", "legendFormat": "{{topic}}", "refId": "A" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 12, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false },
+          "unit": "reqps"
+        }, "overrides": []
+      }
+    },
+
+    { "id": 53, "type": "row", "title": "Latence Réseau — Requêtes Produce & Fetch (JMX)", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 40 }, "panels": [] },
+
+    {
+      "id": 30, "type": "timeseries",
+      "title": "Requêtes Produce — Débit & Latence (ms)",
+      "description": "Taux de requêtes Produce/s et latence totale (TotalTimeMs p95). Les producteurs sont les microservices SEED publiant des événements.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 41 },
+      "targets": [
+        { "expr": "kafka_network_requestmetrics_requestspersec_onemimuterate{request=\"Produce\"}", "legendFormat": "Produce req/s", "refId": "A" },
+        { "expr": "kafka_network_requestmetrics_totaltimems_95thpercentile{request=\"Produce\"}", "legendFormat": "Produce latence p95 (ms)", "refId": "B" },
+        { "expr": "kafka_network_requestmetrics_totaltimems_99thpercentile{request=\"Produce\"}", "legendFormat": "Produce latence p99 (ms)", "refId": "C" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false }, "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Produce req/s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }, { "id": "unit", "value": "reqps" }] },
+          { "matcher": { "id": "byName", "options": "Produce latence p95 (ms)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }, { "id": "unit", "value": "ms" }, { "id": "custom.axisPlacement", "value": "right" }] },
+          { "matcher": { "id": "byName", "options": "Produce latence p99 (ms)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } }, { "id": "unit", "value": "ms" }, { "id": "custom.axisPlacement", "value": "right" }, { "id": "custom.lineStyle", "value": { "dash": [6,3], "fill": "dash" } }] }
+        ]
+      }
+    },
+    {
+      "id": 31, "type": "timeseries",
+      "title": "Requêtes Fetch Consumer — Débit & Latence (ms)",
+      "description": "Taux de requêtes Fetch/s et latence (TotalTimeMs p95). Les consommateurs sont les microservices SEED lisant les événements.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 41 },
+      "targets": [
+        { "expr": "kafka_network_requestmetrics_requestspersec_onemimuterate{request=\"FetchConsumer\"}", "legendFormat": "Fetch req/s", "refId": "A" },
+        { "expr": "kafka_network_requestmetrics_totaltimems_95thpercentile{request=\"FetchConsumer\"}", "legendFormat": "Fetch latence p95 (ms)", "refId": "B" },
+        { "expr": "kafka_network_requestmetrics_requestqueuetimems_95thpercentile{request=\"FetchConsumer\"}", "legendFormat": "Queue time p95 (ms)", "refId": "C" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false }, "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Fetch req/s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }, { "id": "unit", "value": "reqps" }] },
+          { "matcher": { "id": "byName", "options": "Fetch latence p95 (ms)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }, { "id": "unit", "value": "ms" }, { "id": "custom.axisPlacement", "value": "right" }] },
+          { "matcher": { "id": "byName", "options": "Queue time p95 (ms)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }, { "id": "unit", "value": "ms" }, { "id": "custom.axisPlacement", "value": "right" } ] }
+        ]
+      }
+    },
+
+    { "id": 54, "type": "row", "title": "Replica Manager — Santé ISR & Partitions", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 50 }, "panels": [] },
+
+    {
+      "id": 40, "type": "timeseries",
+      "title": "Partitions leader & totales — Broker #1",
+      "description": "Nombre de partitions dont ce broker est le leader (LeaderCount) vs total (PartitionCount). En single-broker, ils doivent être égaux.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 51 },
+      "targets": [
+        { "expr": "kafka_server_replicamanager_leadercount_value", "legendFormat": "Partitions Leader", "refId": "A" },
+        { "expr": "kafka_server_replicamanager_partitioncount_value", "legendFormat": "Partitions Total", "refId": "B" }
+      ],
+      "options": { "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "none" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "lineInterpolation": "stepAfter", "lineWidth": 2, "showPoints": "never", "spanNulls": false }, "unit": "short", "decimals": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Partitions Leader" }, "properties": [{ "id": "color", "value": { "fixedColor": "#eab308", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Partitions Total" }, "properties": [{ "id": "color", "value": { "fixedColor": "#6b7280", "mode": "fixed" } }, { "id": "custom.lineStyle", "value": { "dash": [6,3], "fill": "dash" } }] }
+        ]
+      }
+    },
+    {
+      "id": 41, "type": "timeseries",
+      "title": "ISR Expansions & Shrinks — Indicateur de stabilité",
+      "description": "ISR Shrinks = un réplica a quitté l'ensemble In-Sync (problème réseau/latence). ISR Expand = réplica revenu. Des shrinks fréquents indiquent une instabilité.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 51 },
+      "targets": [
+        { "expr": "rate(kafka_server_replicamanager_isrshrinkspersec_onemimuterate[5m])", "legendFormat": "ISR Shrinks / s", "refId": "A" },
+        { "expr": "rate(kafka_server_replicamanager_isrexpandspersec_onemimuterate[5m])", "legendFormat": "ISR Expands / s", "refId": "B" }
+      ],
+      "options": { "legend": { "calcs": ["sum","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 15, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false }, "unit": "short", "min": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "ISR Shrinks / s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "ISR Expands / s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 42, "type": "timeseries",
+      "title": "Purgatory — Opérations différées en attente",
+      "description": "Nombre de requêtes Produce/Fetch en attente dans la purgatory. Un chiffre élevé persistent indique une pression sur le broker.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 51 },
+      "targets": [
+        { "expr": "kafka_server_delayedoperationpurgatory_size{operation=\"Produce\"}", "legendFormat": "Purgatory Produce", "refId": "A" },
+        { "expr": "kafka_server_delayedoperationpurgatory_size{operation=\"Fetch\"}", "legendFormat": "Purgatory Fetch", "refId": "B" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 12, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false }, "unit": "short", "min": 0 },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Purgatory Produce" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Purgatory Fetch" }, "properties": [{ "id": "color", "value": { "fixedColor": "#8b5cf6", "mode": "fixed" } }] }
+        ]
+      }
+    },
+
+    { "id": 55, "type": "row", "title": "JVM Broker — Mémoire, GC & CPU", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 59 }, "panels": [] },
+
+    {
+      "id": 50, "type": "gauge", "title": "Heap JVM Kafka — Utilisation (%)",
+      "description": "Heap du broker Kafka (limite : 512MB). Rester sous 75% pour éviter les GC Full.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 5, "x": 0, "y": 60 },
+      "targets": [{ "expr": "seed:kafka_jvm_heap_usage:ratio * 100", "refId": "A", "instant": true }],
+      "options": { "minVizHeight": 75, "minVizWidth": 75, "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": true, "showThresholdMarkers": true },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" }, "min": 0, "max": 100,
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "#eab308", "value": null }, { "color": "#f97316", "value": 60 }, { "color": "#ef4444", "value": 80 }] },
+          "unit": "percent", "decimals": 1, "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 51, "type": "timeseries",
+      "title": "JVM Kafka — Heap utilisé vs max (512MB limite)",
+      "description": "Évolution du Heap JVM Kafka. La ligne rouge = limite configurée (KAFKA_HEAP_OPTS). G1GC doit maintenir le Heap sous contrôle.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 11, "x": 5, "y": 60 },
+      "targets": [
+        { "expr": "kafka_jvm_heap_memory_used_bytes", "legendFormat": "Heap utilisé", "refId": "A" },
+        { "expr": "kafka_jvm_heap_memory_max_bytes", "legendFormat": "Heap max (512MB limite)", "refId": "B" },
+        { "expr": "kafka_jvm_nonheap_memory_used_bytes", "legendFormat": "Non-Heap (Metaspace)", "refId": "C" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 15, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never", "spanNulls": false }, "unit": "bytes" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Heap utilisé" }, "properties": [{ "id": "color", "value": { "fixedColor": "#eab308", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Heap max (512MB limite)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } }, { "id": "custom.lineStyle", "value": { "dash": [8,4], "fill": "dash" } }, { "id": "custom.lineWidth", "value": 1 }, { "id": "custom.fillOpacity", "value": 0 }] },
+          { "matcher": { "id": "byName", "options": "Non-Heap (Metaspace)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 52, "type": "timeseries",
+      "title": "JVM Kafka — GC & Threads",
+      "description": "Pauses GC G1 (ms) et nombre de threads. Des pauses GC fréquentes > 200ms peuvent augmenter la latence des requêtes Kafka.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 60 },
+      "targets": [
+        { "expr": "rate(kafka_jvm_gc_collection_time_ms_total[5m])", "legendFormat": "GC — {{gc}} (ms/s)", "refId": "A" },
+        { "expr": "kafka_jvm_threads_live", "legendFormat": "Threads live", "refId": "B" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 10, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false }, "unit": "short" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Threads live" }, "properties": [{ "id": "custom.axisPlacement", "value": "right" }, { "id": "unit", "value": "short" }, { "id": "color", "value": { "fixedColor": "#6b7280", "mode": "fixed" } }, { "id": "custom.lineStyle", "value": { "dash": [6,3], "fill": "dash" } }] }
+        ]
+      }
+    }
+
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["seed","isra","cnra","kafka","jvm","messaging"],
+  "templating": { "list": [] },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SEED — Kafka Broker & Messaging",
+  "uid": "seed-kafka",
+  "version": 1,
+  "weekStart": ""
+}

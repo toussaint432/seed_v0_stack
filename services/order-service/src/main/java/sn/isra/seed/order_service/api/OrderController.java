@@ -6,6 +6,7 @@ import sn.isra.seed.order_service.api.dto.StatutRequest;
 import sn.isra.seed.order_service.entity.AllocationCommande;
 import sn.isra.seed.order_service.entity.Commande;
 import sn.isra.seed.order_service.entity.LigneCommande;
+import sn.isra.seed.order_service.entity.enums.StatutCommande;
 import sn.isra.seed.order_service.kafka.OrderEventProducer;
 import sn.isra.seed.order_service.repo.AllocationRepo;
 import sn.isra.seed.order_service.repo.CommandeRepo;
@@ -13,10 +14,12 @@ import sn.isra.seed.order_service.repo.LigneRepo;
 import sn.isra.seed.order_service.repo.MembreOrganisationRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
@@ -31,9 +34,9 @@ public class OrderController {
   private final AllocationRepo allocationRepo;
   private final MembreOrganisationRepo membreRepo;
   private final OrderEventProducer producer;
-  private final ObjectMapper om; // injecté par Spring Boot (JavaTimeModule inclus)
+  private final ObjectMapper om;
 
-  /** Toutes les commandes (admin / upseml) */
+  /** Toutes les commandes (admin / upsemcl) */
   @GetMapping
   public List<Commande> list() {
     return commandeRepo.findAll();
@@ -59,8 +62,8 @@ public class OrderController {
   @PostMapping
   public Commande create(@RequestBody CreateOrderRequest req,
                          @AuthenticationPrincipal Jwt jwt) throws Exception {
-    String username = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
-    Long orgAcheteur = null;
+    String username   = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+    Long orgAcheteur  = null;
     if (username != null) {
       orgAcheteur = membreRepo.findByKeycloakUsername(username)
           .map(m -> m.getOrganisation().getId()).orElse(null);
@@ -69,7 +72,7 @@ public class OrderController {
     Commande c = new Commande();
     c.setCodeCommande(req.codeCommande());
     c.setClient(req.client());
-    c.setStatut("SOUMISE");
+    c.setStatut(StatutCommande.SOUMISE);
     c.setUsernameAcheteur(username);
     c.setIdOrganisationAcheteur(orgAcheteur);
     c.setIdOrganisationFournisseur(req.idOrganisationFournisseur());
@@ -93,12 +96,24 @@ public class OrderController {
     return saved;
   }
 
-  /** Changer le statut d'une commande (multiplicateur : CONFIRMEE / ANNULEE) */
+  /** Changer le statut d'une commande (multiplicateur : ACCEPTEE / ANNULEE…) */
   @PutMapping("/{id}/statut")
   public ResponseEntity<Commande> updateStatut(@PathVariable Long id,
                                                @RequestBody StatutRequest req) {
+    if (req.statut() == null || req.statut().isBlank())
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le champ 'statut' est obligatoire");
+
+    StatutCommande nouveauStatut;
+    try {
+      nouveauStatut = StatutCommande.valueOf(req.statut().toUpperCase());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Statut invalide : " + req.statut() +
+          ". Valeurs acceptées : SOUMISE, ACCEPTEE, EN_PREPARATION, LIVREE, ANNULEE, REJETEE");
+    }
+
     return commandeRepo.findById(id).map(c -> {
-      c.setStatut(req.statut());
+      c.setStatut(nouveauStatut);
       if (req.observations() != null) c.setObservations(req.observations());
       return ResponseEntity.ok(commandeRepo.save(c));
     }).orElse(ResponseEntity.notFound().build());

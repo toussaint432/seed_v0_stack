@@ -74,63 +74,63 @@ ON CONFLICT (code_variete) DO NOTHING;
 
 -- ── SITES ─────────────────────────────────────────────────────
 INSERT INTO site (code_site, nom_site, type_site, localite, region) VALUES
-  ('CNRA-BAMBEY',   'CNRA Bambey',                    'STATION', 'Bambey',      'Diourbel'),
-  ('ISRA-KAOLACK',  'Station ISRA Kaolack',           'STATION', 'Kaolack',     'Kaolack'),
-  ('MAG-KAOLACK',   'Magasin Kaolack',                'MAGASIN', 'Kaolack',     'Kaolack'),
-  ('MAG-ZIGUINCH',  'Magasin Ziguinchor',             'MAGASIN', 'Ziguinchor',  'Ziguinchor'),
-  ('MAG-STLOUIS',   'Magasin Saint-Louis',            'MAGASIN', 'Saint-Louis', 'Saint-Louis'),
-  ('FERME-MULTI-02','Ferme Multiplicateur Casamance',  'FERME',   'Bignona',     'Ziguinchor'),
-  ('FERME-MULTI-03','Ferme Multiplicateur Sine-Saloum','FERME',   'Nioro du Rip','Kaolack'),
-  ('SAED-PODOR',    'Station SAED Podor',             'STATION', 'Podor',       'Saint-Louis')
+  ('CNRA-BAMBEY',   'CNRA Bambey',                    'STATION_RECHERCHE', 'Bambey',      'Diourbel'),
+  ('ISRA-KAOLACK',  'Station ISRA Kaolack',           'STATION_RECHERCHE', 'Kaolack',     'Kaolack'),
+  ('MAG-KAOLACK',   'Magasin Kaolack',                'MAGASIN',           'Kaolack',     'Kaolack'),
+  ('MAG-ZIGUINCH',  'Magasin Ziguinchor',             'MAGASIN',           'Ziguinchor',  'Ziguinchor'),
+  ('MAG-STLOUIS',   'Magasin Saint-Louis',            'MAGASIN',           'Saint-Louis', 'Saint-Louis'),
+  ('FERME-MULTI-02','Ferme Multiplicateur Casamance',  'FERME',             'Bignona',     'Ziguinchor'),
+  ('FERME-MULTI-03','Ferme Multiplicateur Sine-Saloum','FERME',             'Nioro du Rip','Kaolack'),
+  ('SAED-PODOR',    'Station SAED Podor',             'STATION_RECHERCHE', 'Podor',       'Saint-Louis')
 ON CONFLICT (code_site) DO NOTHING;
 
 -- ── LOTS G0 ───────────────────────────────────────────────────
-INSERT INTO lot_semencier (code_lot, id_variete, id_generation, campagne, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
-  ('G0-MIL-SOUNA3-2024',  (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='G0'), '2024', '2024-06-15', 48.5,  'kg', 98.5, 99.5, 'DISPONIBLE'),
-  ('G0-SOR-CE145-2024',   (SELECT id FROM variete WHERE code_variete='SOR-CE145'),   (SELECT id FROM generation_semence WHERE code_generation='G0'), '2024', '2024-06-20', 44.0,  'kg', 97.0, 99.0, 'DISPONIBLE'),
-  ('G0-MAI-DK8031-2024',  (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='G0'), '2024', '2024-05-10', 78.0,  'kg', 96.0, 99.0, 'DISPONIBLE'),
-  ('G0-ARA-FLEUR11-2024', (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='G0'), '2024', '2024-04-05', 58.5,  'kg', 98.0, 99.5, 'DISPONIBLE'),
-  ('G0-RIZ-SAHEL108-2024',(SELECT id FROM variete WHERE code_variete='RIZ-SAHEL108'),(SELECT id FROM generation_semence WHERE code_generation='G0'), '2024', '2024-05-20', 35.0,  'kg', 97.5, 99.0, 'DISPONIBLE')
+INSERT INTO lot_semencier (code_lot, id_variete, id_generation, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
+  ('G0-MIL-SOUNA3-2024',  (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='G0'), '2024-06-15', 48.5,  'kg', 98.5, 99.5, 'DISPONIBLE'),
+  ('G0-SOR-CE145-2024',   (SELECT id FROM variete WHERE code_variete='SOR-CE145'),   (SELECT id FROM generation_semence WHERE code_generation='G0'), '2024-06-20', 44.0,  'kg', 97.0, 99.0, 'DISPONIBLE'),
+  ('G0-MAI-DK8031-2024',  (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='G0'), '2024-05-10', 78.0,  'kg', 96.0, 99.0, 'DISPONIBLE'),
+  ('G0-ARA-FLEUR11-2024', (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='G0'), '2024-04-05', 58.5,  'kg', 98.0, 99.5, 'DISPONIBLE'),
+  ('G0-RIZ-SAHEL108-2024',(SELECT id FROM variete WHERE code_variete='RIZ-SAHEL108'),(SELECT id FROM generation_semence WHERE code_generation='G0'), '2024-05-20', 35.0,  'kg', 97.5, 99.0, 'DISPONIBLE')
 ON CONFLICT (code_lot) DO NOTHING;
 
 -- ── LOTS G1 ───────────────────────────────────────────────────
-INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, campagne, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
-  ('G1-MIL-SOUNA3-2024',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-MIL-SOUNA3-2024'),  '2024', '2024-10-15', 490.0,  'kg', 97.5, 98.5, 'DISPONIBLE'),
-  ('G1-SOR-CE145-2024',    (SELECT id FROM variete WHERE code_variete='SOR-CE145'),   (SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-SOR-CE145-2024'),   '2024', '2024-10-20', 392.0,  'kg', 96.0, 98.0, 'DISPONIBLE'),
-  ('G1-ARA-FLEUR11-2024',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-ARA-FLEUR11-2024'), '2024', '2024-09-10', 588.0,  'kg', 97.0, 99.0, 'DISPONIBLE'),
-  ('G1-MAI-DK8031-2024',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-MAI-DK8031-2024'),  '2024', '2024-11-01', 750.0,  'kg', 96.5, 98.5, 'DISPONIBLE'),
-  ('G1-RIZ-SAHEL108-2024', (SELECT id FROM variete WHERE code_variete='RIZ-SAHEL108'),(SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-RIZ-SAHEL108-2024'),'2024', '2024-11-10', 320.0,  'kg', 97.0, 98.0, 'DISPONIBLE')
+INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
+  ('G1-MIL-SOUNA3-2024',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-MIL-SOUNA3-2024'),  '2024-10-15', 490.0,  'kg', 97.5, 98.5, 'DISPONIBLE'),
+  ('G1-SOR-CE145-2024',    (SELECT id FROM variete WHERE code_variete='SOR-CE145'),   (SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-SOR-CE145-2024'),   '2024-10-20', 392.0,  'kg', 96.0, 98.0, 'DISPONIBLE'),
+  ('G1-ARA-FLEUR11-2024',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-ARA-FLEUR11-2024'), '2024-09-10', 588.0,  'kg', 97.0, 99.0, 'DISPONIBLE'),
+  ('G1-MAI-DK8031-2024',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-MAI-DK8031-2024'),  '2024-11-01', 750.0,  'kg', 96.5, 98.5, 'DISPONIBLE'),
+  ('G1-RIZ-SAHEL108-2024', (SELECT id FROM variete WHERE code_variete='RIZ-SAHEL108'),(SELECT id FROM generation_semence WHERE code_generation='G1'), (SELECT id FROM lot_semencier WHERE code_lot='G0-RIZ-SAHEL108-2024'),'2024-11-10', 320.0,  'kg', 97.0, 98.0, 'DISPONIBLE')
 ON CONFLICT (code_lot) DO NOTHING;
 
 -- ── LOTS G2 ───────────────────────────────────────────────────
-INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, campagne, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
-  ('G2-MIL-SOUNA3-2025',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='G2'), (SELECT id FROM lot_semencier WHERE code_lot='G1-MIL-SOUNA3-2024'),  '2025', '2025-03-15', 4400.0,  'kg', 96.0, 97.5, 'DISPONIBLE'),
-  ('G2-SOR-CE145-2025',    (SELECT id FROM variete WHERE code_variete='SOR-CE145'),   (SELECT id FROM generation_semence WHERE code_generation='G2'), (SELECT id FROM lot_semencier WHERE code_lot='G1-SOR-CE145-2024'),   '2025', '2025-03-20', 3420.0,  'kg', 95.5, 97.0, 'DISPONIBLE'),
-  ('G2-ARA-FLEUR11-2025',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='G2'), (SELECT id FROM lot_semencier WHERE code_lot='G1-ARA-FLEUR11-2024'), '2025', '2025-02-10', 4880.0,  'kg', 96.5, 98.0, 'DISPONIBLE'),
-  ('G2-MAI-DK8031-2025',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='G2'), (SELECT id FROM lot_semencier WHERE code_lot='G1-MAI-DK8031-2024'),  '2025', '2025-04-01', 6800.0,  'kg', 95.0, 97.0, 'DISPONIBLE')
+INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
+  ('G2-MIL-SOUNA3-2025',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='G2'), (SELECT id FROM lot_semencier WHERE code_lot='G1-MIL-SOUNA3-2024'),  '2025-03-15', 4400.0,  'kg', 96.0, 97.5, 'DISPONIBLE'),
+  ('G2-SOR-CE145-2025',    (SELECT id FROM variete WHERE code_variete='SOR-CE145'),   (SELECT id FROM generation_semence WHERE code_generation='G2'), (SELECT id FROM lot_semencier WHERE code_lot='G1-SOR-CE145-2024'),   '2025-03-20', 3420.0,  'kg', 95.5, 97.0, 'DISPONIBLE'),
+  ('G2-ARA-FLEUR11-2025',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='G2'), (SELECT id FROM lot_semencier WHERE code_lot='G1-ARA-FLEUR11-2024'), '2025-02-10', 4880.0,  'kg', 96.5, 98.0, 'DISPONIBLE'),
+  ('G2-MAI-DK8031-2025',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='G2'), (SELECT id FROM lot_semencier WHERE code_lot='G1-MAI-DK8031-2024'),  '2025-04-01', 6800.0,  'kg', 95.0, 97.0, 'DISPONIBLE')
 ON CONFLICT (code_lot) DO NOTHING;
 
 -- ── LOTS G3 ───────────────────────────────────────────────────
-INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, campagne, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
-  ('G3-MIL-SOUNA3-2025',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='G3'), (SELECT id FROM lot_semencier WHERE code_lot='G2-MIL-SOUNA3-2025'),  '2025', '2025-08-10', 11760.0, 'kg', 95.0, 96.5, 'DISPONIBLE'),
-  ('G3-ARA-FLEUR11-2025',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='G3'), (SELECT id FROM lot_semencier WHERE code_lot='G2-ARA-FLEUR11-2025'), '2025', '2025-08-20', 14700.0, 'kg', 95.5, 97.0, 'DISPONIBLE'),
-  ('G3-MAI-DK8031-2025',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='G3'), (SELECT id FROM lot_semencier WHERE code_lot='G2-MAI-DK8031-2025'),  '2025', '2025-09-01', 28000.0, 'kg', 94.5, 96.0, 'DISPONIBLE')
+INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
+  ('G3-MIL-SOUNA3-2025',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='G3'), (SELECT id FROM lot_semencier WHERE code_lot='G2-MIL-SOUNA3-2025'),  '2025-08-10', 11760.0, 'kg', 95.0, 96.5, 'DISPONIBLE'),
+  ('G3-ARA-FLEUR11-2025',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='G3'), (SELECT id FROM lot_semencier WHERE code_lot='G2-ARA-FLEUR11-2025'), '2025-08-20', 14700.0, 'kg', 95.5, 97.0, 'DISPONIBLE'),
+  ('G3-MAI-DK8031-2025',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='G3'), (SELECT id FROM lot_semencier WHERE code_lot='G2-MAI-DK8031-2025'),  '2025-09-01', 28000.0, 'kg', 94.5, 96.0, 'DISPONIBLE')
 ON CONFLICT (code_lot) DO NOTHING;
 
 -- ── LOTS R1 ───────────────────────────────────────────────────
-INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, campagne, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
-  ('R1-MIL-SOUNA3-2025',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='R1'), (SELECT id FROM lot_semencier WHERE code_lot='G3-MIL-SOUNA3-2025'),  '2025', '2025-11-05', 44100.0,  'kg', 93.0, 95.5, 'DISPONIBLE'),
-  ('R1-ARA-FLEUR11-2025',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='R1'), (SELECT id FROM lot_semencier WHERE code_lot='G3-ARA-FLEUR11-2025'), '2025', '2025-11-15', 53900.0,  'kg', 93.5, 96.0, 'DISPONIBLE'),
-  ('R1-MAI-DK8031-2025',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='R1'), (SELECT id FROM lot_semencier WHERE code_lot='G3-MAI-DK8031-2025'),  '2025', '2025-12-01', 105000.0, 'kg', 92.5, 95.0, 'DISPONIBLE')
+INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
+  ('R1-MIL-SOUNA3-2025',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='R1'), (SELECT id FROM lot_semencier WHERE code_lot='G3-MIL-SOUNA3-2025'),  '2025-11-05', 44100.0,  'kg', 93.0, 95.5, 'DISPONIBLE'),
+  ('R1-ARA-FLEUR11-2025',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='R1'), (SELECT id FROM lot_semencier WHERE code_lot='G3-ARA-FLEUR11-2025'), '2025-11-15', 53900.0,  'kg', 93.5, 96.0, 'DISPONIBLE'),
+  ('R1-MAI-DK8031-2025',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='R1'), (SELECT id FROM lot_semencier WHERE code_lot='G3-MAI-DK8031-2025'),  '2025-12-01', 105000.0, 'kg', 92.5, 95.0, 'DISPONIBLE')
 ON CONFLICT (code_lot) DO NOTHING;
 
 -- ── LOTS R2 (vendables aux quotataires) ───────────────────────
-INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, campagne, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
-  ('R2-MIL-SOUNA3-2026',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='R2'), (SELECT id FROM lot_semencier WHERE code_lot='R1-MIL-SOUNA3-2025'),  '2026', '2026-01-15', 147000.0, 'kg', 92.0, 95.0, 'DISPONIBLE'),
-  ('R2-ARA-FLEUR11-2026',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='R2'), (SELECT id FROM lot_semencier WHERE code_lot='R1-ARA-FLEUR11-2025'), '2026', '2026-01-20', 176400.0, 'kg', 92.5, 95.5, 'DISPONIBLE'),
-  ('R2-MAI-DK8031-2026',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='R2'), (SELECT id FROM lot_semencier WHERE code_lot='R1-MAI-DK8031-2025'),  '2026', '2026-02-01', 390000.0, 'kg', 91.5, 94.5, 'DISPONIBLE'),
-  ('R2-SOR-CE145-2026',    (SELECT id FROM variete WHERE code_variete='SOR-CE145'),   (SELECT id FROM generation_semence WHERE code_generation='R2'), NULL,                                                                  '2026', '2026-02-10', 78400.0,  'kg', 91.0, 94.0, 'DISPONIBLE'),
-  ('R2-NIE-MELAKH-2026',   (SELECT id FROM variete WHERE code_variete='NIE-MELAKH'),  (SELECT id FROM generation_semence WHERE code_generation='R2'), NULL,                                                                  '2026', '2026-02-15', 42000.0,  'kg', 93.0, 96.0, 'DISPONIBLE')
+INSERT INTO lot_semencier (code_lot, id_variete, id_generation, id_lot_parent, date_production, quantite_nette, unite, taux_germination, purete_physique, statut_lot) VALUES
+  ('R2-MIL-SOUNA3-2026',   (SELECT id FROM variete WHERE code_variete='MIL-SOUNA3'),  (SELECT id FROM generation_semence WHERE code_generation='R2'), (SELECT id FROM lot_semencier WHERE code_lot='R1-MIL-SOUNA3-2025'),  '2026-01-15', 147000.0, 'kg', 92.0, 95.0, 'DISPONIBLE'),
+  ('R2-ARA-FLEUR11-2026',  (SELECT id FROM variete WHERE code_variete='ARA-FLEUR11'), (SELECT id FROM generation_semence WHERE code_generation='R2'), (SELECT id FROM lot_semencier WHERE code_lot='R1-ARA-FLEUR11-2025'), '2026-01-20', 176400.0, 'kg', 92.5, 95.5, 'DISPONIBLE'),
+  ('R2-MAI-DK8031-2026',   (SELECT id FROM variete WHERE code_variete='MAI-DK8031'),  (SELECT id FROM generation_semence WHERE code_generation='R2'), (SELECT id FROM lot_semencier WHERE code_lot='R1-MAI-DK8031-2025'),  '2026-02-01', 390000.0, 'kg', 91.5, 94.5, 'DISPONIBLE'),
+  ('R2-SOR-CE145-2026',    (SELECT id FROM variete WHERE code_variete='SOR-CE145'),   (SELECT id FROM generation_semence WHERE code_generation='R2'), NULL,                                                                  '2026-02-10', 78400.0,  'kg', 91.0, 94.0, 'DISPONIBLE'),
+  ('R2-NIE-MELAKH-2026',   (SELECT id FROM variete WHERE code_variete='NIE-MELAKH'),  (SELECT id FROM generation_semence WHERE code_generation='R2'), NULL,                                                                  '2026-02-15', 42000.0,  'kg', 93.0, 96.0, 'DISPONIBLE')
 ON CONFLICT (code_lot) DO NOTHING;
 
 -- ── STOCKS ────────────────────────────────────────────────────

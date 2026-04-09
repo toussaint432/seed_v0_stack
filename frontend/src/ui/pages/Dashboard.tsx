@@ -6,8 +6,11 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { SelectorAnalytics }   from './SelectorAnalytics'
+import { GlobalAnalytics }     from './GlobalAnalytics'
+import { PendingDeliveries }   from '../components/PendingDeliveries'
 
-interface Props { roleKey: string }
+interface Props { roleKey: string; userSpecialisation?: string | null }
 
 interface Stats {
   lotsCount:    number
@@ -83,7 +86,7 @@ function StatCard({
   )
 }
 
-export function Dashboard({ roleKey }: Props) {
+export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const [stats, setStats] = useState<Stats>({
     lotsCount: 0, stockTotal: 0, ordersCount: 0, varietiesCount: 0,
     ordersPending: 0, ordersAllocated: 0,
@@ -387,6 +390,21 @@ export function Dashboard({ roleKey }: Props) {
           </div>
         )}
       </div>
+
+      {/* Livraisons en attente (upsemcl + multiplicateur) */}
+      {['seed-upsemcl','seed-multiplicator'].includes(roleKey) && (
+        <PendingDeliveries roleKey={roleKey} />
+      )}
+
+      {/* Analytics sélectionneur */}
+      {roleKey === 'seed-selector' && (
+        <SelectorAnalytics userSpecialisation={userSpecialisation} />
+      )}
+
+      {/* Analytics global (admin / upsemcl / multiplicateur / quotataire) */}
+      {['seed-admin','seed-upsemcl','seed-multiplicator','seed-quotataire'].includes(roleKey) && (
+        <GlobalAnalytics roleKey={roleKey} />
+      )}
 
       {/* CSS for spin animation */}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>

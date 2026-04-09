@@ -5,13 +5,16 @@ import sn.isra.seed.stock_service.api.dto.UpsertStockRequest;
 import sn.isra.seed.stock_service.entity.MouvementStock;
 import sn.isra.seed.stock_service.entity.Site;
 import sn.isra.seed.stock_service.entity.Stock;
+import sn.isra.seed.stock_service.entity.enums.TypeMouvement;
 import sn.isra.seed.stock_service.kafka.StockEventProducer;
 import sn.isra.seed.stock_service.repo.MouvementRepo;
 import sn.isra.seed.stock_service.repo.SiteRepo;
 import sn.isra.seed.stock_service.repo.StockRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -26,10 +29,10 @@ public class StockController {
   private final SiteRepo siteRepo;
   private final MouvementRepo mouvementRepo;
   private final StockEventProducer producer;
-  private final ObjectMapper om = new ObjectMapper();
+  private final ObjectMapper om;
 
   @GetMapping("/stocks")
-  public List<Stock> list(@RequestParam(name="site", required=false) String site) {
+  public List<Stock> list(@RequestParam(required = false) String site) {
     if (site == null || site.isBlank()) return stockRepo.findAll();
     return stockRepo.findBySite_CodeSite(site);
   }
@@ -58,29 +61,41 @@ public class StockController {
   @PostMapping("/movements")
   public MouvementStock move(@RequestBody MovementRequest req) throws Exception {
     BigDecimal q = req.quantite();
-    if (q == null || q.signum() <= 0) throw new IllegalArgumentException("quantite must be > 0");
+    if (q == null || q.signum() <= 0)
+      throw new IllegalArgumentException("quantite doit être > 0");
 
-    Site src = req.siteSourceCode() == null ? null : siteRepo.findByCodeSite(req.siteSourceCode()).orElseThrow();
+    // Parser le type (String → enum)
+    TypeMouvement type;
+    try {
+      type = TypeMouvement.valueOf(req.type().toUpperCase());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Type de mouvement invalide : " + req.type() + ". Valeurs acceptées : IN, OUT, TRANSFER");
+    }
+
+    Site src = req.siteSourceCode() == null      ? null : siteRepo.findByCodeSite(req.siteSourceCode()).orElseThrow();
     Site dst = req.siteDestinationCode() == null ? null : siteRepo.findByCodeSite(req.siteDestinationCode()).orElseThrow();
 
-    // Update stocks
-    if ("IN".equalsIgnoreCase(req.type())) {
-      if (dst == null) throw new IllegalArgumentException("destination required for IN");
-      upsertInternal(req.idLot(), dst.getCodeSite(), delta(q), req.unite());
-    } else if ("OUT".equalsIgnoreCase(req.type())) {
-      if (src == null) throw new IllegalArgumentException("source required for OUT");
-      upsertInternal(req.idLot(), src.getCodeSite(), delta(q.negate()), req.unite());
-    } else if ("TRANSFER".equalsIgnoreCase(req.type())) {
-      if (src == null || dst == null) throw new IllegalArgumentException("source and destination required for TRANSFER");
-      upsertInternal(req.idLot(), src.getCodeSite(), delta(q.negate()), req.unite());
-      upsertInternal(req.idLot(), dst.getCodeSite(), delta(q), req.unite());
-    } else {
-      throw new IllegalArgumentException("unknown type");
+    switch (type) {
+      case IN -> {
+        if (dst == null) throw new IllegalArgumentException("destination requise pour IN");
+        upsertInternal(req.idLot(), dst.getCodeSite(), q, req.unite());
+      }
+      case OUT -> {
+        if (src == null) throw new IllegalArgumentException("source requise pour OUT");
+        upsertInternal(req.idLot(), src.getCodeSite(), q.negate(), req.unite());
+      }
+      case TRANSFER -> {
+        if (src == null || dst == null)
+          throw new IllegalArgumentException("source et destination requises pour TRANSFER");
+        upsertInternal(req.idLot(), src.getCodeSite(), q.negate(), req.unite());
+        upsertInternal(req.idLot(), dst.getCodeSite(), q, req.unite());
+      }
     }
 
     MouvementStock m = new MouvementStock();
     m.setIdLot(req.idLot());
-    m.setTypeMouvement(req.type().toUpperCase());
+    m.setTypeMouvement(type);
     m.setSiteSource(src);
     m.setSiteDestination(dst);
     m.setQuantite(q);
@@ -89,8 +104,7 @@ public class StockController {
     m.setCreatedAt(Instant.now());
     MouvementStock saved = mouvementRepo.save(m);
 
-    String payload = om.writeValueAsString(saved);
-    producer.stockMoved(payload);
+    producer.stockMoved(om.writeValueAsString(saved));
     return saved;
   }
 
@@ -106,11 +120,10 @@ public class StockController {
           return s;
         });
     BigDecimal newQ = stock.getQuantiteDisponible().add(delta);
-    if (newQ.signum() < 0) throw new IllegalStateException("Insufficient stock at " + siteCode);
+    if (newQ.signum() < 0)
+      throw new IllegalStateException("Stock insuffisant au site : " + siteCode);
     stock.setQuantiteDisponible(newQ);
     stock.setUpdatedAt(Instant.now());
     stockRepo.save(stock);
   }
-
-  private BigDecimal delta(BigDecimal v) { return v; }
 }

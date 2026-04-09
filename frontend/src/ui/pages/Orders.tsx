@@ -111,7 +111,7 @@ function OrderTable({ orders, loading, emptyMsg }: { orders: any[]; loading: boo
 /* ══════════════════════════════════════════════════════════════
    VUE QUOTATAIRE — mes commandes + nouvelle commande
    ══════════════════════════════════════════════════════════════ */
-function VueQuotataire({ setToast }: { toast: any; setToast: any }) {
+function VueQuotataire({ setToast }: { setToast: any }) {
   const [orders, setOrders]       = useState<any[]>([])
   const [orgs, setOrgs]           = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
@@ -256,7 +256,7 @@ function VueQuotataire({ setToast }: { toast: any; setToast: any }) {
 /* ══════════════════════════════════════════════════════════════
    VUE MULTIPLICATEUR — commandes à traiter
    ══════════════════════════════════════════════════════════════ */
-function VueMultiplicateur({ setToast }: { toast: any; setToast: any }) {
+function VueMultiplicateur({ setToast }: { setToast: any }) {
   const [orders, setOrders]       = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
   const [refusModal, setRefusModal] = useState<{ id: number; code: string } | null>(null)
@@ -381,7 +381,7 @@ function VueMultiplicateur({ setToast }: { toast: any; setToast: any }) {
 /* ══════════════════════════════════════════════════════════════
    VUE ADMIN / UPSEMCL — toutes les commandes + allocation
    ══════════════════════════════════════════════════════════════ */
-function VueAdmin({ setToast }: { toast: any; setToast: any }) {
+function VueAdmin({ setToast }: { setToast: any }) {
   const [orders, setOrders]       = useState<any[]>([])
   const [search, setSearch]       = useState('')
   const [filterStatus, setFilter] = useState('')
@@ -490,10 +490,10 @@ export function Orders({ roleKey }: Props) {
     <div>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       {roleKey === 'seed-quotataire'
-        ? <VueQuotataire toast={toast} setToast={setToast} />
+        ? <VueQuotataire setToast={setToast} />
         : roleKey === 'seed-multiplicator'
-          ? <VueMultiplicateur toast={toast} setToast={setToast} />
-          : <VueAdmin toast={toast} setToast={setToast} />
+          ? <VueMultiplicateur setToast={setToast} />
+          : <VueAdmin setToast={setToast} />
       }
     </div>
   )

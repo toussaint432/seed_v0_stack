@@ -1,16 +1,36 @@
 import React, { useEffect, useState } from 'react'
 import {
   ArrowRightLeft, Plus, RefreshCw, Search, X, Eye,
-  Send, CheckCircle2, Truck, Package, Clock
+  Send, CheckCircle2, Truck, Clock, FileText, Download, Receipt
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
+import { keycloak } from '../../lib/keycloak'
+import { generateTransferDoc, generateNumero, TransferDocData, LotPdfData, PartiePdf } from '../../lib/pdf/generateTransferDoc'
+import { generateFacture, FactureData } from '../../lib/pdf/generateFacture'
 
 interface Props { roleKey: string }
 const PAGE_SIZE = 10
+
+/* ── Labels officiels des rôles ── */
+const ROLE_LABELS: Record<string, string> = {
+  'seed-selector':     'Sélectionneur ISRA/CNRA',
+  'seed-upsemcl':      'Unité de Production UPSemCL',
+  'seed-multiplicator':'Multiplicateur Agréé',
+  'seed-quotataire':   'Distributeur / Quotataire',
+  'seed-admin':        'Administrateur',
+}
+
+/* ── Inférence du rôle depuis la génération ── */
+function guessRoleFromGen(gen: string, side: 'emetteur' | 'dest'): string {
+  if (gen === 'G0' || gen === 'G1') return side === 'emetteur' ? 'seed-selector'     : 'seed-upsemcl'
+  if (gen === 'G3')                 return side === 'emetteur' ? 'seed-upsemcl'      : 'seed-multiplicator'
+  if (gen === 'R1' || gen === 'R2') return side === 'emetteur' ? 'seed-multiplicator': 'seed-quotataire'
+  return side === 'emetteur' ? 'seed-selector' : 'seed-upsemcl'
+}
 
 /* ── Règles métier : générations autorisées et destination fixe par rôle ── */
 const TRANSFER_RULES: Record<string, { allowedGens: string[]; source: string; destination: string; destRole: string }> = {
@@ -40,7 +60,6 @@ export function Transfers({ roleKey }: Props) {
   const [saving, setSaving] = useState(false)
 
   const canCreate = ['seed-admin', 'seed-selector', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
-  const canValidate = ['seed-admin', 'seed-upsemcl'].includes(roleKey)
   const rule = TRANSFER_RULES[roleKey]
 
   // Lots filtrés selon les générations autorisées pour ce rôle
@@ -60,20 +79,25 @@ export function Transfers({ roleKey }: Props) {
   const [recus, setRecus] = useState<any[]>([])
   const [refusModal, setRefusModal] = useState<any>(null)
   const [motifRefus, setMotifRefus] = useState('')
-  const [membres, setMembres] = useState<any[]>([])
+  // État modale facture
+  const [factureModal, setFactureModal] = useState<any>(null)
+  const [facturePrix, setFacturePrix] = useState('')
+  const [factureTva, setFactureTva] = useState('0')
+  const [factureConditions, setFactureConditions] = useState('')
+
+  // Rôles éligibles à émettre des factures (émetteur du transfert)
+  const canFacture = ['seed-selector', 'seed-upsemcl', 'seed-admin'].includes(roleKey)
 
   async function fetchAll() {
     setLoading(true)
-    const [tRes, lRes, rRes, mRes] = await Promise.allSettled([
+    const [tRes, lRes, rRes] = await Promise.allSettled([
       api.get(endpoints.transfertsLot),
       api.get(endpoints.lots),
       api.get(endpoints.transfertsRecus),
-      api.get(endpoints.membres),
     ])
     setTransfers(tRes.status === 'fulfilled' ? tRes.value.data : [])
     setLots(lRes.status === 'fulfilled' ? lRes.value.data : [])
     setRecus(rRes.status === 'fulfilled' ? rRes.value.data : [])
-    setMembres(mRes.status === 'fulfilled' ? mRes.value.data : [])
     setLoading(false)
   }
 
@@ -93,11 +117,6 @@ export function Transfers({ roleKey }: Props) {
   const byStatus = transfers.reduce((acc: Record<string, number>, t: any) => {
     acc[t.statut] = (acc[t.statut] || 0) + 1; return acc
   }, {})
-
-  // Membres éligibles selon le rôle de l'émetteur
-  const destRole = roleKey === 'seed-selector' ? 'seed-upsemcl'
-                 : roleKey === 'seed-upsemcl'   ? 'seed-multiplicator' : ''
-  const membresEligibles = membres.filter((m: any) => m.roleDansOrg === destRole || m.roleKeycloak === destRole)
 
   async function accepter(id: number) {
     try {
@@ -146,19 +165,107 @@ export function Transfers({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  async function updateStatus(id: number, newStatus: string) {
-    try {
-      await api.patch(endpoints.transferById(id), { statutTransfert: newStatus })
-      setToast({ msg: `Transfert mis à jour : ${newStatus}`, type: 'success' })
-      fetchAll()
-    } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur de mise à jour', type: 'error' })
-    }
-  }
-
   function getLotLabel(idLot: number): string {
     const lot = lots.find((l: any) => l.id === idLot)
     return lot ? lot.codeLot : `#${idLot}`
+  }
+
+  function submitFacture(e: React.FormEvent) {
+    e.preventDefault()
+    const t = factureModal
+    const lot = lots.find((l: any) => l.id === (t.idLot ?? t.lot?.id))
+    const jwt = keycloak.tokenParsed as Record<string, unknown>
+    const currentUser = (jwt?.preferred_username as string) || ''
+    const gen = t.generationTransferee || lot?.generation?.codeGeneration || ''
+    const emetteurRoleKey = t.roleEmetteur || guessRoleFromGen(gen, 'emetteur')
+    const destRoleKey     = t.roleDestinataire || guessRoleFromGen(gen, 'dest')
+
+    const data: FactureData = {
+      transfertId:      t.id,
+      codeTransfert:    t.codeTransfert,
+      vendeurUsername:  t.usernameEmetteur || currentUser,
+      vendeurNom:       t.usernameEmetteur || currentUser,
+      vendeurRole:      ROLE_LABELS[emetteurRoleKey] || emetteurRoleKey,
+      vendeurAdresse:   'ISRA/CNRA — Bambey, Sénégal',
+      acheteurUsername: t.usernameDestinataire || '—',
+      acheteurNom:      t.usernameDestinataire || '—',
+      acheteurRole:     ROLE_LABELS[destRoleKey] || destRoleKey,
+      codeLot:          lot?.codeLot || `LOT-${t.idLot}`,
+      nomVariete:       lot?.variete?.nomVariete || lot?.nomVariete || 'N/D',
+      nomEspece:        lot?.variete?.espece?.nomEspece || lot?.espece?.nomEspece || 'Semence',
+      generationCode:   gen || '—',
+      quantiteKg:       Number(t.quantite ?? lot?.quantiteNette ?? 0),
+      unite:            lot?.unite || 'kg',
+      campagne:         lot?.campagne,
+      prixUnitaireKg:   parseFloat(facturePrix) || 0,
+      tvaPercent:       parseFloat(factureTva) || 0,
+      dateFacture:      new Date().toISOString().split('T')[0],
+      conditions:       factureConditions || undefined,
+      observations:     t.observations,
+    }
+
+    generateFacture(data)
+    setFactureModal(null)
+    setFacturePrix('')
+    setFactureTva('0')
+    setFactureConditions('')
+    setToast({ msg: `Facture FACT-${t.codeTransfert}.pdf téléchargée`, type: 'success' })
+  }
+
+  function downloadDoc(t: any, type: 'BORDEREAU' | 'ACCUSE_RECEPTION') {
+    const lot = lots.find((l: any) => l.id === (t.idLot ?? t.lot?.id))
+    const jwt = keycloak.tokenParsed as Record<string, unknown>
+    const currentUser = (jwt?.preferred_username as string) || ''
+
+    const gen = t.generationTransferee || lot?.generation?.codeGeneration || ''
+    const emetteurRoleKey = t.roleEmetteur || guessRoleFromGen(gen, 'emetteur')
+    const destRoleKey     = t.roleDestinataire || guessRoleFromGen(gen, 'dest')
+
+    const lotData: LotPdfData = {
+      codeLot:          lot?.codeLot || `LOT-${t.idLot}`,
+      nomVariete:       lot?.variete?.nomVariete || lot?.nomVariete || 'N/D',
+      nomEspece:        lot?.variete?.espece?.nomEspece || lot?.espece?.nomEspece || 'Semence',
+      generationCode:   gen || '—',
+      quantiteNette:    Number(t.quantite ?? lot?.quantiteNette ?? 0),
+      unite:            lot?.unite || 'kg',
+      tauxGermination:  lot?.tauxGermination,
+      puretePhysique:   lot?.puretePhysique,
+      statutLot:        lot?.statutLot || 'TRANSFERE',
+      dateProduction:   lot?.dateProduction,
+      campagne:         lot?.campagne,
+      lotParentCode:    lot?.lotParent?.codeLot,
+    }
+
+    const expediteur: PartiePdf = {
+      username:  t.usernameEmetteur || '—',
+      nom:       t.usernameEmetteur || '—',
+      roleKey:   emetteurRoleKey,
+      roleLabel: ROLE_LABELS[emetteurRoleKey] || emetteurRoleKey,
+    }
+
+    const destinataire: PartiePdf = {
+      username:  t.usernameDestinataire || '—',
+      nom:       t.usernameDestinataire || '—',
+      roleKey:   destRoleKey,
+      roleLabel: ROLE_LABELS[destRoleKey] || destRoleKey,
+    }
+
+    const docData: TransferDocData = {
+      type,
+      codeTransfert:      t.codeTransfert,
+      numero:             generateNumero(t.id),
+      lot:                lotData,
+      expediteur,
+      destinataire,
+      quantiteTransferee: Number(t.quantite ?? 0),
+      dateDemande:        t.dateDemande || new Date().toISOString().split('T')[0],
+      observations:       t.observations,
+      dateAcceptation:    type === 'ACCUSE_RECEPTION' ? (t.dateAcceptation || new Date().toISOString().split('T')[0]) : undefined,
+      nomReceptionnaire:  type === 'ACCUSE_RECEPTION' ? currentUser : undefined,
+      quantiteRecue:      type === 'ACCUSE_RECEPTION' ? Number(t.quantite ?? 0) : undefined,
+    }
+
+    generateTransferDoc(docData)
   }
 
   return (
@@ -275,12 +382,32 @@ export function Transfers({ roleKey }: Props) {
                     <td><StatusBadge status={t.statut || t.statutTransfert} showIcon /></td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11 }} onClick={() => setShowDetail(t)}><Eye size={12} /></button>
+                        <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11 }} title="Voir détail" onClick={() => setShowDetail(t)}><Eye size={12} /></button>
                         {t.statut === 'EN_ATTENTE' && t.usernameDestinataire && (
                           <>
                             <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#15803d' }} onClick={() => accepter(t.id)} title="Accepter"><CheckCircle2 size={12} /></button>
                             <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#ef4444' }} onClick={() => { setRefusModal(t); setMotifRefus('') }} title="Refuser"><Send size={12} style={{ transform: 'rotate(180deg)' }} /></button>
                           </>
+                        )}
+                        {t.statut !== 'ANNULE' && t.statut !== 'REFUSE' && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#0369a1' }}
+                            title="Télécharger le Bordereau de Livraison (PDF)"
+                            onClick={() => downloadDoc(t, 'BORDEREAU')}
+                          >
+                            <FileText size={12} />
+                          </button>
+                        )}
+                        {t.statut === 'ACCEPTE' && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#15803d' }}
+                            title="Télécharger l'Accusé de Réception (PDF)"
+                            onClick={() => downloadDoc(t, 'ACCUSE_RECEPTION')}
+                          >
+                            <Download size={12} />
+                          </button>
                         )}
                       </div>
                     </td>
@@ -294,7 +421,45 @@ export function Transfers({ roleKey }: Props) {
 
       {/* Detail Modal */}
       {showDetail && (
-        <Modal title={`Transfert — ${showDetail.codeTransfert}`} subtitle={`Lot #${showDetail.idLot} · ${showDetail.generationTransferee || ''}`} onClose={() => setShowDetail(null)}>
+        <Modal
+          title={`Transfert — ${showDetail.codeTransfert}`}
+          subtitle={`Lot #${showDetail.idLot} · ${showDetail.generationTransferee || ''}`}
+          onClose={() => setShowDetail(null)}
+          >
+          {/* Boutons PDF — toujours visibles en haut */}
+          {(showDetail.statut || showDetail.statutTransfert) !== 'ANNULE' &&
+           (showDetail.statut || showDetail.statutTransfert) !== 'REFUSE' && (
+            <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, minWidth: 140, justifyContent: 'center', gap: 8, border: '1.5px solid #bae6fd', background: '#f0f9ff' }}
+                onClick={() => downloadDoc(showDetail, 'BORDEREAU')}
+              >
+                <FileText size={14} color="#0369a1" />
+                <span style={{ color: '#0369a1', fontWeight: 600, fontSize: 12.5 }}>Bordereau de Livraison</span>
+              </button>
+              {(showDetail.statut || showDetail.statutTransfert) === 'ACCEPTE' && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1, minWidth: 140, justifyContent: 'center', gap: 8, border: '1.5px solid #bbf7d0', background: '#f0fdf4' }}
+                  onClick={() => downloadDoc(showDetail, 'ACCUSE_RECEPTION')}
+                >
+                  <Download size={14} color="#15803d" />
+                  <span style={{ color: '#15803d', fontWeight: 600, fontSize: 12.5 }}>Accusé de Réception</span>
+                </button>
+              )}
+              {canFacture && ['EN_ATTENTE','ACCEPTE'].includes(showDetail.statut || showDetail.statutTransfert) && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ flex: 1, minWidth: 140, justifyContent: 'center', gap: 8, border: '1.5px solid #fca5a5', background: '#fff5f5' }}
+                  onClick={() => { setShowDetail(null); setFactureModal(showDetail); setFacturePrix(''); setFactureTva('0') }}
+                >
+                  <Receipt size={14} color="#b91c1c" />
+                  <span style={{ color: '#b91c1c', fontWeight: 600, fontSize: 12.5 }}>Générer Facture</span>
+                </button>
+              )}
+            </div>
+          )}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
             <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Émetteur</div><div style={{ fontSize: 13, fontWeight: 500 }}>{showDetail.usernameEmetteur || showDetail.organisationSource || '—'}</div></div>
             <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Destinataire</div><div style={{ fontSize: 13, fontWeight: 500 }}>{showDetail.usernameDestinataire || showDetail.organisationDestination || '—'}</div></div>
@@ -389,6 +554,88 @@ export function Transfers({ roleKey }: Props) {
               <textarea value={form.observations} onChange={e => setForm(f => ({ ...f, observations: e.target.value }))} placeholder="Notes…" style={{ width: '100%', minHeight: 70, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
             </Field>
             <FormActions onCancel={() => setShowForm(false)} loading={saving} submitLabel="Créer le transfert" />
+          </form>
+        </Modal>
+      )}
+
+      {/* Modale Facture — saisie du prix unitaire */}
+      {factureModal && (
+        <Modal
+          title="Générer la Facture"
+          subtitle={`Transfert ${factureModal.codeTransfert} · ${factureModal.generationTransferee || ''} · ${Number(factureModal.quantite || 0).toLocaleString('fr-FR')} kg`}
+          onClose={() => setFactureModal(null)}
+          size="sm"
+        >
+          {/* Récap vendeur / acheteur */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
+            <div style={{ flex: 1, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 3 }}>Vendeur</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{factureModal.usernameEmetteur || '—'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ROLE_LABELS[factureModal.roleEmetteur || guessRoleFromGen(factureModal.generationTransferee || '', 'emetteur')] || '—'}</div>
+            </div>
+            <div style={{ flex: 1, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', marginBottom: 3 }}>Acheteur</div>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>{factureModal.usernameDestinataire || '—'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ROLE_LABELS[factureModal.roleDestinataire || guessRoleFromGen(factureModal.generationTransferee || '', 'dest')] || '—'}</div>
+            </div>
+          </div>
+
+          <form onSubmit={submitFacture}>
+            <FormRow>
+              <Field label="Prix unitaire (FCFA / kg)" required hint="Ex : 350 pour G1, 150 pour G3">
+                <FormInput
+                  type="number"
+                  value={facturePrix}
+                  onChange={e => setFacturePrix(e.target.value)}
+                  placeholder="350"
+                  min="0"
+                  step="1"
+                  required
+                  autoFocus
+                />
+              </Field>
+              <Field label="TVA (%)" hint="0 si exonéré, 18 sinon">
+                <FormSelect value={factureTva} onChange={e => setFactureTva(e.target.value)}>
+                  <option value="0">Exonéré (0 %)</option>
+                  <option value="18">TVA 18 %</option>
+                </FormSelect>
+              </Field>
+            </FormRow>
+
+            {/* Aperçu calcul */}
+            {facturePrix && Number(facturePrix) > 0 && (
+              <div style={{ background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', marginBottom: 8 }}>Aperçu facture</div>
+                {(() => {
+                  const ht  = Number(factureModal.quantite || 0) * Number(facturePrix)
+                  const tva = Number(factureTva) > 0 ? Math.round(ht * Number(factureTva) / 100) : 0
+                  const ttc = ht + tva
+                  return (
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Quantité</span>
+                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{Number(factureModal.quantite || 0).toLocaleString('fr-FR')} kg</span>
+                      <span style={{ color: 'var(--text-muted)' }}>Prix unitaire</span>
+                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{Number(facturePrix).toLocaleString('fr-FR')} FCFA/kg</span>
+                      <span style={{ color: 'var(--text-muted)' }}>Total HT</span>
+                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{ht.toLocaleString('fr-FR')} FCFA</span>
+                      {tva > 0 && <><span style={{ color: 'var(--text-muted)' }}>TVA {factureTva} %</span><span style={{ fontWeight: 600, textAlign: 'right' }}>{tva.toLocaleString('fr-FR')} FCFA</span></>}
+                      <span style={{ color: '#b91c1c', fontWeight: 700, borderTop: '1px solid #fca5a5', paddingTop: 4 }}>TOTAL TTC</span>
+                      <span style={{ color: '#b91c1c', fontWeight: 700, textAlign: 'right', borderTop: '1px solid #fca5a5', paddingTop: 4 }}>{ttc.toLocaleString('fr-FR')} FCFA</span>
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+
+            <Field label="Conditions de paiement" hint="Laisser vide pour la valeur par défaut">
+              <FormInput
+                value={factureConditions}
+                onChange={e => setFactureConditions(e.target.value)}
+                placeholder="Paiement à 30 jours — Virement ISRA/CNRA"
+              />
+            </Field>
+
+            <FormActions onCancel={() => setFactureModal(null)} loading={false} submitLabel="📄 Télécharger la Facture PDF" />
           </form>
         </Modal>
       )}

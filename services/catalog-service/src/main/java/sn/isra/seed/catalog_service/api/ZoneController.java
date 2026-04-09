@@ -3,13 +3,16 @@ package sn.isra.seed.catalog_service.api;
 import sn.isra.seed.catalog_service.entity.VarieteZone;
 import sn.isra.seed.catalog_service.entity.VarieteZoneId;
 import sn.isra.seed.catalog_service.entity.ZoneAgro;
+import sn.isra.seed.catalog_service.entity.enums.NiveauAdaptation;
 import sn.isra.seed.catalog_service.repo.VarieteZoneRepo;
 import sn.isra.seed.catalog_service.repo.ZoneAgroRepo;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -48,9 +51,21 @@ public class ZoneController {
         varieteZoneRepo.flush();
 
         for (ZoneAssignRequest z : zones) {
+            NiveauAdaptation niveau;
+            if (z.niveauAdaptation() != null && !z.niveauAdaptation().isBlank()) {
+                try {
+                    niveau = NiveauAdaptation.valueOf(z.niveauAdaptation().toUpperCase());
+                } catch (IllegalArgumentException e) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Niveau d'adaptation invalide : " + z.niveauAdaptation() +
+                        ". Valeurs acceptées : OPTIMAL, ACCEPTABLE, MARGINALE");
+                }
+            } else {
+                niveau = NiveauAdaptation.OPTIMAL;
+            }
             VarieteZone vz = new VarieteZone();
             vz.setId(new VarieteZoneId(id, z.idZone()));
-            vz.setNiveauAdaptation(z.niveauAdaptation() != null ? z.niveauAdaptation() : "OPTIMAL");
+            vz.setNiveauAdaptation(niveau);
             varieteZoneRepo.save(vz);
         }
 

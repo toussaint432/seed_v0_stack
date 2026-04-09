@@ -2,6 +2,7 @@ package sn.isra.seed.catalog_service.api;
 
 import sn.isra.seed.catalog_service.entity.Espece;
 import sn.isra.seed.catalog_service.entity.Variete;
+import sn.isra.seed.catalog_service.entity.enums.StatutVariete;
 import sn.isra.seed.catalog_service.repo.EspeceRepo;
 import sn.isra.seed.catalog_service.repo.VarieteRepo;
 import lombok.RequiredArgsConstructor;
@@ -45,10 +46,17 @@ public class CatalogController {
   // ── Variétés ─────────────────────────────────────────────
   @GetMapping("/varieties")
   public List<Variete> varieties(
-      @RequestParam(required=false) Long especeId,
-      @RequestParam(required=false) String statut) {
+      @RequestParam(required = false) Long especeId,
+      @RequestParam(required = false) String statut) {
     if (especeId != null) return varieteRepo.findByEspece_Id(especeId);
-    if (statut != null) return varieteRepo.findByStatutVariete(statut);
+    if (statut != null) {
+      try {
+        return varieteRepo.findByStatutVariete(StatutVariete.valueOf(statut.toUpperCase()));
+      } catch (IllegalArgumentException e) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Statut invalide : " + statut + ". Valeurs acceptées : DIFFUSEE, EN_TEST, RETIREE, ARCHIVEE");
+      }
+    }
     return varieteRepo.findAll();
   }
 
@@ -67,8 +75,18 @@ public class CatalogController {
   @PatchMapping("/varieties/{id}/statut")
   public ResponseEntity<Variete> updateStatut(@PathVariable Long id,
                                                @RequestBody Map<String, String> body) {
+    String statutStr = body.get("statut");
+    if (statutStr == null || statutStr.isBlank())
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le champ 'statut' est obligatoire");
+    StatutVariete nouveauStatut;
+    try {
+      nouveauStatut = StatutVariete.valueOf(statutStr.toUpperCase());
+    } catch (IllegalArgumentException e) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Statut invalide : " + statutStr + ". Valeurs acceptées : DIFFUSEE, EN_TEST, RETIREE, ARCHIVEE");
+    }
     return varieteRepo.findById(id).map(v -> {
-      v.setStatutVariete(body.get("statut"));
+      v.setStatutVariete(nouveauStatut);
       return ResponseEntity.ok(varieteRepo.save(v));
     }).orElse(ResponseEntity.notFound().build());
   }
@@ -86,13 +104,14 @@ public class CatalogController {
 
     String commentaire = body.get("commentaire");
     if (commentaire == null || commentaire.isBlank())
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Un commentaire est obligatoire pour archiver une variété");
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Un commentaire est obligatoire pour archiver une variété");
 
     return varieteRepo.findById(id).map(v -> {
-      if ("ARCHIVEE".equals(v.getStatutVariete()))
+      if (StatutVariete.ARCHIVEE == v.getStatutVariete())
         throw new ResponseStatusException(HttpStatus.CONFLICT, "Cette variété est déjà archivée");
 
-      v.setStatutVariete("ARCHIVEE");
+      v.setStatutVariete(StatutVariete.ARCHIVEE);
       v.setCommentaireArchivage(commentaire.trim());
       v.setDateArchivage(Instant.now());
       v.setArchivePar(jwt != null ? jwt.getClaimAsString("preferred_username") : "inconnu");
@@ -108,12 +127,12 @@ public class CatalogController {
   @DeleteMapping("/varieties/{id}")
   public ResponseEntity<Void> deleteVariete(
       @PathVariable Long id,
-      @RequestBody(required=false) Map<String, String> body) {
+      @RequestBody(required = false) Map<String, String> body) {
 
     Variete v = varieteRepo.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Variété introuvable"));
 
-    if (!"ARCHIVEE".equals(v.getStatutVariete()))
+    if (StatutVariete.ARCHIVEE != v.getStatutVariete())
       throw new ResponseStatusException(HttpStatus.CONFLICT,
           "Seules les variétés archivées peuvent être supprimées définitivement");
 

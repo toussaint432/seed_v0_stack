@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye, Building2, MoreVertical, Download } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye, Building2, Download, FileText } from 'lucide-react'
+import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
+import { generateTransferDoc, generateNumero, type TransferDocData, type LotPdfData, type PartiePdf } from '../../lib/pdf/generateTransferDoc'
 
-interface Props { roleKey: string }
+interface Props { roleKey: string; userSpecialisation?: string | null }
 const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', G4: 'badge-gray', R1: 'badge-blue', R2: 'badge-green' }
 const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef9ed', G3: '#f9fafb', G4: '#f9fafb', R1: '#eff6ff', R2: '#f0fdf4' }
 const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', G4: '#e5e7eb', R1: '#bfdbfe', R2: '#bbf7d0' }
@@ -20,28 +22,6 @@ const ROLE_NODE_COLORS: Record<string, { bg: string; border: string; label: stri
   'seed-admin':         { bg: '#f3e5f5', border: '#7c3aed', label: 'Admin' },
 }
 
-function DropdownItem({ icon, label, onClick, highlight }: { icon: React.ReactNode; label: string; onClick: () => void; highlight?: boolean }) {
-  const [hov, setHov] = React.useState(false)
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        width: '100%', background: hov ? 'var(--surface-2)' : 'none',
-        border: 'none', cursor: 'pointer',
-        display: 'flex', alignItems: 'center', gap: 9,
-        padding: '9px 14px', fontSize: 13,
-        color: highlight ? 'var(--green-700)' : 'var(--text-primary)',
-        fontWeight: highlight ? 600 : 400,
-        textAlign: 'left',
-      }}
-    >
-      {icon} {label}
-    </button>
-  )
-}
 
 function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: string; onClose: () => void }) {
   return (
@@ -115,7 +95,7 @@ function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: stri
   )
 }
 
-export function Lots({ roleKey }: Props) {
+export function Lots({ roleKey, userSpecialisation }: Props) {
   const [lots, setLots] = useState<any[]>([])
   const [varieties, setVarieties] = useState<any[]>([])
   const [generation, setGeneration] = useState('')
@@ -129,12 +109,25 @@ export function Lots({ roleKey }: Props) {
   const [showTransfer, setShowTransfer] = useState(false)
   const [parentLot, setParentLot] = useState<any>(null)
   const [saving, setSaving] = useState(false)
-  const [openMenuId,    setOpenMenuId]    = useState<number | null>(null)
   const [showReception, setShowReception] = useState(false)
   const [receptionForm, setReceptionForm] = useState({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' })
+  // Cache des Bordereaux générés (lotId → data PDF) pour re-téléchargement
+  const [bordereauCache, setBordereauCache] = useState<Map<number, TransferDocData>>(new Map())
   const allowedGens = ROLE_GENERATIONS[roleKey] || ALL_GENS
   const canCreate   = ['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey)
-  const canTransfer = ['seed-selector','seed-upsemcl'].includes(roleKey)
+  // Pour seed-upsemcl : toujours autorisé.
+  // Pour seed-selector : autorisé uniquement si la spécialisation correspond à l'espèce du lot.
+  function canTransferLot(lot: any): boolean {
+    if (roleKey === 'seed-upsemcl') return true
+    if (roleKey === 'seed-selector') {
+      if (!userSpecialisation) return true
+      const variety = varieties.find((v: any) => v.id === lot.idVariete)
+      const codeEspece: string | undefined = variety?.espece?.codeEspece
+      if (!codeEspece) return true   // espèce inconnue → on laisse passer
+      return codeEspece.toUpperCase() === userSpecialisation.toUpperCase()
+    }
+    return false
+  }
   const canChild    = ['seed-admin','seed-upsemcl','seed-multiplicator'].includes(roleKey)
   const canReception = roleKey === 'seed-quotataire'
 
@@ -203,19 +196,78 @@ export function Lots({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
+  const ROLE_LABEL_MAP: Record<string, string> = {
+    'seed-selector': 'Sélectionneur ISRA', 'seed-upsemcl': 'UPSem-CL',
+    'seed-multiplicator': 'Multiplicateur', 'seed-quotataire': 'Quotataire / OP',
+    'seed-admin': 'Administrateur ISRA',
+  }
+
   async function submitTransfer(e: React.FormEvent) {
     e.preventDefault(); if (!parentLot) return; setSaving(true)
     try {
-      await api.post(endpoints.lotTransfer(parentLot.id), {
+      const resp = await api.post(endpoints.lotTransfer(parentLot.id), {
         usernameDestinataire: transferForm.usernameDestinataire,
         roleDestinataire: transferForm.roleDestinataire,
         quantite: transferForm.quantite ? Number(transferForm.quantite) : undefined,
         observations: transferForm.observations,
       })
-      setToast({ msg: "Lot " + parentLot.codeLot + " transféré vers " + transferForm.usernameDestinataire, type: 'success' })
+      const savedTransfert = resp.data
+
+      // Construire et mémoriser les données PDF
+      const jwt   = keycloak.tokenParsed as Record<string, unknown>
+      const fn    = (jwt?.given_name  as string) ?? ''
+      const ln    = (jwt?.family_name as string) ?? ''
+      const nom   = [fn, ln].filter(Boolean).join(' ') || (jwt?.preferred_username as string) || roleKey
+
+      const variety   = varieties.find(v => v.id === parentLot.idVariete)
+      const espece    = variety?.espece
+      const lotPdf: LotPdfData = {
+        codeLot:          parentLot.codeLot,
+        nomVariete:       variety?.nomVariete ?? '—',
+        nomEspece:        espece?.nomCommun ?? espece?.codeEspece ?? '—',
+        generationCode:   parentLot.generation?.codeGeneration ?? '?',
+        quantiteNette:    parentLot.quantiteNette,
+        unite:            parentLot.unite ?? 'kg',
+        tauxGermination:  parentLot.tauxGermination ?? undefined,
+        puretePhysique:   parentLot.puretePhysique  ?? undefined,
+        statutLot:        parentLot.statutLot,
+        dateProduction:   parentLot.dateProduction   ?? undefined,
+        campagne:         parentLot.campagne,
+        lotParentCode:    parentLot.lotParent?.codeLot,
+      }
+      const expPdf: PartiePdf = {
+        username:  (jwt?.preferred_username as string) ?? '',
+        nom,
+        roleKey,
+        roleLabel: ROLE_LABEL_MAP[roleKey] ?? roleKey,
+      }
+      const destPdf: PartiePdf = {
+        username:  transferForm.usernameDestinataire,
+        nom:       transferForm.usernameDestinataire,
+        roleKey:   transferForm.roleDestinataire,
+        roleLabel: ROLE_LABEL_MAP[transferForm.roleDestinataire] ?? transferForm.roleDestinataire,
+      }
+      const docData: TransferDocData = {
+        type:               'BORDEREAU',
+        codeTransfert:      savedTransfert.codeTransfert ?? `TL-${parentLot.id}`,
+        numero:             generateNumero(savedTransfert.id ?? parentLot.id),
+        lot:                lotPdf,
+        expediteur:         expPdf,
+        destinataire:       destPdf,
+        quantiteTransferee: transferForm.quantite ? Number(transferForm.quantite) : parentLot.quantiteNette,
+        dateDemande:        new Date().toISOString().slice(0, 10),
+        observations:       transferForm.observations || undefined,
+      }
+
+      // Mémoriser pour re-téléchargement + générer immédiatement
+      setBordereauCache(prev => new Map(prev).set(parentLot.id, docData))
+      generateTransferDoc(docData)
+
+      setToast({ msg: `Lot ${parentLot.codeLot} transféré — Bordereau BL-${docData.codeTransfert}.pdf téléchargé`, type: 'success' })
       setShowTransfer(false); fetchLots()
-    } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur lors du transfert', type: 'error' })
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Erreur lors du transfert'
+      setToast({ msg, type: 'error' })
     } finally { setSaving(false) }
   }
 
@@ -342,48 +394,62 @@ export function Lots({ roleKey }: Props) {
                       ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
                     </td>
                     <td><span className={"badge " + (l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray')} style={{ fontSize: 11 }}>{l.statutLot}</span></td>
-                    <td style={{ position: 'relative' }}>
-                      <button
-                        className="btn btn-ghost"
-                        style={{ height: 28, fontSize: 12, padding: '0 10px', gap: 5 }}
-                        onClick={e => { e.stopPropagation(); setOpenMenuId(openMenuId === l.id ? null : l.id) }}
-                      >
-                        <MoreVertical size={13} /> Actions
-                      </button>
-                      {openMenuId === l.id && (
-                        <>
-                          <div style={{ position: 'fixed', inset: 0, zIndex: 49 }} onClick={() => setOpenMenuId(null)} />
-                          <div style={{ position: 'absolute', right: 0, top: '100%', zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.15)', minWidth: 195, padding: '4px 0', overflow: 'hidden' }}>
-                            <DropdownItem
-                              icon={lineageLoading === l.id ? <RefreshCw size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Eye size={13} />}
-                              label="Voir traçabilité"
-                              onClick={() => { showLineage(l); setOpenMenuId(null) }}
-                            />
-                            {canChild && (
-                              <DropdownItem
-                                icon={<GitBranch size={13} />}
-                                label="Créer un Lot Enfant"
-                                onClick={() => { setParentLot(l); setChildForm({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '' }); setShowChildLot(true); setOpenMenuId(null) }}
-                              />
-                            )}
-                            {canTransfer && (
-                              <DropdownItem
-                                icon={<ArrowRightLeft size={13} />}
-                                label="Transférer un Lot"
-                                onClick={() => { setParentLot(l); setTransferForm({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' }); setShowTransfer(true); setOpenMenuId(null) }}
-                              />
-                            )}
-                            {canReception && gen === 'R2' && (
-                              <DropdownItem
-                                icon={<Download size={13} />}
-                                label="Réceptionner"
-                                onClick={() => { setParentLot(l); setReceptionForm({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' }); setShowReception(true); setOpenMenuId(null) }}
-                                highlight
-                              />
-                            )}
-                          </div>
-                        </>
-                      )}
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ width: 30, height: 30, padding: 0, borderRadius: 6 }}
+                          title="Voir traçabilité"
+                          onClick={() => showLineage(l)}
+                        >
+                          {lineageLoading === l.id
+                            ? <RefreshCw size={13} style={{ animation: 'spin 0.8s linear infinite' }} />
+                            : <Eye size={13} />}
+                        </button>
+                        {canChild && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ width: 30, height: 30, padding: 0, borderRadius: 6 }}
+                            title="Créer un Lot Enfant"
+                            onClick={() => { setParentLot(l); setChildForm({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '' }); setShowChildLot(true) }}
+                          >
+                            <GitBranch size={13} />
+                          </button>
+                        )}
+                        {canTransferLot(l) && l.statutLot !== 'TRANSFERE' && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: 'var(--green-700)' }}
+                            title="Transférer un Lot"
+                            onClick={() => { setParentLot(l); setTransferForm({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' }); setShowTransfer(true) }}
+                          >
+                            <ArrowRightLeft size={13} />
+                          </button>
+                        )}
+                        {l.statutLot === 'TRANSFERE' && bordereauCache.has(l.id) && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: '#0369a1' }}
+                            title="Re-télécharger le Bordereau de Livraison"
+                            onClick={() => {
+                              const cached = bordereauCache.get(l.id)
+                              if (cached) generateTransferDoc(cached)
+                            }}
+                          >
+                            <FileText size={13} />
+                          </button>
+                        )}
+                        {canReception && gen === 'R2' && (
+                          <button
+                            className="btn btn-primary"
+                            style={{ width: 30, height: 30, padding: 0, borderRadius: 6 }}
+                            title="Réceptionner"
+                            onClick={() => { setParentLot(l); setReceptionForm({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' }); setShowReception(true) }}
+                          >
+                            <Download size={13} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )

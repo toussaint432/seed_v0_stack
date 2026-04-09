@@ -1,0 +1,203 @@
+# =============================================================================
+#  SEED Platform — Recording Rules (Règles d'enregistrement)
+#  Pré-calcul des métriques complexes pour optimiser les requêtes Grafana
+#  Ces règles créent de nouvelles séries temporelles stockées dans Prometheus
+# =============================================================================
+groups:
+
+  # ---------------------------------------------------------------------------
+  #  HTTP — Trafic et performance pré-calculés (rafraîchissement Grafana rapide)
+  # ---------------------------------------------------------------------------
+  - name: seed:http:rates
+    interval: 30s
+    rules:
+
+      # Requêtes par seconde par service (fenêtre 5 min)
+      - record: seed:http_requests:rate5m
+        expr: >
+          sum(rate(http_server_requests_seconds_count{component="microservice"}[5m])) by (job)
+
+      # Requêtes par seconde — toute la plateforme
+      - record: seed:http_requests_total:rate5m
+        expr: >
+          sum(rate(http_server_requests_seconds_count{component="microservice"}[5m]))
+
+      # Taux d'erreurs 5xx par service (fenêtre 5 min)
+      - record: seed:http_error_rate5xx:ratio5m
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5..", component="microservice"}[5m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count{component="microservice"}[5m])) by (job)
+
+      # Taux d'erreurs 5xx global
+      - record: seed:http_error_rate5xx_total:ratio5m
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5..", component="microservice"}[5m]))
+          /
+          sum(rate(http_server_requests_seconds_count{component="microservice"}[5m]))
+
+      # Latence p50 par service
+      - record: seed:http_latency_p50:5m
+        expr: >
+          histogram_quantile(0.50,
+            sum(rate(http_server_requests_seconds_bucket{component="microservice"}[5m])) by (job, le)
+          )
+
+      # Latence p95 par service — métrique SLO principale
+      - record: seed:http_latency_p95:5m
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket{component="microservice"}[5m])) by (job, le)
+          )
+
+      # Latence p99 par service
+      - record: seed:http_latency_p99:5m
+        expr: >
+          histogram_quantile(0.99,
+            sum(rate(http_server_requests_seconds_bucket{component="microservice"}[5m])) by (job, le)
+          )
+
+  # ---------------------------------------------------------------------------
+  #  JVM — Métriques mémoire pré-calculées
+  # ---------------------------------------------------------------------------
+  - name: seed:jvm:memory
+    interval: 30s
+    rules:
+
+      # Pourcentage Heap utilisé par service
+      - record: seed:jvm_heap_usage:ratio
+        expr: >
+          sum(jvm_memory_used_bytes{area="heap"}) by (job)
+          /
+          sum(jvm_memory_max_bytes{area="heap"}) by (job)
+
+      # Heap total consommé par tous les microservices
+      - record: seed:jvm_heap_used_total:bytes
+        expr: >
+          sum(jvm_memory_used_bytes{area="heap", component="microservice"})
+
+      # Non-Heap (Metaspace) par service
+      - record: seed:jvm_nonheap_used:bytes
+        expr: >
+          sum(jvm_memory_used_bytes{area="nonheap"}) by (job)
+
+      # Heap Keycloak (surveillance OOM séparée)
+      - record: seed:keycloak_heap_usage:ratio
+        expr: >
+          sum(jvm_memory_used_bytes{job="keycloak", area="heap"})
+          /
+          sum(jvm_memory_max_bytes{job="keycloak", area="heap"})
+
+      # Taux de pause GC par service (ms/s)
+      - record: seed:jvm_gc_pause_rate:ms_per_second
+        expr: >
+          rate(jvm_gc_pause_seconds_sum[5m]) * 1000
+
+  # ---------------------------------------------------------------------------
+  #  PostgreSQL — Ratios et KPIs pré-calculés
+  # ---------------------------------------------------------------------------
+  - name: seed:postgresql:performance
+    interval: 60s
+    rules:
+
+      # Ratio cache hit (> 95% = excellent)
+      - record: seed:pg_cache_hit:ratio
+        expr: >
+          rate(pg_stat_database_blks_hit{datname="seed"}[5m])
+          /
+          (rate(pg_stat_database_blks_hit{datname="seed"}[5m])
+           + rate(pg_stat_database_blks_read{datname="seed"}[5m])
+           + 0.001)
+
+      # Ratio rollback (< 5% = acceptable)
+      - record: seed:pg_rollback:ratio
+        expr: >
+          rate(pg_stat_database_xact_rollback{datname="seed"}[5m])
+          /
+          (rate(pg_stat_database_xact_commit{datname="seed"}[5m])
+           + rate(pg_stat_database_xact_rollback{datname="seed"}[5m])
+           + 0.001)
+
+      # Taux de transactions (commits + rollbacks) par seconde
+      - record: seed:pg_transactions:rate5m
+        expr: >
+          rate(pg_stat_database_xact_commit{datname="seed"}[5m])
+          + rate(pg_stat_database_xact_rollback{datname="seed"}[5m])
+
+      # Connexions actives sur la base seed
+      - record: seed:pg_connections_active:count
+        expr: >
+          sum(pg_stat_database_numbackends{datname="seed"})
+
+  # ---------------------------------------------------------------------------
+  #  Kafka — Consumer lag + broker throughput pré-calculés
+  # ---------------------------------------------------------------------------
+  - name: seed:kafka:metrics
+    interval: 15s
+    rules:
+
+      # Lag total toute la plateforme
+      - record: seed:kafka_consumer_lag_total:sum
+        expr: sum(kafka_consumergroup_lag)
+
+      # Lag par consumer group
+      - record: seed:kafka_consumer_lag_by_group:sum
+        expr: sum(kafka_consumergroup_lag) by (consumergroup)
+
+      # Lag par topic
+      - record: seed:kafka_consumer_lag_by_topic:sum
+        expr: sum(kafka_consumergroup_lag) by (topic)
+
+      # Messages produits/s (JMX broker)
+      - record: seed:kafka_messages_in:rate1m
+        expr: >
+          sum(kafka_server_brokertopicmetrics_messagesinpersec_onemimuterate
+            {topic!~"__.*"})
+
+      # Bytes entrants/s (JMX broker)
+      - record: seed:kafka_bytes_in:rate1m
+        expr: >
+          sum(kafka_server_brokertopicmetrics_bytesinpersec_onemimuterate
+            {topic!~"__.*"})
+
+      # Bytes sortants/s (JMX broker)
+      - record: seed:kafka_bytes_out:rate1m
+        expr: >
+          sum(kafka_server_brokertopicmetrics_bytesoutpersec_onemimuterate
+            {topic!~"__.*"})
+
+      # Heap JVM broker Kafka (ratio)
+      - record: seed:kafka_jvm_heap_usage:ratio
+        expr: >
+          kafka_jvm_heap_memory_used_bytes
+          / kafka_jvm_heap_memory_max_bytes
+
+      # Partitions sous-répliquées (doit être 0 en permanence)
+      - record: seed:kafka_under_replicated_partitions:count
+        expr: kafka_server_replicamanager_underreplicatedpartitions_value
+
+  # ---------------------------------------------------------------------------
+  #  SLO Platform — Indicateurs globaux pour dashboard exécutif
+  # ---------------------------------------------------------------------------
+  - name: seed:slo
+    interval: 60s
+    rules:
+
+      # Disponibilité globale (% services UP)
+      - record: seed:platform_availability:ratio
+        expr: >
+          sum(up{component="microservice"})
+          / count(up{component="microservice"})
+
+      # Score SLO HTTP : % de requêtes réussies (non 5xx) sous 500ms
+      - record: seed:slo_http_success:ratio5m
+        expr: >
+          1 - (
+            sum(rate(http_server_requests_seconds_count{status=~"5..", component="microservice"}[5m]))
+            / sum(rate(http_server_requests_seconds_count{component="microservice"}[5m]))
+          )
+
+      # Nombre total de services surveillés
+      - record: seed:monitored_services:count
+        expr: >
+          count(up{component=~"microservice|iam|database|message-broker"})

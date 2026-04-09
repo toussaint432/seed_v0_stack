@@ -1,0 +1,204 @@
+# =============================================================================
+#  SEED Platform — Alertes Microservices Spring Boot
+#  Catalogue des alertes critiques sur les 4 microservices applicatifs
+# =============================================================================
+groups:
+
+  # ---------------------------------------------------------------------------
+  #  Disponibilité des services
+  # ---------------------------------------------------------------------------
+  - name: seed.availability
+    interval: 30s
+    rules:
+
+      - alert: ServiceDown
+        expr: up{component="microservice"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team:     isra-cnra
+        annotations:
+          summary:     "Microservice SEED inaccessible — {{ $labels.job }}"
+          description: >
+            Le service **{{ $labels.job }}** ({{ $labels.instance }}) ne répond plus
+            depuis plus d'1 minute. Prometheus ne peut pas collecter ses métriques.
+            Vérifier : `docker logs seed-{{ $labels.domain }}`.
+
+      - alert: HealthCheckFailing
+        expr: probe_success{probe_type="health"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          team:     isra-cnra
+        annotations:
+          summary:     "Health check KO — {{ $labels.service_name }}"
+          description: >
+            L'endpoint `/actuator/health` de **{{ $labels.service_name }}** répond
+            avec une erreur depuis 2 minutes. Le service est peut-être en état
+            DEGRADED (base de données inaccessible, Kafka coupé, etc.).
+
+      - alert: HealthCheckDown
+        expr: probe_success{probe_type="health"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          team:     isra-cnra
+        annotations:
+          summary:     "Service CRITIQUE hors service — {{ $labels.service_name }}"
+          description: >
+            **{{ $labels.service_name }}** est DOWN depuis 5 minutes.
+            Impact utilisateurs confirmé. Intervention immédiate requise.
+
+  # ---------------------------------------------------------------------------
+  #  Latence HTTP — SLO < 500ms au p95
+  # ---------------------------------------------------------------------------
+  - name: seed.latency
+    interval: 30s
+    rules:
+
+      - alert: HighLatencyP95
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket{component="microservice"}[5m])) by (job, le)
+          ) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          team:     isra-cnra
+        annotations:
+          summary:     "Latence élevée (p95) — {{ $labels.job }}"
+          description: >
+            Le 95e percentile de latence de **{{ $labels.job }}** dépasse **500ms**
+            depuis 5 minutes (valeur actuelle : {{ $value | humanizeDuration }}).
+            SLO plateforme SEED : p95 < 500ms.
+
+      - alert: CriticalLatencyP95
+        expr: >
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket{component="microservice"}[5m])) by (job, le)
+          ) > 2
+        for: 3m
+        labels:
+          severity: critical
+          team:     isra-cnra
+        annotations:
+          summary:     "Latence critique — {{ $labels.job }} > 2s"
+          description: >
+            **{{ $labels.job }}** dépasse **2 secondes** de latence p95.
+            Les utilisateurs (sélectionneurs, multiplicateurs) subissent des timeouts.
+
+  # ---------------------------------------------------------------------------
+  #  Taux d'erreurs HTTP
+  # ---------------------------------------------------------------------------
+  - name: seed.errors
+    interval: 30s
+    rules:
+
+      - alert: High5xxErrorRate
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5..", component="microservice"}[5m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count{component="microservice"}[5m])) by (job)
+          > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          team:     isra-cnra
+        annotations:
+          summary:     "Taux d'erreurs 5xx > 1% — {{ $labels.job }}"
+          description: >
+            **{{ $labels.job }}** génère {{ $value | humanizePercentage }} d'erreurs
+            serveur (HTTP 5xx) sur les 5 dernières minutes.
+            SLO plateforme SEED : taux d'erreurs < 1%.
+
+      - alert: Critical5xxErrorRate
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5..", component="microservice"}[5m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count{component="microservice"}[5m])) by (job)
+          > 0.10
+        for: 2m
+        labels:
+          severity: critical
+          team:     isra-cnra
+        annotations:
+          summary:     "CRITIQUE — Taux d'erreurs 5xx > 10% — {{ $labels.job }}"
+          description: >
+            **{{ $labels.job }}** est en état de défaillance partielle :
+            {{ $value | humanizePercentage }} de requêtes échouent.
+
+  # ---------------------------------------------------------------------------
+  #  JVM — Mémoire Heap
+  # ---------------------------------------------------------------------------
+  - name: seed.jvm.memory
+    interval: 30s
+    rules:
+
+      - alert: JvmHeapHighUsage
+        expr: >
+          sum(jvm_memory_used_bytes{area="heap", component="microservice"}) by (job)
+          /
+          sum(jvm_memory_max_bytes{area="heap", component="microservice"}) by (job)
+          > 0.80
+        for: 5m
+        labels:
+          severity: warning
+          team:     isra-cnra
+        annotations:
+          summary:     "Heap JVM > 80% — {{ $labels.job }}"
+          description: >
+            La JVM de **{{ $labels.job }}** utilise {{ $value | humanizePercentage }}
+            de sa Heap. Risque de GC Full fréquents et dégradation des performances.
+            Heap actuelle : {{ $value | humanize }}B.
+
+      - alert: JvmHeapCritical
+        expr: >
+          sum(jvm_memory_used_bytes{area="heap", component="microservice"}) by (job)
+          /
+          sum(jvm_memory_max_bytes{area="heap", component="microservice"}) by (job)
+          > 0.92
+        for: 2m
+        labels:
+          severity: critical
+          team:     isra-cnra
+        annotations:
+          summary:     "CRITIQUE — Heap JVM > 92% — {{ $labels.job }} — OOM imminent"
+          description: >
+            **{{ $labels.job }}** est à {{ $value | humanizePercentage }} de Heap.
+            Un OutOfMemoryError (exit 137) est imminent. Redémarrage préventif recommandé.
+
+      - alert: JvmGcPauseHigh
+        expr: >
+          rate(jvm_gc_pause_seconds_sum{component="microservice"}[5m])
+          /
+          rate(jvm_gc_pause_seconds_count{component="microservice"}[5m])
+          > 0.3
+        for: 5m
+        labels:
+          severity: warning
+          team:     isra-cnra
+        annotations:
+          summary:     "Pauses GC longues — {{ $labels.job }}"
+          description: >
+            Les pauses Garbage Collection de **{{ $labels.job }}** durent en moyenne
+            {{ $value | humanizeDuration }} (seuil : 300ms). Impact sur la latence.
+
+  # ---------------------------------------------------------------------------
+  #  JVM — Threads
+  # ---------------------------------------------------------------------------
+  - name: seed.jvm.threads
+    interval: 60s
+    rules:
+
+      - alert: ThreadLeakSuspected
+        expr: >
+          increase(jvm_threads_live_threads{component="microservice"}[30m]) > 50
+        for: 15m
+        labels:
+          severity: warning
+          team:     isra-cnra
+        annotations:
+          summary:     "Fuite de threads suspectée — {{ $labels.job }}"
+          description: >
+            **{{ $labels.job }}** a créé {{ $value }} threads supplémentaires en 30 minutes
+            sans libération. Suspicion de fuite : vérifier les pools Kafka/HTTP.

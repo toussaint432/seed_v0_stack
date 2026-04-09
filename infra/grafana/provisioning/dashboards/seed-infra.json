@@ -1,0 +1,895 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Supervision Infrastructure : Keycloak IAM · PostgreSQL · Kafka — Plateforme SEED ISRA/CNRA",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": ["seed", "overview"],
+      "targetBlank": false,
+      "title": "Vue d'Ensemble",
+      "type": "dashboards"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": false,
+      "keepTime": true,
+      "tags": ["seed", "jvm"],
+      "targetBlank": false,
+      "title": "Métriques JVM",
+      "type": "dashboards"
+    }
+  ],
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "",
+      "transparent": true,
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"background: linear-gradient(135deg, #1a0a2e 0%, #2d1b5a 40%, #1e3a5f 100%); padding: 22px 28px; border-radius: 10px; display: flex; align-items: center; justify-content: space-between; border: 1px solid rgba(139,92,246,0.25); box-shadow: 0 4px 24px rgba(0,0,0,0.4);\"><div style=\"display: flex; align-items: center; gap: 18px;\"><div style=\"width: 52px; height: 52px; border-radius: 12px; background: linear-gradient(135deg, #7c3aed, #db2777); display: flex; align-items: center; justify-content: center; font-size: 26px; box-shadow: 0 4px 12px rgba(124,58,237,0.4);\">🏗️</div><div><h1 style=\"color: #f5f3ff; font-size: 22px; font-weight: 800; margin: 0; letter-spacing: -0.03em; font-family: sans-serif;\">Infrastructure SEED — Keycloak · PostgreSQL · Kafka</h1><p style=\"color: #c4b5fd; font-size: 13px; margin: 5px 0 0; font-family: sans-serif; font-weight: 400;\">Supervision des composants socle : IAM · Base de données · Bus de messages</p></div></div><div style=\"display: flex; gap: 8px;\"><div style=\"background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); border-radius: 8px; padding: 8px 14px; text-align: center;\"><span style=\"color: #fca5a5; font-size: 11px; font-weight: 700; font-family: sans-serif; display: block;\">🔑 KEYCLOAK</span><span style=\"color: #fecaca; font-size: 10px; font-family: sans-serif;\">IAM · JWT · Sessions</span></div><div style=\"background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; padding: 8px 14px; text-align: center;\"><span style=\"color: #93c5fd; font-size: 11px; font-weight: 700; font-family: sans-serif; display: block;\">🐘 POSTGRESQL</span><span style=\"color: #bfdbfe; font-size: 10px; font-family: sans-serif;\">Connexions · Tx · Taille</span></div><div style=\"background: rgba(234,179,8,0.15); border: 1px solid rgba(234,179,8,0.3); border-radius: 8px; padding: 8px 14px; text-align: center;\"><span style=\"color: #fcd34d; font-size: 11px; font-weight: 700; font-family: sans-serif; display: block;\">📨 KAFKA</span><span style=\"color: #fde68a; font-size: 10px; font-family: sans-serif;\">Topics · Lag · Messages</span></div></div></div>"
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Keycloak — Statut",
+      "description": "Keycloak est-il opérationnel ? (1 = UP, 0 = DOWN)",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "up{job=\"keycloak\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto",
+        "orientation": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }]
+          },
+          "noValue": "INCONNU"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "PostgreSQL — Statut",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "pg_up",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "DOWN", "color": "red", "index": 0 }, "1": { "text": "UP", "color": "green", "index": 1 } } }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }]
+          },
+          "noValue": "INCONNU"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Kafka — Brokers actifs",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "kafka_brokers",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }]
+          },
+          "noValue": "0",
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "PostgreSQL — Connexions actives",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(pg_stat_database_numbackends{datname=\"seed\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "blue", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 90 }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Kafka — Consumer Lag total",
+      "description": "Nombre de messages en attente de traitement dans tous les consumer groups. 0 = parfait.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(kafka_consumergroup_lag)",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 100 },
+              { "color": "red", "value": 1000 }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Taille base seed (MB)",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 4 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "pg_database_size_bytes{datname=\"seed\"}",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#3b82f6", "mode": "fixed" },
+          "unit": "bytes",
+          "noValue": "N/A"
+        },
+        "overrides": []
+      }
+    },
+
+    {
+      "id": 10,
+      "type": "row",
+      "title": "Keycloak IAM — Authentification & Ressources",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 },
+      "panels": []
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Keycloak — Connexions réussies vs échouées",
+      "description": "Nombre de logins réussis et échecs d'authentification par minute. Un pic d'échecs peut indiquer une attaque par force brute.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 9 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(keycloak_logins_total{realm=\"seed-v0\"}[$__rate_interval]) * 60",
+          "legendFormat": "Logins réussis — {{client_id}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(keycloak_failed_login_attempts_total{realm=\"seed-v0\"}[$__rate_interval]) * 60",
+          "legendFormat": "Échecs — {{error}}",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["sum", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "short"
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "Logins.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }]
+          },
+          {
+            "matcher": { "id": "byRegexp", "options": "Échecs.*" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 25 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "Keycloak JVM — Heap utilisé",
+      "description": "Mémoire Heap de la JVM Keycloak. Surveiller de près : un Heap > 80% est précurseur d'un crash OOM (exit 137).",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 9 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"keycloak\", area=\"heap\"})",
+          "legendFormat": "Heap utilisé",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_max_bytes{job=\"keycloak\", area=\"heap\"})",
+          "legendFormat": "Heap max (limite)",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(jvm_memory_used_bytes{job=\"keycloak\", area=\"nonheap\"})",
+          "legendFormat": "Non-Heap (Metaspace)",
+          "refId": "C"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line+area" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "rgba(239,68,68,0.15)", "value": 440000000 }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Heap utilisé" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f97316", "mode": "fixed" } }] },
+          {
+            "matcher": { "id": "byName", "options": "Heap max (limite)" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } },
+              { "id": "custom.lineStyle", "value": { "dash": [8, 4], "fill": "dash" } },
+              { "id": "custom.lineWidth", "value": 1 },
+              { "id": "custom.fillOpacity", "value": 0 }
+            ]
+          },
+          { "matcher": { "id": "byName", "options": "Non-Heap (Metaspace)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    },
+
+    {
+      "id": 20,
+      "type": "row",
+      "title": "PostgreSQL — Connexions, Transactions & Performances",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "panels": []
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "PostgreSQL — Connexions actives par base",
+      "description": "Nombre de backends (connexions) actifs. PostgreSQL par défaut accepte max 100 connexions. Un pool JDBC mal dimensionné peut saturer rapidement.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 19 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "pg_stat_database_numbackends{datname=\"seed\"}",
+          "legendFormat": "seed (prod)",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "pg_stat_database_numbackends{datname!~\"template.*|postgres\"}",
+          "legendFormat": "{{datname}}",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "rgba(239,68,68,0.4)", "value": 80 }
+            ]
+          },
+          "unit": "short",
+          "decimals": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "seed (prod)" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 22,
+      "type": "timeseries",
+      "title": "PostgreSQL — Transactions (commit/rollback) par seconde",
+      "description": "Débit transactionnel de la base seed. Un rollback élevé indique des erreurs applicatives fréquentes.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 19 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(pg_stat_database_xact_commit{datname=\"seed\"}[$__rate_interval])",
+          "legendFormat": "Commits/s",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(pg_stat_database_xact_rollback{datname=\"seed\"}[$__rate_interval])",
+          "legendFormat": "Rollbacks/s",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Commits/s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          {
+            "matcher": { "id": "byName", "options": "Rollbacks/s" },
+            "properties": [
+              { "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } },
+              { "id": "custom.fillOpacity", "value": 25 }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "PostgreSQL — Lectures (hits cache vs disque)",
+      "description": "Blocs lus depuis le cache partagé (blks_hit) vs disque (blks_read). Un ratio hit/total > 95 % est excellent. Un ratio bas indique que le shared_buffers est trop petit.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 28 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(pg_stat_database_blks_hit{datname=\"seed\"}[$__rate_interval])",
+          "legendFormat": "Cache hits/s",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(pg_stat_database_blks_read{datname=\"seed\"}[$__rate_interval])",
+          "legendFormat": "Lectures disque/s",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "ops"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Cache hits/s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lectures disque/s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f97316", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "PostgreSQL — Conflits & Verrous (deadlocks)",
+      "description": "Deadlocks = transactions bloquées mutuellement. Même un deadlock occasionnel mérite investigation. Les conflits indiquent une contention sur les ressources.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 28 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(pg_stat_database_deadlocks{datname=\"seed\"}[$__rate_interval])",
+          "legendFormat": "Deadlocks/s",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "rate(pg_stat_database_conflicts{datname=\"seed\"}[$__rate_interval])",
+          "legendFormat": "Conflits/s",
+          "refId": "B"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["sum", "max"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line+area" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "rgba(239,68,68,0.2)", "value": 0.001 }
+            ]
+          },
+          "unit": "ops",
+          "min": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Deadlocks/s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#ef4444", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Conflits/s" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f97316", "mode": "fixed" } }] }
+        ]
+      }
+    },
+
+    {
+      "id": 30,
+      "type": "row",
+      "title": "Kafka — Topics, Partitions & Consumer Lag",
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 37 },
+      "panels": []
+    },
+    {
+      "id": 31,
+      "type": "timeseries",
+      "title": "Kafka — Consumer Lag par groupe",
+      "description": "Nombre de messages en attente par consumer group. Un lag croissant signifie que les consommateurs ne suivent pas le rythme de production. Cible : 0.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 38 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(kafka_consumergroup_lag) by (consumergroup)",
+          "legendFormat": "{{consumergroup}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["mean", "max", "lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" },
+            "thresholdsStyle": { "mode": "line" }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "transparent", "value": null },
+              { "color": "rgba(234,179,8,0.3)", "value": 100 }
+            ]
+          },
+          "unit": "short",
+          "min": 0
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 32,
+      "type": "timeseries",
+      "title": "Kafka — Offset courant par topic",
+      "description": "Position actuelle du dernier message produit sur chaque topic. Une courbe plate indique une absence d'activité sur ce topic.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 38 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(kafka_topic_partition_current_offset{topic!~\"__.*\"}) by (topic)",
+          "legendFormat": "{{topic}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": {
+          "calcs": ["lastNotNull"],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": { "group": "A", "mode": "none" }
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 33,
+      "type": "stat",
+      "title": "Kafka — Topics actifs",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 0, "y": 47 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "count(count(kafka_topic_partition_current_offset{topic!~\"__.*\"}) by (topic))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#eab308", "mode": "fixed" },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 34,
+      "type": "stat",
+      "title": "Kafka — Partitions totales",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 6, "y": 47 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "sum(kafka_topic_partitions{topic!~\"__.*\"})",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#eab308", "mode": "fixed" },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 35,
+      "type": "stat",
+      "title": "Kafka — Consumer Groups actifs",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 12, "y": 47 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "count(count(kafka_consumergroup_current_offset) by (consumergroup))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "fixedColor": "#eab308", "mode": "fixed" },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 36,
+      "type": "stat",
+      "title": "Kafka — Consumer Lag max (worst group)",
+      "description": "Le consumer group avec le lag le plus élevé. Priorité d'investigation.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 6, "x": 18, "y": 47 },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+          "expr": "max(sum(kafka_consumergroup_lag) by (consumergroup))",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true
+        }
+      ],
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "red", "value": 500 }
+            ]
+          },
+          "unit": "short",
+          "noValue": "0"
+        },
+        "overrides": []
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["seed", "isra", "cnra", "infrastructure", "keycloak", "postgresql", "kafka"],
+  "templating": { "list": [] },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SEED — Infrastructure (Keycloak · PostgreSQL · Kafka)",
+  "uid": "seed-infra",
+  "version": 1,
+  "weekStart": ""
+}

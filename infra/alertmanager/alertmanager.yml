@@ -1,0 +1,140 @@
+# =============================================================================
+#  SEED Platform — Alertmanager Configuration v0.27
+#  Routage et regroupement des alertes Prometheus
+#  Institut Sénégalais de Recherches Agricoles (ISRA) / CNRA Bambey
+# =============================================================================
+
+global:
+  # Durée pendant laquelle une alerte résolue reste visible
+  resolve_timeout: 5m
+
+  # ── Email (configurer avec un vrai SMTP en production) ──────────────────
+  # smtp_smarthost: 'smtp.example.com:587'
+  # smtp_from: 'alertes@isra.sn'
+  # smtp_auth_username: 'alertes@isra.sn'
+  # smtp_auth_password: 'VOTRE_MOT_DE_PASSE'
+  # smtp_require_tls: true
+
+# =============================================================================
+#  TEMPLATES
+# =============================================================================
+templates:
+  - '/etc/alertmanager/templates/*.tmpl'
+
+# =============================================================================
+#  ROUTAGE PRINCIPAL
+# =============================================================================
+route:
+  # Délai avant envoi de la première notification (aggrégation initiale)
+  group_wait:      30s
+  # Délai avant envoi d'une nouvelle alerte dans un groupe existant
+  group_interval:  5m
+  # Délai avant renvoi si l'alerte n'est pas résolue
+  repeat_interval: 4h
+  # Regrouper par plateforme + sévérité
+  group_by: ['platform', 'severity', 'component']
+  # Receiver par défaut
+  receiver: 'seed-log'
+
+  # ── Règles de routage par sévérité ────────────────────────────────────
+  routes:
+    # Alertes critiques → notification immédiate (group_wait court)
+    - match:
+        severity: critical
+      receiver: 'seed-critical'
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: false
+
+    # Alertes warning → receiver standard
+    - match:
+        severity: warning
+      receiver: 'seed-warning'
+      group_wait: 1m
+      repeat_interval: 6h
+      continue: false
+
+    # Alertes infrastructure → regroupement spécifique
+    - match_re:
+        component: 'database|message-broker|iam'
+      receiver: 'seed-infrastructure'
+      group_by: ['component', 'severity']
+      group_wait: 20s
+      continue: false
+
+# =============================================================================
+#  INHIBITIONS — Éviter les cascades d'alertes redondantes
+# =============================================================================
+inhibit_rules:
+  # Si un service est DOWN (critical), inhiber les alertes warning du même service
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['job', 'component']
+
+  # Si PostgreSQL est DOWN, inhiber les alertes de connexions/rollbacks
+  - source_match:
+      alertname: 'PostgreSQLDown'
+    target_match_re:
+      alertname: 'PostgreSQL.*'
+    equal: ['component']
+
+  # Si Keycloak est DOWN, inhiber les alertes de login failures
+  - source_match:
+      alertname: 'KeycloakDown'
+    target_match_re:
+      alertname: 'Keycloak.*'
+    equal: ['component']
+
+# =============================================================================
+#  RECEIVERS
+# =============================================================================
+receivers:
+
+  # Log uniquement (toujours actif — trace dans les logs Alertmanager)
+  - name: 'seed-log'
+
+  # Alertes critiques — à connecter à Slack/email en production
+  - name: 'seed-critical'
+    # Décommenter et configurer pour activer les notifications :
+    #
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/VOTRE/WEBHOOK/SEED'
+    #     channel: '#seed-alertes-critiques'
+    #     send_resolved: true
+    #     title: '🚨 [CRITIQUE] {{ .GroupLabels.alertname }} — SEED Platform'
+    #     text: >-
+    #       {{ range .Alerts }}
+    #       *Service:* {{ .Labels.job | default "N/A" }}
+    #       *Résumé:* {{ .Annotations.summary }}
+    #       *Détail:* {{ .Annotations.description }}
+    #       {{ end }}
+    #
+    # email_configs:
+    #   - to: 'dsi@isra.sn'
+    #     subject: '[CRITIQUE] {{ .GroupLabels.alertname }} — SEED Platform ISRA/CNRA'
+    #     body: |
+    #       Alerte critique sur la Plateforme SEED (ISRA/CNRA Bambey)
+    #
+    #       {{ range .Alerts }}
+    #       Service  : {{ .Labels.job | default "N/A" }}
+    #       Résumé   : {{ .Annotations.summary }}
+    #       Détail   : {{ .Annotations.description }}
+    #       Début    : {{ .StartsAt.Format "02/01/2006 15:04:05" }}
+    #       {{ end }}
+
+  # Alertes warning
+  - name: 'seed-warning'
+    # slack_configs:
+    #   - api_url: 'https://hooks.slack.com/services/VOTRE/WEBHOOK/SEED'
+    #     channel: '#seed-alertes'
+    #     send_resolved: true
+    #     title: '⚠️ [WARNING] {{ .GroupLabels.alertname }}'
+    #     text: '{{ range .Alerts }}{{ .Annotations.summary }}{{ end }}'
+
+  # Alertes infrastructure
+  - name: 'seed-infrastructure'
+    # email_configs:
+    #   - to: 'infra@isra.sn'
+    #     subject: '[INFRA] {{ .GroupLabels.component }} — {{ .GroupLabels.alertname }}'

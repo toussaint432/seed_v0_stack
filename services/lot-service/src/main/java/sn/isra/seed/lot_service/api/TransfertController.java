@@ -1,6 +1,8 @@
 package sn.isra.seed.lot_service.api;
 
 import sn.isra.seed.lot_service.entity.TransfertLot;
+import sn.isra.seed.lot_service.entity.enums.StatutLot;
+import sn.isra.seed.lot_service.entity.enums.StatutTransfert;
 import sn.isra.seed.lot_service.repo.LotRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
 import lombok.RequiredArgsConstructor;
@@ -43,17 +45,16 @@ public class TransfertController {
 
         String username = jwt.getClaimAsString("preferred_username");
         return transfertRepo.findById(id).map(t -> {
-            if (!t.getUsernameDestinataire().equals(username)) {
+            if (!t.getUsernameDestinataire().equals(username))
                 return ResponseEntity.status(403).<Object>body(Map.of("message", "Non autorisé"));
-            }
-            if (!"EN_ATTENTE".equals(t.getStatut())) {
+            if (StatutTransfert.EN_ATTENTE != t.getStatut())
                 return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
-            }
-            t.setStatut("ACCEPTE");
+
+            t.setStatut(StatutTransfert.ACCEPTE);
             t.setDateAcceptation(LocalDate.now());
             // Marquer le lot comme transféré
             lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
-                lot.setStatutLot("TRANSFERE");
+                lot.setStatutLot(StatutLot.TRANSFERE);
                 lotRepo.save(lot);
             });
             return ResponseEntity.<Object>ok(transfertRepo.save(t));
@@ -69,16 +70,14 @@ public class TransfertController {
 
         String username = jwt.getClaimAsString("preferred_username");
         return transfertRepo.findById(id).map(t -> {
-            if (!t.getUsernameDestinataire().equals(username)) {
+            if (!t.getUsernameDestinataire().equals(username))
                 return ResponseEntity.status(403).<Object>body(Map.of("message", "Non autorisé"));
-            }
-            if (!"EN_ATTENTE".equals(t.getStatut())) {
+            if (StatutTransfert.EN_ATTENTE != t.getStatut())
                 return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
-            }
-            t.setStatut("REFUSE");
+
+            t.setStatut(StatutTransfert.REJETE);
             t.setMotifRefus(body.getOrDefault("motif", "Refusé par le destinataire"));
             return ResponseEntity.<Object>ok(transfertRepo.save(t));
         }).orElse(ResponseEntity.notFound().build());
     }
-
 }

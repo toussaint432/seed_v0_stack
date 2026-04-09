@@ -1,0 +1,318 @@
+{
+  "annotations": { "list": [{ "builtIn": 1, "datasource": { "type": "grafana", "uid": "-- Grafana --" }, "enable": true, "hide": true, "iconColor": "rgba(0,211,255,1)", "name": "Annotations & Alerts", "type": "dashboard" }] },
+  "description": "Tableau de bord principal — Plateforme SEED Gestion des semences certifiées — ISRA/CNRA Bambey",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    { "asDropdown": false, "icon": "dashboard", "keepTime": true, "tags": ["seed","jvm"], "title": "JVM Microservices", "type": "dashboards" },
+    { "asDropdown": false, "icon": "dashboard", "keepTime": true, "tags": ["seed","infrastructure"], "title": "Infrastructure", "type": "dashboards" },
+    { "asDropdown": false, "icon": "dashboard", "keepTime": true, "tags": ["seed","slo"], "title": "SLO & Alertes", "type": "dashboards" }
+  ],
+  "panels": [
+    {
+      "id": 1, "type": "text", "title": "", "transparent": true,
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "html",
+        "content": "<div style=\"background:linear-gradient(135deg,#052e16 0%,#064e3b 40%,#065f46 100%);padding:22px 28px;border-radius:10px;display:flex;align-items:center;justify-content:space-between;border:1px solid rgba(52,211,153,0.2);box-shadow:0 4px 24px rgba(0,0,0,0.4);\"><div style=\"display:flex;align-items:center;gap:18px;\"><div style=\"width:52px;height:52px;border-radius:12px;background:linear-gradient(135deg,#059669,#10b981);display:flex;align-items:center;justify-content:center;font-size:26px;box-shadow:0 4px 12px rgba(16,185,129,0.4);\">🌱</div><div><h1 style=\"color:#ecfdf5;font-size:22px;font-weight:800;margin:0;letter-spacing:-0.03em;font-family:sans-serif;\">SEED Platform — Vue d'Ensemble</h1><p style=\"color:#6ee7b7;font-size:13px;margin:5px 0 0;font-family:sans-serif;\">Institut Sénégalais de Recherches Agricoles (ISRA) &nbsp;·&nbsp; CNRA Bambey &nbsp;·&nbsp; Gestion des semences certifiées</p></div></div><div style=\"text-align:right;\"><div style=\"display:inline-flex;align-items:center;gap:8px;background:rgba(16,185,129,0.15);border:1px solid rgba(52,211,153,0.3);border-radius:8px;padding:8px 14px;\"><div style=\"width:8px;height:8px;border-radius:50%;background:#34d399;box-shadow:0 0 6px #34d399;\"></div><span style=\"color:#34d399;font-size:12px;font-weight:600;font-family:sans-serif;\">4 microservices · Keycloak · PostgreSQL · Kafka</span></div><p style=\"color:#6ee7b7;font-size:11px;margin:8px 0 0;font-family:sans-serif;\">Spring Boot · Micrometer · Prometheus · Grafana 10 · Alertmanager</p></div></div>"
+      },
+      "fieldConfig": { "defaults": {}, "overrides": [] }
+    },
+
+    {
+      "id": 100, "type": "stat",
+      "title": "Score SLO Plateforme",
+      "description": "Pourcentage de requêtes réussies (non-5xx) sur les 5 dernières minutes. Cible : > 99%.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 5, "x": 0, "y": 4 },
+      "targets": [{ "expr": "seed:slo_http_success:ratio5m * 100", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto", "orientation": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 95 }, { "color": "yellow", "value": 99 }, { "color": "green", "value": 99.5 }] },
+          "unit": "percent", "decimals": 2, "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 2, "type": "stat",
+      "title": "Services Opérationnels",
+      "description": "Microservices Spring Boot actifs (cible 4/4)",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 5, "y": 4 },
+      "targets": [{ "expr": "sum(up{component=\"microservice\"})", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "none", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": [{ "type": "value", "options": { "0": { "text": "0/4", "color": "red", "index": 0 }, "1": { "text": "1/4", "color": "orange", "index": 1 }, "2": { "text": "2/4", "color": "yellow", "index": 2 }, "3": { "text": "3/4", "color": "yellow", "index": 3 }, "4": { "text": "4/4 ✓", "color": "green", "index": 4 } } }],
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 3 }, { "color": "green", "value": 4 }] },
+          "noValue": "0/4"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 3, "type": "stat",
+      "title": "Requêtes / seconde",
+      "description": "Trafic HTTP agrégé — tous microservices",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 9, "y": 4 },
+      "targets": [{ "expr": "seed:http_requests_total:rate5m", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "#1d4ed8", "value": null }, { "color": "#3b82f6", "value": 1 }, { "color": "#60a5fa", "value": 10 }] },
+          "unit": "reqps", "decimals": 2, "noValue": "0"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 4, "type": "stat",
+      "title": "Latence p95 — Pire service",
+      "description": "95e percentile de latence sur le service le plus lent. SLO : < 500ms.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 13, "y": 4 },
+      "targets": [{ "expr": "max(seed:http_latency_p95:5m) * 1000", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 300 }, { "color": "orange", "value": 500 }, { "color": "red", "value": 1000 }] },
+          "unit": "ms", "decimals": 0, "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 5, "type": "stat",
+      "title": "Taux d'erreurs 5xx",
+      "description": "Pourcentage de réponses serveur en erreur — toute la plateforme",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 4, "x": 17, "y": 4 },
+      "targets": [{ "expr": "seed:http_error_rate5xx_total:ratio5m * 100", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.5 }, { "color": "orange", "value": 1 }, { "color": "red", "value": 5 }] },
+          "unit": "percent", "decimals": 2, "noValue": "0 %"
+        }, "overrides": []
+      }
+    },
+    {
+      "id": 101, "type": "stat",
+      "title": "Heap JVM — Moyenne",
+      "description": "Utilisation moyenne de la Heap sur les 4 microservices",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 5, "w": 3, "x": 21, "y": 4 },
+      "targets": [{ "expr": "avg(seed:jvm_heap_usage:ratio) * 100", "refId": "A", "instant": true }],
+      "options": { "colorMode": "background", "graphMode": "area", "justifyMode": "center", "reduceOptions": { "calcs": ["lastNotNull"] }, "textMode": "auto" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 60 }, { "color": "orange", "value": 80 }, { "color": "red", "value": 90 }] },
+          "unit": "percent", "decimals": 1, "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+
+    { "id": 50, "type": "row", "title": "Trafic HTTP — Requêtes & Erreurs par service", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 }, "panels": [] },
+
+    {
+      "id": 7, "type": "timeseries",
+      "title": "Requêtes par seconde — Par microservice",
+      "description": "Débit HTTP par service (pré-calculé via recording rules seed:http_requests:rate5m).",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 14, "x": 0, "y": 10 },
+      "targets": [
+        { "expr": "seed:http_requests:rate5m{job=\"catalog-service\"}", "legendFormat": "Catalog — variétés & espèces", "refId": "A" },
+        { "expr": "seed:http_requests:rate5m{job=\"lot-service\"}", "legendFormat": "Lot — semences & certifications", "refId": "B" },
+        { "expr": "seed:http_requests:rate5m{job=\"stock-service\"}", "legendFormat": "Stock — sites & transferts", "refId": "C" },
+        { "expr": "seed:http_requests:rate5m{job=\"order-service\"}", "legendFormat": "Order — commandes & orgs", "refId": "D" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 12, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" } },
+          "unit": "reqps"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Catalog — variétés & espèces" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot — semences & certifications" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stock — sites & transferts" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Order — commandes & orgs" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 102, "type": "timeseries",
+      "title": "Taux d'erreurs 5xx — Par service (%)",
+      "description": "Ratio d'erreurs serveur par service (recording rule seed:http_error_rate5xx:ratio5m). Seuil alerte : 1%.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 9, "w": 10, "x": 14, "y": 10 },
+      "targets": [
+        { "expr": "seed:http_error_rate5xx:ratio5m{job=\"catalog-service\"} * 100", "legendFormat": "Catalog", "refId": "A" },
+        { "expr": "seed:http_error_rate5xx:ratio5m{job=\"lot-service\"} * 100", "legendFormat": "Lot", "refId": "B" },
+        { "expr": "seed:http_error_rate5xx:ratio5m{job=\"stock-service\"} * 100", "legendFormat": "Stock", "refId": "C" },
+        { "expr": "seed:http_error_rate5xx:ratio5m{job=\"order-service\"} * 100", "legendFormat": "Order", "refId": "D" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 20, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line+area" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }, { "color": "rgba(239,68,68,0.15)", "value": 1 }] },
+          "unit": "percent", "min": 0
+        }, "overrides": []
+      }
+    },
+
+    { "id": 51, "type": "row", "title": "Performance — Latence SLO (p50 / p95 / p99)", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 19 }, "panels": [] },
+
+    {
+      "id": 9, "type": "timeseries",
+      "title": "Latence HTTP — p50 · p95 · p99 par service",
+      "description": "Percentiles de latence précalculés. Seuil SLO p95 < 500ms. Ligne rouge = seuil d'alerte.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 10, "w": 14, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "seed:http_latency_p95:5m{job=\"catalog-service\"} * 1000", "legendFormat": "Catalog p95", "refId": "A" },
+        { "expr": "seed:http_latency_p95:5m{job=\"lot-service\"} * 1000", "legendFormat": "Lot p95", "refId": "B" },
+        { "expr": "seed:http_latency_p95:5m{job=\"stock-service\"} * 1000", "legendFormat": "Stock p95", "refId": "C" },
+        { "expr": "seed:http_latency_p95:5m{job=\"order-service\"} * 1000", "legendFormat": "Order p95", "refId": "D" },
+        { "expr": "seed:http_latency_p50:5m{job=\"catalog-service\"} * 1000", "legendFormat": "Catalog p50", "refId": "E" },
+        { "expr": "seed:http_latency_p50:5m{job=\"lot-service\"} * 1000", "legendFormat": "Lot p50", "refId": "F" },
+        { "expr": "seed:http_latency_p99:5m * 1000", "legendFormat": "p99 — {{job}}", "refId": "G" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "palette-classic" },
+          "custom": { "fillOpacity": 8, "gradientMode": "none", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never", "spanNulls": false, "stacking": { "group": "A", "mode": "none" }, "thresholdsStyle": { "mode": "line" } },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "transparent", "value": null }, { "color": "rgba(239,68,68,0.5)", "value": 500 }] },
+          "unit": "ms"
+        },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*p50" }, "properties": [{ "id": "custom.lineWidth", "value": 1 }, { "id": "custom.lineStyle", "value": { "dash": [4, 3], "fill": "dash" } }] },
+          { "matcher": { "id": "byRegexp", "options": ".*p99.*" }, "properties": [{ "id": "custom.lineWidth", "value": 1 }, { "id": "custom.lineStyle", "value": { "dash": [6, 3], "fill": "dash" } }] },
+          { "matcher": { "id": "byName", "options": "Catalog p95" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot p95" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stock p95" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Order p95" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    },
+    {
+      "id": 103, "type": "bargauge",
+      "title": "Latence p95 actuelle — Comparaison services",
+      "description": "Classement des services par latence p95 instantanée. Vert < 300ms · Jaune < 500ms · Rouge > 500ms.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 10, "w": 10, "x": 14, "y": 20 },
+      "targets": [
+        { "expr": "seed:http_latency_p95:5m * 1000", "legendFormat": "{{job}}", "refId": "A", "instant": true }
+      ],
+      "options": { "displayMode": "lcd", "minVizHeight": 10, "minVizWidth": 0, "namePlacement": "auto", "orientation": "horizontal", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }, "showUnfilled": true, "valueMode": "color" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 300 }, { "color": "orange", "value": 500 }, { "color": "red", "value": 1000 }] },
+          "unit": "ms", "decimals": 0, "min": 0, "max": 2000, "noValue": "N/A"
+        }, "overrides": []
+      }
+    },
+
+    { "id": 52, "type": "row", "title": "Mémoire JVM — Heap par microservice", "collapsed": false, "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 }, "panels": [] },
+
+    {
+      "id": 12, "type": "gauge", "title": "Heap — catalog-service", "description": "Variétés & Espèces",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 7, "w": 6, "x": 0, "y": 31 },
+      "targets": [{ "expr": "seed:jvm_heap_usage:ratio{job=\"catalog-service\"} * 100", "refId": "A", "instant": true }],
+      "options": { "minVizHeight": 75, "minVizWidth": 75, "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "#22c55e", "value": null }, { "color": "#eab308", "value": 60 }, { "color": "#f97316", "value": 75 }, { "color": "#ef4444", "value": 90 }] }, "unit": "percent", "decimals": 1, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 13, "type": "gauge", "title": "Heap — lot-service", "description": "Lots, Certifications & Programmes",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 7, "w": 6, "x": 6, "y": 31 },
+      "targets": [{ "expr": "seed:jvm_heap_usage:ratio{job=\"lot-service\"} * 100", "refId": "A", "instant": true }],
+      "options": { "minVizHeight": 75, "minVizWidth": 75, "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "#3b82f6", "value": null }, { "color": "#eab308", "value": 60 }, { "color": "#f97316", "value": 75 }, { "color": "#ef4444", "value": 90 }] }, "unit": "percent", "decimals": 1, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 14, "type": "gauge", "title": "Heap — stock-service", "description": "Sites, Stocks & Transferts physiques",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 31 },
+      "targets": [{ "expr": "seed:jvm_heap_usage:ratio{job=\"stock-service\"} * 100", "refId": "A", "instant": true }],
+      "options": { "minVizHeight": 75, "minVizWidth": 75, "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "#f59e0b", "value": null }, { "color": "#eab308", "value": 60 }, { "color": "#f97316", "value": 75 }, { "color": "#ef4444", "value": 90 }] }, "unit": "percent", "decimals": 1, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 15, "type": "gauge", "title": "Heap — order-service", "description": "Commandes & Organisations",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 31 },
+      "targets": [{ "expr": "seed:jvm_heap_usage:ratio{job=\"order-service\"} * 100", "refId": "A", "instant": true }],
+      "options": { "minVizHeight": 75, "minVizWidth": 75, "orientation": "auto", "reduceOptions": { "calcs": ["lastNotNull"] }, "showThresholdLabels": false, "showThresholdMarkers": true },
+      "fieldConfig": { "defaults": { "color": { "mode": "thresholds" }, "min": 0, "max": 100, "thresholds": { "mode": "absolute", "steps": [{ "color": "#a855f7", "value": null }, { "color": "#eab308", "value": 60 }, { "color": "#f97316", "value": 75 }, { "color": "#ef4444", "value": 90 }] }, "unit": "percent", "decimals": 1, "noValue": "N/A" }, "overrides": [] }
+    },
+    {
+      "id": 17, "type": "timeseries",
+      "title": "Évolution Heap JVM — Par service (MB)",
+      "description": "Tendance de la consommation Heap. Une montée continue sans GC indique une fuite mémoire.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 38 },
+      "targets": [
+        { "expr": "seed:jvm_heap_used_total:bytes", "legendFormat": "Total microservices", "refId": "A" },
+        { "expr": "seed:jvm_nonheap_used:bytes{job=\"catalog-service\"}", "legendFormat": "Catalog Non-Heap", "refId": "B" },
+        { "expr": "seed:jvm_nonheap_used:bytes{job=\"lot-service\"}", "legendFormat": "Lot Non-Heap", "refId": "C" },
+        { "expr": "seed:jvm_nonheap_used:bytes{job=\"stock-service\"}", "legendFormat": "Stock Non-Heap", "refId": "D" },
+        { "expr": "seed:jvm_nonheap_used:bytes{job=\"order-service\"}", "legendFormat": "Order Non-Heap", "refId": "E" }
+      ],
+      "options": { "legend": { "calcs": ["mean","lastNotNull"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 12, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "never", "spanNulls": false }, "unit": "bytes" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Total microservices" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f8fafc", "mode": "fixed" } }, { "id": "custom.lineWidth", "value": 3 }] }
+        ]
+      }
+    },
+    {
+      "id": 104, "type": "timeseries",
+      "title": "GC Pauses — Débit (ms/s)",
+      "description": "Temps passé en Garbage Collection par seconde. G1GC : normal si < 50ms/s sur Young GC.",
+      "datasource": { "type": "prometheus", "uid": "seed-prometheus" },
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 38 },
+      "targets": [
+        { "expr": "seed:jvm_gc_pause_rate:ms_per_second{job=\"catalog-service\"}", "legendFormat": "Catalog", "refId": "A" },
+        { "expr": "seed:jvm_gc_pause_rate:ms_per_second{job=\"lot-service\"}", "legendFormat": "Lot", "refId": "B" },
+        { "expr": "seed:jvm_gc_pause_rate:ms_per_second{job=\"stock-service\"}", "legendFormat": "Stock", "refId": "C" },
+        { "expr": "seed:jvm_gc_pause_rate:ms_per_second{job=\"order-service\"}", "legendFormat": "Order", "refId": "D" }
+      ],
+      "options": { "legend": { "calcs": ["mean","max"], "displayMode": "table", "placement": "bottom", "showLegend": true }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "fieldConfig": {
+        "defaults": { "color": { "mode": "palette-classic" }, "custom": { "fillOpacity": 15, "gradientMode": "opacity", "lineInterpolation": "smooth", "lineWidth": 2, "showPoints": "auto", "spanNulls": false }, "unit": "ms" },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Catalog" }, "properties": [{ "id": "color", "value": { "fixedColor": "#22c55e", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Lot" }, "properties": [{ "id": "color", "value": { "fixedColor": "#3b82f6", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Stock" }, "properties": [{ "id": "color", "value": { "fixedColor": "#f59e0b", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "Order" }, "properties": [{ "id": "color", "value": { "fixedColor": "#a855f7", "mode": "fixed" } }] }
+        ]
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": ["seed","isra","cnra","platform","overview"],
+  "templating": { "list": [] },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "SEED Platform — Vue d'Ensemble",
+  "uid": "seed-overview",
+  "version": 2,
+  "weekStart": ""
+}

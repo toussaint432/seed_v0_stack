@@ -1,31 +1,41 @@
 package sn.isra.seed.lot_service.entity;
 
-import jakarta.persistence.*;
-import lombok.*;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import com.fasterxml.jackson.datatype.jsr310.deser.LocalDateDeserializer;
 import com.fasterxml.jackson.datatype.jsr310.ser.LocalDateSerializer;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.*;
+import lombok.*;
+import sn.isra.seed.lot_service.entity.enums.ResultatCertification;
+
 import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "certification")
+@Table(name = "certification",
+    indexes = @Index(name = "idx_cert_lot", columnList = "id_lot"))
 @Getter @Setter @NoArgsConstructor
 public class Certification {
 
-    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotNull(message = "Le lot est obligatoire")
     @Column(name = "id_lot", nullable = false)
     private Long idLot;
 
-    @Column(name = "organisme_certificateur", nullable = false)
+    @NotBlank(message = "L'organisme certificateur est obligatoire")
+    @Size(max = 200)
+    @Column(name = "organisme_certificateur", nullable = false, length = 200)
     private String organismeCertificateur;
 
-    @Column(name = "numero_certificat", nullable = false, unique = true)
+    @NotBlank(message = "Le numéro de certificat est obligatoire")
+    @Size(max = 100)
+    @Column(name = "numero_certificat", nullable = false, unique = true, length = 100)
     private String numeroCertificat;
 
     @Column(name = "date_demande")
@@ -46,10 +56,12 @@ public class Certification {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate dateCertification;
 
-    @Column(name = "resultat_certification", nullable = false)
-    private String resultatCertification;
+    @NotNull(message = "Le résultat de certification est obligatoire")
+    @Enumerated(EnumType.STRING)
+    @Column(name = "resultat_certification", nullable = false, length = 30)
+    private ResultatCertification resultatCertification;
 
-    @Column(name = "motif_rejet")
+    @Column(name = "motif_rejet", columnDefinition = "TEXT")
     private String motifRejet;
 
     @Column(name = "date_expiration")
@@ -58,14 +70,15 @@ public class Certification {
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd")
     private LocalDate dateExpiration;
 
-    @Column(name = "nom_document")
+    @Size(max = 255)
+    @Column(name = "nom_document", length = 255)
     private String nomDocument;
 
     @JsonIgnore
     @Column(name = "contenu_document")
     private byte[] contenuDocument;
 
-    @Column(name = "created_at")
+    @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
     @PrePersist
