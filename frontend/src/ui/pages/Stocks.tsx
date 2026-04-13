@@ -24,16 +24,21 @@ export function Stocks({ roleKey }: Props) {
   const [stockForm, setStockForm] = useState({ idLot: '', siteCode: '', quantite: '', unite: 'kg' })
   const [mvtForm, setMvtForm] = useState({ idLot: '', type: 'IN', siteSourceCode: '', siteDestinationCode: '', quantite: '', unite: 'kg', reference: '' })
 
+  const isMulti = roleKey === 'seed-multiplicator'
+
   async function fetchStocks(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
-    const url = site ? `${endpoints.stocks}?site=${site}` : endpoints.stocks
+    // Multiplicateur : endpoint isolé par org ; autres : tous les stocks avec filtre site
+    const url = isMulti
+      ? endpoints.stockMonStock
+      : (site ? `${endpoints.stocks}?site=${site}` : endpoints.stocks)
     api.get(url).then(r => setStocks(r.data)).catch(() => setStocks([]))
       .finally(() => { setLoading(false); setRefreshing(false) })
   }
 
   useEffect(() => {
     fetchStocks()
-    api.get(endpoints.lots).then(r => setLots(r.data)).catch(() => {})
+    api.get(isMulti ? endpoints.lotsMesLots : endpoints.lots).then(r => setLots(r.data)).catch(() => {})
     api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {})
   }, [])
 

@@ -49,9 +49,10 @@ export function Programs({ roleKey }: Props) {
 
   async function fetchAll() {
     setLoading(true)
+    const lotsUrl = roleKey === 'seed-multiplicator' ? endpoints.lotsMesLots : endpoints.lots
     const [pRes, lRes] = await Promise.allSettled([
       api.get(endpoints.programs),
-      api.get(endpoints.lots),
+      api.get(lotsUrl),
     ])
     setPrograms(pRes.status === 'fulfilled' ? pRes.value.data : [])
     setLots(lRes.status === 'fulfilled' ? lRes.value.data : [])

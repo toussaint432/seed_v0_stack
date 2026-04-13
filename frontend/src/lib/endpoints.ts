@@ -38,6 +38,10 @@ export const endpoints = {
   zones:            `${CATALOG}/zones`,
   varietyZones:     (id: number) => `${CATALOG}/varieties/${id}/zones`,
 
+  // ── Lot Service — Multiplicateur (isolation par org) ──
+  lotsCatalogueG3: `${LOT}/lots/catalogue-g3`,
+  lotsMesLots:     `${LOT}/lots/mes-lots`,
+
   // ── Lot Service — Transferts de lots (Phase 2bis) ──
   transfertsLot:          `${LOT}/transferts`,
   transfertsRecus:        `${LOT}/transferts/recus`,
@@ -67,8 +71,13 @@ export const endpoints = {
 
   // Phase 1 : Membres (liaison Keycloak ↔ organisation)
   membres:                `${ORDER}/membres`,
+  membreMe:               `${ORDER}/membres/me`,
   membreByUsername:  (username: string) => `${ORDER}/membres/username/${username}`,
   membresByOrg:     (orgId: number) => `${ORDER}/membres/organisation/${orgId}`,
+
+  // ── Order Service — Multiplicateur ──
+  stockMonStock:           `${STOCK}/stocks/mon-stock`,
+  ordersMesDemandesG3:     `${ORDER}/orders/mes-demandes-g3`,
 
   // ── Chat / Messagerie (order-service :18084) — Phase 6 ──
   chatConversations:  `${ORDER}/chat/conversations`,

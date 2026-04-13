@@ -354,10 +354,10 @@ export function GlobalAnalytics({ roleKey }: Props) {
   async function fetchAll(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
     const [oR, lR, vR, sR] = await Promise.allSettled([
-      api.get(endpoints.orders),
-      api.get(endpoints.lots),
+      api.get(isMultiplicator ? endpoints.ordersATraiter : endpoints.orders),
+      api.get(isMultiplicator ? endpoints.lotsMesLots    : endpoints.lots),
       api.get(endpoints.varieties),
-      api.get(endpoints.stocks),
+      api.get(isMultiplicator ? endpoints.stockMonStock  : endpoints.stocks),
     ])
     setOrders(oR.status    === 'fulfilled' ? oR.value.data : [])
     setLots(lR.status      === 'fulfilled' ? lR.value.data : [])

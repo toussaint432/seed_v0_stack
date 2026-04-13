@@ -69,10 +69,11 @@ export function Certifications({ roleKey }: Props) {
 
   async function fetchAll() {
     setLoading(true)
+    const lotsUrl = roleKey === 'seed-multiplicator' ? endpoints.lotsMesLots : endpoints.lots
     const [ctrlRes, certRes, lotsRes] = await Promise.allSettled([
       api.get(endpoints.controls),
       api.get(endpoints.certifications),
-      api.get(endpoints.lots),
+      api.get(lotsUrl),
     ])
     setControls(ctrlRes.status === 'fulfilled' ? ctrlRes.value.data : [])
     setCertifications(certRes.status === 'fulfilled' ? certRes.value.data : [])

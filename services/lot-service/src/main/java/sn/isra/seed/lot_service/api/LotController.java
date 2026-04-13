@@ -3,11 +3,13 @@ package sn.isra.seed.lot_service.api;
 import sn.isra.seed.lot_service.api.dto.CreateChildLotRequest;
 import sn.isra.seed.lot_service.api.dto.LineageNode;
 import sn.isra.seed.lot_service.entity.Generation;
+import sn.isra.seed.lot_service.entity.HistoriqueStatutLot;
 import sn.isra.seed.lot_service.entity.LotSemencier;
 import sn.isra.seed.lot_service.entity.TransfertLot;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.kafka.LotEventProducer;
 import sn.isra.seed.lot_service.repo.GenerationRepo;
+import sn.isra.seed.lot_service.repo.HistoriqueStatutLotRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -33,6 +35,7 @@ public class LotController {
     private final LotRepo lotRepo;
     private final GenerationRepo generationRepo;
     private final TransfertLotRepo transfertRepo;
+    private final HistoriqueStatutLotRepo historiqueRepo;
     private final LotEventProducer producer;
     private final ObjectMapper om = new ObjectMapper();
 
@@ -42,10 +45,35 @@ public class LotController {
     );
 
     // ── Liste tous les lots avec filtre optionnel ─────────────
+    // Isolation par rôle :
+    //   seed-selector     → G0+G1 filtrés par spécialisation espèce
+    //   seed-multiplicator → G3→R2 de son organisation uniquement
+    //   autres             → tous les lots (avec filtre optionnel)
     @GetMapping
     public List<LotSemencier> list(
             @RequestParam(required = false) String generation,
-            @RequestParam(required = false) Long idVariete) {
+            @RequestParam(required = false) Long idVariete,
+            @AuthenticationPrincipal Jwt jwt) {
+        List<String> roles = jwt != null ? extractRealmRoles(jwt) : List.of();
+
+        // Isolation sélectionneur : G0+G1 filtrés par spécialisation
+        if (roles.contains("seed-selector")) {
+            String specialisation = jwt != null ? jwt.getClaimAsString("specialisation") : null;
+            return lotRepo.findForSelector(specialisation);
+        }
+
+        // Isolation multiplicateur : uniquement ses propres lots G3→R2
+        if (roles.contains("seed-multiplicator")) {
+            Object orgClaim = jwt != null ? jwt.getClaim("org_id") : null;
+            if (orgClaim != null) {
+                try {
+                    Long orgId = Long.parseLong(orgClaim.toString());
+                    return lotRepo.findMesLots(orgId);
+                } catch (NumberFormatException ignored) {}
+            }
+            return List.of();
+        }
+
         if (generation != null && !generation.isBlank())
             return lotRepo.findByGeneration_CodeGeneration(generation);
         if (idVariete != null)
@@ -171,11 +199,26 @@ public class LotController {
                 Map.of("message", "Flux non autorisé : " + roleEmetteur + " → " + roleDestinataire));
 
         String gen = lot.getGeneration() != null ? lot.getGeneration().getCodeGeneration() : "";
-        boolean genOk = ("seed-selector".equals(roleEmetteur) && List.of("G0","G1").contains(gen))
+
+        // Règle métier : seed-selector ne peut transférer que les lots G1 (pas G0)
+        // seed-upsemcl transfère G2 ou G3 vers le multiplicateur
+        boolean genOk = ("seed-selector".equals(roleEmetteur) && "G1".equals(gen))
                      || ("seed-upsemcl".equals(roleEmetteur)   && List.of("G2","G3").contains(gen));
         if (!genOk)
             return ResponseEntity.badRequest().body(
-                Map.of("message", "Génération " + gen + " non transférable pour " + roleEmetteur));
+                Map.of("message", "Génération " + gen + " non transférable pour " + roleEmetteur
+                    + ". Seuls les lots G1 peuvent être transférés par le sélectionneur."));
+
+        // Vérifier spécialisation : seed-selector ne transfère que les lots de son espèce
+        if ("seed-selector".equals(roleEmetteur)) {
+            String specialisation = jwt.getClaimAsString("specialisation");
+            if (specialisation != null && lot.getCodeEspece() != null
+                    && !specialisation.equalsIgnoreCase(lot.getCodeEspece())) {
+                return ResponseEntity.status(403).body(
+                    Map.of("message", "Lot d'espèce " + lot.getCodeEspece()
+                        + " hors de votre spécialisation (" + specialisation + ")"));
+            }
+        }
 
         TransfertLot t = new TransfertLot();
         t.setCodeTransfert("TL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
@@ -189,6 +232,20 @@ public class LotController {
         if (qte instanceof Number) t.setQuantite(new BigDecimal(qte.toString()));
 
         TransfertLot saved = transfertRepo.save(t);
+
+        // ── Journal d'audit : transition DISPONIBLE → TRANSFERE ──
+        StatutLot ancienStatut = lot.getStatutLot();
+        lot.setStatutLot(StatutLot.TRANSFERE);
+        lotRepo.save(lot);
+        historiqueRepo.save(HistoriqueStatutLot.of(
+            id,
+            ancienStatut,
+            StatutLot.TRANSFERE,
+            usernameEmetteur,
+            "Transfert " + gen + " vers " + usernameDestinataire
+                + " [" + roleDestinataire + "] — code: " + saved.getCodeTransfert()
+        ));
+
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -206,6 +263,30 @@ public class LotController {
         return chain.isEmpty()
                 ? ResponseEntity.notFound().build()
                 : ResponseEntity.ok(chain);
+    }
+
+    // ── Catalogue G3 visible par les multiplicateurs ─────────
+    // Retourne TOUS les lots G3 DISPONIBLES (vitrine de l'UPSemCL)
+    @GetMapping("/catalogue-g3")
+    public List<LotSemencier> catalogueG3() {
+        return lotRepo.findCatalogueG3(StatutLot.DISPONIBLE);
+    }
+
+    // ── Lots propres au multiplicateur connecté ───────────────
+    // Isolé par organisation : chaque multiplicateur ne voit que ses G3→R2
+    @GetMapping("/mes-lots")
+    public ResponseEntity<List<LotSemencier>> mesLots(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) return ResponseEntity.status(401).build();
+        // L'org est résolu depuis le claim "org_id" injecté par Keycloak mapper,
+        // ou via le champ responsable_role en fallback.
+        // On utilise idOrgProducteur stocké sur le lot au moment de la création.
+        Object orgClaim = jwt.getClaim("org_id");
+        if (orgClaim == null)
+            return ResponseEntity.ok(List.of()); // pas encore rattaché à une org
+        Long orgId;
+        try { orgId = Long.parseLong(orgClaim.toString()); }
+        catch (NumberFormatException e) { return ResponseEntity.badRequest().build(); }
+        return ResponseEntity.ok(lotRepo.findMesLots(orgId));
     }
 
     // ── Helpers JWT ───────────────────────────────────────────

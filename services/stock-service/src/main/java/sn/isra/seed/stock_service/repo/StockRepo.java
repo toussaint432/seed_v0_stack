@@ -15,6 +15,13 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
   Optional<Stock> findByIdLotAndSite_CodeSite(Long idLot, String codeSite);
 
   /**
+   * Stock d'une organisation (multiplicateur isolé) : tous ses sites.
+   * Joint sur site.id_organisation pour ne retourner que les stocks de son périmètre.
+   */
+  @Query("SELECT s FROM Stock s WHERE s.site.idOrganisation = :orgId ORDER BY s.updatedAt DESC")
+  List<Stock> findByOrganisation(@Param("orgId") Long orgId);
+
+  /**
    * Catalogue public : stocks R1/R2 disponibles chez les multiplicateurs.
    * Filtre optionnel par code espèce et zone agro-écologique.
    * Tri : niveau adaptation (OPTIMAL→ACCEPTABLE→MARGINALE→sans zone) puis quantité DESC.

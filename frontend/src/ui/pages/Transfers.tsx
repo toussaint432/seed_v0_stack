@@ -90,9 +90,10 @@ export function Transfers({ roleKey }: Props) {
 
   async function fetchAll() {
     setLoading(true)
+    const lotsUrl = roleKey === 'seed-multiplicator' ? endpoints.lotsMesLots : endpoints.lots
     const [tRes, lRes, rRes] = await Promise.allSettled([
       api.get(endpoints.transfertsLot),
-      api.get(endpoints.lots),
+      api.get(lotsUrl),
       api.get(endpoints.transfertsRecus),
     ])
     setTransfers(tRes.status === 'fulfilled' ? tRes.value.data : [])

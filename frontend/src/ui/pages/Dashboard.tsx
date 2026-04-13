@@ -101,10 +101,16 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   async function fetchAll(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
 
+    // Isolation par organisation pour le multiplicateur
+    const isMulti = roleKey === 'seed-multiplicator'
+    const lotsUrl    = isMulti ? endpoints.lotsMesLots    : endpoints.lots
+    const stocksUrl  = isMulti ? endpoints.stockMonStock  : endpoints.stocks
+    const ordersUrl  = isMulti ? endpoints.ordersATraiter : endpoints.orders
+
     const results = await Promise.allSettled([
-      api.get(endpoints.lots),
-      api.get(endpoints.stocks),
-      api.get(endpoints.orders),
+      api.get(lotsUrl),
+      api.get(stocksUrl),
+      api.get(ordersUrl),
       api.get(endpoints.varieties),
     ])
 
@@ -143,8 +149,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const greeting = roleGreetings[roleKey] || { title: 'Tableau de bord', sub: "Vue d'ensemble" }
 
   const showStats = (r: string) => !['seed-quotataire'].includes(r)
-  const showOrders = ['seed-admin','seed-upsemcl','seed-quotataire'].includes(roleKey)
+  const showOrders = ['seed-admin','seed-upsemcl','seed-quotataire','seed-multiplicator'].includes(roleKey)
   const showPipeline = ['seed-admin','seed-selector','seed-upsemcl'].includes(roleKey)
+  const ordersLabel = roleKey === 'seed-multiplicator' ? 'Cmdes reçues' : 'Commandes'
 
   return (
     <div>
@@ -192,7 +199,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
           <StatCard icon={Leaf} label="Variétés actives"
             value={stats.varietiesCount} color="gold" delay={160} />
           {showOrders && (
-            <StatCard icon={ShoppingCart} label="Commandes"
+            <StatCard icon={ShoppingCart} label={ordersLabel}
               value={stats.ordersCount}
               sub={`${stats.ordersPending} en attente`}
               color="violet" delay={240} />

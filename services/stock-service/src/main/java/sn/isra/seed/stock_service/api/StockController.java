@@ -13,6 +13,10 @@ import sn.isra.seed.stock_service.repo.StockRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -32,9 +36,45 @@ public class StockController {
   private final ObjectMapper om;
 
   @GetMapping("/stocks")
-  public List<Stock> list(@RequestParam(required = false) String site) {
+  public List<Stock> list(@RequestParam(required = false) String site,
+                          @AuthenticationPrincipal Jwt jwt) {
+    // Isolation multiplicateur : ne retourner que son stock
+    if (jwt != null && isMultiplicateur(jwt)) {
+      Object orgClaim = jwt.getClaim("org_id");
+      if (orgClaim != null) {
+        try { return stockRepo.findByOrganisation(Long.parseLong(orgClaim.toString())); }
+        catch (NumberFormatException ignored) {}
+      }
+      return List.of();
+    }
     if (site == null || site.isBlank()) return stockRepo.findAll();
     return stockRepo.findBySite_CodeSite(site);
+  }
+
+  private boolean isMultiplicateur(Jwt jwt) {
+    try {
+      java.util.Map<String, Object> realmAccess = jwt.getClaim("realm_access");
+      if (realmAccess == null) return false;
+      Object roles = realmAccess.get("roles");
+      if (roles instanceof java.util.List<?> list) return list.contains("seed-multiplicator");
+    } catch (Exception ignored) {}
+    return false;
+  }
+
+  /**
+   * GET /api/stocks/mon-stock — stocks propres au multiplicateur connecté.
+   * Isolation par organisation : chaque multiplicateur ne voit que les stocks
+   * des sites rattachés à son organisation (site.id_organisation = org_id du JWT).
+   */
+  @GetMapping("/stocks/mon-stock")
+  public ResponseEntity<List<Stock>> monStock(@AuthenticationPrincipal Jwt jwt) {
+    if (jwt == null) return ResponseEntity.status(401).build();
+    Object orgClaim = jwt.getClaim("org_id");
+    if (orgClaim == null) return ResponseEntity.ok(List.of());
+    Long orgId;
+    try { orgId = Long.parseLong(orgClaim.toString()); }
+    catch (NumberFormatException e) { return ResponseEntity.badRequest().build(); }
+    return ResponseEntity.ok(stockRepo.findByOrganisation(orgId));
   }
 
   @PostMapping("/stocks")
@@ -58,6 +98,7 @@ public class StockController {
     return saved;
   }
 
+  @Transactional
   @PostMapping("/movements")
   public MouvementStock move(@RequestBody MovementRequest req) throws Exception {
     BigDecimal q = req.quantite();

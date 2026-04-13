@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye, Building2, Download, FileText } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2 } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -95,6 +95,378 @@ function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: stri
   )
 }
 
+/* ══════════════════════════════════════════════════════════════
+   VUE MULTIPLICATEUR — Catalogue G3 + Mes Lots isolés
+   ══════════════════════════════════════════════════════════════ */
+function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type: 'success'|'error' }) => void }) {
+  const [onglet, setOnglet]           = useState<'catalogue'|'meslots'>('catalogue')
+  const [catalogueG3, setCatalogueG3] = useState<any[]>([])
+  const [mesLots, setMesLots]         = useState<any[]>([])
+  const [monStock, setMonStock]       = useState<any[]>([])
+  const [varieties, setVarieties]     = useState<any[]>([])
+  const [loadingCat, setLoadingCat]   = useState(true)
+  const [loadingMes, setLoadingMes]   = useState(true)
+  const [showCommande, setShowCommande] = useState(false)
+  const [commandeLot, setCommandeLot] = useState<any>(null)
+  const [cmdForm, setCmdForm]         = useState({ quantite: '', unite: 'kg', observations: '' })
+  const [saving, setSaving]           = useState(false)
+  const [lineageChain, setLineageChain]   = useState<any[] | null>(null)
+  const [lineageLotCode, setLineageLotCode] = useState('')
+  const [searchCat, setSearchCat]     = useState('')
+
+  async function fetchAll() {
+    setLoadingCat(true); setLoadingMes(true)
+    const [catRes, mesRes, stockRes, varRes] = await Promise.allSettled([
+      api.get(endpoints.lotsCatalogueG3),
+      api.get(endpoints.lotsMesLots),
+      api.get(endpoints.stockMonStock),
+      api.get(endpoints.varieties),
+    ])
+    setCatalogueG3(catRes.status === 'fulfilled' ? catRes.value.data : [])
+    setLoadingCat(false)
+    setMesLots(mesRes.status === 'fulfilled' ? mesRes.value.data : [])
+    setMonStock(stockRes.status === 'fulfilled' ? stockRes.value.data : [])
+    setLoadingMes(false)
+    setVarieties(varRes.status === 'fulfilled' ? varRes.value.data : [])
+  }
+
+  useEffect(() => { fetchAll() }, [])
+
+  const varietyMap: Record<number, any> = Object.fromEntries(varieties.map(v => [v.id, v]))
+
+  // Catalogue G3 filtré par recherche
+  const catFiltered = catalogueG3.filter(l => {
+    if (!searchCat) return true
+    const v = varietyMap[l.idVariete]
+    const term = searchCat.toLowerCase()
+    return l.codeLot?.toLowerCase().includes(term)
+        || v?.nomVariete?.toLowerCase().includes(term)
+        || v?.codeVariete?.toLowerCase().includes(term)
+  })
+
+  // KPIs mes lots
+  const mesLotsG3  = mesLots.filter(l => l.generation?.codeGeneration === 'G3').length
+  const mesLotsR1R2 = mesLots.filter(l => ['R1','R2'].includes(l.generation?.codeGeneration)).length
+  const stockTotal  = monStock.reduce((s: number, st: any) => s + Number(st.quantiteDisponible || 0), 0)
+
+  // Afficher traçabilité
+  async function showLineage(lot: any) {
+    try {
+      const r = await api.get(endpoints.lotLineage(lot.id))
+      setLineageChain(r.data); setLineageLotCode(lot.codeLot)
+    } catch {
+      setLineageChain([{ lotId: lot.id, codeLot: lot.codeLot, generation: lot.generation?.codeGeneration,
+        dateProduction: lot.dateProduction, quantiteNette: lot.quantiteNette, unite: lot.unite,
+        tauxGermination: lot.tauxGermination, puretePhysique: lot.puretePhysique, statutLot: lot.statutLot }])
+      setLineageLotCode(lot.codeLot)
+    }
+  }
+
+  // Commander un lot G3 (passer une demande à l'UPSemCL)
+  async function submitCommande(e: React.FormEvent) {
+    e.preventDefault(); if (!commandeLot) return; setSaving(true)
+    try {
+      const code = 'CMD-G3-' + Date.now().toString(36).toUpperCase()
+      await api.post(endpoints.orders, {
+        codeCommande: code,
+        client: commandeLot.responsableNom || 'Multiplicateur',
+        observations: cmdForm.observations || `Demande G3 — lot ${commandeLot.codeLot}`,
+        lignes: [{
+          idVariete:   commandeLot.idVariete,
+          idGeneration: 4, // G3
+          quantite:    Number(cmdForm.quantite),
+          unite:       cmdForm.unite,
+        }],
+      })
+      setToast({ msg: `Demande ${code} soumise à l'UPSemCL`, type: 'success' })
+      setShowCommande(false); setCmdForm({ quantite: '', unite: 'kg', observations: '' })
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la demande', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  const tabBtn = (key: 'catalogue'|'meslots', icon: React.ReactNode, label: string, count?: number) => (
+    <button
+      onClick={() => setOnglet(key)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px',
+        borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+        background: onglet === key ? 'var(--surface)' : 'transparent',
+        color:      onglet === key ? 'var(--green-700)' : 'var(--text-muted)',
+        borderBottom: onglet === key ? '2px solid var(--green-600)' : '2px solid transparent',
+        transition: 'all .15s',
+      }}
+    >
+      {icon}
+      {label}
+      {count !== undefined && (
+        <span style={{ background: onglet === key ? 'var(--green-100)' : 'var(--surface-2)', color: onglet === key ? 'var(--green-700)' : 'var(--text-muted)', borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{count}</span>
+      )}
+    </button>
+  )
+
+  return (
+    <div>
+      {lineageChain && <LineageModal chain={lineageChain} codeLot={lineageLotCode} onClose={() => setLineageChain(null)} />}
+
+      {/* KPIs */}
+      <div className="stats-grid">
+        <div className="stat-card">
+          <div className="stat-icon green"><Store size={18} /></div>
+          <div className="stat-body"><div className="stat-value">{loadingCat ? '…' : catalogueG3.length}</div><div className="stat-label">Lots G3 disponibles</div></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon blue"><Layers size={18} /></div>
+          <div className="stat-body"><div className="stat-value">{loadingMes ? '…' : mesLotsG3}</div><div className="stat-label">Mes lots G3 reçus</div></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon gold"><Package size={18} /></div>
+          <div className="stat-body"><div className="stat-value">{loadingMes ? '…' : mesLotsR1R2}</div><div className="stat-label">Mes lots R1/R2</div></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon green"><CheckCircle2 size={18} /></div>
+          <div className="stat-body"><div className="stat-value">{loadingMes ? '…' : stockTotal.toLocaleString('fr-FR')}</div><div className="stat-label">kg en stock total</div></div>
+        </div>
+      </div>
+
+      {/* Onglets */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border)', marginBottom: 0, background: 'var(--surface-2)', borderRadius: '10px 10px 0 0', padding: '0 16px' }}>
+        {tabBtn('catalogue', <Store size={14} />, 'Catalogue G3', catFiltered.length)}
+        {tabBtn('meslots',   <Layers size={14} />, 'Mes Lots', mesLots.length)}
+      </div>
+
+      {/* ── Onglet Catalogue G3 ───────────────────────────────── */}
+      {onglet === 'catalogue' && (
+        <div className="card" style={{ borderRadius: '0 0 var(--radius) var(--radius)', borderTop: 'none' }}>
+          <div className="card-header">
+            <span className="card-title"><span className="card-title-icon"><Store size={15} /></span>Lots G3 disponibles à l'UPSemCL</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', height: 32 }}>
+                <Package size={12} color="var(--text-muted)" />
+                <input value={searchCat} onChange={e => setSearchCat(e.target.value)} placeholder="Rechercher variété, code lot…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'Outfit, sans-serif', width: 180 }} />
+                {searchCat && <button onClick={() => setSearchCat('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>}
+              </div>
+              <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+            </div>
+          </div>
+
+          <div style={{ padding: '10px 22px 6px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShoppingCart size={13} />
+            Sélectionnez un lot G3 et cliquez sur <strong style={{ color: 'var(--green-700)' }}>Commander</strong> pour soumettre une demande à l'UPSemCL.
+          </div>
+
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code Lot</th>
+                  <th>Variété</th>
+                  <th>Génération</th>
+                  <th>Date production</th>
+                  <th>Quantité disponible</th>
+                  <th>Germination</th>
+                  <th>Pureté</th>
+                  <th>Statut</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingCat
+                  ? [0,1,2,3].map(i => <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
+                  : catFiltered.length === 0
+                    ? <tr><td colSpan={9}><div className="empty-state"><div className="empty-icon"><Store size={20} /></div><div className="empty-title">{searchCat ? 'Aucun résultat' : 'Aucun lot G3 disponible pour le moment'}</div></div></td></tr>
+                    : catFiltered.map(l => {
+                        const v = varietyMap[l.idVariete]
+                        return (
+                          <tr key={l.id}>
+                            <td><span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span></td>
+                            <td>
+                              {v ? (
+                                <div>
+                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{v.nomVariete}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{v.codeVariete}</div>
+                                </div>
+                              ) : <span style={{ color: 'var(--text-muted)' }}>#{l.idVariete}</span>}
+                            </td>
+                            <td><span className="badge badge-gold">G3</span></td>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{l.dateProduction || '—'}</td>
+                            <td><span style={{ fontWeight: 700, fontSize: 13 }}>{Number(l.quantiteNette).toLocaleString('fr-FR')}</span> <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.unite}</span></td>
+                            <td>
+                              {l.tauxGermination != null
+                                ? <span style={{ fontWeight: 600, color: Number(l.tauxGermination) >= 95 ? 'var(--green-700)' : 'var(--amber-600)' }}>{l.tauxGermination}%</span>
+                                : '—'}
+                            </td>
+                            <td>
+                              {l.puretePhysique != null
+                                ? <span style={{ fontWeight: 600, color: Number(l.puretePhysique) >= 98 ? 'var(--green-700)' : 'var(--amber-600)' }}>{l.puretePhysique}%</span>
+                                : '—'}
+                            </td>
+                            <td>
+                              <span className={`badge ${l.statutLot === 'DISPONIBLE' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 11 }}>
+                                {l.statutLot}
+                              </span>
+                            </td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-ghost" style={{ width: 30, height: 30, padding: 0, borderRadius: 6 }} title="Traçabilité" onClick={() => showLineage(l)}><Eye size={13} /></button>
+                                {l.statutLot === 'DISPONIBLE' && (
+                                  <button
+                                    className="btn btn-primary"
+                                    style={{ height: 30, padding: '0 10px', fontSize: 11, gap: 4 }}
+                                    title="Commander ce lot G3"
+                                    onClick={() => { setCommandeLot(l); setCmdForm({ quantite: '', unite: 'kg', observations: '' }); setShowCommande(true) }}
+                                  >
+                                    <ShoppingCart size={12} /> Commander
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Onglet Mes Lots ───────────────────────────────────── */}
+      {onglet === 'meslots' && (
+        <div className="card" style={{ borderRadius: '0 0 var(--radius) var(--radius)', borderTop: 'none' }}>
+          <div className="card-header">
+            <span className="card-title"><span className="card-title-icon"><Layers size={15} /></span>Mes Lots — G3 reçus · G4 · R1 · R2 produits</span>
+            <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+          </div>
+
+          {/* Résumé stock */}
+          {monStock.length > 0 && (
+            <div style={{ padding: '10px 22px', borderBottom: '1px solid var(--border)', background: 'var(--green-50)', display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 12 }}>
+              <span style={{ fontWeight: 700, color: 'var(--green-700)' }}>Stock de mon organisation :</span>
+              {monStock.map((st: any) => (
+                <span key={st.id} style={{ color: 'var(--text-secondary)' }}>
+                  <strong>{Number(st.quantiteDisponible).toLocaleString('fr-FR')} {st.unite}</strong>
+                  {st.site?.nomSite ? ` @ ${st.site.nomSite}` : ''}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code Lot</th>
+                  <th>Variété</th>
+                  <th>Génération</th>
+                  <th>Lot parent</th>
+                  <th>Quantité</th>
+                  <th>Germination</th>
+                  <th>Pureté</th>
+                  <th>Statut</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loadingMes
+                  ? [0,1,2,3].map(i => <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
+                  : mesLots.length === 0
+                    ? <tr><td colSpan={9}><div className="empty-state"><div className="empty-icon"><Layers size={20} /></div><div className="empty-title">Aucun lot enregistré pour votre organisation</div><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Commandezun lot G3 dans l'onglet Catalogue pour démarrer</div></div></td></tr>
+                    : mesLots.map(l => {
+                        const v = varietyMap[l.idVariete]
+                        const gen = l.generation?.codeGeneration || '?'
+                        return (
+                          <tr key={l.id}>
+                            <td><span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span></td>
+                            <td>
+                              {v ? (
+                                <div>
+                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{v.nomVariete}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{v.codeVariete}</div>
+                                </div>
+                              ) : <span style={{ color: 'var(--text-muted)' }}>#{l.idVariete}</span>}
+                            </td>
+                            <td><span className={`badge ${GEN_COLORS[gen] || 'badge-gray'}`}>{gen}</span></td>
+                            <td>{l.lotParent?.codeLot ? <span className="td-mono" style={{ fontSize: 11 }}>{l.lotParent.codeLot}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
+                            <td><span style={{ fontWeight: 700 }}>{Number(l.quantiteNette).toLocaleString('fr-FR')}</span> <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.unite}</span></td>
+                            <td>{l.tauxGermination != null ? <span style={{ fontWeight: 600, color: Number(l.tauxGermination) >= 95 ? 'var(--green-700)' : 'var(--amber-600)' }}>{l.tauxGermination}%</span> : '—'}</td>
+                            <td>{l.puretePhysique != null ? <span style={{ fontWeight: 600, color: Number(l.puretePhysique) >= 98 ? 'var(--green-700)' : 'var(--amber-600)' }}>{l.puretePhysique}%</span> : '—'}</td>
+                            <td><span className={`badge ${l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray'}`} style={{ fontSize: 11 }}>{l.statutLot}</span></td>
+                            <td>
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <button className="btn btn-ghost" style={{ width: 30, height: 30, padding: 0, borderRadius: 6 }} title="Traçabilité" onClick={() => showLineage(l)}><Eye size={13} /></button>
+                                {/* Le multiplicateur peut créer des lots enfants (G4, R1, R2) depuis ses lots G3 */}
+                                {gen === 'G3' && l.statutLot === 'DISPONIBLE' && (
+                                  <button className="btn btn-ghost" style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: 'var(--green-700)' }} title="Créer un lot enfant G4/R1/R2"><GitBranch size={13} /></button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Modal commande G3 */}
+      {showCommande && commandeLot && (() => {
+        const v = varietyMap[commandeLot.idVariete]
+        return (
+          <Modal
+            title="Commander ce Lot G3"
+            subtitle={`${commandeLot.codeLot}${v ? ` — ${v.nomVariete}` : ''}`}
+            onClose={() => setShowCommande(false)}
+            size="sm"
+          >
+            <div style={{ background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: 'var(--green-800)' }}>
+              <div style={{ display: 'grid', gap: 4 }}>
+                <div><strong>Lot :</strong> {commandeLot.codeLot}</div>
+                {v && <div><strong>Variété :</strong> {v.nomVariete} ({v.codeVariete})</div>}
+                <div><strong>Disponible :</strong> {Number(commandeLot.quantiteNette).toLocaleString('fr-FR')} {commandeLot.unite}</div>
+                <div><strong>Germination :</strong> {commandeLot.tauxGermination ?? '—'}% · <strong>Pureté :</strong> {commandeLot.puretePhysique ?? '—'}%</div>
+              </div>
+            </div>
+            <form onSubmit={submitCommande}>
+              <Field label="Quantité demandée" required>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <FormInput
+                    type="number"
+                    value={cmdForm.quantite}
+                    onChange={e => setCmdForm(f => ({ ...f, quantite: e.target.value }))}
+                    placeholder={`Max ${Number(commandeLot.quantiteNette).toLocaleString('fr-FR')}`}
+                    min="1"
+                    max={commandeLot.quantiteNette}
+                    step="0.01"
+                    required
+                    style={{ flex: 1 }}
+                  />
+                  <FormSelect value={cmdForm.unite} onChange={e => setCmdForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}>
+                    <option value="kg">kg</option>
+                    <option value="t">t</option>
+                  </FormSelect>
+                </div>
+              </Field>
+              <Field label="Observations">
+                <textarea
+                  value={cmdForm.observations}
+                  onChange={e => setCmdForm(f => ({ ...f, observations: e.target.value }))}
+                  placeholder="Précisions sur la demande, délai souhaité…"
+                  rows={3}
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+                />
+              </Field>
+              <FormActions onCancel={() => setShowCommande(false)} loading={saving} submitLabel="Soumettre la demande" />
+            </form>
+          </Modal>
+        )
+      })()}
+    </div>
+  )
+}
+
 export function Lots({ roleKey, userSpecialisation }: Props) {
   const [lots, setLots] = useState<any[]>([])
   const [varieties, setVarieties] = useState<any[]>([])
@@ -120,6 +492,10 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   function canTransferLot(lot: any): boolean {
     if (roleKey === 'seed-upsemcl') return true
     if (roleKey === 'seed-selector') {
+      // Seuls les lots G1 sont transférables par le sélectionneur vers l'UPSemCL
+      const gen = lot.generation?.codeGeneration
+      if (gen !== 'G1') return false
+      // Et uniquement les lots de sa spécialisation
       if (!userSpecialisation) return true
       const variety = varieties.find((v: any) => v.id === lot.idVariete)
       const codeEspece: string | undefined = variety?.espece?.codeEspece
@@ -152,7 +528,17 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {})
   }, [generation])
 
-  const genCounts = lots.reduce((acc: Record<string, number>, l) => {
+  // Filtre client-side supplémentaire par spécialisation pour seed-selector
+  // (double sécurité : le backend filtre déjà via findForSelector)
+  const displayLots = (roleKey === 'seed-selector' && userSpecialisation)
+    ? lots.filter(l => {
+        const v = (varieties as any[]).find((vv: any) => vv.id === l.idVariete)
+        const ce: string | undefined = v?.espece?.codeEspece
+        return !ce || ce.toUpperCase() === userSpecialisation.toUpperCase()
+      })
+    : lots
+
+  const genCounts = displayLots.reduce((acc: Record<string, number>, l) => {
     const g = l.generation?.codeGeneration || 'N/A'; acc[g] = (acc[g] || 0) + 1; return acc
   }, {})
 
@@ -162,6 +548,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   async function submitNewLot(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
+      const selectedVariety = (varieties as any[]).find(v => v.id === Number(newLotForm.idVariete))
       await api.post(endpoints.lots, {
         codeLot: newLotForm.codeLot, idVariete: Number(newLotForm.idVariete),
         generation: { id: GEN_IDS[newLotForm.generationCode] || 1 },
@@ -169,6 +556,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         quantiteNette: Number(newLotForm.quantiteNette), unite: newLotForm.unite,
         tauxGermination: Number(newLotForm.tauxGermination), puretePhysique: Number(newLotForm.puretePhysique),
         statutLot: newLotForm.statutLot,
+        codeEspece: selectedVariety?.espece?.codeEspece ?? null,
       })
       setToast({ msg: "Lot " + newLotForm.codeLot + " créé avec succès", type: 'success' })
       setShowNewLot(false)
@@ -188,6 +576,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         quantiteNette: Number(childForm.quantiteNette), unite: childForm.unite,
         tauxGermination: childForm.tauxGermination ? Number(childForm.tauxGermination) : undefined,
         puretePhysique: childForm.puretePhysique ? Number(childForm.puretePhysique) : undefined,
+        codeEspece: parentLot.codeEspece ?? null,
       })
       setToast({ msg: "Lot enfant " + childForm.codeLot + " créé", type: 'success' })
       setShowChildLot(false); fetchLots()
@@ -314,6 +703,16 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     finally { setLineageLoading(null) }
   }
 
+  /* ── Multiplicateur : vue dédiée avec isolation par org ── */
+  if (roleKey === 'seed-multiplicator') {
+    return (
+      <div>
+        {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+        <VueLotsMultiplicateur setToast={setToast} />
+      </div>
+    )
+  }
+
   return (
     <div>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
@@ -335,7 +734,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
       )}
 
       <div className="stats-grid">
-        <div className="stat-card"><div className="stat-icon green"><Package size={18} /></div><div className="stat-body"><div className="stat-value">{lots.length}</div><div className="stat-label">Total lots</div></div></div>
+        <div className="stat-card"><div className="stat-icon green"><Package size={18} /></div><div className="stat-body"><div className="stat-value">{displayLots.length}</div><div className="stat-label">Total lots</div></div></div>
         {Object.entries(genCounts).slice(0, 3).map(([gen, count]) => (
           <div className="stat-card" key={gen}><div className="stat-icon blue"><span style={{ fontSize: 14, fontWeight: 700 }}>{gen}</span></div><div className="stat-body"><div className="stat-value">{count as number}</div><div className="stat-label">Generation {gen}</div></div></div>
         ))}
@@ -365,9 +764,9 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             <thead><tr><th>Code Lot</th><th>Variété</th><th>Génération</th><th>Lot Parent</th><th>Quantité</th><th>Campagne</th><th>Producteur</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody>
               {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
-               lots.length === 0 ? (
+               displayLots.length === 0 ? (
                 <tr><td colSpan={9}><div className="empty-state"><div className="empty-icon"><Package size={20} /></div><div className="empty-title">Aucun lot</div>{canCreate && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}</div></td></tr>
-               ) : lots.map(l => {
+               ) : displayLots.map(l => {
                 const gen = l.generation?.codeGeneration || 'N/A'
                 return (
                   <tr key={l.id}>
@@ -588,11 +987,12 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
 
       {showTransfer && parentLot && (() => {
         const destRole = roleKey === 'seed-selector' ? 'seed-upsemcl' : roleKey === 'seed-upsemcl' ? 'seed-multiplicator' : ''
-        const eligibles = membres.filter((m: any) => m.roleDansOrg === destRole || m.roleKeycloak === destRole)
+        // Filtre par keycloakRole (nom correct du champ dans MembreOrganisation)
+        const eligibles = membres.filter((m: any) => m.keycloakRole === destRole)
         return (
           <Modal title="Transférer un Lot" subtitle={`${parentLot.codeLot} — ${parentLot.generation?.codeGeneration || ''}`} onClose={() => setShowTransfer(false)} size="sm">
             <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e' }}>
-              <strong>Flux autorisé :</strong> {roleKey === 'seed-selector' ? 'Sélectionneur → UPSemCL (G0/G1)' : 'UPSemCL → Multiplicateur (G2/G3)'}
+              <strong>Flux autorisé :</strong> {roleKey === 'seed-selector' ? 'Sélectionneur → UPSemCL (G1 uniquement)' : 'UPSemCL → Multiplicateur (G2/G3)'}
             </div>
             <form onSubmit={submitTransfer}>
               <Field label="Destinataire" required hint={destRole ? `Rôle cible : ${destRole}` : 'Rôle non autorisé'}>
@@ -600,15 +1000,17 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   value={transferForm.usernameDestinataire}
                   onChange={e => {
                     const m = eligibles.find((x: any) => x.keycloakUsername === e.target.value)
-                    setTransferForm(f => ({ ...f, usernameDestinataire: e.target.value, roleDestinataire: m?.roleDansOrg || destRole }))
+                    setTransferForm(f => ({ ...f, usernameDestinataire: e.target.value, roleDestinataire: m?.keycloakRole || destRole }))
                   }}
                   required
                 >
                   <option value="">— Sélectionner un destinataire —</option>
                   {eligibles.length === 0
-                    ? <option disabled value="">Aucun destinataire disponible</option>
+                    ? <option disabled value="">Aucun membre UPSemCL enregistré</option>
                     : eligibles.map((m: any) => (
-                      <option key={m.id} value={m.keycloakUsername}>{m.keycloakUsername} — {m.organisation?.nomOrganisation || ''}</option>
+                      <option key={m.id} value={m.keycloakUsername}>
+                        {m.nomComplet || m.keycloakUsername} — {m.organisation?.nomOrganisation || ''}
+                      </option>
                     ))
                   }
                 </FormSelect>

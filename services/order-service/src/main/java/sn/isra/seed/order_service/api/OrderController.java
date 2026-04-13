@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -36,10 +37,26 @@ public class OrderController {
   private final OrderEventProducer producer;
   private final ObjectMapper om;
 
-  /** Toutes les commandes (admin / upsemcl) */
+  /** Toutes les commandes (admin / upsemcl) — multiplicateur redirigé vers ses commandes reçues */
   @GetMapping
-  public List<Commande> list() {
+  public List<Commande> list(@AuthenticationPrincipal Jwt jwt) {
+    if (jwt != null && isMultiplicateur(jwt)) {
+      String username = jwt.getClaimAsString("preferred_username");
+      return membreRepo.findByKeycloakUsername(username)
+          .map(m -> commandeRepo.findByIdOrganisationFournisseurOrderByCreatedAtDesc(m.getOrganisation().getId()))
+          .orElse(List.of());
+    }
     return commandeRepo.findAll();
+  }
+
+  private boolean isMultiplicateur(Jwt jwt) {
+    try {
+      java.util.Map<String, Object> ra = jwt.getClaim("realm_access");
+      if (ra == null) return false;
+      Object roles = ra.get("roles");
+      if (roles instanceof java.util.List<?> list) return list.contains("seed-multiplicator");
+    } catch (Exception ignored) {}
+    return false;
   }
 
   /** Commandes passées par le quotataire connecté */
@@ -47,6 +64,20 @@ public class OrderController {
   public List<Commande> mesCommandes(@AuthenticationPrincipal Jwt jwt) {
     String username = jwt.getClaimAsString("preferred_username");
     return commandeRepo.findByUsernameAcheteurOrderByCreatedAtDesc(username);
+  }
+
+  /**
+   * GET /api/orders/mes-demandes-g3
+   * Commandes de G3 passées PAR le multiplicateur connecté auprès de l'UPSemCL.
+   * Isolation : filtre sur id_organisation_acheteur = org du connecté.
+   */
+  @GetMapping("/mes-demandes-g3")
+  public List<Commande> mesDemandesG3(@AuthenticationPrincipal Jwt jwt) {
+    String username = jwt.getClaimAsString("preferred_username");
+    return membreRepo.findByKeycloakUsername(username)
+        .map(m -> commandeRepo.findByIdOrganisationAcheteurOrderByCreatedAtDesc(
+            m.getOrganisation().getId()))
+        .orElse(List.of());
   }
 
   /** Commandes reçues par l'organisation du multiplicateur connecté */
@@ -59,6 +90,7 @@ public class OrderController {
         .orElse(List.of());
   }
 
+  @Transactional
   @PostMapping
   public Commande create(@RequestBody CreateOrderRequest req,
                          @AuthenticationPrincipal Jwt jwt) throws Exception {

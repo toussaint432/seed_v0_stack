@@ -8,6 +8,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -20,6 +22,20 @@ public class MembreController {
 
     private final MembreOrganisationRepo membreRepo;
     private final OrganisationRepo organisationRepo;
+
+    /**
+     * GET /api/membres/me — profil + organisation du connecté.
+     * Utilisé par le frontend pour résoudre org_id sans claim JWT custom.
+     * Retourne 404 si l'utilisateur n'est pas encore rattaché à une organisation.
+     */
+    @GetMapping("/me")
+    public ResponseEntity<MembreOrganisation> me(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) return ResponseEntity.status(401).build();
+        String username = jwt.getClaimAsString("preferred_username");
+        return membreRepo.findByKeycloakUsername(username)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
 
     /** Liste tous les membres, avec filtre optionnel par rôle Keycloak */
     @GetMapping

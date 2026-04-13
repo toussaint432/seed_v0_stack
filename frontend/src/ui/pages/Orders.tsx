@@ -10,10 +10,14 @@ import { Modal, Field, FormInput, FormSelect, FormActions, Toast } from '../comp
 interface Props { roleKey: string }
 
 const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> = {
-  SOUMISE:   { label: 'Soumise',   bg: '#eff6ff', color: '#1d4ed8' },
-  CONFIRMEE: { label: 'Confirmée', bg: '#f0fdf4', color: '#15803d' },
-  ANNULEE:   { label: 'Annulée',   bg: '#fef2f2', color: '#dc2626' },
-  ALLOUEE:   { label: 'Allouée',   bg: '#fdf4ff', color: '#7e22ce' },
+  SOUMISE:        { label: 'Soumise',        bg: '#eff6ff', color: '#1d4ed8' },
+  ACCEPTEE:       { label: 'Acceptée',       bg: '#f0fdf4', color: '#15803d' },
+  CONFIRMEE:      { label: 'Confirmée',      bg: '#f0fdf4', color: '#15803d' },
+  EN_PREPARATION: { label: 'En préparation', bg: '#fef9ed', color: '#92660a' },
+  LIVREE:         { label: 'Livrée',         bg: '#f0fdf4', color: '#166534' },
+  ANNULEE:        { label: 'Annulée',        bg: '#fef2f2', color: '#dc2626' },
+  REJETEE:        { label: 'Rejetée',        bg: '#fef2f2', color: '#dc2626' },
+  ALLOUEE:        { label: 'Allouée',        bg: '#fdf4ff', color: '#7e22ce' },
   // alias anciens statuts
   PENDING:    { label: 'En attente', bg: '#fef9ed', color: '#92660a' },
   EN_ATTENTE: { label: 'En attente', bg: '#fef9ed', color: '#92660a' },
@@ -254,19 +258,30 @@ function VueQuotataire({ setToast }: { setToast: any }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   VUE MULTIPLICATEUR — commandes à traiter
+   VUE MULTIPLICATEUR — 2 onglets :
+     • Commandes reçues (quotataires → moi)
+     • Mes demandes G3  (moi → UPSemCL)
    ══════════════════════════════════════════════════════════════ */
 function VueMultiplicateur({ setToast }: { setToast: any }) {
-  const [orders, setOrders]       = useState<any[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [refusModal, setRefusModal] = useState<{ id: number; code: string } | null>(null)
-  const [motif, setMotif]         = useState('')
-  const [saving, setSaving]       = useState(false)
+  const [onglet, setOnglet]           = useState<'recues'|'demandes'>('recues')
+  const [recues, setRecues]           = useState<any[]>([])
+  const [demandes, setDemandes]       = useState<any[]>([])
+  const [loadingR, setLoadingR]       = useState(true)
+  const [loadingD, setLoadingD]       = useState(true)
+  const [refusModal, setRefusModal]   = useState<{ id: number; code: string } | null>(null)
+  const [motif, setMotif]             = useState('')
+  const [saving, setSaving]           = useState(false)
 
   async function fetchAll() {
-    setLoading(true)
-    api.get(endpoints.ordersATraiter).then(r => setOrders(r.data)).catch(() => setOrders([]))
-      .finally(() => setLoading(false))
+    setLoadingR(true); setLoadingD(true)
+    const [rRes, dRes] = await Promise.allSettled([
+      api.get(endpoints.ordersATraiter),
+      api.get(endpoints.ordersMesDemandesG3),
+    ])
+    setRecues(rRes.status === 'fulfilled' ? rRes.value.data : [])
+    setLoadingR(false)
+    setDemandes(dRes.status === 'fulfilled' ? dRes.value.data : [])
+    setLoadingD(false)
   }
 
   useEffect(() => { fetchAll() }, [])
@@ -294,75 +309,156 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
     finally { setSaving(false) }
   }
 
-  const soumises   = orders.filter(o => o.statut === 'SOUMISE').length
-  const confirmees = orders.filter(o => o.statut === 'CONFIRMEE').length
-  const annulees   = orders.filter(o => o.statut === 'ANNULEE').length
+  const soumisesRecues  = recues.filter(o => o.statut === 'SOUMISE').length
+  const confirmeesRecues = recues.filter(o => ['CONFIRMEE','ACCEPTEE'].includes(o.statut)).length
+  const demandesEnCours  = demandes.filter(o => o.statut === 'SOUMISE').length
+  const demandesAcceptees = demandes.filter(o => ['CONFIRMEE','ACCEPTEE','LIVREE'].includes(o.statut)).length
+
+  const tabBtn = (key: 'recues'|'demandes', icon: React.ReactNode, label: string, count?: number) => (
+    <button
+      onClick={() => setOnglet(key)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px',
+        borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+        background: onglet === key ? 'var(--surface)' : 'transparent',
+        color:      onglet === key ? 'var(--green-700)' : 'var(--text-muted)',
+        borderBottom: onglet === key ? '2px solid var(--green-600)' : '2px solid transparent',
+        transition: 'all .15s',
+      }}
+    >
+      {icon}
+      {label}
+      {count !== undefined && (
+        <span style={{ background: onglet === key ? 'var(--green-100)' : 'var(--surface-2)', color: onglet === key ? 'var(--green-700)' : 'var(--text-muted)', borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{count}</span>
+      )}
+    </button>
+  )
 
   return (
     <div>
+      {/* KPIs globaux */}
       <div className="stats-grid">
-        <div className="stat-card"><div className="stat-icon blue"><Building2 size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : orders.length}</div><div className="stat-label">Commandes reçues</div></div></div>
-        <div className="stat-card"><div className="stat-icon gold"><Clock size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : soumises}</div><div className="stat-label">À traiter</div></div></div>
-        <div className="stat-card"><div className="stat-icon green"><PackageCheck size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : confirmees}</div><div className="stat-label">Confirmées</div></div></div>
-        <div className="stat-card"><div className="stat-icon red"><XCircle size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : annulees}</div><div className="stat-label">Annulées</div></div></div>
+        <div className="stat-card"><div className="stat-icon blue"><Building2 size={18} /></div><div className="stat-body"><div className="stat-value">{loadingR ? '…' : recues.length}</div><div className="stat-label">Commandes reçues</div></div></div>
+        <div className="stat-card"><div className="stat-icon gold"><Clock size={18} /></div><div className="stat-body"><div className="stat-value">{loadingR ? '…' : soumisesRecues}</div><div className="stat-label">À traiter</div></div></div>
+        <div className="stat-card"><div className="stat-icon green"><ShoppingCart size={18} /></div><div className="stat-body"><div className="stat-value">{loadingD ? '…' : demandes.length}</div><div className="stat-label">Mes demandes G3</div></div></div>
+        <div className="stat-card"><div className="stat-icon green"><PackageCheck size={18} /></div><div className="stat-body"><div className="stat-value">{loadingD ? '…' : demandesAcceptees}</div><div className="stat-label">Demandes acceptées</div></div></div>
       </div>
 
-      {soumises > 0 && (
+      {soumisesRecues > 0 && (
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: '#1d4ed8' }}>
           <Clock size={16} />
-          <strong>{soumises} commande{soumises > 1 ? 's' : ''} en attente</strong> de votre décision.
+          <strong>{soumisesRecues} commande{soumisesRecues > 1 ? 's' : ''} en attente</strong> de votre décision.
         </div>
       )}
 
-      <div className="card">
-        <div className="card-header">
-          <span className="card-title"><span className="card-title-icon"><ShoppingCart size={15} /></span>Commandes de mon organisation</span>
-          <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
-        </div>
-
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Client</th>
-                <th>Statut</th>
-                <th>Acheteur</th>
-                <th>Date</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading
-                ? [0,1,2].map(i => <tr key={i}><td colSpan={6}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
-                : orders.length === 0
-                  ? <tr><td colSpan={6}><div className="empty-state"><div className="empty-icon"><Building2 size={20} /></div><div className="empty-title">Aucune commande reçue</div></div></td></tr>
-                  : orders.map(o => (
-                    <tr key={o.id}>
-                      <td><span className="td-mono" style={{ fontWeight: 600 }}>{o.codeCommande}</span></td>
-                      <td style={{ fontWeight: 500 }}>{o.client || '—'}</td>
-                      <td><StatusBadge statut={o.statut} /></td>
-                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.usernameAcheteur || '—'}</td>
-                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
-                      <td>
-                        {o.statut === 'SOUMISE' && (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px' }} onClick={() => confirmer(o.id)} disabled={saving}>
-                              <CheckCircle2 size={12} /> Confirmer
-                            </button>
-                            <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 10px', color: 'var(--red-600)', border: '1px solid #fecaca' }} onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }} disabled={saving}>
-                              <Ban size={12} /> Annuler
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-              }
-            </tbody>
-          </table>
-        </div>
+      {/* Onglets */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border)', marginBottom: 0, background: 'var(--surface-2)', borderRadius: '10px 10px 0 0', padding: '0 16px' }}>
+        {tabBtn('recues',   <Building2 size={14} />,    'Commandes reçues',  recues.length)}
+        {tabBtn('demandes', <ShoppingCart size={14} />, 'Mes demandes G3',   demandes.length)}
       </div>
+
+      {/* ── Onglet Commandes reçues ───────────────────────────── */}
+      {onglet === 'recues' && (
+        <div className="card" style={{ borderRadius: '0 0 var(--radius) var(--radius)', borderTop: 'none' }}>
+          <div className="card-header">
+            <span className="card-title"><span className="card-title-icon"><Building2 size={15} /></span>Commandes de mon organisation <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{recues.length}</span></span>
+            <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+          </div>
+
+          {!loadingR && confirmeesRecues > 0 && (
+            <div style={{ padding: '8px 22px', background: 'var(--green-50)', borderBottom: '1px solid var(--green-100)', fontSize: 12.5, color: 'var(--green-700)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <CheckCircle2 size={13} /> <strong>{confirmeesRecues}</strong> commande{confirmeesRecues > 1 ? 's' : ''} confirmée{confirmeesRecues > 1 ? 's' : ''}
+            </div>
+          )}
+
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Code</th><th>Client</th><th>Statut</th><th>Acheteur</th><th>Date</th><th>Actions</th></tr>
+              </thead>
+              <tbody>
+                {loadingR
+                  ? [0,1,2].map(i => <tr key={i}><td colSpan={6}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
+                  : recues.length === 0
+                    ? <tr><td colSpan={6}><div className="empty-state"><div className="empty-icon"><Building2 size={20} /></div><div className="empty-title">Aucune commande reçue</div></div></td></tr>
+                    : recues.map(o => (
+                      <tr key={o.id}>
+                        <td><span className="td-mono" style={{ fontWeight: 600 }}>{o.codeCommande}</span></td>
+                        <td style={{ fontWeight: 500 }}>{o.client || '—'}</td>
+                        <td><StatusBadge statut={o.statut} /></td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.usernameAcheteur || '—'}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
+                        <td>
+                          {o.statut === 'SOUMISE' && (
+                            <div style={{ display: 'flex', gap: 6 }}>
+                              <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px' }} onClick={() => confirmer(o.id)} disabled={saving}>
+                                <CheckCircle2 size={12} /> Confirmer
+                              </button>
+                              <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 10px', color: 'var(--red-600)', border: '1px solid #fecaca' }} onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }} disabled={saving}>
+                                <Ban size={12} /> Annuler
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Onglet Mes demandes G3 ────────────────────────────── */}
+      {onglet === 'demandes' && (
+        <div className="card" style={{ borderRadius: '0 0 var(--radius) var(--radius)', borderTop: 'none' }}>
+          <div className="card-header">
+            <span className="card-title"><span className="card-title-icon"><ShoppingCart size={15} /></span>Mes demandes G3 auprès de l'UPSemCL <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{demandes.length}</span></span>
+            <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+          </div>
+
+          {!loadingD && demandesEnCours > 0 && (
+            <div style={{ padding: '8px 22px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe', fontSize: 12.5, color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Clock size={13} /> <strong>{demandesEnCours}</strong> demande{demandesEnCours > 1 ? 's' : ''} en attente de réponse de l'UPSemCL
+            </div>
+          )}
+
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr><th>Code commande</th><th>Variété / Lot</th><th>Statut</th><th>Fournisseur</th><th>Date soumission</th><th>Observations</th></tr>
+              </thead>
+              <tbody>
+                {loadingD
+                  ? [0,1,2].map(i => <tr key={i}><td colSpan={6}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
+                  : demandes.length === 0
+                    ? <tr><td colSpan={6}><div className="empty-state"><div className="empty-icon"><ShoppingCart size={20} /></div><div className="empty-title">Aucune demande G3 passée</div><div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Rendez-vous dans la page Lots pour commander un lot G3 à l'UPSemCL</div></div></td></tr>
+                    : demandes.map(o => (
+                      <tr key={o.id}>
+                        <td><span className="td-mono" style={{ fontWeight: 600 }}>{o.codeCommande}</span></td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {o.lignes?.length > 0
+                            ? `${o.lignes.length} ligne${o.lignes.length > 1 ? 's' : ''}`
+                            : o.client || '—'}
+                        </td>
+                        <td><StatusBadge statut={o.statut} /></td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {o.idOrganisationFournisseur ? `UPSemCL #${o.idOrganisationFournisseur}` : 'UPSemCL'}
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                          {o.createdAt ? new Date(o.createdAt).toLocaleDateString('fr-FR') : '—'}
+                        </td>
+                        <td style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 200 }}>
+                          <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.observations || '—'}</span>
+                        </td>
+                      </tr>
+                    ))
+                }
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {refusModal && (
         <Modal title="Annuler la commande" subtitle={`Commande ${refusModal.code}`} onClose={() => setRefusModal(null)} size="sm">

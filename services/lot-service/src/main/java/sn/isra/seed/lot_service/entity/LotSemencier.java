@@ -40,12 +40,12 @@ public class LotSemencier {
     private Long idVariete;
 
     @NotNull(message = "La génération est obligatoire")
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @ManyToOne(optional = false, fetch = FetchType.EAGER)
     @JoinColumn(name = "id_generation", nullable = false)
     private Generation generation;
 
     /** Auto-référence pour la généalogie G0 → G1 → … → R2 */
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "id_lot_parent")
     private LotSemencier lotParent;
 
@@ -103,6 +103,15 @@ public class LotSemencier {
     @Size(max = 100)
     @Column(name = "responsable_role", length = 100)
     private String responsableRole;
+
+    /**
+     * Code espèce dénormalisé depuis catalog-service (ex: RIZ, MIL, ARA, MAIS…).
+     * Peuplé à la création du lot ; permet le filtrage par spécialisation
+     * du sélectionneur sans appel inter-service.
+     */
+    @Size(max = 30)
+    @Column(name = "code_espece", length = 30)
+    private String codeEspece;
 
     @PrePersist
     void prePersist() {
