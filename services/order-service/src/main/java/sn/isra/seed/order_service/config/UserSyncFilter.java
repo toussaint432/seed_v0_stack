@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 import sn.isra.seed.order_service.entity.MembreOrganisation;
 import sn.isra.seed.order_service.entity.Organisation;
+import sn.isra.seed.order_service.entity.enums.TypeOrganisation;
 import sn.isra.seed.order_service.repo.MembreOrganisationRepo;
 import sn.isra.seed.order_service.repo.OrganisationRepo;
 
@@ -41,12 +42,12 @@ public class UserSyncFilter extends OncePerRequestFilter {
     private final MembreOrganisationRepo membreRepo;
     private final OrganisationRepo       orgRepo;
 
-    private static final Map<String, String> ROLE_ORG_TYPE = Map.of(
-        "seed-admin",         "ISRA",
-        "seed-selector",      "ISRA",
-        "seed-upsemcl",       "UPSEMCL",
-        "seed-multiplicator", "MULTIPLICATEUR",
-        "seed-quotataire",    "OP"
+    private static final Map<String, TypeOrganisation> ROLE_ORG_TYPE = Map.of(
+        "seed-admin",         TypeOrganisation.ISRA,
+        "seed-selector",      TypeOrganisation.ISRA,
+        "seed-upsemcl",       TypeOrganisation.UPSEMCL,
+        "seed-multiplicator", TypeOrganisation.MULTIPLICATEUR,
+        "seed-quotataire",    TypeOrganisation.AUTRE
     );
 
     @Override
@@ -89,7 +90,7 @@ public class UserSyncFilter extends OncePerRequestFilter {
     }
 
     private Organisation findDefaultOrg(String role) {
-        String type = ROLE_ORG_TYPE.getOrDefault(role, "OP");
+        TypeOrganisation type = ROLE_ORG_TYPE.getOrDefault(role, TypeOrganisation.AUTRE);
         List<Organisation> orgs = orgRepo.findByTypeOrganisation(type);
         if (!orgs.isEmpty()) return orgs.get(0);
         List<Organisation> all = orgRepo.findAll();

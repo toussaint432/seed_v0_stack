@@ -31,6 +31,7 @@ public class CatalogController {
     return especeRepo.findAll();
   }
 
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
   @PostMapping("/species")
   public Espece createSpecies(@RequestBody Espece e) {
     return especeRepo.save(e);
@@ -67,11 +68,41 @@ public class CatalogController {
         .orElse(ResponseEntity.notFound().build());
   }
 
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
   @PostMapping("/varieties")
-  public Variete createVariety(@RequestBody Variete v) {
-    return varieteRepo.save(v);
+  public ResponseEntity<Variete> createVariety(@RequestBody Variete v) {
+    if (v.getEspece() == null || v.getEspece().getId() == null)
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le champ 'espece.id' est obligatoire");
+    Espece espece = especeRepo.findById(v.getEspece().getId())
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Espèce introuvable : id=" + v.getEspece().getId()));
+    v.setEspece(espece);
+    return ResponseEntity.status(HttpStatus.CREATED).body(varieteRepo.save(v));
   }
 
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
+  @PutMapping("/varieties/{id}")
+  public ResponseEntity<Variete> updateVariete(@PathVariable Long id,
+                                                @RequestBody Variete body) {
+    return varieteRepo.findById(id).map(v -> {
+      if (body.getNomVariete() != null) v.setNomVariete(body.getNomVariete());
+      if (body.getEspece() != null && body.getEspece().getId() != null)
+        especeRepo.findById(body.getEspece().getId()).ifPresent(v::setEspece);
+      if (body.getOrigine()                != null) v.setOrigine(body.getOrigine());
+      if (body.getSelectionneurPrincipal() != null) v.setSelectionneurPrincipal(body.getSelectionneurPrincipal());
+      if (body.getAnneeCreation()          != null) v.setAnneeCreation(body.getAnneeCreation());
+      if (body.getCycleMin()               != null) v.setCycleMin(body.getCycleMin());
+      if (body.getCycleMax()               != null) v.setCycleMax(body.getCycleMax());
+      if (body.getStatutVariete()          != null) v.setStatutVariete(body.getStatutVariete());
+      if (body.getPedigree()               != null) v.setPedigree(body.getPedigree());
+      if (body.getTypeGrain()              != null) v.setTypeGrain(body.getTypeGrain());
+      if (body.getRendementMin()           != null) v.setRendementMin(body.getRendementMin());
+      if (body.getRendementMax()           != null) v.setRendementMax(body.getRendementMax());
+      return ResponseEntity.ok(varieteRepo.save(v));
+    }).orElse(ResponseEntity.notFound().build());
+  }
+
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
   @PatchMapping("/varieties/{id}/statut")
   public ResponseEntity<Variete> updateStatut(@PathVariable Long id,
                                                @RequestBody Map<String, String> body) {

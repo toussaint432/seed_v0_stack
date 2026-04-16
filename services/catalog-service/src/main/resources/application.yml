@@ -14,17 +14,20 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        default_batch_fetch_size: 20
+        "[default_batch_fetch_size]": 20
   # ── Flyway : catalog-service est le schema owner ──────────
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
-    baseline-version: 0
+    baseline-version: 0  # 0 = avant V1 → toutes les migrations V1-V7 s'exécutent sur DB fraîche
     out-of-order: false
     validate-on-migrate: true
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false  # Dates ISO-8601 (ex: 2025-06-01T10:00:00Z) au lieu de timestamps Unix
   security:
     oauth2:
       resourceserver:
@@ -38,8 +41,6 @@ management:
       exposure:
         include: health,info,prometheus
   endpoint:
-    prometheus:
-      enabled: true
     health:
       show-details: always
   metrics:

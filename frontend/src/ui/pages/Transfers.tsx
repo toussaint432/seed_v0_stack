@@ -40,10 +40,9 @@ const TRANSFER_RULES: Record<string, { allowedGens: string[]; source: string; de
 }
 
 const STATUT_TRANSFERT = [
-  { value: 'DEMANDE', label: 'Demandé' },
-  { value: 'VALIDE', label: 'Validé' },
-  { value: 'EXPEDIE', label: 'Expédié' },
-  { value: 'RECEPTIONNE', label: 'Réceptionné' },
+  { value: 'EN_ATTENTE', label: 'En attente' },
+  { value: 'ACCEPTE', label: 'Accepté' },
+  { value: 'REJETE', label: 'Refusé' },
   { value: 'ANNULE', label: 'Annulé' },
 ]
 
@@ -151,10 +150,8 @@ export function Transfers({ roleKey }: Props) {
         idLot: Number(form.idLot),
         organisationSource: form.organisationSource || undefined,
         organisationDestination: form.organisationDestination || undefined,
-        siteSource: form.siteSource || undefined,
-        siteDestination: form.siteDestination || undefined,
-        quantiteTransferee: Number(form.quantiteTransferee),
-        dateDemande: form.dateDemande,
+        quantite: Number(form.quantiteTransferee),
+        dateTransfert: form.dateDemande,
         observations: form.observations || undefined,
       })
       setToast({ msg: `Transfert ${form.codeTransfert} créé`, type: 'success' })
@@ -278,7 +275,7 @@ export function Transfers({ roleKey }: Props) {
         <div className="stat-card"><div className="stat-icon blue"><ArrowRightLeft size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : transfers.length}</div><div className="stat-label">Total transferts</div></div></div>
         <div className="stat-card"><div className="stat-icon gold"><Clock size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : (byStatus['EN_ATTENTE'] || byStatus['DEMANDE'] || 0)}</div><div className="stat-label">En attente</div></div></div>
         <div className="stat-card"><div className="stat-icon violet"><Truck size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : byStatus['ACCEPTE'] || 0}</div><div className="stat-label">Acceptés</div></div></div>
-        <div className="stat-card"><div className="stat-icon green"><CheckCircle2 size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : byStatus['REFUSE'] || 0}</div><div className="stat-label">Refusés</div></div></div>
+        <div className="stat-card"><div className="stat-icon green"><CheckCircle2 size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : byStatus['REJETE'] || 0}</div><div className="stat-label">Refusés</div></div></div>
       </div>
 
       {/* Transferts à traiter — section urgente */}
@@ -390,7 +387,7 @@ export function Transfers({ roleKey }: Props) {
                             <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#ef4444' }} onClick={() => { setRefusModal(t); setMotifRefus('') }} title="Refuser"><Send size={12} style={{ transform: 'rotate(180deg)' }} /></button>
                           </>
                         )}
-                        {t.statut !== 'ANNULE' && t.statut !== 'REFUSE' && (
+                        {t.statut !== 'ANNULE' && t.statut !== 'REJETE' && (
                           <button
                             className="btn btn-ghost"
                             style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#0369a1' }}
@@ -429,7 +426,7 @@ export function Transfers({ roleKey }: Props) {
           >
           {/* Boutons PDF — toujours visibles en haut */}
           {(showDetail.statut || showDetail.statutTransfert) !== 'ANNULE' &&
-           (showDetail.statut || showDetail.statutTransfert) !== 'REFUSE' && (
+           (showDetail.statut || showDetail.statutTransfert) !== 'REJETE' && (
             <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
               <button
                 className="btn btn-secondary"

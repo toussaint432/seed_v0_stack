@@ -28,6 +28,18 @@ const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> =
 
 const PAGE_SIZE = 10
 
+// ── Pipeline de statuts : SOUMISE → ACCEPTEE → EN_PREPARATION → LIVREE ──
+const PIPELINE_STEPS = [
+  { key: 'SOUMISE',        label: 'Soumise' },
+  { key: 'ACCEPTEE',       label: 'Acceptée' },
+  { key: 'EN_PREPARATION', label: 'En préparation' },
+  { key: 'LIVREE',         label: 'Livrée' },
+]
+const PIPELINE_IDX: Record<string, number> = {
+  SOUMISE: 0, ACCEPTEE: 1, CONFIRMEE: 1, EN_PREPARATION: 2, LIVREE: 3,
+}
+const TERMINAL_STATUTS = ['ANNULEE', 'REJETEE', 'ANNULEE', 'CANCELLED']
+
 function StatusBadge({ statut }: { statut: string }) {
   const cfg = STATUS_CFG[statut]
   return cfg
@@ -35,11 +47,96 @@ function StatusBadge({ statut }: { statut: string }) {
     : <span className="badge badge-gray">{statut || '—'}</span>
 }
 
-function OrderTable({ orders, loading, emptyMsg }: { orders: any[]; loading: boolean; emptyMsg: string }) {
+function StatusPipeline({ statut }: { statut: string }) {
+  const isTerminal = TERMINAL_STATUTS.includes(statut)
+  const currentIdx = PIPELINE_IDX[statut] ?? (isTerminal ? 0 : -1)
+
+  return (
+    <div style={{ margin: '16px 0 20px', padding: '16px 12px', background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 14 }}>
+        Progression de la commande
+      </div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative' }}>
+        {PIPELINE_STEPS.flatMap((step, i) => {
+          const isDone    = !isTerminal && currentIdx > i
+          const isCurrent = !isTerminal && currentIdx === i
+          const nodes = [
+            <div key={step.key} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flex: 1, position: 'relative', zIndex: 1 }}>
+              <div style={{
+                width: 30, height: 30, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: isDone ? 14 : 12, fontWeight: 700,
+                background: isDone ? '#dcfce7' : isCurrent ? '#16a34a' : '#f1f5f9',
+                color:      isDone ? '#15803d' : isCurrent ? 'white'   : '#94a3b8',
+                border: `2px solid ${isDone ? '#86efac' : isCurrent ? '#16a34a' : '#e2e8f0'}`,
+                transition: 'all .2s',
+              }}>
+                {isDone ? '✓' : isCurrent ? '●' : i + 1}
+              </div>
+              <span style={{ fontSize: 10.5, fontWeight: isCurrent ? 700 : 500, color: isCurrent ? '#15803d' : isDone ? '#16a34a' : '#94a3b8', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                {step.label}
+              </span>
+            </div>
+          ]
+          if (i < PIPELINE_STEPS.length - 1) {
+            nodes.push(
+              <div key={step.key + '-conn'} style={{ flex: '0 0 16px', height: 2, background: isDone ? '#86efac' : '#e2e8f0', marginTop: 14, zIndex: 0 }} />
+            )
+          }
+          return nodes
+        })}
+      </div>
+      {isTerminal && (
+        <div style={{ marginTop: 10, padding: '8px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#dc2626', fontWeight: 600 }}>
+          <XCircle size={14} />
+          {STATUS_CFG[statut]?.label ?? statut} — Commande terminée sans livraison
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Actions de progression disponibles selon le statut actuel ──
+const NEXT_ACTIONS: Record<string, { statut: string; label: string; style?: string }[]> = {
+  SOUMISE:        [{ statut: 'ACCEPTEE',       label: 'Accepter',          style: 'primary' }, { statut: 'REJETEE', label: 'Rejeter', style: 'danger' }],
+  ACCEPTEE:       [{ statut: 'EN_PREPARATION', label: 'Démarrer préparation', style: 'primary' }, { statut: 'ANNULEE', label: 'Annuler', style: 'danger' }],
+  CONFIRMEE:      [{ statut: 'EN_PREPARATION', label: 'Démarrer préparation', style: 'primary' }, { statut: 'ANNULEE', label: 'Annuler', style: 'danger' }],
+  EN_PREPARATION: [{ statut: 'LIVREE',         label: 'Marquer livrée',    style: 'primary' }, { statut: 'ANNULEE', label: 'Annuler', style: 'danger' }],
+}
+
+interface OrderTableProps {
+  orders: any[];
+  loading: boolean;
+  emptyMsg: string;
+  orgs?: any[];
+  onUpdateStatus?: (id: number, statut: string) => Promise<void>;
+}
+
+function OrderTable({ orders, loading, emptyMsg, orgs = [], onUpdateStatus }: OrderTableProps) {
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<any>(null)
+  const [actioning, setActioning] = useState(false)
   const total = Math.max(1, Math.ceil(orders.length / PAGE_SIZE))
   const slice = orders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  const orgName = (id: number | null) => {
+    if (!id) return '—'
+    const found = orgs.find((o: any) => o.id === id)
+    return found ? found.nomOrganisation : `Org #${id}`
+  }
+
+  const handleAction = async (statut: string) => {
+    if (!detail || !onUpdateStatus) return
+    setActioning(true)
+    try {
+      await onUpdateStatus(detail.id, statut)
+      setDetail((d: any) => d ? { ...d, statut } : null)
+    } finally {
+      setActioning(false)
+    }
+  }
+
+  const nextActions = detail ? (NEXT_ACTIONS[detail.statut] ?? []) : []
 
   return (
     <>
@@ -50,7 +147,7 @@ function OrderTable({ orders, loading, emptyMsg }: { orders: any[]; loading: boo
               <th>Code commande</th>
               <th>Client</th>
               <th>Statut</th>
-              <th>Fournisseur (org)</th>
+              <th>Fournisseur</th>
               <th>Date</th>
               <th></th>
             </tr>
@@ -65,7 +162,7 @@ function OrderTable({ orders, loading, emptyMsg }: { orders: any[]; loading: boo
                     <td><span className="td-mono" style={{ fontWeight: 600 }}>{o.codeCommande}</span></td>
                     <td style={{ fontWeight: 500 }}>{o.client || '—'}</td>
                     <td><StatusBadge statut={o.statut} /></td>
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.idOrganisationFournisseur ? `Org #${o.idOrganisationFournisseur}` : '—'}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{orgName(o.idOrganisationFournisseur)}</td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
                     <td><button className="btn btn-ghost btn-icon" onClick={() => setDetail(o)}><Eye size={13} /></button></td>
                   </tr>
@@ -89,23 +186,71 @@ function OrderTable({ orders, loading, emptyMsg }: { orders: any[]; loading: boo
       )}
 
       {detail && (
-        <Modal title={`Commande — ${detail.codeCommande}`} subtitle="Détail de la commande" onClose={() => setDetail(null)} size="sm">
-          <div style={{ display: 'grid', gap: 10, fontSize: 13 }}>
-            {[
-              ['Client', detail.client],
-              ['Statut', <StatusBadge key="s" statut={detail.statut} />],
-              ['Acheteur', detail.usernameAcheteur || '—'],
-              ['Org acheteur', detail.idOrganisationAcheteur ? `#${detail.idOrganisationAcheteur}` : '—'],
-              ['Org fournisseur', detail.idOrganisationFournisseur ? `#${detail.idOrganisationFournisseur}` : '—'],
-              ['Observations', detail.observations || '—'],
-              ['Créée le', detail.createdAt ? new Date(detail.createdAt).toLocaleString('fr-FR') : '—'],
-            ].map(([k, v]) => (
-              <div key={String(k)} style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
-                <span style={{ minWidth: 130, fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.04em' }}>{k}</span>
-                <span>{v}</span>
+        <Modal title={`Commande — ${detail.codeCommande}`} subtitle={`Acheteur : ${detail.usernameAcheteur || '—'} · ${detail.createdAt ? new Date(detail.createdAt).toLocaleDateString('fr-FR') : ''}`} onClose={() => setDetail(null)} size="md">
+
+          {/* Pipeline visuel */}
+          <StatusPipeline statut={detail.statut} />
+
+          {/* Métadonnées */}
+          <div style={{ display: 'grid', gap: 8, fontSize: 13, marginBottom: 16 }}>
+            {([
+              ['Client',          detail.client || '—'],
+              ['Fournisseur',     orgName(detail.idOrganisationFournisseur)],
+              ['Org acheteur',    orgName(detail.idOrganisationAcheteur)],
+              ['Observations',    detail.observations || '—'],
+            ] as [string, string][]).map(([k, v]) => (
+              <div key={k} style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
+                <span style={{ minWidth: 120, fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '.04em' }}>{k}</span>
+                <span style={{ color: 'var(--text-primary)' }}>{v}</span>
               </div>
             ))}
           </div>
+
+          {/* Lignes de commande */}
+          {Array.isArray(detail.lignes) && detail.lignes.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>
+                Lignes de commande ({detail.lignes.length})
+              </div>
+              <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)' }}>Variété</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)' }}>Génération</th>
+                    <th style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>Quantité</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detail.lignes.map((l: any, i: number) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-primary)' }}>Variété #{l.idVariete}</td>
+                      <td style={{ padding: '6px 10px', color: 'var(--text-muted)' }}>Génération #{l.idGeneration}</td>
+                      <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{l.quantiteDemandee} {l.unite}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Actions de progression (si handler disponible) */}
+          {onUpdateStatus && nextActions.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', alignSelf: 'center', marginRight: 4 }}>Action :</span>
+              {nextActions.map(action => (
+                <button
+                  key={action.statut}
+                  className={`btn ${action.style === 'danger' ? 'btn-ghost' : 'btn-primary'}`}
+                  style={action.style === 'danger' ? { color: 'var(--red-600)', border: '1px solid #fecaca', height: 32, fontSize: 12 } : { height: 32, fontSize: 12 }}
+                  onClick={() => handleAction(action.statut)}
+                  disabled={actioning}
+                >
+                  {action.style !== 'danger' ? <CheckCircle2 size={12} /> : <Ban size={12} />}
+                  {action.label}
+                </button>
+              ))}
+            </div>
+          )}
         </Modal>
       )}
     </>
@@ -115,9 +260,21 @@ function OrderTable({ orders, loading, emptyMsg }: { orders: any[]; loading: boo
 /* ══════════════════════════════════════════════════════════════
    VUE QUOTATAIRE — mes commandes + nouvelle commande
    ══════════════════════════════════════════════════════════════ */
+// Générations disponibles pour une commande (G3/R2 = semences commerciales)
+const GENERATIONS_CMD = [
+  { id: '1', label: 'G0 — Pré-base' },
+  { id: '2', label: 'G1 — Base' },
+  { id: '3', label: 'G2 — R1' },
+  { id: '4', label: 'G3 — R2' },
+  { id: '5', label: 'G4 — R3' },
+  { id: '6', label: 'R1' },
+  { id: '7', label: 'R2 — Certifiée' },
+]
+
 function VueQuotataire({ setToast }: { setToast: any }) {
   const [orders, setOrders]       = useState<any[]>([])
   const [orgs, setOrgs]           = useState<any[]>([])
+  const [varieties, setVarieties] = useState<any[]>([])
   const [loading, setLoading]     = useState(true)
   const [showForm, setShowForm]   = useState(false)
   const [saving, setSaving]       = useState(false)
@@ -130,15 +287,19 @@ function VueQuotataire({ setToast }: { setToast: any }) {
 
   async function fetchAll() {
     setLoading(true)
-    const [ordRes, orgRes] = await Promise.allSettled([
+    const [ordRes, orgRes, varRes] = await Promise.allSettled([
       api.get(endpoints.ordersMesCommandes),
       api.get(endpoints.organisations),
+      api.get(endpoints.varieties),
     ])
     setOrders(ordRes.status === 'fulfilled' ? ordRes.value.data : [])
     if (orgRes.status === 'fulfilled') {
       setOrgs(orgRes.value.data.filter((o: any) =>
         o.typeOrganisation?.toLowerCase().includes('multiplic') && o.active !== false
       ))
+    }
+    if (varRes.status === 'fulfilled') {
+      setVarieties(varRes.value.data.filter((v: any) => v.statutVariete === 'DIFFUSEE'))
     }
     setLoading(false)
   }
@@ -201,14 +362,14 @@ function VueQuotataire({ setToast }: { setToast: any }) {
             <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
           </div>
         </div>
-        <OrderTable orders={orders} loading={loading} emptyMsg="Aucune commande passée" />
+        <OrderTable orders={orders} loading={loading} emptyMsg="Aucune commande passée" orgs={orgs} />
       </div>
 
       {showForm && (
         <Modal title="Nouvelle Commande" subtitle="Soumettre une demande de semences certifiées" onClose={() => setShowForm(false)} size="lg">
           <form onSubmit={submitOrder}>
             <Field label="Organisation fournisseur" hint="Multiplicateur qui fournira les semences">
-              <FormSelect value={form.idOrganisationFournisseur} onChange={e => setForm(f => ({ ...f, idOrganisationFournisseur: e.target.value }))}>
+              <FormSelect value={form.idOrganisationFournisseur} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(f => ({ ...f, idOrganisationFournisseur: e.target.value }))}>
                 <option value="">— Choisir un fournisseur —</option>
                 {orgs.map((o: any) => (
                   <option key={o.id} value={o.id}>{o.nomOrganisation} ({o.region || o.localite || 'N/A'})</option>
@@ -224,18 +385,34 @@ function VueQuotataire({ setToast }: { setToast: any }) {
               {form.lignes.map((ligne, i) => (
                 <div key={i} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '14px 16px', marginBottom: 10 }}>
                   <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>Ligne {i+1}</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
-                    <Field label="ID variété" required><FormInput type="number" value={ligne.idVariete} onChange={e => updateLigne(i,'idVariete',e.target.value)} placeholder="Ex: 12" required /></Field>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                    <Field label="Variété" required>
+                      <FormSelect value={ligne.idVariete} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateLigne(i,'idVariete',e.target.value)} required>
+                        <option value="">— Choisir une variété —</option>
+                        {Object.entries(
+                          varieties.reduce((acc: Record<string, any[]>, v: any) => {
+                            const esp = v.espece?.codeEspece || 'Autre'
+                            ;(acc[esp] = acc[esp] || []).push(v)
+                            return acc
+                          }, {})
+                        ).sort(([a], [b]) => a.localeCompare(b)).map(([esp, vs]) => (
+                          <optgroup key={esp} label={esp}>
+                            {(vs as any[]).map((v: any) => (
+                              <option key={v.id} value={v.id}>{v.nomVariete} ({v.codeVariete})</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </FormSelect>
+                    </Field>
                     <Field label="Génération" required>
-                      <FormSelect value={ligne.idGeneration} onChange={e => updateLigne(i,'idGeneration',e.target.value)}>
-                        <option value="1">G0</option><option value="2">G1</option><option value="3">G2</option>
-                        <option value="4">G3</option><option value="5">G4</option><option value="6">R1</option><option value="7">R2</option>
+                      <FormSelect value={ligne.idGeneration} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateLigne(i,'idGeneration',e.target.value)}>
+                        {GENERATIONS_CMD.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
                       </FormSelect>
                     </Field>
                     <Field label="Quantité" required>
                       <div style={{ display: 'flex', gap: 6 }}>
-                        <FormInput type="number" value={ligne.quantite} onChange={e => updateLigne(i,'quantite',e.target.value)} placeholder="500" min="1" required style={{ flex: 1 }} />
-                        <FormSelect value={ligne.unite} onChange={e => updateLigne(i,'unite',e.target.value)} style={{ width: 70 }}><option value="kg">kg</option><option value="t">t</option></FormSelect>
+                        <FormInput type="number" value={ligne.quantite} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLigne(i,'quantite',e.target.value)} placeholder="500" min="1" required style={{ flex: 1 }} />
+                        <FormSelect value={ligne.unite} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateLigne(i,'unite',e.target.value)} style={{ width: 70 }}><option value="kg">kg</option><option value="t">t</option></FormSelect>
                       </div>
                     </Field>
                     {form.lignes.length > 1 && (
@@ -247,7 +424,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
             </div>
 
             <Field label="Observations">
-              <textarea value={form.observations} onChange={e => setForm(f => ({ ...f, observations: e.target.value }))} placeholder="Précisions sur la commande, urgence, qualité attendue..." rows={3} style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
+              <textarea value={form.observations} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm(f => ({ ...f, observations: e.target.value }))} placeholder="Précisions sur la commande, urgence, qualité attendue..." rows={3} style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
             </Field>
             <FormActions onCancel={() => setShowForm(false)} loading={saving} submitLabel="Soumettre la commande" />
           </form>
@@ -289,8 +466,8 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
   async function confirmer(id: number) {
     setSaving(true)
     try {
-      await api.put(endpoints.orderStatut(id), { statut: 'CONFIRMEE' })
-      setToast({ msg: 'Commande confirmée', type: 'success' })
+      await api.put(endpoints.orderStatut(id), { statut: 'ACCEPTEE' })
+      setToast({ msg: 'Commande acceptée', type: 'success' })
       fetchAll()
     } catch { setToast({ msg: 'Erreur lors de la confirmation', type: 'error' }) }
     finally { setSaving(false) }
@@ -464,7 +641,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
         <Modal title="Annuler la commande" subtitle={`Commande ${refusModal.code}`} onClose={() => setRefusModal(null)} size="sm">
           <form onSubmit={refuser}>
             <Field label="Motif d'annulation" required hint="Ce motif sera visible par le quotataire">
-              <textarea value={motif} onChange={e => setMotif(e.target.value)} placeholder="Stock insuffisant, variété indisponible..." rows={4} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
+              <textarea value={motif} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMotif(e.target.value)} placeholder="Stock insuffisant, variété indisponible..." rows={4} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
             </Field>
             <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer l'annulation" />
           </form>
@@ -479,6 +656,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
    ══════════════════════════════════════════════════════════════ */
 function VueAdmin({ setToast }: { setToast: any }) {
   const [orders, setOrders]       = useState<any[]>([])
+  const [orgs, setOrgs]           = useState<any[]>([])
   const [search, setSearch]       = useState('')
   const [filterStatus, setFilter] = useState('')
   const [loading, setLoading]     = useState(true)
@@ -488,8 +666,19 @@ function VueAdmin({ setToast }: { setToast: any }) {
 
   async function fetchOrders() {
     setLoading(true)
-    api.get(endpoints.orders).then(r => setOrders(r.data)).catch(() => setOrders([]))
-      .finally(() => setLoading(false))
+    const [oRes, orgRes] = await Promise.allSettled([
+      api.get(endpoints.orders),
+      api.get(endpoints.organisations),
+    ])
+    setOrders(oRes.status === 'fulfilled' ? oRes.value.data : [])
+    setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
+    setLoading(false)
+  }
+
+  async function handleUpdateStatus(id: number, statut: string) {
+    await api.put(endpoints.orderStatut(id), { statut })
+    setToast({ msg: `Commande → ${statut}`, type: 'success' })
+    fetchOrders()
   }
 
   useEffect(() => { fetchOrders() }, [])
@@ -549,14 +738,20 @@ function VueAdmin({ setToast }: { setToast: any }) {
             <label className="filter-label">Recherche</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34 }}>
               <Search size={13} color="var(--text-muted)" />
-              <input placeholder="Code commande ou client..." value={search} onChange={e => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 200 }} />
+              <input placeholder="Code commande ou client..." value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 200 }} />
               {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
             </div>
           </div>
           {(search || filterStatus) && <button className="btn btn-ghost" onClick={() => { setSearch(''); setFilter('') }}><X size={12} /> Effacer</button>}
         </div>
 
-        <OrderTable orders={filtered} loading={loading} emptyMsg="Aucune commande" />
+        <OrderTable
+          orders={filtered}
+          loading={loading}
+          emptyMsg="Aucune commande"
+          orgs={orgs}
+          onUpdateStatus={handleUpdateStatus}
+        />
       </div>
 
       {showAlloc && (
@@ -565,9 +760,9 @@ function VueAdmin({ setToast }: { setToast: any }) {
             Trouvez l'ID de la ligne dans le détail de la commande.
           </div>
           <form onSubmit={submitAlloc}>
-            <Field label="ID ligne de commande" required><FormInput type="number" value={allocForm.idLigne} onChange={e => setAllocForm(f => ({ ...f, idLigne: e.target.value }))} placeholder="1" required /></Field>
-            <Field label="ID du lot" required><FormInput type="number" value={allocForm.idLot} onChange={e => setAllocForm(f => ({ ...f, idLot: e.target.value }))} placeholder="22" required /></Field>
-            <Field label="Quantité à allouer" required><FormInput type="number" value={allocForm.quantite} onChange={e => setAllocForm(f => ({ ...f, quantite: e.target.value }))} placeholder="1000" min="1" step="0.01" required /></Field>
+            <Field label="ID ligne de commande" required><FormInput type="number" value={allocForm.idLigne} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAllocForm(f => ({ ...f, idLigne: e.target.value }))} placeholder="1" required /></Field>
+            <Field label="ID du lot" required><FormInput type="number" value={allocForm.idLot} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAllocForm(f => ({ ...f, idLot: e.target.value }))} placeholder="22" required /></Field>
+            <Field label="Quantité à allouer" required><FormInput type="number" value={allocForm.quantite} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAllocForm(f => ({ ...f, quantite: e.target.value }))} placeholder="1000" min="1" step="0.01" required /></Field>
             <FormActions onCancel={() => setShowAlloc(false)} loading={saving} submitLabel="Confirmer l'allocation" />
           </form>
         </Modal>

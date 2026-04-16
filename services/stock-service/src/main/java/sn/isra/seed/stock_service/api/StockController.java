@@ -162,7 +162,9 @@ public class StockController {
         });
     BigDecimal newQ = stock.getQuantiteDisponible().add(delta);
     if (newQ.signum() < 0)
-      throw new IllegalStateException("Stock insuffisant au site : " + siteCode);
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Stock insuffisant au site " + siteCode
+          + " — disponible : " + stock.getQuantiteDisponible() + " " + stock.getUnite());
     stock.setQuantiteDisponible(newQ);
     stock.setUpdatedAt(Instant.now());
     stockRepo.save(stock);

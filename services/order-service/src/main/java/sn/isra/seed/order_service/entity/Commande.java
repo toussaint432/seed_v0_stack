@@ -1,11 +1,13 @@
 package sn.isra.seed.order_service.entity;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import sn.isra.seed.order_service.entity.enums.StatutCommande;
 
 import java.time.Instant;
+import java.util.List;
 
 @Entity
 @Table(name = "commande",
@@ -51,6 +53,10 @@ public class Commande {
 
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
+
+    @JsonManagedReference
+    @OneToMany(mappedBy = "commande", fetch = FetchType.EAGER)
+    private List<LigneCommande> lignes = new java.util.ArrayList<>();
 
     @PrePersist
     void prePersist() {

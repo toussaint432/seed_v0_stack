@@ -20,10 +20,15 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
      * Si specialisation est null → retourne tous les G0+G1 (pas de restriction).
      * Utilise le champ dénormalisé code_espece pour éviter un appel inter-service.
      */
+    /**
+     * Note : le paramètre :specialisation doit être passé en MAJUSCULES depuis le contrôleur.
+     * On évite UPPER(:specialisation) car PostgreSQL ne peut pas inférer le type d'un null
+     * non typé (erreur "function upper(bytea) does not exist").
+     */
     @Query("""
         SELECT l FROM LotSemencier l
         WHERE l.generation.codeGeneration IN ('G0','G1')
-          AND (:specialisation IS NULL OR UPPER(l.codeEspece) = UPPER(:specialisation))
+          AND (:specialisation IS NULL OR UPPER(l.codeEspece) = :specialisation)
         ORDER BY l.generation.ordreGeneration ASC, l.createdAt DESC
         """)
     List<LotSemencier> findForSelector(@Param("specialisation") String specialisation);

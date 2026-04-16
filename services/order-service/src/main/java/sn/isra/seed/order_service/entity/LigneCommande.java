@@ -1,5 +1,6 @@
 package sn.isra.seed.order_service.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -11,6 +12,7 @@ public class LigneCommande {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY)
   private Long id;
 
+  @JsonBackReference
   @ManyToOne(optional=false, fetch=FetchType.EAGER)
   @JoinColumn(name="id_commande")
   private Commande commande;

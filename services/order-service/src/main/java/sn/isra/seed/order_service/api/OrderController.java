@@ -37,6 +37,14 @@ public class OrderController {
   private final OrderEventProducer producer;
   private final ObjectMapper om;
 
+  /** Détail d'une commande par ID */
+  @GetMapping("/{id}")
+  public ResponseEntity<Commande> getById(@PathVariable Long id) {
+    return commandeRepo.findById(id)
+        .map(ResponseEntity::ok)
+        .orElse(ResponseEntity.notFound().build());
+  }
+
   /** Toutes les commandes (admin / upsemcl) — multiplicateur redirigé vers ses commandes reçues */
   @GetMapping
   public List<Commande> list(@AuthenticationPrincipal Jwt jwt) {

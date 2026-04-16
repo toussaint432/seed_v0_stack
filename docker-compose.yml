@@ -35,14 +35,16 @@ services:
       # Métriques & health exposés sur le port de management 9000
       KC_METRICS_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
-      # Limite JVM pour éviter OOM sur machines avec peu de RAM
-      JAVA_OPTS_APPEND: "-Xms128m -Xmx512m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC"
+      # Heap borné : 384m max évite de saturer le cgroup 1100m (G1GC + metaspace + CodeCache).
+      # -XX:ReservedCodeCacheSize=64m réduit l'empreinte mémoire off-heap.
+      JAVA_OPTS_APPEND: "-Xms128m -Xmx384m -XX:MaxMetaspaceSize=180m -XX:ReservedCodeCacheSize=64m -XX:+UseG1GC"
 
     ports:
       - "18080:8080"
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import:ro
-    mem_limit: 1200m
+    mem_limit: 1100m
+    restart: unless-stopped
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
@@ -154,6 +156,7 @@ services:
   catalog-service:
     build: ./services/catalog-service
     container_name: seed-catalog
+    restart: on-failure:5
     depends_on:
       postgres:
         condition: service_healthy
@@ -168,13 +171,25 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-seed}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
-      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx128m -XX:MaxMetaspaceSize=96m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      # Mémoire augmentée — catalog est schema owner (Flyway V1-V9, migrations lourdes)
+      JAVA_TOOL_OPTIONS: "-Xms64m -Xmx256m -XX:MaxMetaspaceSize=128m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      # Flyway : réessaie 10x si Postgres répond lentement au démarrage
+      SPRING_FLYWAY_CONNECT_RETRIES: "10"
+      # Kafka : ne pas crasher si un topic n'existe pas encore au démarrage
+      SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s
     ports:
       - "18081:8080"
 
   lot-service:
     build: ./services/lot-service
     container_name: seed-lot
+    restart: on-failure:5
     depends_on:
       postgres:
         condition: service_healthy
@@ -189,13 +204,21 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-seed}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
-      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx128m -XX:MaxMetaspaceSize=96m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
     ports:
       - "18082:8080"
 
   stock-service:
     build: ./services/stock-service
     container_name: seed-stock
+    restart: on-failure:5
     depends_on:
       postgres:
         condition: service_healthy
@@ -210,13 +233,21 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-seed}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
-      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx128m -XX:MaxMetaspaceSize=96m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
     ports:
       - "18083:8080"
 
   order-service:
     build: ./services/order-service
     container_name: seed-order
+    restart: on-failure:5
     depends_on:
       postgres:
         condition: service_healthy
@@ -231,19 +262,32 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-seed}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
-      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx128m -XX:MaxMetaspaceSize=96m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
     ports:
       - "18084:8080"
 
   frontend:
     build: ./frontend
     container_name: seed-frontend
+    restart: on-failure:3
     depends_on:
-      - keycloak
-      - catalog-service
-      - lot-service
-      - stock-service
-      - order-service
+      keycloak:
+        condition: service_started
+      catalog-service:
+        condition: service_healthy
+      lot-service:
+        condition: service_healthy
+      stock-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
     environment:
       VITE_API_BASE: http://localhost
       VITE_KEYCLOAK_URL: http://localhost:18080

@@ -27,7 +27,7 @@ public class Stock {
     private Long idLot;
 
     @NotNull(message = "Le site est obligatoire")
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @ManyToOne(optional = false, fetch = FetchType.EAGER)
     @JoinColumn(name = "id_site", nullable = false)
     private Site site;
 

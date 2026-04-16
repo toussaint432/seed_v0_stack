@@ -1,6 +1,5 @@
 package sn.isra.seed.catalog_service.entity;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -28,9 +27,8 @@ public class Variete {
     private String nomVariete;
 
     @NotNull(message = "L'espèce est obligatoire")
-    @ManyToOne(optional = false, fetch = FetchType.LAZY)
+    @ManyToOne(optional = false, fetch = FetchType.EAGER)
     @JoinColumn(name = "id_espece", nullable = false)
-    @JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
     private Espece espece;
 
     @Size(max = 200)
@@ -45,9 +43,36 @@ public class Variete {
     @Column(name = "annee_creation")
     private Integer anneeCreation;
 
-    @Positive(message = "Le cycle en jours doit être positif")
-    @Column(name = "cycle_jours")
-    private Integer cycleJours;
+    @Positive(message = "Le cycle minimum doit être positif")
+    @Max(value = 365, message = "Le cycle minimum ne peut dépasser 365 jours")
+    @Column(name = "cycle_min")
+    private Integer cycleMin;
+
+    @Positive(message = "Le cycle maximum doit être positif")
+    @Max(value = 365, message = "Le cycle maximum ne peut dépasser 365 jours")
+    @Column(name = "cycle_max")
+    private Integer cycleMax;
+
+    // ── Données agronomiques ISRA/CNRA ────────────────────────
+
+    /** Généalogie génétique — ex : "55-437 × CE 181-22" */
+    @Column(name = "pedigree", columnDefinition = "TEXT")
+    private String pedigree;
+
+    /** Type de grain — ex : "Virginia (Bold)", "Grain perlé (Blanc)" */
+    @Size(max = 50, message = "Le type de grain ne peut dépasser 50 caractères")
+    @Column(name = "type_grain", length = 50)
+    private String typeGrain;
+
+    /** Rendement potentiel minimum en t/ha */
+    @DecimalMin(value = "0.0", message = "Le rendement minimum ne peut être négatif")
+    @Column(name = "rendement_min", precision = 4, scale = 1)
+    private java.math.BigDecimal rendementMin;
+
+    /** Rendement potentiel maximum en t/ha */
+    @DecimalMin(value = "0.0", message = "Le rendement maximum ne peut être négatif")
+    @Column(name = "rendement_max", precision = 4, scale = 1)
+    private java.math.BigDecimal rendementMax;
 
     @NotNull(message = "Le statut est obligatoire")
     @Enumerated(EnumType.STRING)

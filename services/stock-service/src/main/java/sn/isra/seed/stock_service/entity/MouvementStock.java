@@ -31,12 +31,11 @@ public class MouvementStock {
     @Column(name = "type_mouvement", nullable = false, length = 20)
     private TypeMouvement typeMouvement;
 
-    /** LAZY : les sites ne sont chargés que si explicitement demandés */
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "id_site_source")
     private Site siteSource;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "id_site_destination")
     private Site siteDestination;
 

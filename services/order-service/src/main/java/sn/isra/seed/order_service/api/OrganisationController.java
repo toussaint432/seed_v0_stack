@@ -1,6 +1,7 @@
 package sn.isra.seed.order_service.api;
 
 import sn.isra.seed.order_service.entity.Organisation;
+import sn.isra.seed.order_service.entity.enums.TypeOrganisation;
 import sn.isra.seed.order_service.repo.OrganisationRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -22,8 +23,13 @@ public class OrganisationController {
     public List<Organisation> list(
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String region) {
-        if (type != null && !type.isBlank())
-            return organisationRepo.findByTypeOrganisation(type.toUpperCase());
+        if (type != null && !type.isBlank()) {
+            try {
+                return organisationRepo.findByTypeOrganisation(TypeOrganisation.valueOf(type.toUpperCase()));
+            } catch (IllegalArgumentException e) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Type inconnu : " + type);
+            }
+        }
         if (region != null && !region.isBlank())
             return organisationRepo.findByRegion(region);
         return organisationRepo.findAll();

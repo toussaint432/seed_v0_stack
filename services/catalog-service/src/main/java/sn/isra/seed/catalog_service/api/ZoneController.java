@@ -31,6 +31,7 @@ public class ZoneController {
     }
 
     /** GET /api/varieties/{id}/zones — public */
+    @Transactional(readOnly = true)
     @GetMapping("/varieties/{id}/zones")
     public List<VarieteZone> getVarieteZones(@PathVariable Long id) {
         return varieteZoneRepo.findByIdIdVariete(id);

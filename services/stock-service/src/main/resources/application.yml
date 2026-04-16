@@ -14,12 +14,18 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        default_batch_fetch_size: 20
+        "[default_batch_fetch_size]": 20
   # Flyway désactivé — schéma géré par catalog-service
   flyway:
     enabled: false
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
+    producer:
+      properties:
+        "[max.block.ms]": 3000
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false  # Dates ISO-8601 au lieu de timestamps Unix
   security:
     oauth2:
       resourceserver:
@@ -33,8 +39,6 @@ management:
       exposure:
         include: health,info,prometheus
   endpoint:
-    prometheus:
-      enabled: true
     health:
       show-details: always
   metrics:

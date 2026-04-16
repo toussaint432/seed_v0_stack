@@ -27,7 +27,7 @@ export function Campagnes({ roleKey }: Props) {
 
   const [form, setForm] = useState({
     codeCampagne: '', libelle: '', dateDebut: '', dateFin: '',
-    typeCampagne: 'HIVERNALE', statut: 'OUVERTE',
+    typeCampagne: 'HIVERNALE', statut: 'PLANIFIEE',
   })
 
   async function fetchData() {
@@ -41,11 +41,11 @@ export function Campagnes({ roleKey }: Props) {
 
   useEffect(() => { fetchData() }, [])
 
-  const activeCount = campagnes.filter(c => c.statut === 'OUVERTE').length
+  const activeCount = campagnes.filter(c => c.statut === 'EN_COURS').length
 
   function openCreate() {
     setEditItem(null)
-    setForm({ codeCampagne: '', libelle: '', dateDebut: '', dateFin: '', typeCampagne: 'HIVERNALE', statut: 'OUVERTE' })
+    setForm({ codeCampagne: '', libelle: '', dateDebut: '', dateFin: '', typeCampagne: 'HIVERNALE', statut: 'PLANIFIEE' })
     setShowForm(true)
   }
 
@@ -54,7 +54,7 @@ export function Campagnes({ roleKey }: Props) {
     setForm({
       codeCampagne: c.codeCampagne || '', libelle: c.libelle || '',
       dateDebut: c.dateDebut || '', dateFin: c.dateFin || '',
-      typeCampagne: c.typeCampagne || 'HIVERNALE', statut: c.statut || 'OUVERTE',
+      typeCampagne: c.typeCampagne || 'HIVERNALE', statut: c.statut || 'PLANIFIEE',
     })
     setShowForm(true)
   }
@@ -157,8 +157,10 @@ export function Campagnes({ roleKey }: Props) {
               </Field>
               <Field label="Statut">
                 <FormSelect value={form.statut} onChange={e => setForm(f => ({ ...f, statut: e.target.value }))}>
-                  <option value="OUVERTE">Ouverte</option>
-                  <option value="FERMEE">Fermée</option>
+                  <option value="PLANIFIEE">Planifiée</option>
+                  <option value="EN_COURS">En cours</option>
+                  <option value="TERMINEE">Terminée</option>
+                  <option value="ANNULEE">Annulée</option>
                 </FormSelect>
               </Field>
             </FormRow>

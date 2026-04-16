@@ -483,6 +483,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [saving, setSaving] = useState(false)
   const [showReception, setShowReception] = useState(false)
   const [receptionForm, setReceptionForm] = useState({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' })
+  const [sites, setSites] = useState<any[]>([])
   // Cache des Bordereaux générés (lotId → data PDF) pour re-téléchargement
   const [bordereauCache, setBordereauCache] = useState<Map<number, TransferDocData>>(new Map())
   const allowedGens = ROLE_GENERATIONS[roleKey] || ALL_GENS
@@ -526,6 +527,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     fetchLots()
     api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {})
     api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {})
+    api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
   }, [generation])
 
   // Filtre client-side supplémentaire par spécialisation pour seed-selector
@@ -946,13 +948,20 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             Cette action enregistre l'arrivée physique des semences R2 achetées dans votre site de stockage.
           </div>
           <form onSubmit={submitReception}>
-            <Field label="Site de réception" required hint="Code du site où vous stockez les semences">
-              <FormInput
+            <Field label="Site de réception" required hint="Site de stockage où les semences seront enregistrées">
+              <FormSelect
                 value={receptionForm.siteCode}
-                onChange={e => setReceptionForm(f => ({ ...f, siteCode: e.target.value.toUpperCase() }))}
-                placeholder="Ex : DEPOT-DAKAR-01"
+                onChange={e => setReceptionForm(f => ({ ...f, siteCode: e.target.value }))}
                 required
-              />
+              >
+                <option value="">— Sélectionner un site —</option>
+                {sites.map((s: any) => (
+                  <option key={s.codeSite} value={s.codeSite}>
+                    {s.nomSite} ({s.codeSite})
+                    {s.region ? ` — ${s.region}` : ''}
+                  </option>
+                ))}
+              </FormSelect>
             </Field>
             <FormRow>
               <Field label="Quantité reçue" required>

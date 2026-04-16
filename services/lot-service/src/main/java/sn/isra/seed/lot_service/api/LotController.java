@@ -37,7 +37,7 @@ public class LotController {
     private final TransfertLotRepo transfertRepo;
     private final HistoriqueStatutLotRepo historiqueRepo;
     private final LotEventProducer producer;
-    private final ObjectMapper om = new ObjectMapper();
+    private final ObjectMapper om; // injecté par Spring (JavaTimeModule inclus)
 
     private static final Map<String, String> FLUX_RULES = Map.of(
         "seed-selector",    "seed-upsemcl",
@@ -58,7 +58,9 @@ public class LotController {
 
         // Isolation sélectionneur : G0+G1 filtrés par spécialisation
         if (roles.contains("seed-selector")) {
-            String specialisation = jwt != null ? jwt.getClaimAsString("specialisation") : null;
+            String raw = jwt != null ? jwt.getClaimAsString("specialisation") : null;
+            // Normalisé en majuscules pour correspondre à la query JPQL (évite upper(bytea))
+            String specialisation = raw != null ? raw.toUpperCase() : null;
             return lotRepo.findForSelector(specialisation);
         }
 
@@ -120,6 +122,8 @@ public class LotController {
         LotSemencier child = new LotSemencier();
         child.setCodeLot(req.codeLot());
         child.setIdVariete(req.idVariete() != null ? req.idVariete() : parent.getIdVariete());
+        // Héritage de l'espèce depuis le parent (indispensable pour le filtre par spécialisation)
+        child.setCodeEspece(req.codeEspece() != null ? req.codeEspece() : parent.getCodeEspece());
         child.setGeneration(gen);
         child.setLotParent(parent);
         child.setCampagne(req.campagne());
@@ -150,7 +154,9 @@ public class LotController {
         return saved;
     }
 
-    // ── Changer le statut d'un lot ────────────────────────────
+    // ── Changer le statut d'un lot (réservé admin) ───────────
+    // Les transitions métier (DISPONIBLE→TRANSFERE) passent par /transfer ou /accept
+    @org.springframework.security.access.prepost.PreAuthorize("hasAuthority('ROLE_seed-admin')")
     @PatchMapping("/{id}/statut")
     public ResponseEntity<LotSemencier> updateStatut(@PathVariable Long id,
                                                        @RequestBody Map<String, String> body) {

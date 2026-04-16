@@ -32,6 +32,21 @@
             "multivalued": "false",
             "aggregate.attrs": "false"
           }
+        },
+        {
+          "name": "zone",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "zone",
+            "claim.name": "zone",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "false",
+            "aggregate.attrs": "false"
+          }
         }
       ]
     },
@@ -43,7 +58,39 @@
       "protocol": "openid-connect",
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": true
+      "directAccessGrantsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "specialisation",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "specialisation",
+            "claim.name": "specialisation",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "false",
+            "aggregate.attrs": "false"
+          }
+        },
+        {
+          "name": "zone",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "zone",
+            "claim.name": "zone",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "multivalued": "false",
+            "aggregate.attrs": "false"
+          }
+        }
+      ]
     }
   ],
   "roles": {
@@ -120,6 +167,83 @@
       "firstName": "Aminata",
       "lastName": "Quotataire",
       "credentials": [{ "type": "password", "value": "quota123", "temporary": false }],
+      "realmRoles": ["seed-quotataire"]
+    },
+    {
+      "username": "upsemcl_bambey",
+      "enabled": true,
+      "email": "upsemcl.bambey@seed.local",
+      "firstName": "Ousmane",
+      "lastName": "UPSemCL-Bambey",
+      "credentials": [{ "type": "password", "value": "upsemcl123", "temporary": false }],
+      "realmRoles": ["seed-upsemcl"]
+    },
+    {
+      "username": "upsemcl_stlouis",
+      "enabled": true,
+      "email": "upsemcl.stlouis@seed.local",
+      "firstName": "Rokhaya",
+      "lastName": "UPSemCL-StLouis",
+      "credentials": [{ "type": "password", "value": "upsemclsl123", "temporary": false }],
+      "realmRoles": ["seed-upsemcl"]
+    },
+    {
+      "username": "selecteur_sor",
+      "enabled": true,
+      "email": "selecteur.sor@seed.local",
+      "firstName": "Babacar",
+      "lastName": "Sélect-SOR",
+      "attributes": { "specialisation": ["SOR"] },
+      "credentials": [{ "type": "password", "value": "selectsor123", "temporary": false }],
+      "realmRoles": ["seed-selector"]
+    },
+    {
+      "username": "selecteur_nie",
+      "enabled": true,
+      "email": "selecteur.nie@seed.local",
+      "firstName": "Mariama",
+      "lastName": "Sélect-NIE",
+      "attributes": { "specialisation": ["NIE"] },
+      "credentials": [{ "type": "password", "value": "selectnie123", "temporary": false }],
+      "realmRoles": ["seed-selector"]
+    },
+    {
+      "username": "multi_fatick",
+      "enabled": true,
+      "email": "multi.fatick@seed.local",
+      "firstName": "Ibrahima",
+      "lastName": "Multi-Fatick",
+      "credentials": [{ "type": "password", "value": "multifat123", "temporary": false }],
+      "realmRoles": ["seed-multiplicator"]
+    },
+    {
+      "username": "quotataire_nord",
+      "enabled": true,
+      "email": "quota.nord@seed.local",
+      "firstName": "Ndéye",
+      "lastName": "OP-Nord",
+      "attributes": { "zone": ["NORD"] },
+      "credentials": [{ "type": "password", "value": "quotanord123", "temporary": false }],
+      "realmRoles": ["seed-quotataire"]
+    },
+    {
+      "username": "quotataire_centre",
+      "enabled": true,
+      "email": "quota.centre@seed.local",
+      "firstName": "Moussa",
+      "lastName": "OP-Centre",
+      "attributes": { "zone": ["CENTRE"] },
+      "credentials": [{ "type": "password", "value": "quotacentre123", "temporary": false }],
+      "realmRoles": ["seed-quotataire"]
+    },
+    {
+      "username": "quotataire_casamance",
+      "enabled": true,
+      "email": "quota.casamance@seed.local",
+      "firstName": "Fatoumata",
+      "lastName": "OP-Casamance",
+      "attributes": { "zone": ["CASAMANCE"] },
+      "credentials": [{ "type": "password", "value": "quotacas123", "temporary": false }],
       "realmRoles": ["seed-quotataire"]
     }
   ]

@@ -21,7 +21,7 @@ const STATUT_OPTIONS = [
 ]
 
 const ALL_GENS = ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
-const GEN_IDS: Record<string, number> = { G0: 1, G1: 2, G2: 3, G3: 4, G4: 5, R1: 6, R2: 7 }
+
 
 export function Programs({ roleKey }: Props) {
   const [programs, setPrograms] = useState<any[]>([])
@@ -65,16 +65,16 @@ export function Programs({ roleKey }: Props) {
     const matchSearch = !search ||
       p.codeProgramme?.toLowerCase().includes(search.toLowerCase()) ||
       p.multiplicateur?.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = !filterStatus || p.statutProgramme === filterStatus
+    const matchStatus = !filterStatus || p.statut === filterStatus
     return matchSearch && matchStatus
   })
 
   const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
   const byStatus = programs.reduce((acc: Record<string, number>, p: any) => {
-    acc[p.statutProgramme] = (acc[p.statutProgramme] || 0) + 1; return acc
+    acc[p.statut] = (acc[p.statut] || 0) + 1; return acc
   }, {})
-  const totalSurface = programs.reduce((sum, p) => sum + (parseFloat(p.surfacePrevueHa) || 0), 0)
+  const totalSurface = programs.reduce((sum, p) => sum + (parseFloat(p.superficieHa) || 0), 0)
 
   function openCreate() {
     setEditItem(null)
@@ -85,14 +85,14 @@ export function Programs({ roleKey }: Props) {
   function openEdit(p: any) {
     setEditItem(p)
     setForm({
-      codeProgramme: p.codeProgramme || '', idLotSource: p.idLotSource?.toString() || '',
-      generationCible: p.generationCible?.codeGeneration || p.generationCible || 'G3',
-      multiplicateur: p.multiplicateur?.nom || p.multiplicateur || '',
-      campagne: p.campagne?.codeCampagne || p.campagne || '',
-      surfacePrevueHa: p.surfacePrevueHa?.toString() || '',
-      quantiteSemenceAllouee: p.quantiteSemenceAllouee?.toString() || '',
-      dateAttribution: p.dateAttribution || new Date().toISOString().split('T')[0],
-      statutProgramme: p.statutProgramme || 'PLANIFIE', observations: p.observations || '',
+      codeProgramme: p.codeProgramme || '', idLotSource: p.idLot?.toString() || '',
+      generationCible: p.generationCible || 'G3',
+      multiplicateur: '',
+      campagne: '',
+      surfacePrevueHa: p.superficieHa?.toString() || '',
+      quantiteSemenceAllouee: p.objectifKg?.toString() || '',
+      dateAttribution: p.dateDebut || new Date().toISOString().split('T')[0],
+      statutProgramme: p.statut || 'PLANIFIE', observations: p.observations || '',
     })
     setShowForm(true)
   }
@@ -105,17 +105,20 @@ export function Programs({ roleKey }: Props) {
   async function submitForm(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
+      const obs = [
+        form.multiplicateur ? `Multiplicateur : ${form.multiplicateur}` : '',
+        form.campagne ? `Campagne : ${form.campagne}` : '',
+        form.observations || '',
+      ].filter(Boolean).join(' — ') || undefined
       const payload = {
         codeProgramme: form.codeProgramme,
-        idLotSource: Number(form.idLotSource),
-        idGenerationCible: GEN_IDS[form.generationCible] || 4,
-        multiplicateur: form.multiplicateur,
-        campagne: form.campagne,
-        surfacePrevueHa: form.surfacePrevueHa ? Number(form.surfacePrevueHa) : undefined,
-        quantiteSemenceAllouee: form.quantiteSemenceAllouee ? Number(form.quantiteSemenceAllouee) : undefined,
-        dateAttribution: form.dateAttribution || undefined,
-        statutProgramme: form.statutProgramme,
-        observations: form.observations || undefined,
+        idLot: Number(form.idLotSource),
+        generationCible: form.generationCible,
+        superficieHa: form.surfacePrevueHa ? Number(form.surfacePrevueHa) : undefined,
+        objectifKg: form.quantiteSemenceAllouee ? Number(form.quantiteSemenceAllouee) : undefined,
+        dateDebut: form.dateAttribution || undefined,
+        statut: form.statutProgramme,
+        observations: obs,
       }
       if (editItem) {
         await api.put(endpoints.programById(editItem.id), payload)
@@ -198,12 +201,12 @@ export function Programs({ roleKey }: Props) {
                 ) : pageItems.map(p => (
                   <tr key={p.id}>
                     <td><span className="td-mono" style={{ fontWeight: 700 }}>{p.codeProgramme}</span></td>
-                    <td><span className="td-mono" style={{ fontSize: 11 }}>{p.idLotSource ? getLotLabel(p.idLotSource) : p.lotSource?.codeLot || '—'}</span></td>
-                    <td><span className="badge badge-gold" style={{ fontSize: 11 }}>{p.generationCible?.codeGeneration || p.generationCible || '—'}</span></td>
-                    <td style={{ fontWeight: 500, fontSize: 12.5 }}>{p.multiplicateur?.nom || p.multiplicateur || '—'}</td>
-                    <td style={{ fontWeight: 600 }}>{p.surfacePrevueHa ? Number(p.surfacePrevueHa).toLocaleString('fr-FR') : '—'}</td>
-                    <td>{p.quantiteSemenceAllouee ? <><span style={{ fontWeight: 600 }}>{Number(p.quantiteSemenceAllouee).toLocaleString('fr-FR')}</span> <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>kg</span></> : '—'}</td>
-                    <td><StatusBadge status={p.statutProgramme} showIcon /></td>
+                    <td><span className="td-mono" style={{ fontSize: 11 }}>{p.idLot ? getLotLabel(p.idLot) : '—'}</span></td>
+                    <td><span className="badge badge-gold" style={{ fontSize: 11 }}>{p.generationCible || '—'}</span></td>
+                    <td style={{ fontWeight: 500, fontSize: 12.5 }}>—</td>
+                    <td style={{ fontWeight: 600 }}>{p.superficieHa ? Number(p.superficieHa).toLocaleString('fr-FR') : '—'}</td>
+                    <td>{p.objectifKg ? <><span style={{ fontWeight: 600 }}>{Number(p.objectifKg).toLocaleString('fr-FR')}</span> <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>kg</span></> : '—'}</td>
+                    <td><StatusBadge status={p.statut} showIcon /></td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11 }} onClick={() => setShowDetail(p)}><Eye size={12} /></button>
@@ -223,14 +226,13 @@ export function Programs({ roleKey }: Props) {
       {showDetail && (
         <Modal title={`Programme — ${showDetail.codeProgramme}`} subtitle="Détails du programme de multiplication" onClose={() => setShowDetail(null)} size="lg">
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Lot source</div><div style={{ fontSize: 13, fontWeight: 600 }}>{showDetail.lotSource?.codeLot || getLotLabel(showDetail.idLotSource)}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Génération cible</div><span className="badge badge-gold">{showDetail.generationCible?.codeGeneration || showDetail.generationCible}</span></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Multiplicateur</div><div style={{ fontSize: 13 }}>{showDetail.multiplicateur?.nom || showDetail.multiplicateur || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Campagne</div><div style={{ fontSize: 13 }}>{showDetail.campagne?.codeCampagne || showDetail.campagne || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Surface prévue</div><div style={{ fontSize: 20, fontWeight: 700 }}>{showDetail.surfacePrevueHa || '—'} <span style={{ fontSize: 13, fontWeight: 400 }}>ha</span></div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Semence allouée</div><div style={{ fontSize: 20, fontWeight: 700 }}>{showDetail.quantiteSemenceAllouee ? Number(showDetail.quantiteSemenceAllouee).toLocaleString('fr-FR') : '—'} <span style={{ fontSize: 13, fontWeight: 400 }}>kg</span></div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date attribution</div><div style={{ fontSize: 13 }}>{showDetail.dateAttribution || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Statut</div><StatusBadge status={showDetail.statutProgramme} showIcon size="md" /></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Lot source</div><div style={{ fontSize: 13, fontWeight: 600 }}>{getLotLabel(showDetail.idLot)}</div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Génération cible</div><span className="badge badge-gold">{showDetail.generationCible || '—'}</span></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Surface prévue</div><div style={{ fontSize: 20, fontWeight: 700 }}>{showDetail.superficieHa || '—'} <span style={{ fontSize: 13, fontWeight: 400 }}>ha</span></div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Objectif récolte</div><div style={{ fontSize: 20, fontWeight: 700 }}>{showDetail.objectifKg ? Number(showDetail.objectifKg).toLocaleString('fr-FR') : '—'} <span style={{ fontSize: 13, fontWeight: 400 }}>kg</span></div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date début</div><div style={{ fontSize: 13 }}>{showDetail.dateDebut || '—'}</div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date fin</div><div style={{ fontSize: 13 }}>{showDetail.dateFin || '—'}</div></div>
+            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Statut</div><StatusBadge status={showDetail.statut} showIcon size="md" /></div>
             {showDetail.observations && (
               <div style={{ gridColumn: '1 / -1' }}><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Observations</div><div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{showDetail.observations}</div></div>
             )}

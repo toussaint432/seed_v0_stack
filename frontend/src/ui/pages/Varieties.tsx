@@ -54,8 +54,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   })
   const [varieteForm, setVarieteForm] = useState({
     codeVariete: '', nomVariete: '', idEspece: '', origine: '',
-    selectionneurPrincipal: '', anneeCreation: '', cycleJours: '',
+    selectionneurPrincipal: '', anneeCreation: '', cycleMin: '', cycleMax: '',
     statutVariete: 'DIFFUSEE',
+    pedigree: '', typeGrain: '', rendementMin: '', rendementMax: '',
   })
 
   const isAdminOrSelector = ['seed-admin', 'seed-selector'].includes(roleKey)
@@ -167,24 +168,42 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     setSaving(true)
     try {
       if (editVariete) {
-        await api.patch(endpoints.varietyStatut(editVariete.id), { statut: varieteForm.statutVariete })
+        await api.put(endpoints.varietyById(editVariete.id), {
+          nomVariete:             varieteForm.nomVariete,
+          espece:                 { id: Number(varieteForm.idEspece) },
+          origine:                varieteForm.origine               || null,
+          selectionneurPrincipal: varieteForm.selectionneurPrincipal || null,
+          anneeCreation:          varieteForm.anneeCreation  ? Number(varieteForm.anneeCreation)  : null,
+          cycleMin:               varieteForm.cycleMin       ? Number(varieteForm.cycleMin)       : null,
+          cycleMax:               varieteForm.cycleMax       ? Number(varieteForm.cycleMax)       : null,
+          statutVariete:          varieteForm.statutVariete,
+          pedigree:               varieteForm.pedigree       || null,
+          typeGrain:              varieteForm.typeGrain      || null,
+          rendementMin:           varieteForm.rendementMin   ? Number(varieteForm.rendementMin)   : null,
+          rendementMax:           varieteForm.rendementMax   ? Number(varieteForm.rendementMax)   : null,
+        })
         setToast({ msg: 'Variété mise à jour', type: 'success' })
       } else {
         await api.post(endpoints.varieties, {
-          codeVariete:           varieteForm.codeVariete,
-          nomVariete:            varieteForm.nomVariete,
-          idEspece:              Number(varieteForm.idEspece),
-          origine:               varieteForm.origine || undefined,
-          selectionneurPrincipal:varieteForm.selectionneurPrincipal || undefined,
-          anneeCreation:         varieteForm.anneeCreation ? Number(varieteForm.anneeCreation) : undefined,
-          cycleJours:            varieteForm.cycleJours    ? Number(varieteForm.cycleJours)    : undefined,
-          statutVariete:         varieteForm.statutVariete,
+          codeVariete:            varieteForm.codeVariete,
+          nomVariete:             varieteForm.nomVariete,
+          espece:                 { id: Number(varieteForm.idEspece) },
+          origine:                varieteForm.origine               || undefined,
+          selectionneurPrincipal: varieteForm.selectionneurPrincipal || undefined,
+          anneeCreation:          varieteForm.anneeCreation  ? Number(varieteForm.anneeCreation)  : undefined,
+          cycleMin:               varieteForm.cycleMin       ? Number(varieteForm.cycleMin)       : undefined,
+          cycleMax:               varieteForm.cycleMax       ? Number(varieteForm.cycleMax)       : undefined,
+          statutVariete:          varieteForm.statutVariete,
+          pedigree:               varieteForm.pedigree       || undefined,
+          typeGrain:              varieteForm.typeGrain      || undefined,
+          rendementMin:           varieteForm.rendementMin   ? Number(varieteForm.rendementMin)   : undefined,
+          rendementMax:           varieteForm.rendementMax   ? Number(varieteForm.rendementMax)   : undefined,
         })
         setToast({ msg: `Variété "${varieteForm.nomVariete}" créée`, type: 'success' })
       }
       setShowVarieteForm(false)
       setEditVariete(null)
-      setVarieteForm({ codeVariete: '', nomVariete: '', idEspece: '', origine: '', selectionneurPrincipal: '', anneeCreation: '', cycleJours: '', statutVariete: 'DIFFUSEE' })
+      setVarieteForm({ codeVariete: '', nomVariete: '', idEspece: '', origine: '', selectionneurPrincipal: '', anneeCreation: '', cycleMin: '', cycleMax: '', statutVariete: 'DIFFUSEE', pedigree: '', typeGrain: '', rendementMin: '', rendementMax: '' })
       fetchData(true)
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
@@ -198,8 +217,13 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       idEspece: v.espece?.id?.toString() || '', origine: v.origine || '',
       selectionneurPrincipal: v.selectionneurPrincipal || '',
       anneeCreation: v.anneeCreation?.toString() || '',
-      cycleJours: v.cycleJours?.toString() || '',
+      cycleMin: v.cycleMin?.toString() || '',
+      cycleMax: v.cycleMax?.toString() || '',
       statutVariete: v.statutVariete || 'DIFFUSEE',
+      pedigree: v.pedigree || '',
+      typeGrain: v.typeGrain || '',
+      rendementMin: v.rendementMin?.toString() || '',
+      rendementMax: v.rendementMax?.toString() || '',
     })
     setShowVarieteForm(true)
   }
@@ -209,8 +233,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     setVarieteForm({
       codeVariete: '', nomVariete: '',
       idEspece: selectedSpeciesId?.toString() || '',
-      origine: '', selectionneurPrincipal: '', anneeCreation: '', cycleJours: '',
+      origine: '', selectionneurPrincipal: '', anneeCreation: '', cycleMin: '', cycleMax: '',
       statutVariete: 'DIFFUSEE',
+      pedigree: '', typeGrain: '', rendementMin: '', rendementMax: '',
     })
     setShowVarieteForm(true)
   }
@@ -475,6 +500,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   <th>Nom variété</th>
                   <th>Espèce</th>
                   <th>Cycle</th>
+                  <th>Rendement</th>
                   <th>Statut</th>
                   {isAdminOrSelector && <th style={{ width: 80 }}></th>}
                 </tr>
@@ -483,7 +509,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 {loading
                   ? [0, 1, 2, 3, 4].map(i => (
                       <tr key={i}>
-                        <td colSpan={isAdminOrSelector ? 6 : 5}>
+                        <td colSpan={isAdminOrSelector ? 7 : 6}>
                           <div className="skeleton" style={{ height: 14, borderRadius: 4 }} />
                         </td>
                       </tr>
@@ -491,7 +517,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   : filtered.length === 0
                   ? (
                       <tr>
-                        <td colSpan={isAdminOrSelector ? 6 : 5}>
+                        <td colSpan={isAdminOrSelector ? 7 : 6}>
                           <div className="empty-state" style={{ padding: '40px 0' }}>
                             <div className="empty-icon"><Sprout size={20} /></div>
                             <div className="empty-title">
@@ -525,6 +551,18 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           <td>
                             <span style={{ fontWeight: 500, color: 'var(--text-primary)' }}>{v.nomVariete}</span>
                             {v.origine && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{v.origine}</div>}
+                            {v.typeGrain && (
+                              <div style={{
+                                display: 'inline-block', marginTop: 3,
+                                fontSize: 10, fontWeight: 500,
+                                padding: '1px 6px', borderRadius: 4,
+                                background: 'var(--surface-alt, #f0f4f0)',
+                                color: 'var(--text-secondary)',
+                                border: '1px solid var(--border-subtle, #d8e4d8)',
+                              }}>
+                                {v.typeGrain}
+                              </div>
+                            )}
                             {isArchived && v.commentaireArchivage && (
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, marginTop: 3, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                                 <MessageSquare size={10} style={{ marginTop: 1, flexShrink: 0 }} />
@@ -540,8 +578,19 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                             ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                           </td>
                           <td>
-                            {v.cycleJours
-                              ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{v.cycleJours} j</span>
+                            {v.cycleMin != null && v.cycleMax != null
+                              ? <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                                  {v.cycleMin === v.cycleMax ? `${v.cycleMin} j` : `${v.cycleMin}–${v.cycleMax} j`}
+                                </span>
+                              : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                          </td>
+                          <td>
+                            {v.rendementMin != null && v.rendementMax != null
+                              ? <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                                  {v.rendementMin === v.rendementMax
+                                    ? `${v.rendementMin} t/ha`
+                                    : `${v.rendementMin}–${v.rendementMax} t/ha`}
+                                </span>
                               : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                           </td>
                           <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
@@ -694,7 +743,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   </Field>
                 </FormRow>
                 <FormRow>
-                  <Field label="Année de création">
+                  <Field label="Année d'obtention">
                     <FormInput
                       type="number"
                       value={varieteForm.anneeCreation}
@@ -703,13 +752,56 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       min="1900" max="2030"
                     />
                   </Field>
-                  <Field label="Cycle (jours)">
+                  <Field label="Cycle min (j)">
                     <FormInput
                       type="number"
-                      value={varieteForm.cycleJours}
-                      onChange={e => setVarieteForm(f => ({ ...f, cycleJours: e.target.value }))}
-                      placeholder="90"
+                      value={varieteForm.cycleMin}
+                      onChange={e => setVarieteForm(f => ({ ...f, cycleMin: e.target.value }))}
+                      placeholder="85"
                       min="1" max="365"
+                    />
+                  </Field>
+                  <Field label="Cycle max (j)">
+                    <FormInput
+                      type="number"
+                      value={varieteForm.cycleMax}
+                      onChange={e => setVarieteForm(f => ({ ...f, cycleMax: e.target.value }))}
+                      placeholder="95"
+                      min="1" max="365"
+                    />
+                  </Field>
+                </FormRow>
+                <Field label="Pedigree" hint="Généalogie génétique — ex : 55-437 × CE 181-22">
+                  <FormInput
+                    value={varieteForm.pedigree}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVarieteForm(f => ({ ...f, pedigree: e.target.value }))}
+                    placeholder="Sélection ISRA-CNRA Bambey"
+                  />
+                </Field>
+                <FormRow>
+                  <Field label="Type de grain" hint="ex : Virginia (Bold), Grain perlé (Blanc)">
+                    <FormInput
+                      value={varieteForm.typeGrain}
+                      onChange={e => setVarieteForm(f => ({ ...f, typeGrain: e.target.value }))}
+                      placeholder="Virginia (Bold)"
+                    />
+                  </Field>
+                  <Field label="Rendement min (t/ha)">
+                    <FormInput
+                      type="number"
+                      value={varieteForm.rendementMin}
+                      onChange={e => setVarieteForm(f => ({ ...f, rendementMin: e.target.value }))}
+                      placeholder="2.5"
+                      min="0" step="0.1"
+                    />
+                  </Field>
+                  <Field label="Rendement max (t/ha)">
+                    <FormInput
+                      type="number"
+                      value={varieteForm.rendementMax}
+                      onChange={e => setVarieteForm(f => ({ ...f, rendementMax: e.target.value }))}
+                      placeholder="3.5"
+                      min="0" step="0.1"
                     />
                   </Field>
                 </FormRow>
