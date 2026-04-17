@@ -9,8 +9,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -38,27 +40,34 @@ public class TransfertController {
     }
 
     /* ── PUT /api/transferts/{id}/accepter ─────────────────────── */
+    @Transactional
     @PutMapping("/{id}/accepter")
     public ResponseEntity<?> accepter(
             @PathVariable Long id,
             @AuthenticationPrincipal Jwt jwt) {
 
         String username = jwt.getClaimAsString("preferred_username");
-        return transfertRepo.findById(id).map(t -> {
-            if (!t.getUsernameDestinataire().equals(username))
-                return ResponseEntity.status(403).<Object>body(Map.of("message", "Non autorisé"));
-            if (StatutTransfert.EN_ATTENTE != t.getStatut())
-                return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
+        TransfertLot t = transfertRepo.findById(id).orElse(null);
+        if (t == null) return ResponseEntity.notFound().build();
+        if (!t.getUsernameDestinataire().equals(username))
+            return ResponseEntity.status(403).<Object>body(Map.of("message", "Non autorisé"));
+        if (StatutTransfert.EN_ATTENTE != t.getStatut())
+            return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
 
-            t.setStatut(StatutTransfert.ACCEPTE);
-            t.setDateAcceptation(LocalDate.now());
-            // Marquer le lot comme transféré
-            lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
-                lot.setStatutLot(StatutLot.TRANSFERE);
-                lotRepo.save(lot);
-            });
-            return ResponseEntity.<Object>ok(transfertRepo.save(t));
-        }).orElse(ResponseEntity.notFound().build());
+        t.setStatut(StatutTransfert.ACCEPTE);
+        t.setDateAcceptation(LocalDate.now());
+
+        // Déduire la quantité transférée du stock du lot source
+        lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
+            lot.setStatutLot(StatutLot.TRANSFERE);
+            if (t.getQuantite() != null && lot.getQuantiteNette() != null) {
+                BigDecimal restant = lot.getQuantiteNette().subtract(t.getQuantite());
+                lot.setQuantiteNette(restant.compareTo(BigDecimal.ZERO) >= 0 ? restant : BigDecimal.ZERO);
+            }
+            lotRepo.save(lot);
+        });
+
+        return ResponseEntity.<Object>ok(transfertRepo.save(t));
     }
 
     /* ── PUT /api/transferts/{id}/refuser ──────────────────────── */

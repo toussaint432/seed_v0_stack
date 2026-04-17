@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import {
-  LayoutDashboard, Leaf, Package, BarChart3,
+  LayoutDashboard, Leaf, Package, BarChart2,
   Users as UsersIcon, CircleUser, Bell, Search, Menu, LogOut, ChevronRight,
   Activity, Warehouse, ShoppingCart, ArrowRightLeft, Shield,
   Calendar, MapPin, Building2, Workflow, Server, Store, MessageCircle,
@@ -88,21 +88,23 @@ function getNavSections(roleKey: string): NavSection[] {
       return [
         { section: 'Général', items: [dashboard] },
         { section: 'Recherche', items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
-        { section: 'Transferts', items: [transfers, certifications] },
+        { section: 'Gestion', items: [transfers, certifications, orders] },
         { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
     case 'seed-upsemcl':
       return [
         { section: 'Général', items: [dashboard] },
+        { section: 'Référentiel', items: [{ ...varieties, label: 'Variétés & Espèces' }] },
         { section: 'Multiplication', items: [{ ...lots, label: 'Lots G1→G3' }, programs] },
-        { section: 'Gestion', items: [stocks, certifications, transfers] },
+        { section: 'Gestion', items: [stocks, certifications, transfers, orders] },
         { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
     case 'seed-multiplicator':
       return [
         { section: 'Général', items: [dashboard] },
+        { section: 'Référentiel', items: [{ ...varieties, label: 'Variétés & Espèces' }] },
         { section: 'Production', items: [{ ...lots, label: 'Lots G3→R2' }, programs] },
         { section: 'Gestion', items: [stocks, certifications, orders] },
         { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
@@ -111,7 +113,7 @@ function getNavSections(roleKey: string): NavSection[] {
     case 'seed-quotataire':
       return [
         { section: 'Général',   items: [dashboard] },
-        { section: 'Catalogue', items: [{ id: 'catalogue' as Page, label: 'Catalogue R1/R2', icon: Store }] },
+        { section: 'Référentiel', items: [{ ...varieties, label: 'Variétés & Espèces' }, { id: 'catalogue' as Page, label: 'Catalogue R1/R2', icon: Store }] },
         { section: 'Commandes', items: [orders, { id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
         { section: 'Réceptions', items: [{ ...lots, label: 'Semences R2 reçues' }] },
       ]
@@ -152,7 +154,7 @@ const roleDescriptions: Record<string, string> = {
 /* ── Monitoring links for admin ── */
 const adminTools = [
   { href: 'http://localhost:19090/targets', icon: Activity,   label: 'Prometheus', badge: 'Live' },
-  { href: 'http://localhost:13000',          icon: BarChart3,  label: 'Grafana' },
+  { href: 'http://localhost:13000',          icon: BarChart2,  label: 'Grafana' },
   { href: 'http://localhost:18085',          icon: Server,     label: 'Kafka UI' },
 ]
 

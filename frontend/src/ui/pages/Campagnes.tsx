@@ -8,12 +8,6 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 
 interface Props { roleKey: string }
 
-const TYPE_CAMPAGNE = [
-  { value: 'HIVERNALE', label: 'Hivernale' },
-  { value: 'CONTRE_SAISON', label: 'Contre-saison' },
-  { value: 'IRRIGUEE', label: 'Irriguée' },
-]
-
 export function Campagnes({ roleKey }: Props) {
   const [campagnes, setCampagnes] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -26,8 +20,7 @@ export function Campagnes({ roleKey }: Props) {
   const canManage = ['seed-admin'].includes(roleKey)
 
   const [form, setForm] = useState({
-    codeCampagne: '', libelle: '', dateDebut: '', dateFin: '',
-    typeCampagne: 'HIVERNALE', statut: 'PLANIFIEE',
+    codeCampagne: '', libelle: '', dateDebut: '', dateFin: '', statut: 'PLANIFIEE',
   })
 
   async function fetchData() {
@@ -45,7 +38,7 @@ export function Campagnes({ roleKey }: Props) {
 
   function openCreate() {
     setEditItem(null)
-    setForm({ codeCampagne: '', libelle: '', dateDebut: '', dateFin: '', typeCampagne: 'HIVERNALE', statut: 'PLANIFIEE' })
+    setForm({ codeCampagne: '', libelle: '', dateDebut: '', dateFin: '', statut: 'PLANIFIEE' })
     setShowForm(true)
   }
 
@@ -54,19 +47,20 @@ export function Campagnes({ roleKey }: Props) {
     setForm({
       codeCampagne: c.codeCampagne || '', libelle: c.libelle || '',
       dateDebut: c.dateDebut || '', dateFin: c.dateFin || '',
-      typeCampagne: c.typeCampagne || 'HIVERNALE', statut: c.statut || 'PLANIFIEE',
+      statut: c.statut || 'PLANIFIEE',
     })
     setShowForm(true)
   }
 
   async function submitForm(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
+    const annee = form.dateDebut ? new Date(form.dateDebut).getFullYear() : new Date().getFullYear()
     try {
       if (editItem) {
-        await api.put(`${endpoints.campagnes}/${editItem.id}`, form)
+        await api.put(`${endpoints.campagnes}/${editItem.id}`, { ...form, annee })
         setToast({ msg: `Campagne "${form.libelle}" mise à jour`, type: 'success' })
       } else {
-        await api.post(endpoints.campagnes, form)
+        await api.post(endpoints.campagnes, { ...form, annee })
         setToast({ msg: `Campagne "${form.libelle}" créée`, type: 'success' })
       }
       setShowForm(false); setEditItem(null); fetchData()
@@ -114,16 +108,15 @@ export function Campagnes({ roleKey }: Props) {
         </div>
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Code</th><th>Libellé</th><th>Type</th><th>Début</th><th>Fin</th><th>Statut</th>{canManage && <th>Actions</th>}</tr></thead>
+            <thead><tr><th>Code</th><th>Libellé</th><th>Début</th><th>Fin</th><th>Statut</th>{canManage && <th>Actions</th>}</tr></thead>
             <tbody>
-              {loading ? [0, 1, 2].map(i => <tr key={i}><td colSpan={7}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
+              {loading ? [0, 1, 2].map(i => <tr key={i}><td colSpan={6}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
                 campagnes.length === 0 ? (
-                  <tr><td colSpan={7}><div className="empty-state"><div className="empty-icon"><Calendar size={20} /></div><div className="empty-title">Aucune campagne</div>{canManage && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={openCreate}>+ Créer une campagne</button>}</div></td></tr>
+                  <tr><td colSpan={6}><div className="empty-state"><div className="empty-icon"><Calendar size={20} /></div><div className="empty-title">Aucune campagne</div>{canManage && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={openCreate}>+ Créer une campagne</button>}</div></td></tr>
                 ) : campagnes.map(c => (
                   <tr key={c.id}>
                     <td><span className="td-mono" style={{ fontWeight: 600 }}>{c.codeCampagne}</span></td>
                     <td style={{ fontWeight: 500 }}>{c.libelle}</td>
-                    <td><span className="badge badge-blue" style={{ fontSize: 11 }}>{c.typeCampagne || '—'}</span></td>
                     <td style={{ fontSize: 12.5 }}>{c.dateDebut ? new Date(c.dateDebut).toLocaleDateString('fr-FR') : '—'}</td>
                     <td style={{ fontSize: 12.5 }}>{c.dateFin ? new Date(c.dateFin).toLocaleDateString('fr-FR') : '—'}</td>
                     <td><StatusBadge status={c.statut} showIcon /></td>
@@ -150,11 +143,6 @@ export function Campagnes({ roleKey }: Props) {
               <Field label="Libellé" required><FormInput value={form.libelle} onChange={e => setForm(f => ({ ...f, libelle: e.target.value }))} placeholder="Campagne Hivernale 2026" required /></Field>
             </FormRow>
             <FormRow>
-              <Field label="Type de campagne">
-                <FormSelect value={form.typeCampagne} onChange={e => setForm(f => ({ ...f, typeCampagne: e.target.value }))}>
-                  {TYPE_CAMPAGNE.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </FormSelect>
-              </Field>
               <Field label="Statut">
                 <FormSelect value={form.statut} onChange={e => setForm(f => ({ ...f, statut: e.target.value }))}>
                   <option value="PLANIFIEE">Planifiée</option>

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Database, RefreshCw, Plus, MapPin, Scale, TrendingUp, X, Filter } from 'lucide-react'
+import { Database, RefreshCw, Plus, MapPin, Package, TrendingUp, X, Filter } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
@@ -78,7 +78,7 @@ export function Stocks({ roleKey }: Props) {
       <div className="stats-grid">
         <div className="stat-card"><div className="stat-icon green"><Database size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : stocks.length}</div><div className="stat-label">Entrees stock</div></div></div>
         <div className="stat-card"><div className="stat-icon blue"><MapPin size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : sites.length}</div><div className="stat-label">Sites de stockage</div></div></div>
-        <div className="stat-card"><div className="stat-icon gold"><Scale size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : totalQty.toLocaleString('fr-FR')}</div><div className="stat-label">Quantite totale (kg)</div></div></div>
+        <div className="stat-card"><div className="stat-icon gold"><Package size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : totalQty.toLocaleString('fr-FR')}</div><div className="stat-label">Quantite totale (kg)</div></div></div>
         <div className="stat-card"><div className="stat-icon violet"><TrendingUp size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '...' : stocks.length > 0 ? Math.round(totalQty / stocks.length).toLocaleString('fr-FR') : 0}</div><div className="stat-label">Moyenne par entree (kg)</div></div></div>
       </div>
 

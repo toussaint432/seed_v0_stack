@@ -772,6 +772,134 @@ function VueAdmin({ setToast }: { setToast: any }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   VUE UPSEMCL / SELECTEUR — commandes reçues à valider
+   ══════════════════════════════════════════════════════════════ */
+function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
+  const [recues, setRecues]   = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving]   = useState(false)
+  const [refusModal, setRefusModal] = useState<{ id: number; code: string } | null>(null)
+  const [motif, setMotif]     = useState('')
+
+  const isUpsemcl = roleKey === 'seed-upsemcl'
+  const label = isUpsemcl
+    ? 'commandes des multiplicateurs'
+    : 'commandes reçues'
+
+  async function fetchAll() {
+    setLoading(true)
+    try {
+      const r = await api.get(endpoints.ordersATraiter)
+      setRecues(r.data ?? [])
+    } catch { setRecues([]) }
+    setLoading(false)
+  }
+
+  useEffect(() => { fetchAll() }, [])
+
+  async function accepter(id: number) {
+    setSaving(true)
+    try {
+      await api.put(endpoints.orderStatut(id), { statut: 'ACCEPTEE' })
+      setToast({ msg: 'Commande acceptée', type: 'success' })
+      fetchAll()
+    } catch { setToast({ msg: "Erreur lors de l'acceptation", type: 'error' }) }
+    finally { setSaving(false) }
+  }
+
+  async function refuser(e: React.FormEvent) {
+    e.preventDefault()
+    if (!refusModal) return
+    setSaving(true)
+    try {
+      await api.put(endpoints.orderStatut(refusModal.id), { statut: 'ANNULEE', observations: motif })
+      setToast({ msg: `Commande ${refusModal.code} annulée`, type: 'success' })
+      setRefusModal(null); setMotif('')
+      fetchAll()
+    } catch { setToast({ msg: 'Erreur lors du refus', type: 'error' }) }
+    finally { setSaving(false) }
+  }
+
+  const aTraiter   = recues.filter(o => o.statut === 'SOUMISE').length
+  const acceptees  = recues.filter(o => ['ACCEPTEE','CONFIRMEE'].includes(o.statut)).length
+
+  return (
+    <div>
+      <div className="stats-grid">
+        <div className="stat-card"><div className="stat-icon blue"><Building2 size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : recues.length}</div><div className="stat-label">Total reçues</div></div></div>
+        <div className="stat-card"><div className="stat-icon gold"><Clock size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : aTraiter}</div><div className="stat-label">À traiter</div></div></div>
+        <div className="stat-card"><div className="stat-icon green"><PackageCheck size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : acceptees}</div><div className="stat-label">Acceptées</div></div></div>
+        <div className="stat-card"><div className="stat-icon red"><XCircle size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : recues.filter(o => ['ANNULEE','REJETEE'].includes(o.statut)).length}</div><div className="stat-label">Annulées</div></div></div>
+      </div>
+
+      {aTraiter > 0 && (
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: '#1d4ed8' }}>
+          <Clock size={16} />
+          <strong>{aTraiter} commande{aTraiter > 1 ? 's' : ''}</strong> en attente de votre décision.
+        </div>
+      )}
+
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">
+            <span className="card-title-icon"><Building2 size={15} /></span>
+            Mes {label}
+            <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{recues.length}</span>
+          </span>
+          <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+        </div>
+
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Code</th><th>Client / Acheteur</th><th>Statut</th><th>Date</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              {loading
+                ? [0,1,2].map(i => <tr key={i}><td colSpan={5}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
+                : recues.length === 0
+                  ? <tr><td colSpan={5}><div className="empty-state"><div className="empty-icon"><ShoppingCart size={20} /></div><div className="empty-title">Aucune commande reçue</div></div></td></tr>
+                  : recues.map(o => (
+                    <tr key={o.id}>
+                      <td><span className="td-mono" style={{ fontWeight: 600 }}>{o.codeCommande}</span></td>
+                      <td style={{ fontWeight: 500 }}>{o.usernameAcheteur || o.client || '—'}</td>
+                      <td><StatusBadge statut={o.statut} /></td>
+                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
+                      <td>
+                        {o.statut === 'SOUMISE' && (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px' }} onClick={() => accepter(o.id)} disabled={saving}>
+                              <CheckCircle2 size={12} /> Accepter
+                            </button>
+                            <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 10px', color: 'var(--red-600)', border: '1px solid #fecaca' }} onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }} disabled={saving}>
+                              <Ban size={12} /> Annuler
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+              }
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {refusModal && (
+        <Modal title="Annuler la commande" subtitle={`Commande ${refusModal.code}`} onClose={() => setRefusModal(null)} size="sm">
+          <form onSubmit={refuser}>
+            <Field label="Motif d'annulation" required hint="Ce motif sera visible par le demandeur">
+              <textarea value={motif} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMotif(e.target.value)} placeholder="Stock insuffisant, variété indisponible..." rows={4} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
+            </Field>
+            <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer l'annulation" />
+          </form>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
    COMPOSANT PRINCIPAL — dispatch par rôle
    ══════════════════════════════════════════════════════════════ */
 export function Orders({ roleKey }: Props) {
@@ -784,7 +912,9 @@ export function Orders({ roleKey }: Props) {
         ? <VueQuotataire setToast={setToast} />
         : roleKey === 'seed-multiplicator'
           ? <VueMultiplicateur setToast={setToast} />
-          : <VueAdmin setToast={setToast} />
+          : roleKey === 'seed-upsemcl' || roleKey === 'seed-selector'
+            ? <VueUpsemcl setToast={setToast} roleKey={roleKey} />
+            : <VueAdmin setToast={setToast} />
       }
     </div>
   )

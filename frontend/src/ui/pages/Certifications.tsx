@@ -21,16 +21,18 @@ const RESULT_OPTIONS = [
 ]
 
 const CERT_RESULT_OPTIONS = [
-  { value: 'CERTIFIE', label: 'Certifié' },
-  { value: 'REJETE', label: 'Rejeté' },
-  { value: 'EN_COURS', label: 'En cours' },
+  { value: 'CONFORME', label: 'Certifié' },
+  { value: 'NON_CONFORME', label: 'Non conforme' },
+  { value: 'EN_ATTENTE', label: 'En attente' },
 ]
 
 const CONTROL_TYPES = [
-  { value: 'LABORATOIRE', label: 'Laboratoire' },
-  { value: 'CHAMP', label: 'Champ' },
-  { value: 'POST_RECOLTE', label: 'Post-récolte' },
-  { value: 'PRE_CERTIFICATION', label: 'Pré-certification' },
+  { value: 'GERMINATION', label: 'Germination' },
+  { value: 'HUMIDITE', label: 'Humidité' },
+  { value: 'PURETE_PHYSIQUE', label: 'Pureté physique' },
+  { value: 'PURETE_SPECIFIQUE', label: 'Pureté spécifique' },
+  { value: 'SANITAIRE', label: 'Sanitaire' },
+  { value: 'COMPLET', label: 'Complet' },
 ]
 
 export function Certifications({ roleKey }: Props) {
@@ -56,7 +58,7 @@ export function Certifications({ roleKey }: Props) {
   const [uploadingId, setUploadingId] = useState<number | null>(null)
 
   const [controlForm, setControlForm] = useState({
-    idLot: '', typeControle: 'LABORATOIRE', dateControle: new Date().toISOString().split('T')[0],
+    idLot: '', typeControle: 'GERMINATION', dateControle: new Date().toISOString().split('T')[0],
     tauxGermination: '', tauxHumidite: '', puretePhysique: '', pureteSpecifique: '',
     conformiteVarietale: '', resultat: 'CONFORME', controleur: '', observations: '',
   })
@@ -64,7 +66,7 @@ export function Certifications({ roleKey }: Props) {
   const [certForm, setCertForm] = useState({
     idLot: '', organismeCertificateur: 'DISEM/ISRA', numeroCertificat: '',
     dateDemande: new Date().toISOString().split('T')[0], dateInspection: '',
-    dateCertification: '', resultatCertification: 'EN_COURS', motifRejet: '', dateExpiration: '',
+    dateCertification: '', resultatCertification: 'EN_ATTENTE', motifRejet: '', dateExpiration: '',
   })
 
   async function fetchAll() {
@@ -107,8 +109,8 @@ export function Certifications({ roleKey }: Props) {
 
   // Stats
   const conformeCount = controls.filter(c => c.resultat === 'CONFORME').length
-  const certifieCount = certifications.filter(c => c.resultatCertification === 'CERTIFIE').length
-  const enCoursCount = certifications.filter(c => c.resultatCertification === 'EN_COURS').length
+  const certifieCount = certifications.filter(c => c.resultatCertification === 'CONFORME').length
+  const enCoursCount = certifications.filter(c => c.resultatCertification === 'EN_ATTENTE').length
 
   // ── Submit ──
   async function submitControl(e: React.FormEvent) {
@@ -194,7 +196,7 @@ export function Certifications({ roleKey }: Props) {
 
   function resetControlForm() {
     setControlForm({
-      idLot: '', typeControle: 'LABORATOIRE', dateControle: new Date().toISOString().split('T')[0],
+      idLot: '', typeControle: 'GERMINATION', dateControle: new Date().toISOString().split('T')[0],
       tauxGermination: '', tauxHumidite: '', puretePhysique: '', pureteSpecifique: '',
       conformiteVarietale: '', resultat: 'CONFORME', controleur: '', observations: '',
     })
@@ -204,7 +206,7 @@ export function Certifications({ roleKey }: Props) {
     setCertForm({
       idLot: '', organismeCertificateur: 'DISEM/ISRA', numeroCertificat: '',
       dateDemande: new Date().toISOString().split('T')[0], dateInspection: '',
-      dateCertification: '', resultatCertification: 'EN_COURS', motifRejet: '', dateExpiration: '',
+      dateCertification: '', resultatCertification: 'EN_ATTENTE', motifRejet: '', dateExpiration: '',
     })
   }
 
@@ -699,7 +701,7 @@ export function Certifications({ roleKey }: Props) {
                 {CERT_RESULT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </FormSelect>
             </Field>
-            {certForm.resultatCertification === 'REJETE' && (
+            {certForm.resultatCertification === 'NON_CONFORME' && (
               <Field label="Motif de rejet" required>
                 <textarea
                   value={certForm.motifRejet}
