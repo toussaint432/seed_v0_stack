@@ -32,24 +32,24 @@ services:
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
       KC_HTTP_PORT: 8080
-
-      # ✅ rend l'issuer stable — options validées pour KC 25.x (hostname:v2)
       KC_HOSTNAME_STRICT: "false"
       KC_HTTP_ENABLED: "true"
       KC_PROXY_HEADERS: "xforwarded"
-      # Métriques & health exposés sur le port de management 9000
       KC_METRICS_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
-      # JVM: auto-configuration via UseContainerSupport (JDK 11+)
-      # JAVA_OPTS_APPEND retiré — option build-time dans KC 25.x qui provoque
-      # un hot-reload Quarkus en boucle après chaque démarrage réussi
-
+      # Plafond heap explicite — évite que MaxRAMPercentage=70 alloue 980m+
+      # et dépasse le mem_limit avec le metaspace (256m) + natif (~350m)
+      JAVA_OPTS_APPEND: "-Xms128m -Xmx640m -Dquarkus.live-reload.enabled=false"
     ports:
       - "18080:8080"
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import:ro
-    mem_limit: 900m
-    restart: unless-stopped
+      # Cache des artefacts Quarkus — le build n'est exécuté qu'UNE SEULE FOIS
+      # puis chargé depuis le volume (~300m au lieu de ~1500m)
+      - keycloak_quarkus_cache:/opt/keycloak/lib/quarkus
+    # heap 640m + metaspace 256m + natif ~300m = ~1196m < 1300m ✓
+    mem_limit: 1300m
+    restart: no
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
@@ -105,14 +105,16 @@ services:
       KAFKA_JMX_PORT: 9999
       KAFKA_JMX_HOSTNAME: kafka
       # ── JVM — G1GC, limité pour dev sur M1 ────────────────────────────
-      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+      KAFKA_HEAP_OPTS: "-Xms192m -Xmx384m"
       KAFKA_JVM_PERFORMANCE_OPTS: >-
         -XX:+UseG1GC
         -XX:MaxGCPauseMillis=20
         -XX:InitiatingHeapOccupancyPercent=35
         -XX:+ExplicitGCInvokesConcurrent
         -XX:MaxInlineLevel=15
-    mem_limit: 768m
+      # Stabilisation en environnement mémoire contraint (4 GB RAM)
+      KAFKA_REPLICA_FETCH_MAX_BYTES: 1048576
+    mem_limit: 512m
 
   kafka-jmx-exporter:
     image: sscaling/jmx-prometheus-exporter
@@ -125,6 +127,7 @@ services:
     depends_on:
       - kafka
     mem_limit: 128m
+    restart: no
 
   kafka-exporter:
     image: danielqsj/kafka-exporter:latest
@@ -154,14 +157,14 @@ services:
       KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED: "false"
       DYNAMIC_CONFIG_ENABLED: "true"
       LOGGING_LEVEL_ROOT: warn
-      JAVA_OPTS: "-Xms48m -Xmx160m -XX:MaxMetaspaceSize=96m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
-    mem_limit: 320m
+      JAVA_OPTS: "-Xms32m -Xmx96m -XX:MaxMetaspaceSize=64m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+    mem_limit: 192m
 
   # ✅ Base env commun (optionnel mais propre)
   catalog-service:
     build: ./services/catalog-service
     container_name: seed-catalog
-    restart: on-failure:5
+    restart: no
     depends_on:
       postgres:
         condition: service_healthy
@@ -194,7 +197,7 @@ services:
   lot-service:
     build: ./services/lot-service
     container_name: seed-lot
-    restart: on-failure:5
+    restart: no
     depends_on:
       postgres:
         condition: service_healthy
@@ -223,7 +226,7 @@ services:
   stock-service:
     build: ./services/stock-service
     container_name: seed-stock
-    restart: on-failure:5
+    restart: no
     depends_on:
       postgres:
         condition: service_healthy
@@ -252,7 +255,7 @@ services:
   order-service:
     build: ./services/order-service
     container_name: seed-order
-    restart: on-failure:5
+    restart: no
     depends_on:
       postgres:
         condition: service_healthy
@@ -281,7 +284,7 @@ services:
   frontend:
     build: ./frontend
     container_name: seed-frontend
-    restart: on-failure:3
+    restart: no
     depends_on:
       keycloak:
         condition: service_started
@@ -384,6 +387,7 @@ services:
 
 volumes:
   seed_pgdata:
+  keycloak_quarkus_cache:
   seed_grafana_data:
   seed_prometheus_data:
   seed_alertmanager_data:

@@ -12,8 +12,10 @@ import sn.isra.seed.order_service.repo.AllocationRepo;
 import sn.isra.seed.order_service.repo.CommandeRepo;
 import sn.isra.seed.order_service.repo.LigneRepo;
 import sn.isra.seed.order_service.repo.MembreOrganisationRepo;
+import sn.isra.seed.order_service.repo.StockOrderRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,6 +27,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.List;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
@@ -34,6 +37,7 @@ public class OrderController {
   private final LigneRepo ligneRepo;
   private final AllocationRepo allocationRepo;
   private final MembreOrganisationRepo membreRepo;
+  private final StockOrderRepo stockOrderRepo;
   private final OrderEventProducer producer;
   private final ObjectMapper om;
 
@@ -58,11 +62,19 @@ public class OrderController {
   }
 
   private boolean isMultiplicateur(Jwt jwt) {
+    return hasRole(jwt, "seed-multiplicator");
+  }
+
+  private boolean isUpsemcl(Jwt jwt) {
+    return hasRole(jwt, "seed-upsemcl");
+  }
+
+  private boolean hasRole(Jwt jwt, String role) {
     try {
       java.util.Map<String, Object> ra = jwt.getClaim("realm_access");
       if (ra == null) return false;
       Object roles = ra.get("roles");
-      if (roles instanceof java.util.List<?> list) return list.contains("seed-multiplicator");
+      if (roles instanceof java.util.List<?> list) return list.contains(role);
     } catch (Exception ignored) {}
     return false;
   }
@@ -88,13 +100,19 @@ public class OrderController {
         .orElse(List.of());
   }
 
-  /** Commandes reçues par l'organisation du multiplicateur connecté */
+  /**
+   * Commandes reçues par l'organisation connectée.
+   * Pour l'UPSemCL : toutes les commandes dont le fournisseur est de type UPSEMCL
+   * (quel que soit l'ID d'org), plus celles sans fournisseur explicite.
+   */
   @GetMapping("/a-traiter")
   public List<Commande> aTraiter(@AuthenticationPrincipal Jwt jwt) {
+    if (isUpsemcl(jwt)) {
+      return commandeRepo.findForAnyUpsemcl();
+    }
     String username = jwt.getClaimAsString("preferred_username");
     return membreRepo.findByKeycloakUsername(username)
-        .map(m -> commandeRepo.findByIdOrganisationFournisseurOrderByCreatedAtDesc(
-            m.getOrganisation().getId()))
+        .map(m -> commandeRepo.findByIdOrganisationFournisseurOrderByCreatedAtDesc(m.getOrganisation().getId()))
         .orElse(List.of());
   }
 
@@ -136,7 +154,8 @@ public class OrderController {
     return saved;
   }
 
-  /** Changer le statut d'une commande (multiplicateur : ACCEPTEE / ANNULEE…) */
+  /** Changer le statut d'une commande. Déclenche un mouvement de stock sur LIVREE. */
+  @Transactional
   @PutMapping("/{id}/statut")
   public ResponseEntity<Commande> updateStatut(@PathVariable Long id,
                                                @RequestBody StatutRequest req) {
@@ -155,8 +174,38 @@ public class OrderController {
     return commandeRepo.findById(id).map(c -> {
       c.setStatut(nouveauStatut);
       if (req.observations() != null) c.setObservations(req.observations());
-      return ResponseEntity.ok(commandeRepo.save(c));
+      Commande saved = commandeRepo.save(c);
+
+      if (nouveauStatut == StatutCommande.LIVREE && c.getIdOrganisationAcheteur() != null) {
+        appliquerMouvementStock(saved);
+      }
+
+      return ResponseEntity.ok(saved);
     }).orElse(ResponseEntity.notFound().build());
+  }
+
+  /**
+   * Débite le stock UPSemCL et crédite le stock du multiplicateur acheteur
+   * pour chaque allocation liée à la commande.
+   */
+  private void appliquerMouvementStock(Commande commande) {
+    for (LigneCommande ligne : commande.getLignes()) {
+      List<AllocationCommande> allocs = allocationRepo.findByLigne_Id(ligne.getId());
+      for (AllocationCommande alloc : allocs) {
+        try {
+          stockOrderRepo.debitUpsemcl(alloc.getIdLot(), alloc.getQuantiteAllouee());
+          stockOrderRepo.creditOrg(
+              alloc.getIdLot(),
+              commande.getIdOrganisationAcheteur(),
+              alloc.getQuantiteAllouee(),
+              ligne.getUnite() != null ? ligne.getUnite() : "kg"
+          );
+        } catch (Exception e) {
+          log.error("Mouvement stock échoué — lot={} org={}: {}",
+              alloc.getIdLot(), commande.getIdOrganisationAcheteur(), e.getMessage());
+        }
+      }
+    }
   }
 
   @PostMapping("/allocate")

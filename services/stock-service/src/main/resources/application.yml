@@ -23,6 +23,11 @@ spring:
     producer:
       properties:
         "[max.block.ms]": 3000
+    consumer:
+      group-id: stock-service-lot-consumer
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
   jackson:
     serialization:
       write-dates-as-timestamps: false  # Dates ISO-8601 au lieu de timestamps Unix

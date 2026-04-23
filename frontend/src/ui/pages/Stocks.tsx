@@ -50,14 +50,23 @@ export function Stocks({ roleKey }: Props) {
   const varMap: Record<number, any> = Object.fromEntries(varieties.map(v => [v.id, v]))
   const lotMap: Record<number, any> = Object.fromEntries(lots.map(l => [l.id, l]))
 
+  function toastFromError(err: any, fallback: string) {
+    const status = err?.response?.status
+    const msg    = err?.response?.data?.message || err?.response?.data?.error || fallback
+    if (status === 409) return setToast({ msg: `Stock insuffisant — ${msg}`, type: 'error' })
+    if (status === 400) return setToast({ msg: `Données invalides — ${msg}`, type: 'error' })
+    if (status === 500) return setToast({ msg: `Erreur serveur — veuillez réessayer`, type: 'error' })
+    setToast({ msg, type: 'error' })
+  }
+
   async function submitStock(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
       await api.post(endpoints.stocks, { idLot: Number(stockForm.idLot), siteCode: stockForm.siteCode, quantite: Number(stockForm.quantite), unite: stockForm.unite })
-      setToast({ msg: "Stock enregistre pour lot " + stockForm.idLot, type: 'success' })
+      setToast({ msg: `Stock enregistré — lot #${stockForm.idLot} sur ${stockForm.siteCode}`, type: 'success' })
       setShowStockForm(false); setStockForm({ idLot: '', siteCode: '', quantite: '', unite: 'kg' }); fetchStocks(true)
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
+      toastFromError(err, 'Erreur enregistrement stock')
     } finally { setSaving(false) }
   }
 
@@ -65,10 +74,11 @@ export function Stocks({ roleKey }: Props) {
     e.preventDefault(); setSaving(true)
     try {
       await api.post(endpoints.movements, { idLot: Number(mvtForm.idLot), type: mvtForm.type, siteSourceCode: mvtForm.siteSourceCode || undefined, siteDestinationCode: mvtForm.siteDestinationCode || undefined, quantite: Number(mvtForm.quantite), unite: mvtForm.unite, reference: mvtForm.reference || undefined })
-      setToast({ msg: "Mouvement " + mvtForm.type + " enregistre", type: 'success' })
+      const labels: Record<string, string> = { IN: 'Entrée', OUT: 'Sortie', TRANSFER: 'Transfert' }
+      setToast({ msg: `${labels[mvtForm.type] || mvtForm.type} de ${mvtForm.quantite} ${mvtForm.unite} enregistré`, type: 'success' })
       setShowMvtForm(false); setMvtForm({ idLot: '', type: 'IN', siteSourceCode: '', siteDestinationCode: '', quantite: '', unite: 'kg', reference: '' }); fetchStocks(true)
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur mouvement', type: 'error' })
+      toastFromError(err, 'Erreur mouvement')
     } finally { setSaving(false) }
   }
 

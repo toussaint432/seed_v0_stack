@@ -104,6 +104,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [mesLots, setMesLots]         = useState<any[]>([])
   const [monStock, setMonStock]       = useState<any[]>([])
   const [varieties, setVarieties]     = useState<any[]>([])
+  const [upsemclOrgId, setUpsemclOrgId] = useState<number | null>(null)
   const [loadingCat, setLoadingCat]   = useState(true)
   const [loadingMes, setLoadingMes]   = useState(true)
   const [showCommande, setShowCommande] = useState(false)
@@ -116,11 +117,12 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
 
   async function fetchAll() {
     setLoadingCat(true); setLoadingMes(true)
-    const [catRes, mesRes, stockRes, varRes] = await Promise.allSettled([
+    const [catRes, mesRes, stockRes, varRes, orgRes] = await Promise.allSettled([
       api.get(endpoints.lotsCatalogueG3),
       api.get(endpoints.lotsMesLots),
       api.get(endpoints.stockMonStock),
       api.get(endpoints.varieties),
+      api.get(endpoints.organisations),
     ])
     setCatalogueG3(catRes.status === 'fulfilled' ? catRes.value.data : [])
     setLoadingCat(false)
@@ -128,6 +130,12 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     setMonStock(stockRes.status === 'fulfilled' ? stockRes.value.data : [])
     setLoadingMes(false)
     setVarieties(varRes.status === 'fulfilled' ? varRes.value.data : [])
+    if (orgRes.status === 'fulfilled') {
+      const upsemcl = orgRes.value.data.find((o: any) =>
+        o.typeOrganisation?.toUpperCase() === 'UPSEMCL' && o.active !== false
+      )
+      setUpsemclOrgId(upsemcl?.id ?? null)
+    }
   }
 
   useEffect(() => { fetchAll() }, [])
@@ -170,6 +178,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       await api.post(endpoints.orders, {
         codeCommande: code,
         client: commandeLot.responsableNom || 'Multiplicateur',
+        idOrganisationFournisseur: upsemclOrgId,
         observations: cmdForm.observations || `Demande G3 — lot ${commandeLot.codeLot}`,
         lignes: [{
           idVariete:   commandeLot.idVariete,

@@ -1,11 +1,15 @@
 package sn.isra.seed.lot_service.api;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import sn.isra.seed.lot_service.entity.OutboxEvent;
 import sn.isra.seed.lot_service.entity.TransfertLot;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.entity.enums.StatutTransfert;
 import sn.isra.seed.lot_service.repo.LotRepo;
+import sn.isra.seed.lot_service.repo.OutboxEventRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
@@ -17,13 +21,16 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/transferts")
 @RequiredArgsConstructor
 public class TransfertController {
 
     private final TransfertLotRepo transfertRepo;
-    private final LotRepo lotRepo;
+    private final LotRepo          lotRepo;
+    private final OutboxEventRepo  outboxRepo;
+    private final ObjectMapper     om;
 
     /* ── GET /api/transferts — tous les transferts du connecté ── */
     @GetMapping
@@ -67,7 +74,31 @@ public class TransfertController {
             lotRepo.save(lot);
         });
 
-        return ResponseEntity.<Object>ok(transfertRepo.save(t));
+        TransfertLot saved = transfertRepo.save(t);
+
+        // Outbox — même transaction, durabilité garantie vers Kafka après commit
+        try {
+            String payload = om.writeValueAsString(Map.of(
+                "idTransfertLot",   saved.getId(),
+                "codeTransfert",    saved.getCodeTransfert(),
+                "idLot",            saved.getIdLot(),
+                "quantite",         saved.getQuantite(),
+                "unite",            "kg",
+                "roleEmetteur",     saved.getRoleEmetteur(),
+                "roleDestinataire", saved.getRoleDestinataire()
+            ));
+            OutboxEvent event = new OutboxEvent();
+            event.setAggregateType("TransfertLot");
+            event.setAggregateId(saved.getId().toString());
+            event.setType("LOT_TRANSFER_ACCEPTE");
+            event.setPayload(payload);
+            outboxRepo.save(event);
+        } catch (Exception e) {
+            log.error("Impossible de sérialiser l'événement outbox pour le transfert lot {}",
+                      saved.getCodeTransfert(), e);
+        }
+
+        return ResponseEntity.<Object>ok(saved);
     }
 
     /* ── PUT /api/transferts/{id}/refuser ──────────────────────── */

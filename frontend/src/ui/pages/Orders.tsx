@@ -773,63 +773,55 @@ function VueAdmin({ setToast }: { setToast: any }) {
 
 /* ══════════════════════════════════════════════════════════════
    VUE UPSEMCL / SELECTEUR — commandes reçues à valider
+   Interface identique à VueAdmin sur le périmètre UPSemCL :
+   recherche, filtres statut, modal détail + pipeline + actions
    ══════════════════════════════════════════════════════════════ */
 function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
-  const [recues, setRecues]   = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving]   = useState(false)
-  const [refusModal, setRefusModal] = useState<{ id: number; code: string } | null>(null)
-  const [motif, setMotif]     = useState('')
+  const [orders, setOrders]       = useState<any[]>([])
+  const [orgs, setOrgs]           = useState<any[]>([])
+  const [search, setSearch]       = useState('')
+  const [filterStatus, setFilter] = useState('')
+  const [loading, setLoading]     = useState(true)
 
   const isUpsemcl = roleKey === 'seed-upsemcl'
-  const label = isUpsemcl
-    ? 'commandes des multiplicateurs'
-    : 'commandes reçues'
 
   async function fetchAll() {
     setLoading(true)
-    try {
-      const r = await api.get(endpoints.ordersATraiter)
-      setRecues(r.data ?? [])
-    } catch { setRecues([]) }
+    const [oRes, orgRes] = await Promise.allSettled([
+      api.get(endpoints.ordersATraiter),
+      api.get(endpoints.organisations),
+    ])
+    setOrders(oRes.status === 'fulfilled' ? oRes.value.data : [])
+    setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
     setLoading(false)
+  }
+
+  async function handleUpdateStatus(id: number, statut: string) {
+    await api.put(endpoints.orderStatut(id), { statut })
+    setToast({ msg: `Commande → ${STATUS_CFG[statut]?.label ?? statut}`, type: 'success' })
+    fetchAll()
   }
 
   useEffect(() => { fetchAll() }, [])
 
-  async function accepter(id: number) {
-    setSaving(true)
-    try {
-      await api.put(endpoints.orderStatut(id), { statut: 'ACCEPTEE' })
-      setToast({ msg: 'Commande acceptée', type: 'success' })
-      fetchAll()
-    } catch { setToast({ msg: "Erreur lors de l'acceptation", type: 'error' }) }
-    finally { setSaving(false) }
-  }
+  const statuses = [...new Set(orders.map((o: any) => o.statut).filter(Boolean))]
+  const filtered = orders.filter(o => {
+    const ms = !search || o.codeCommande?.toLowerCase().includes(search.toLowerCase()) || o.client?.toLowerCase().includes(search.toLowerCase())
+    const mf = !filterStatus || o.statut === filterStatus
+    return ms && mf
+  })
 
-  async function refuser(e: React.FormEvent) {
-    e.preventDefault()
-    if (!refusModal) return
-    setSaving(true)
-    try {
-      await api.put(endpoints.orderStatut(refusModal.id), { statut: 'ANNULEE', observations: motif })
-      setToast({ msg: `Commande ${refusModal.code} annulée`, type: 'success' })
-      setRefusModal(null); setMotif('')
-      fetchAll()
-    } catch { setToast({ msg: 'Erreur lors du refus', type: 'error' }) }
-    finally { setSaving(false) }
-  }
-
-  const aTraiter   = recues.filter(o => o.statut === 'SOUMISE').length
-  const acceptees  = recues.filter(o => ['ACCEPTEE','CONFIRMEE'].includes(o.statut)).length
+  const aTraiter = orders.filter(o => o.statut === 'SOUMISE').length
+  const acceptees = orders.filter(o => ['ACCEPTEE', 'CONFIRMEE'].includes(o.statut)).length
+  const rejetees  = orders.filter(o => ['ANNULEE', 'REJETEE'].includes(o.statut)).length
 
   return (
     <div>
       <div className="stats-grid">
-        <div className="stat-card"><div className="stat-icon blue"><Building2 size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : recues.length}</div><div className="stat-label">Total reçues</div></div></div>
+        <div className="stat-card"><div className="stat-icon blue"><ShoppingCart size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : orders.length}</div><div className="stat-label">Total reçues</div></div></div>
         <div className="stat-card"><div className="stat-icon gold"><Clock size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : aTraiter}</div><div className="stat-label">À traiter</div></div></div>
         <div className="stat-card"><div className="stat-icon green"><PackageCheck size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : acceptees}</div><div className="stat-label">Acceptées</div></div></div>
-        <div className="stat-card"><div className="stat-icon red"><XCircle size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : recues.filter(o => ['ANNULEE','REJETEE'].includes(o.statut)).length}</div><div className="stat-label">Annulées</div></div></div>
+        <div className="stat-card"><div className="stat-icon red"><XCircle size={18} /></div><div className="stat-body"><div className="stat-value">{loading ? '…' : rejetees}</div><div className="stat-label">Rejetées</div></div></div>
       </div>
 
       {aTraiter > 0 && (
@@ -843,58 +835,58 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
         <div className="card-header">
           <span className="card-title">
             <span className="card-title-icon"><Building2 size={15} /></span>
-            Mes {label}
-            <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{recues.length}</span>
+            {isUpsemcl ? 'Commandes des multiplicateurs' : 'Commandes reçues'}
+            <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{filtered.length}/{orders.length}</span>
           </span>
           <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
         </div>
 
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr><th>Code</th><th>Client / Acheteur</th><th>Statut</th><th>Date</th><th>Actions</th></tr>
-            </thead>
-            <tbody>
-              {loading
-                ? [0,1,2].map(i => <tr key={i}><td colSpan={5}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
-                : recues.length === 0
-                  ? <tr><td colSpan={5}><div className="empty-state"><div className="empty-icon"><ShoppingCart size={20} /></div><div className="empty-title">Aucune commande reçue</div></div></td></tr>
-                  : recues.map(o => (
-                    <tr key={o.id}>
-                      <td><span className="td-mono" style={{ fontWeight: 600 }}>{o.codeCommande}</span></td>
-                      <td style={{ fontWeight: 500 }}>{o.usernameAcheteur || o.client || '—'}</td>
-                      <td><StatusBadge statut={o.statut} /></td>
-                      <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
-                      <td>
-                        {o.statut === 'SOUMISE' && (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px' }} onClick={() => accepter(o.id)} disabled={saving}>
-                              <CheckCircle2 size={12} /> Accepter
-                            </button>
-                            <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 10px', color: 'var(--red-600)', border: '1px solid #fecaca' }} onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }} disabled={saving}>
-                              <Ban size={12} /> Annuler
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
-                  ))
-              }
-            </tbody>
-          </table>
-        </div>
-      </div>
+        {/* Filtres par statut */}
+        {!loading && statuses.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', padding: '10px 22px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+            <button className={"gen-chain-btn " + (!filterStatus ? 'active' : '')} onClick={() => setFilter('')}>
+              Tous ({orders.length})
+            </button>
+            {statuses.map(s => {
+              const cfg = STATUS_CFG[s]; if (!cfg) return null
+              return (
+                <button key={s} className={"gen-chain-btn " + (filterStatus === s ? 'active' : '')} style={{ color: cfg.color }}
+                  onClick={() => setFilter(filterStatus === s ? '' : s)}>
+                  {cfg.label} ({orders.filter(o => o.statut === s).length})
+                </button>
+              )
+            })}
+          </div>
+        )}
 
-      {refusModal && (
-        <Modal title="Annuler la commande" subtitle={`Commande ${refusModal.code}`} onClose={() => setRefusModal(null)} size="sm">
-          <form onSubmit={refuser}>
-            <Field label="Motif d'annulation" required hint="Ce motif sera visible par le demandeur">
-              <textarea value={motif} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMotif(e.target.value)} placeholder="Stock insuffisant, variété indisponible..." rows={4} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
-            </Field>
-            <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer l'annulation" />
-          </form>
-        </Modal>
-      )}
+        {/* Barre de recherche */}
+        <div className="filters-bar">
+          <div className="filter-group">
+            <label className="filter-label">Recherche</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34 }}>
+              <Search size={13} color="var(--text-muted)" />
+              <input
+                placeholder="Code commande ou client..."
+                value={search}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 200 }}
+              />
+              {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>}
+            </div>
+          </div>
+          {(search || filterStatus) && (
+            <button className="btn btn-ghost" onClick={() => { setSearch(''); setFilter('') }}><X size={12} /> Effacer</button>
+          )}
+        </div>
+
+        <OrderTable
+          orders={filtered}
+          loading={loading}
+          emptyMsg="Aucune commande reçue"
+          orgs={orgs}
+          onUpdateStatus={handleUpdateStatus}
+        />
+      </div>
     </div>
   )
 }

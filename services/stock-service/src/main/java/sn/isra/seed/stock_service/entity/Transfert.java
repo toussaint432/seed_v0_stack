@@ -65,6 +65,19 @@ public class Transfert {
     @Column(nullable = false, length = 30)
     private StatutTransfert statut = StatutTransfert.EN_ATTENTE;
 
+    /**
+     * Codes des sites physiques impliqués dans le transfert.
+     * Envoyés par le frontend (champs siteSource / siteDestination).
+     * Requis pour que l'acceptation déclenche la mise à jour du stock.
+     */
+    @Size(max = 50)
+    @Column(name = "code_site_source", length = 50)
+    private String codeSiteSource;
+
+    @Size(max = 50)
+    @Column(name = "code_site_destination", length = 50)
+    private String codeSiteDestination;
+
     @Column(name = "date_transfert")
     private LocalDate dateTransfert;
 
