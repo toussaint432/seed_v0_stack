@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   RefreshCw, BarChart2, TrendingUp, AlertTriangle,
-  Package, Database, ShoppingCart, Filter, X,
+  Package, Database, ShoppingCart, Filter, X, Search,
   CheckCircle2, Clock, XCircle, ArrowUpRight,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 
@@ -20,6 +21,11 @@ interface OrderRow {
 interface MonthPoint { month: string; count: number; _y?: number; _m?: number }
 interface SpeciesAlert { codeEspece: string; stockKg: number; demande: number; ratio: number }
 interface BarDatum     { label: string; value: number; color: string; gen: string }
+interface StockRow {
+  codeEspece: string; nomEspece: string; codeVariete: string; nomVariete: string
+  generation: string; stockKg: number; nbLots: number; demandKg: number
+}
+type StockSortKey = 'nomEspece' | 'nomVariete' | 'generation' | 'stockKg' | 'nbLots' | 'demandKg'
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTES
@@ -58,7 +64,7 @@ const REFRESH_MS = 30_000
 /* ═══════════════════════════════════════════════════════════════
    BarChart professionnel — axes + grille + tooltip + labels
 ═══════════════════════════════════════════════════════════════ */
-function BarChart({ data }: { data: BarDatum[] }) {
+function BarChart({ data, yLabel = 'Quantité demandée (kg)' }: { data: BarDatum[]; yLabel?: string }) {
   const [hovered, setHovered] = useState<number | null>(null)
   if (data.length === 0) return null
 
@@ -170,7 +176,7 @@ function BarChart({ data }: { data: BarDatum[] }) {
       <text x={10} y={PAD_T + innerH / 2} textAnchor="middle"
         fontSize={9} fill="var(--text-muted)" fontFamily="Outfit,sans-serif"
         transform={`rotate(-90, 10, ${PAD_T + innerH / 2})`}>
-        Quantité demandée (kg)
+        {yLabel}
       </text>
     </svg>
   )
@@ -306,7 +312,7 @@ function LineChart({ data, color = '#0f766e' }: { data: MonthPoint[]; color?: st
    KPI Card animée
 ═══════════════════════════════════════════════════════════════ */
 function KpiCard({ icon: Icon, label, value, color, delay, sub, trend }: {
-  icon: React.ElementType; label: string; value: string | number
+  icon: LucideIcon; label: string; value: string | number
   color: string; delay: number; sub?: string; trend?: { val: string; up: boolean }
 }) {
   const [vis, setVis] = useState(false)
@@ -349,6 +355,11 @@ export function GlobalAnalytics({ roleKey }: Props) {
   const [refreshing, setRefreshing] = useState(false)
   const [filterGen,    setFilterGen]    = useState('')
   const [filterStatut, setFilterStatut] = useState('')
+  const [stockSortCol, setStockSortCol] = useState<StockSortKey>('stockKg')
+  const [stockSortAsc, setStockSortAsc] = useState(false)
+  const [filterEspece,   setFilterEspece]   = useState('')
+  const [filterVariete,  setFilterVariete]  = useState('')
+  const [filterGenStock, setFilterGenStock] = useState('')
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function fetchAll(isRefresh = false) {
@@ -470,6 +481,72 @@ export function GlobalAnalytics({ roleKey }: Props) {
       return { codeEspece: code, stockKg: stock, demande, ratio: demande > 0 ? stock / demande : 999 }
     }).sort((a, b) => a.ratio - b.ratio)
 
+  /* ── Stock par espèce / variété / génération ── */
+  const stockRowMap: Record<string, StockRow> = {}
+  stocks.forEach((st: any) => {
+    const lotObj      = st.lot ?? lotMap[st.idLot ?? st.lotId] ?? {}
+    const gen         = lotObj.generation?.codeGeneration ?? st.generation ?? '?'
+    if (!allowedGens.includes(gen)) return
+    let variety: any  = lotObj.variete ?? varietyMap[lotObj.idVariete ?? lotObj.varieteId ?? -1] ?? {}
+    if (!variety.codeVariete) variety = varietyMap[st.idVariete ?? -1] ?? st.variete ?? {}
+    if (!variety.codeVariete) return
+    const codeVariete = variety.codeVariete
+    const nomVariete  = variety.nomVariete ?? codeVariete
+    const esp         = variety.espece ?? {}
+    const codeEspece  = esp.codeEspece ?? '?'
+    const nomEspece   = esp.nomEspece  ?? codeEspece
+    const key = `${codeVariete}|${gen}`
+    if (!stockRowMap[key]) stockRowMap[key] = { codeEspece, nomEspece, codeVariete, nomVariete, generation: gen, stockKg: 0, nbLots: 0, demandKg: 0 }
+    stockRowMap[key].stockKg += parseFloat(st.quantiteDisponible) || 0
+  })
+  lots.forEach((l: any) => {
+    const gen         = l.generation?.codeGeneration ?? '?'
+    if (!allowedGens.includes(gen)) return
+    const variety     = varietyMap[l.idVariete ?? l.varieteId ?? -1] ?? l.variete ?? {}
+    const codeVariete = variety.codeVariete ?? l.codeVariete
+    if (!codeVariete) return
+    const key = `${codeVariete}|${gen}`
+    const active = ['DISPONIBLE','EN_PRODUCTION','CERTIFIE','EN_COURS_CERT','SOUCHE']
+    if (stockRowMap[key] && active.includes((l.statut ?? '').toUpperCase())) stockRowMap[key].nbLots++
+  })
+  roleFiltered.forEach(o => {
+    const lot         = lotMap[o.id] ?? {}
+    const variety     = varietyMap[lot.idVariete ?? -1] ?? {}
+    const codeVariete = variety.codeVariete ?? (o as any).codeVariete
+    if (!codeVariete) return
+    const key = `${codeVariete}|${o.generation}`
+    if (stockRowMap[key]) stockRowMap[key].demandKg += o.quantite
+  })
+  const stockRows: StockRow[] = Object.values(stockRowMap).sort((a, b) => {
+    const va = a[stockSortCol], vb = b[stockSortCol]
+    if (typeof va === 'string') return stockSortAsc ? va.localeCompare(vb as string) : (vb as string).localeCompare(va as string)
+    return stockSortAsc ? (va as number) - (vb as number) : (vb as number) - (va as number)
+  })
+  function thSort(col: StockSortKey) {
+    if (stockSortCol === col) setStockSortAsc(v => !v)
+    else { setStockSortCol(col); setStockSortAsc(false) }
+  }
+
+  /* ── Filtres stock : options dérivées du catalogue complet (toutes espèces, même sans stock) ── */
+  const especeMap: Record<string, string> = {}
+  varieties.forEach((v: any) => {
+    const code = v.espece?.codeEspece
+    const nom  = v.espece?.nomEspece
+    if (code && code !== '?') especeMap[code] = nom ?? code
+  })
+  const especeOptions = Object.keys(especeMap).sort()
+  const filteredStockRows = stockRows.filter(r =>
+    (!filterEspece   || r.codeEspece === filterEspece) &&
+    (!filterGenStock || r.generation === filterGenStock) &&
+    (!filterVariete  || r.codeVariete.toLowerCase().includes(filterVariete.toLowerCase())
+                     || r.nomVariete.toLowerCase().includes(filterVariete.toLowerCase()))
+  )
+  const filteredStockBarData: BarDatum[] = [...filteredStockRows]
+    .sort((a, b) => b.stockKg - a.stockKg).slice(0, 10)
+    .map(r => ({ label: r.codeVariete, value: Math.round(r.stockKg), color: GEN_COLOR[r.generation] ?? '#6b7280', gen: r.generation }))
+  const stockTotalFiltered = filteredStockRows.reduce((s, r) => s + r.stockKg, 0)
+  const hasStockFilter = !!(filterEspece || filterVariete || filterGenStock)
+
   const availableGens    = allowedGens.filter(g => !isMultiplicator || g === 'R2')
   const availableStatuts = [...new Set(roleFiltered.map(o => o.statut))]
 
@@ -484,79 +561,309 @@ export function GlobalAnalytics({ roleKey }: Props) {
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 22, marginTop: 20 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, marginTop: 20 }}>
 
-      {/* ── En-tête section ── */}
+      {/* ── Barre analytique — refresh + indicateurs ── */}
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '14px 18px',
+        padding: '10px 16px', borderRadius: 10,
         background: 'linear-gradient(135deg, var(--surface-2) 0%, var(--surface-3) 100%)',
-        border: '1px solid var(--border)', borderRadius: 10,
+        border: '1px solid var(--border)',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{
-            width: 34, height: 34, borderRadius: 8,
-            background: `linear-gradient(135deg, ${lineColor}22, ${lineColor}08)`,
-            border: `1px solid ${lineColor}30`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>
-            <BarChart2 size={17} color={lineColor} />
-          </div>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--text-primary)' }}>
-              Tableau de bord analytique
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 1 }}>
-              {isMultiplicator
-                ? 'Semences commerciales R1→R2 — votre portefeuille de production'
-                : isAdmin
-                ? 'Vision globale G0 → R2 — toute la chaîne semencière'
-                : `Générations ${allowedGens.join(', ')} — votre périmètre`}
-            </div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a',
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-muted)' }}>
+            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#16a34a',
               display: 'inline-block', animation: 'pulse-dot 2s ease infinite' }} />
             Mise à jour auto · 30s
+            {refreshing && <span style={{ color: lineColor, fontWeight: 600 }}>· Actualisation…</span>}
           </div>
-          <button className="btn btn-secondary" style={{ gap: 6, fontSize: 12, height: 30 }}
-            onClick={() => fetchAll(true)} disabled={refreshing}>
-            <RefreshCw size={11} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
-            Actualiser
-          </button>
+          {!loading && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11.5 }}>
+              <span style={{ color: 'var(--text-muted)' }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{stockRows.length}</span> entrées stock
+              </span>
+              <span style={{ color: 'var(--border)' }}>|</span>
+              <span style={{ color: 'var(--text-muted)' }}>
+                <span style={{ fontWeight: 700, color: lineColor }}>
+                  {(hasStockFilter ? stockTotalFiltered : kpiStock).toLocaleString('fr-FR', { maximumFractionDigits: 0 })} kg
+                </span>
+                {hasStockFilter ? ' filtrés' : ' total'}
+              </span>
+              <span style={{ color: 'var(--border)' }}>|</span>
+              <span style={{ color: 'var(--text-muted)' }}>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{kpiLots}</span> lots actifs
+              </span>
+            </div>
+          )}
         </div>
+        <button className="btn btn-secondary" style={{ gap: 5, fontSize: 12, height: 30 }}
+          onClick={() => fetchAll(true)} disabled={refreshing}>
+          <RefreshCw size={11} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+          Actualiser
+        </button>
       </div>
 
-      {/* ── KPI Cards ── */}
-      {loading ? (
-        <div className="stats-grid">
-          {[0,1,2,3].map(i => (
-            <div key={i} className="stat-card">
-              <div className="stat-icon green" style={{ opacity: 0.2 }}><Package size={18}/></div>
-              <div className="stat-body">
-                <div className="skeleton" style={{ width: 64, height: 24, marginBottom: 7 }}/>
-                <div className="skeleton" style={{ width: 96, height: 12 }}/>
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <div className="stats-grid">
-          <KpiCard icon={Package}      label="Lots actifs"          value={kpiLots}
-            sub={`Gens : ${availableGens.join(' · ')}`}          color="green"  delay={0}   />
-          <KpiCard icon={Database}
-            label={isMultiplicator ? 'Stock R1→R2 disponible' : isAdmin ? 'Stock total disponible' : `Stock ${allowedGens[0]}→${allowedGens[allowedGens.length-1]} disponible`}
-            value={`${kpiStock.toLocaleString('fr-FR')} kg`}
-            sub={isAdmin ? 'Tous sites · G0→R2' : `Périmètre : ${allowedGens.join(' · ')}`}
-            color="blue"   delay={80}  />
-          <KpiCard icon={ShoppingCart} label="Commandes en attente"   value={kpiPending}
-            sub={`${roleFiltered.length} commandes au total`}     color="gold"   delay={160} />
-          <KpiCard icon={CheckCircle2} label="Commandes allouées"      value={kpiAlloc}
-            sub={`${kpiCancel} annulées`}                         color="green"  delay={240} />
+      {/* ── Indicateurs commandes (non dupliqués depuis Dashboard) ── */}
+      {!loading && roleFiltered.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10 }}>
+          <KpiCard icon={ShoppingCart} label="Commandes en cours"  value={roleFiltered.length}
+            sub={`Gens : ${availableGens.join(' · ')}`} color="gold" delay={0} />
+          <KpiCard icon={CheckCircle2} label="Allouées"            value={kpiAlloc}
+            sub={`${kpiPending} en attente`}           color="green" delay={60} />
+          <KpiCard icon={Package}      label="Lots dans le scope"  value={kpiLots}
+            sub={isAdmin ? 'G0→R2 complet' : `Périmètre ${allowedGens.join('·')}`} color="blue" delay={120} />
         </div>
       )}
+
+      {/* ── Stock disponible par espèce / variété ── */}
+      <div className="card">
+        {/* En-tête + filtres */}
+        <div className="card-header" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <span className="card-title">
+            <span className="card-title-icon"><Database size={14}/></span>
+            Stock disponible — Espèces &amp; Variétés
+            {!loading && (
+              <span className="badge badge-blue" style={{ marginLeft: 6, fontSize: 11 }}>
+                {hasStockFilter ? `${filteredStockRows.length} / ${stockRows.length}` : stockRows.length} entrées
+              </span>
+            )}
+          </span>
+          <div style={{ display: 'flex', gap: 8, marginLeft: 'auto', flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* Recherche variété */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30, minWidth: 180,
+              background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px' }}>
+              <Search size={11} color="var(--text-muted)" />
+              <input type="text" placeholder="Rechercher une variété…" value={filterVariete}
+                onChange={(e: { target: { value: string } }) => setFilterVariete(e.target.value)}
+                style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12,
+                  color: 'var(--text-primary)', width: '100%' }} />
+              {filterVariete && (
+                <button onClick={() => setFilterVariete('')}
+                  style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:0,display:'flex' }}>
+                  <X size={10}/>
+                </button>
+              )}
+            </div>
+            {/* Filtre espèce */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30,
+              background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px' }}>
+              <Filter size={10} color="var(--text-muted)" />
+              <select value={filterEspece}
+                onChange={(e: { target: { value: string } }) => setFilterEspece(e.target.value)}
+                style={{ border:'none',background:'none',fontSize:12,color:'var(--text-primary)',outline:'none',cursor:'pointer' }}>
+                <option value="">Toutes espèces ({especeOptions.length})</option>
+                {especeOptions.map(esp => (
+                  <option key={esp} value={esp}>
+                    {esp}{especeMap[esp] && especeMap[esp] !== esp ? ` — ${especeMap[esp]}` : ''}
+                  </option>
+                ))}
+              </select>
+              {filterEspece && (
+                <button onClick={() => setFilterEspece('')}
+                  style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:0,display:'flex' }}>
+                  <X size={10}/>
+                </button>
+              )}
+            </div>
+            {/* Filtre génération */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 5, height: 30,
+              background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px' }}>
+              <Filter size={10} color="var(--text-muted)" />
+              <select value={filterGenStock}
+                onChange={(e: { target: { value: string } }) => setFilterGenStock(e.target.value)}
+                style={{ border:'none',background:'none',fontSize:12,color:'var(--text-primary)',outline:'none',cursor:'pointer' }}>
+                <option value="">Toutes générations</option>
+                {availableGens.map(g => <option key={g} value={g}>{g} — {GEN_LABEL[g]}</option>)}
+              </select>
+              {filterGenStock && (
+                <button onClick={() => setFilterGenStock('')}
+                  style={{ background:'none',border:'none',cursor:'pointer',color:'var(--text-muted)',padding:0,display:'flex' }}>
+                  <X size={10}/>
+                </button>
+              )}
+            </div>
+            {/* Effacer tout */}
+            {hasStockFilter && (
+              <button onClick={() => { setFilterEspece(''); setFilterVariete(''); setFilterGenStock('') }}
+                style={{ fontSize: 11, fontWeight: 600, color: 'var(--red-600)', background: 'none',
+                  border: '1px solid #fecaca', borderRadius: 6, padding: '4px 10px', cursor: 'pointer' }}>
+                Effacer filtres
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Résumé filtré */}
+        {hasStockFilter && !loading && (
+          <div style={{ padding: '8px 16px', background: `${lineColor}08`,
+            borderBottom: '1px solid var(--border)', display: 'flex', gap: 20, fontSize: 12 }}>
+            <span style={{ color: 'var(--text-muted)' }}>
+              Filtré :
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)', marginLeft: 5 }}>
+                {filteredStockRows.length} variétés
+              </span>
+            </span>
+            <span style={{ color: 'var(--text-muted)' }}>
+              Stock total filtré :
+              <span style={{ fontWeight: 700, color: lineColor, marginLeft: 5 }}>
+                {stockTotalFiltered.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} kg
+              </span>
+            </span>
+            <span style={{ color: 'var(--text-muted)' }}>
+              Espèces :
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)', marginLeft: 5 }}>
+                {[...new Set(filteredStockRows.map(r => r.codeEspece))].length}
+              </span>
+            </span>
+          </div>
+        )}
+
+        {/* BarChart stock filtré */}
+        {!loading && filteredStockBarData.length > 0 && (
+          <div style={{ padding: '12px 16px 4px', borderBottom: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              Top {filteredStockBarData.length} variétés — stock disponible (kg)
+              {hasStockFilter && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>(filtre actif)</span>}
+            </div>
+            <BarChart data={filteredStockBarData} yLabel="Stock disponible (kg)" />
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10,
+              paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+              {[...new Set(filteredStockBarData.map(b => b.gen))].map(gen => (
+                <span key={gen} style={{
+                  fontSize: 10.5, fontWeight: 700, borderRadius: 99, padding: '2px 9px',
+                  background: `${GEN_COLOR[gen]}15`, color: GEN_COLOR[gen],
+                  border: `1px solid ${GEN_COLOR[gen]}35`,
+                }}>
+                  {gen} — {GEN_LABEL[gen] ?? gen}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {!loading && filteredStockBarData.length === 0 && stockRows.length > 0 && (
+          <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)',
+            fontSize: 12.5, color: 'var(--text-muted)', textAlign: 'center' }}>
+            Aucune variété ne correspond aux filtres actifs — modifiez les critères pour afficher le graphique.
+          </div>
+        )}
+
+        {/* Tableau triable */}
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                {([
+                  { col: 'nomEspece'  as StockSortKey, label: 'Espèce' },
+                  { col: 'nomVariete' as StockSortKey, label: 'Variété' },
+                  { col: 'generation' as StockSortKey, label: 'Gén.' },
+                  { col: 'stockKg'    as StockSortKey, label: 'Stock disponible' },
+                  { col: 'nbLots'     as StockSortKey, label: 'Lots actifs' },
+                  { col: 'demandKg'   as StockSortKey, label: 'Demande (kg)' },
+                ] as { col: StockSortKey; label: string }[]).map(({ col, label }) => (
+                  <th key={col} onClick={() => thSort(col)}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {label}
+                      {stockSortCol === col
+                        ? <span style={{ fontSize: 9, opacity: 0.85 }}>{stockSortAsc ? '↑' : '↓'}</span>
+                        : <span style={{ fontSize: 9, opacity: 0.25 }}>↕</span>}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                [0,1,2,3,4].map(i => (
+                  <tr key={i}><td colSpan={6}>
+                    <div className="skeleton" style={{ height: 13, borderRadius: 4 }}/>
+                  </td></tr>
+                ))
+              ) : filteredStockRows.length === 0 ? (
+                <tr><td colSpan={6}>
+                  <div className="empty-state" style={{ padding: '32px 0' }}>
+                    <div className="empty-icon"><Database size={18}/></div>
+                    <div className="empty-title">{hasStockFilter ? 'Aucun résultat' : 'Aucun stock disponible'}</div>
+                    <div className="empty-sub">
+                      {hasStockFilter ? 'Modifiez ou effacez les filtres ci-dessus' : 'Les entrées de stock apparaîtront ici dès qu\'elles seront enregistrées'}
+                    </div>
+                  </div>
+                </td></tr>
+              ) : (
+                filteredStockRows.slice(0, 100).map((r, i) => {
+                  const genClr = GEN_COLOR[r.generation] ?? '#6b7280'
+                  const isCrit = r.demandKg > 0 && r.stockKg < r.demandKg * 0.5
+                  const isLow  = !isCrit && r.demandKg > 0 && r.stockKg < r.demandKg
+                  return (
+                    <tr key={i} style={{ background: isCrit ? '#fef2f220' : isLow ? '#fffbeb20' : 'transparent' }}>
+                      <td>
+                        <span style={{ fontWeight: 700, fontSize: 12.5 }}>{r.codeEspece}</span>
+                        {r.nomEspece !== r.codeEspece && (
+                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 5 }}>{r.nomEspece}</span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ fontSize: 12.5, fontWeight: 500 }}>{r.nomVariete}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{r.codeVariete}</div>
+                      </td>
+                      <td>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '3px 9px',
+                          background: `${genClr}18`, color: genClr, border: `1px solid ${genClr}35`,
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}>
+                          {r.generation}
+                          <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.75 }}>{GEN_LABEL[r.generation] ?? ''}</span>
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{
+                          fontWeight: 700, fontSize: 13.5, fontVariantNumeric: 'tabular-nums',
+                          color: isCrit ? 'var(--red-600)' : isLow ? 'var(--gold-dark)' : 'var(--text-primary)',
+                        }}>
+                          {r.stockKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}
+                        </span>
+                        <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 11 }}>kg</span>
+                        {(isCrit || isLow) && (
+                          <span style={{
+                            marginLeft: 6, fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '1px 6px',
+                            background: isCrit ? '#fef2f2' : '#fffbeb',
+                            color: isCrit ? 'var(--red-600)' : 'var(--gold-dark)',
+                            border: `1px solid ${isCrit ? '#fecaca' : '#fde68a'}`,
+                          }}>
+                            {isCrit ? '⚠ Critique' : '⚠ Bas'}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{ fontWeight: 600, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>{r.nbLots}</span>
+                      </td>
+                      <td>
+                        {r.demandKg > 0 ? (
+                          <span style={{
+                            fontWeight: 600, fontSize: 12, fontVariantNumeric: 'tabular-nums',
+                            color: r.demandKg > r.stockKg ? 'var(--red-600)' : 'var(--text-secondary)',
+                          }}>
+                            {r.demandKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} kg
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+          {filteredStockRows.length > 100 && (
+            <div style={{ textAlign: 'center', padding: '10px 0', fontSize: 12,
+              color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
+              100 / {filteredStockRows.length} lignes affichées
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* ── Graphiques ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
@@ -677,7 +984,7 @@ export function GlobalAnalytics({ roleKey }: Props) {
               background: 'var(--surface-2)', border: '1px solid var(--border)',
               borderRadius: 6, padding: '0 10px' }}>
               <Filter size={10} color="var(--text-muted)" />
-              <select value={filterGen} onChange={e => setFilterGen(e.target.value)}
+              <select value={filterGen} onChange={(e: { target: { value: string } }) => setFilterGen(e.target.value)}
                 style={{ border: 'none', background: 'none', fontSize: 12,
                   color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}>
                 <option value="">Toutes générations</option>
@@ -692,7 +999,7 @@ export function GlobalAnalytics({ roleKey }: Props) {
               background: 'var(--surface-2)', border: '1px solid var(--border)',
               borderRadius: 6, padding: '0 10px' }}>
               <Filter size={10} color="var(--text-muted)" />
-              <select value={filterStatut} onChange={e => setFilterStatut(e.target.value)}
+              <select value={filterStatut} onChange={(e: { target: { value: string } }) => setFilterStatut(e.target.value)}
                 style={{ border: 'none', background: 'none', fontSize: 12,
                   color: 'var(--text-primary)', outline: 'none', cursor: 'pointer' }}>
                 <option value="">Tous statuts</option>

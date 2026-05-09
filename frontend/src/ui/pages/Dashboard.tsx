@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Package, Layers, ShoppingCart, Leaf, TrendingUp,
-  TrendingDown, ArrowRight, RefreshCw, Plus, Database,
-  AlertCircle, CheckCircle2, Clock, XCircle
+  TrendingDown, RefreshCw, Plus, Database,
+  CheckCircle2, Clock, XCircle
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { SelectorAnalytics }   from './SelectorAnalytics'
@@ -50,7 +51,7 @@ const roleGreetings: Record<string, { title: string; sub: string }> = {
 function StatCard({
   icon: Icon, label, value, sub, trend, trendUp, color, delay
 }: {
-  icon: React.ElementType; label: string; value: string | number
+  icon: LucideIcon; label: string; value: string | number
   sub?: string; trend?: string; trendUp?: boolean
   color: string; delay: number
 }) {
@@ -75,6 +76,7 @@ function StatCard({
       <div className="stat-body">
         <div className="stat-value">{value}</div>
         <div className="stat-label">{label}</div>
+        {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>}
         {trend && (
           <div className={`stat-trend ${trendUp ? 'up' : 'down'}`}>
             {trendUp ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
@@ -92,6 +94,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     ordersPending: 0, ordersAllocated: 0,
     genCounts: {}, recentLots: [],
   })
+  const [varMap, setVarMap] = useState<Record<number, string>>({})
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const today = new Date().toLocaleDateString('fr-FR', {
@@ -135,6 +138,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       .sort((a: any, b: any) => (b.id || 0) - (a.id || 0))
       .slice(0, 6)
 
+    const vm: Record<number, string> = {}
+    varieties.forEach((v: any) => { if (v.id) vm[v.id] = v.nomVariete ?? v.codeVariete ?? `#${v.id}` })
+    setVarMap(vm)
     setStats({
       lotsCount: lots.length, stockTotal, ordersCount: orders.length,
       varietiesCount: varieties.length, ordersPending, ordersAllocated,
@@ -316,7 +322,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                             {l.codeLot}
                           </span>
                         </td>
-                        <td style={{ fontWeight: 500 }}>{l.idVariete || '—'}</td>
+                        <td style={{ fontWeight: 500 }}>{varMap[l.idVariete] ?? l.variete?.nomVariete ?? (l.idVariete ? `#${l.idVariete}` : '—')}</td>
                         <td>
                           {col ? (
                             <span

@@ -113,6 +113,30 @@ public class LotSemencier {
     @Column(name = "code_espece", length = 30)
     private String codeEspece;
 
+    // ── Champs production PCAE ─────────────────────────────
+    @Column(name = "superficie_ha", precision = 10, scale = 2)
+    private BigDecimal superficieHa;
+
+    @Column(name = "production_brute_kg", precision = 14, scale = 2)
+    private BigDecimal productionBruteKg;
+
+    /** Calculé automatiquement : productionBruteKg / superficieHa */
+    @Column(name = "rendement_kg_ha", precision = 10, scale = 2)
+    private BigDecimal rendementKgHa;
+
+    /** 'C' = Court, 'L' = Long */
+    @Column(name = "cycle", length = 1)
+    private String cycle;
+
+    /** Ex : "3 Semences de base G3" */
+    @Size(max = 50)
+    @Column(name = "niveau_semence", length = 50)
+    private String niveauSemence;
+
+    /** Kg de semences du lot parent utilisés pour planter cette campagne */
+    @Column(name = "quantite_semence_src_kg", precision = 14, scale = 2)
+    private BigDecimal quantiteSemenceSrcKg;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) createdAt = Instant.now();

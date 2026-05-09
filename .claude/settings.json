@@ -6,7 +6,8 @@
       "Bash(sort -k2 -rh)",
       "Bash(curl -sf http://localhost:18080/realms/seed-v0/.well-known/openid-configuration)",
       "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('Realm OK:', d['issuer']\\)\")",
-      "Bash(sort -k1)"
+      "Bash(sort -k1)",
+      "Bash(npx tsc *)"
     ]
   }
 }

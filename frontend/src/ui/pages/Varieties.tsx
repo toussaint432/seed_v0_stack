@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react'
 import {
   Leaf, Sprout, CheckCircle2, Plus, Search, X,
   RefreshCw, Edit2, FlaskConical, ChevronRight,
-  Archive, Trash2, AlertTriangle, Eye, EyeOff, MessageSquare, MapPin
+  Archive, Trash2, AlertTriangle, Eye, EyeOff, MessageSquare, MapPin,
+  RotateCcw, Clock, User, TrendingUp
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -42,6 +43,13 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
 
   // Afficher / masquer les archivées
   const [showArchived, setShowArchived] = useState(false)
+
+  // Sélection de variété pour KPI dynamiques
+  const [selectedVarietyId, setSelectedVarietyId] = useState<number | null>(null)
+
+  // Désarchivage
+  const [desarchiveTarget, setDesarchiveTarget] = useState<any>(null)
+  const [desarchiving,     setDesarchiving]     = useState(false)
 
   // Zones agro-écologiques
   const [allZones,      setAllZones]      = useState<any[]>([])
@@ -91,7 +99,17 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   useEffect(() => { fetchData() }, [])
 
   /* ── Dérivés ── */
-  const selectedSpecies = species.find(s => s.id === selectedSpeciesId) ?? null
+  const selectedSpecies  = species.find(s => s.id === selectedSpeciesId) ?? null
+  const selectedVariety  = varieties.find(v => v.id === selectedVarietyId) ?? null
+
+  // Stats filtrées par espèce sélectionnée (pour KPI dynamiques)
+  const kpiBase = selectedSpecies
+    ? varieties.filter(v => v.espece?.id === selectedSpecies.id)
+    : varieties
+  const kpiActive   = kpiBase.filter(v => v.statutVariete !== 'ARCHIVEE').length
+  const kpiDiffusee = kpiBase.filter(v => v.statutVariete === 'DIFFUSEE').length
+  const kpiEnTest   = kpiBase.filter(v => v.statutVariete === 'EN_TEST').length
+  const kpiArchived = kpiBase.filter(v => v.statutVariete === 'ARCHIVEE').length
 
   const filtered = varieties.filter(v => {
     const isArchived   = v.statutVariete === 'ARCHIVEE'
@@ -106,8 +124,6 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     return matchSpecies && matchSearch
   })
 
-  const diffuseeCount = varieties.filter(v => v.statutVariete === 'DIFFUSEE').length
-  const enTestCount   = varieties.filter(v => v.statutVariete === 'EN_TEST').length
   const archivedCount = varieties.filter(v => v.statutVariete === 'ARCHIVEE').length
 
   function varietyCountForSpecies(s: any) {
@@ -128,6 +144,20 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur lors de l\'archivage', type: 'error' })
     } finally { setArchiving(false) }
+  }
+
+  /* ── Désarchivage ── */
+  async function submitDesarchive() {
+    if (!desarchiveTarget) return
+    setDesarchiving(true)
+    try {
+      await api.patch(endpoints.varietyStatut(desarchiveTarget.id), { statut: 'DIFFUSEE' })
+      setToast({ msg: `Variété "${desarchiveTarget.nomVariete}" désarchivée`, type: 'success' })
+      setDesarchiveTarget(null)
+      fetchData(true)
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors du désarchivage', type: 'error' })
+    } finally { setDesarchiving(false) }
   }
 
   /* ── Suppression définitive ── */
@@ -279,48 +309,212 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     <div>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* ── KPI Cards ── */}
-      <div className="stats-grid" style={{ marginBottom: 22 }}>
-        <div className="stat-card">
-          <div className="stat-icon green"><Leaf size={18} /></div>
-          <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : species.length}</div>
-            <div className="stat-label">Espèces</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon gold"><Sprout size={18} /></div>
-          <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : varieties.filter(v => v.statutVariete !== 'ARCHIVEE').length}</div>
-            <div className="stat-label">Variétés actives</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon green"><CheckCircle2 size={18} /></div>
-          <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : diffuseeCount}</div>
-            <div className="stat-label">Diffusées</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon gold"><FlaskConical size={18} /></div>
-          <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : enTestCount}</div>
-            <div className="stat-label">En test</div>
-          </div>
-        </div>
-        {archivedCount > 0 && (
-          <div className="stat-card" style={{ opacity: 0.7 }}>
-            <div className="stat-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-muted)' }}>
-              <Archive size={18} />
+      {/* ── KPI Cards — 3 niveaux : variété > espèce > global ── */}
+      {selectedVariety ? (
+
+        /* ── Niveau 3 : variété sélectionnée ── */
+        <div style={{ marginBottom: 22 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'var(--green-50)', border: '1px solid var(--green-200)',
+            borderRadius: 10, padding: '8px 14px', marginBottom: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--green-700)' }}>
+              <Sprout size={14} />
+              <strong>{selectedVariety.codeVariete}</strong>
+              <span style={{ color: 'var(--green-600)' }}>{selectedVariety.nomVariete}</span>
+              {selectedSpecies && (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', borderLeft: '1px solid var(--green-200)', paddingLeft: 8 }}>
+                  {selectedSpecies.nomCommun}
+                </span>
+              )}
             </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {selectedSpecies && (
+                <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--text-muted)', gap: 5 }}
+                  onClick={() => setSelectedVarietyId(null)} title="Revenir aux stats de l'espèce">
+                  <Leaf size={12} /> Vue espèce
+                </button>
+              )}
+              <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--text-muted)', gap: 5 }}
+                onClick={() => { setSelectedVarietyId(null); setSelectedSpeciesId(null) }}
+                title="Revenir aux statistiques globales">
+                <X size={12} /> Vue globale
+              </button>
+            </div>
+          </div>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-icon green"><Leaf size={18} /></div>
+              <div className="stat-body">
+                <div className="stat-value" style={{ fontSize: 16 }}>{selectedVariety.espece?.codeEspece ?? '—'}</div>
+                <div className="stat-label">{selectedVariety.espece?.nomCommun ?? 'Espèce'}</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon" style={{
+                background: selectedVariety.statutVariete === 'DIFFUSEE' ? 'var(--green-100)'  :
+                            selectedVariety.statutVariete === 'EN_TEST'  ? 'var(--gold-light)' : 'var(--surface-3)',
+                color:      selectedVariety.statutVariete === 'DIFFUSEE' ? 'var(--green-700)'  :
+                            selectedVariety.statutVariete === 'EN_TEST'  ? 'var(--gold-dark)'  : 'var(--text-muted)',
+              }}>
+                <CheckCircle2 size={18} />
+              </div>
+              <div className="stat-body">
+                <div className="stat-value" style={{ fontSize: 16 }}>
+                  {STATUT_CONFIG[selectedVariety.statutVariete]?.label ?? selectedVariety.statutVariete}
+                </div>
+                <div className="stat-label">Statut</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon gold"><Clock size={18} /></div>
+              <div className="stat-body">
+                <div className="stat-value" style={{ fontSize: 16 }}>
+                  {selectedVariety.cycleMin != null && selectedVariety.cycleMax != null
+                    ? (selectedVariety.cycleMin === selectedVariety.cycleMax
+                        ? `${selectedVariety.cycleMin} j`
+                        : `${selectedVariety.cycleMin}–${selectedVariety.cycleMax} j`)
+                    : '—'}
+                </div>
+                <div className="stat-label">Cycle végétatif</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon green"><TrendingUp size={18} /></div>
+              <div className="stat-body">
+                <div className="stat-value" style={{ fontSize: 16 }}>
+                  {selectedVariety.rendementMin != null && selectedVariety.rendementMax != null
+                    ? (selectedVariety.rendementMin === selectedVariety.rendementMax
+                        ? `${selectedVariety.rendementMin} t/ha`
+                        : `${selectedVariety.rendementMin}–${selectedVariety.rendementMax} t/ha`)
+                    : '—'}
+                </div>
+                <div className="stat-label">Rendement</div>
+              </div>
+            </div>
+            {selectedVariety.selectionneurPrincipal && (
+              <div className="stat-card">
+                <div className="stat-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-secondary)' }}>
+                  <User size={18} />
+                </div>
+                <div className="stat-body">
+                  <div className="stat-value" style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {selectedVariety.selectionneurPrincipal}
+                  </div>
+                  <div className="stat-label">Sélectionneur</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+      ) : selectedSpecies ? (
+
+        /* ── Niveau 2 : espèce sélectionnée ── */
+        <div style={{ marginBottom: 22 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: '#fffbeb', border: '1px solid #fde68a',
+            borderRadius: 10, padding: '8px 14px', marginBottom: 10,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gold-dark)' }}>
+              <Leaf size={14} />
+              <strong>{selectedSpecies.codeEspece}</strong>
+              <span style={{ color: '#92400e' }}>{selectedSpecies.nomCommun}</span>
+              {selectedSpecies.nomScientifique && (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', borderLeft: '1px solid #fde68a', paddingLeft: 8 }}>
+                  {selectedSpecies.nomScientifique}
+                </span>
+              )}
+            </div>
+            <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--text-muted)', gap: 5 }}
+              onClick={() => setSelectedSpeciesId(null)}
+              title="Revenir aux statistiques globales">
+              <X size={12} /> Vue globale
+            </button>
+          </div>
+          <div className="stats-grid">
+            <div className="stat-card">
+              <div className="stat-icon gold"><Sprout size={18} /></div>
+              <div className="stat-body">
+                <div className="stat-value">{loading ? '…' : kpiActive}</div>
+                <div className="stat-label">Variétés actives</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon green"><CheckCircle2 size={18} /></div>
+              <div className="stat-body">
+                <div className="stat-value">{loading ? '…' : kpiDiffusee}</div>
+                <div className="stat-label">Diffusées</div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="stat-icon gold"><FlaskConical size={18} /></div>
+              <div className="stat-body">
+                <div className="stat-value">{loading ? '…' : kpiEnTest}</div>
+                <div className="stat-label">En test</div>
+              </div>
+            </div>
+            {kpiArchived > 0 && (
+              <div className="stat-card" style={{ opacity: 0.7 }}>
+                <div className="stat-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-muted)' }}>
+                  <Archive size={18} />
+                </div>
+                <div className="stat-body">
+                  <div className="stat-value">{kpiArchived}</div>
+                  <div className="stat-label">Archivées</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+      ) : (
+
+        /* ── Niveau 1 : vue globale ── */
+        <div className="stats-grid" style={{ marginBottom: 22 }}>
+          <div className="stat-card">
+            <div className="stat-icon green"><Leaf size={18} /></div>
             <div className="stat-body">
-              <div className="stat-value">{archivedCount}</div>
-              <div className="stat-label">Archivées</div>
+              <div className="stat-value">{loading ? '…' : species.length}</div>
+              <div className="stat-label">Espèces</div>
             </div>
           </div>
-        )}
-      </div>
+          <div className="stat-card">
+            <div className="stat-icon gold"><Sprout size={18} /></div>
+            <div className="stat-body">
+              <div className="stat-value">{loading ? '…' : kpiActive}</div>
+              <div className="stat-label">Variétés actives</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon green"><CheckCircle2 size={18} /></div>
+            <div className="stat-body">
+              <div className="stat-value">{loading ? '…' : kpiDiffusee}</div>
+              <div className="stat-label">Diffusées</div>
+            </div>
+          </div>
+          <div className="stat-card">
+            <div className="stat-icon gold"><FlaskConical size={18} /></div>
+            <div className="stat-body">
+              <div className="stat-value">{loading ? '…' : kpiEnTest}</div>
+              <div className="stat-label">En test</div>
+            </div>
+          </div>
+          {kpiArchived > 0 && (
+            <div className="stat-card" style={{ opacity: 0.7 }}>
+              <div className="stat-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-muted)' }}>
+                <Archive size={18} />
+              </div>
+              <div className="stat-body">
+                <div className="stat-value">{kpiArchived}</div>
+                <div className="stat-label">Archivées</div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Corps principal : espèces + variétés ── */}
       <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr', gap: 16, alignItems: 'start' }}>
@@ -351,7 +545,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             <button
               className="species-filter-item"
               data-active={selectedSpeciesId === null}
-              onClick={() => { setSelectedSpeciesId(null); setSearch('') }}
+              onClick={() => { setSelectedSpeciesId(null); setSelectedVarietyId(null); setSearch('') }}
             >
               <span className="species-filter-all-dot" />
               <div style={{ flex: 1 }}>
@@ -388,7 +582,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       key={s.id}
                       className="species-filter-item"
                       data-active={isActive}
-                      onClick={() => setSelectedSpeciesId(isActive ? null : s.id)}
+                      onClick={() => { setSelectedSpeciesId(isActive ? null : s.id); setSelectedVarietyId(null) }}
                     >
                       <span className="species-code">{s.codeEspece}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -541,8 +735,20 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       const allowed   = canEdit(v.espece?.codeEspece)
                       const dTitle    = `Non autorisé — votre spécialisation est ${userSpecialisation ?? 'N/A'}`
                       const dStyle    = !allowed ? { opacity: 0.4, cursor: 'not-allowed' as const } : {}
+                      const isSelected = selectedVarietyId === v.id
                       return (
-                        <tr key={v.id} style={{ opacity: isArchived ? 0.55 : 1 }}>
+                        <tr
+                          key={v.id}
+                          style={{
+                            opacity: isArchived ? 0.55 : 1,
+                            cursor: 'pointer',
+                            background: isSelected ? 'var(--green-50)' : undefined,
+                            outline: isSelected ? '2px solid var(--green-300)' : undefined,
+                            outlineOffset: -2,
+                          }}
+                          onClick={() => setSelectedVarietyId(isSelected ? null : v.id)}
+                          title={isSelected ? 'Désélectionner' : 'Voir les détails'}
+                        >
                           <td>
                             <span className="td-mono" style={{ fontWeight: 700, textDecoration: isArchived ? 'line-through' : 'none' }}>
                               {v.codeVariete}
@@ -572,7 +778,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           </td>
                           <td>
                             {v.espece ? (
-                              <button className="species-code" style={{ cursor: 'pointer', border: 'none' }} title={`Filtrer par ${v.espece.nomCommun}`} onClick={() => setSelectedSpeciesId(v.espece.id)}>
+                              <button className="species-code" style={{ cursor: 'pointer', border: 'none' }} title={`Filtrer par ${v.espece.nomCommun}`} onClick={(e: React.MouseEvent) => { e.stopPropagation(); setSelectedSpeciesId(v.espece.id); setSelectedVarietyId(null) }}>
                                 {v.espece.codeEspece}
                               </button>
                             ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
@@ -595,7 +801,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           </td>
                           <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
                           {isAdminOrSelector && (
-                            <td>
+                            <td onClick={(e: React.MouseEvent) => e.stopPropagation()}>
                               <div style={{ display: 'flex', gap: 4 }}>
                                 {!isArchived && (
                                   <>
@@ -626,14 +832,24 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                                   </>
                                 )}
                                 {isArchived && allowed && (
-                                  <button
-                                    className="btn btn-ghost"
-                                    style={{ height: 26, padding: '0 8px', color: 'var(--red-600)' }}
-                                    onClick={() => { setDeleteTarget(v); setDeleteComment('') }}
-                                    title="Supprimer définitivement"
-                                  >
-                                    <Trash2 size={12} />
-                                  </button>
+                                  <>
+                                    <button
+                                      className="btn btn-ghost"
+                                      style={{ height: 26, padding: '0 8px', color: 'var(--green-700)' }}
+                                      onClick={() => setDesarchiveTarget(v)}
+                                      title="Désarchiver cette variété"
+                                    >
+                                      <RotateCcw size={12} />
+                                    </button>
+                                    <button
+                                      className="btn btn-ghost"
+                                      style={{ height: 26, padding: '0 8px', color: 'var(--red-600)' }}
+                                      onClick={() => { setDeleteTarget(v); setDeleteComment('') }}
+                                      title="Supprimer définitivement"
+                                    >
+                                      <Trash2 size={12} />
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </td>
@@ -932,6 +1148,36 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               loading={deleting}
               submitLabel="Supprimer définitivement"
               submitClassName="btn-danger"
+            />
+          </form>
+        </Modal>
+      )}
+
+      {/* ── Modal Désarchivage ── */}
+      {desarchiveTarget && (
+        <Modal
+          title="Désarchiver la variété"
+          subtitle={`${desarchiveTarget.codeVariete} — ${desarchiveTarget.nomVariete}`}
+          onClose={() => setDesarchiveTarget(null)}
+          size="sm"
+        >
+          <div style={{ display: 'flex', gap: 10, padding: '12px 14px', borderRadius: 8, background: 'var(--green-50)', border: '1px solid var(--green-200)', marginBottom: 20 }}>
+            <RotateCcw size={16} color="var(--green-700)" style={{ flexShrink: 0, marginTop: 1 }} />
+            <div style={{ fontSize: 13, color: 'var(--green-700)', lineHeight: 1.5 }}>
+              La variété sera remise au statut <strong>Diffusée</strong> et redeviendra visible dans le catalogue actif.
+            </div>
+          </div>
+          {desarchiveTarget.commentaireArchivage && (
+            <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--surface-3)', border: '1px solid var(--border)', marginBottom: 16, fontSize: 12, color: 'var(--text-secondary)' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', marginBottom: 4 }}>Motif d'archivage</div>
+              <div style={{ fontStyle: 'italic' }}>{desarchiveTarget.commentaireArchivage}</div>
+            </div>
+          )}
+          <form onSubmit={(e: React.FormEvent) => { e.preventDefault(); submitDesarchive() }}>
+            <FormActions
+              onCancel={() => setDesarchiveTarget(null)}
+              loading={desarchiving}
+              submitLabel="Confirmer le désarchivage"
             />
           </form>
         </Modal>

@@ -98,6 +98,34 @@ public class StockController {
     return saved;
   }
 
+  @GetMapping("/movements")
+  public List<MouvementStock> listMovements(@RequestParam(required = false) Long idLot) {
+    if (idLot != null) return mouvementRepo.findByIdLotOrderByCreatedAtDesc(idLot);
+    return mouvementRepo.findAllByOrderByCreatedAtDesc();
+  }
+
+  @PutMapping("/stocks/{id}")
+  public ResponseEntity<Stock> updateStock(@PathVariable Long id,
+                                           @RequestBody UpsertStockRequest req) throws Exception {
+    Stock stock = stockRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Stock non trouvé"));
+    if (req.quantite() != null) stock.setQuantiteDisponible(req.quantite());
+    if (req.unite()    != null) stock.setUnite(req.unite());
+    stock.setUpdatedAt(Instant.now());
+    Stock saved = stockRepo.save(stock);
+    producer.stockUpdated(om.writeValueAsString(saved));
+    return ResponseEntity.ok(saved);
+  }
+
+  @Transactional
+  @DeleteMapping("/stocks/{id}")
+  public ResponseEntity<Void> deleteStock(@PathVariable Long id) {
+    if (!stockRepo.existsById(id))
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Stock non trouvé");
+    stockRepo.deleteById(id);
+    return ResponseEntity.noContent().build();
+  }
+
   @Transactional
   @PostMapping("/movements")
   public MouvementStock move(@RequestBody MovementRequest req) throws Exception {

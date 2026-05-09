@@ -18,10 +18,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -64,13 +66,14 @@ public class LotController {
             return lotRepo.findForSelector(specialisation);
         }
 
-        // Isolation multiplicateur : uniquement ses propres lots G3→R2
+        // Isolation multiplicateur : lots produits + lots reçus via transfert accepté
         if (roles.contains("seed-multiplicator")) {
             Object orgClaim = jwt != null ? jwt.getClaim("org_id") : null;
-            if (orgClaim != null) {
+            String username = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+            if (orgClaim != null && username != null) {
                 try {
                     Long orgId = Long.parseLong(orgClaim.toString());
-                    return lotRepo.findMesLots(orgId);
+                    return lotRepo.findMesLots(orgId, username);
                 } catch (NumberFormatException ignored) {}
             }
             return List.of();
@@ -112,6 +115,7 @@ public class LotController {
     }
 
     // ── Créer un lot enfant (G1 depuis G0, G2 depuis G1…) ────
+    @Transactional
     @PostMapping("/{id}/child")
     public LotSemencier createChild(@PathVariable Long id,
                                      @RequestBody CreateChildLotRequest req,
@@ -122,7 +126,6 @@ public class LotController {
         LotSemencier child = new LotSemencier();
         child.setCodeLot(req.codeLot());
         child.setIdVariete(req.idVariete() != null ? req.idVariete() : parent.getIdVariete());
-        // Héritage de l'espèce depuis le parent (indispensable pour le filtre par spécialisation)
         child.setCodeEspece(req.codeEspece() != null ? req.codeEspece() : parent.getCodeEspece());
         child.setGeneration(gen);
         child.setLotParent(parent);
@@ -133,6 +136,20 @@ public class LotController {
         child.setTauxGermination(req.tauxGermination());
         child.setPuretePhysique(req.puretePhysique());
         child.setStatutLot(StatutLot.DISPONIBLE);
+
+        // Champs production PCAE
+        child.setSuperficieHa(req.superficieHa());
+        child.setProductionBruteKg(req.productionBruteKg());
+        child.setCycle(req.cycle());
+        child.setNiveauSemence(req.niveauSemence());
+        child.setQuantiteSemenceSrcKg(req.quantiteSemenceSrcKg());
+
+        // Calcul automatique du rendement si les deux valeurs sont présentes
+        if (req.superficieHa() != null && req.productionBruteKg() != null
+                && req.superficieHa().compareTo(BigDecimal.ZERO) > 0) {
+            child.setRendementKgHa(req.productionBruteKg()
+                    .divide(req.superficieHa(), 2, RoundingMode.HALF_UP));
+        }
 
         if (jwt != null) {
             child.setUsernameCreateur(jwt.getClaimAsString("preferred_username"));
@@ -150,6 +167,13 @@ public class LotController {
         }
 
         LotSemencier saved = lotRepo.save(child);
+
+        // Débiter la quantité nette du lot parent si quantiteSemenceSrcKg fournie
+        if (req.quantiteSemenceSrcKg() != null
+                && req.quantiteSemenceSrcKg().compareTo(BigDecimal.ZERO) > 0) {
+            lotRepo.debitQuantiteNette(parent.getId(), req.quantiteSemenceSrcKg());
+        }
+
         producer.lotCreated(om.writeValueAsString(saved));
         return saved;
     }
@@ -278,21 +302,18 @@ public class LotController {
         return lotRepo.findCatalogueG3(StatutLot.DISPONIBLE);
     }
 
-    // ── Lots propres au multiplicateur connecté ───────────────
-    // Isolé par organisation : chaque multiplicateur ne voit que ses G3→R2
+    // ── Lots propres au multiplicateur connecté + reçus via transfert ────────
     @GetMapping("/mes-lots")
     public ResponseEntity<List<LotSemencier>> mesLots(@AuthenticationPrincipal Jwt jwt) {
         if (jwt == null) return ResponseEntity.status(401).build();
-        // L'org est résolu depuis le claim "org_id" injecté par Keycloak mapper,
-        // ou via le champ responsable_role en fallback.
-        // On utilise idOrgProducteur stocké sur le lot au moment de la création.
         Object orgClaim = jwt.getClaim("org_id");
-        if (orgClaim == null)
-            return ResponseEntity.ok(List.of()); // pas encore rattaché à une org
+        String username = jwt.getClaimAsString("preferred_username");
+        if (orgClaim == null || username == null)
+            return ResponseEntity.ok(List.of());
         Long orgId;
         try { orgId = Long.parseLong(orgClaim.toString()); }
         catch (NumberFormatException e) { return ResponseEntity.badRequest().build(); }
-        return ResponseEntity.ok(lotRepo.findMesLots(orgId));
+        return ResponseEntity.ok(lotRepo.findMesLots(orgId, username));
     }
 
     // ── Helpers JWT ───────────────────────────────────────────

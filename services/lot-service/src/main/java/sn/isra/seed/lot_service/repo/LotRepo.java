@@ -3,9 +3,11 @@ package sn.isra.seed.lot_service.repo;
 import sn.isra.seed.lot_service.entity.LotSemencier;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,15 +48,27 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
     List<LotSemencier> findCatalogueG3(@Param("statut") StatutLot statut);
 
     /**
-     * Lots appartenant à une organisation spécifique (multiplicateur).
+     * Lots du multiplicateur : ceux qu'il a produits (idOrgProducteur = orgId)
+     * ET ceux qu'il a reçus via un transfert accepté (TransfertLot.statut = ACCEPTE).
      * Couvre G3 reçu + G4, R1, R2 produits par l'org.
-     * Tri : génération ASC (G3→R2) puis date DESC.
      */
     @Query("""
-        SELECT l FROM LotSemencier l
-        WHERE l.idOrgProducteur = :orgId
-          AND l.generation.codeGeneration IN ('G3','G4','R1','R2')
+        SELECT DISTINCT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration IN ('G3','G4','R1','R2')
+          AND (
+              l.idOrgProducteur = :orgId
+              OR l.id IN (
+                  SELECT t.idLot FROM TransfertLot t
+                  WHERE t.usernameDestinataire = :username
+                    AND t.statut = sn.isra.seed.lot_service.entity.enums.StatutTransfert.ACCEPTE
+              )
+          )
         ORDER BY l.generation.ordreGeneration ASC, l.createdAt DESC
         """)
-    List<LotSemencier> findMesLots(@Param("orgId") Long orgId);
+    List<LotSemencier> findMesLots(@Param("orgId") Long orgId, @Param("username") String username);
+
+    /** Débite la quantité nette du lot parent lors de la création d'un lot enfant. */
+    @Modifying
+    @Query("UPDATE LotSemencier l SET l.quantiteNette = l.quantiteNette - :qte WHERE l.id = :id")
+    int debitQuantiteNette(@Param("id") Long id, @Param("qte") BigDecimal qte);
 }

@@ -109,10 +109,11 @@ interface OrderTableProps {
   loading: boolean;
   emptyMsg: string;
   orgs?: any[];
+  varieties?: any[];
   onUpdateStatus?: (id: number, statut: string) => Promise<void>;
 }
 
-function OrderTable({ orders, loading, emptyMsg, orgs = [], onUpdateStatus }: OrderTableProps) {
+function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUpdateStatus }: OrderTableProps) {
   const [page, setPage] = useState(1)
   const [detail, setDetail] = useState<any>(null)
   const [actioning, setActioning] = useState(false)
@@ -221,13 +222,21 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], onUpdateStatus }: Or
                   </tr>
                 </thead>
                 <tbody>
-                  {detail.lignes.map((l: any, i: number) => (
-                    <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td style={{ padding: '6px 10px', color: 'var(--text-primary)' }}>Variété #{l.idVariete}</td>
-                      <td style={{ padding: '6px 10px', color: 'var(--text-muted)' }}>Génération #{l.idGeneration}</td>
-                      <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{l.quantiteDemandee} {l.unite}</td>
-                    </tr>
-                  ))}
+                  {detail.lignes.map((l: any, i: number) => {
+                    const variete = varieties.find((v: any) => v.id === l.idVariete)
+                    return (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '6px 10px', color: 'var(--text-primary)', fontWeight: 500 }}>
+                          {variete ? variete.nomVariete : `Variété #${l.idVariete}`}
+                          {variete && <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 5 }}>({variete.codeVariete})</span>}
+                        </td>
+                        <td style={{ padding: '6px 10px', color: 'var(--text-muted)' }}>
+                          {l.idGeneration === 7 ? 'R2 — Certifiée' : l.idGeneration === 6 ? 'R1' : `Génération #${l.idGeneration}`}
+                        </td>
+                        <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{l.quantiteDemandee} {l.unite}</td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>
@@ -337,7 +346,8 @@ function VueQuotataire({ setToast }: { setToast: any }) {
       setForm({ idOrganisationFournisseur: '', observations: '', lignes: [{ idVariete: '', idGeneration: '7', quantite: '', unite: 'kg' }] })
       fetchAll()
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la soumission', type: 'error' })
+      const msg = err?.response?.data?.message || 'Erreur lors de la soumission'
+      setToast({ msg, type: 'error' })
     } finally { setSaving(false) }
   }
 
@@ -362,7 +372,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
             <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
           </div>
         </div>
-        <OrderTable orders={orders} loading={loading} emptyMsg="Aucune commande passée" orgs={orgs} />
+        <OrderTable orders={orders} loading={loading} emptyMsg="Aucune commande passée" orgs={orgs} varieties={varieties} />
       </div>
 
       {showForm && (

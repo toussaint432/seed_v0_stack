@@ -17,5 +17,11 @@ public record CreateChildLotRequest(
     // Phase 1 : traçabilité acteur
     String responsableNom,
     String responsableRole,
-    Long idOrgProducteur
+    Long idOrgProducteur,
+    // Phase 2 : champs production PCAE
+    BigDecimal quantiteSemenceSrcKg,
+    BigDecimal superficieHa,
+    BigDecimal productionBruteKg,
+    String cycle,
+    String niveauSemence
 ) {}

@@ -11,8 +11,10 @@ import sn.isra.seed.order_service.kafka.OrderEventProducer;
 import sn.isra.seed.order_service.repo.AllocationRepo;
 import sn.isra.seed.order_service.repo.CommandeRepo;
 import sn.isra.seed.order_service.repo.LigneRepo;
+import sn.isra.seed.order_service.repo.LotQuantiteRepo;
 import sn.isra.seed.order_service.repo.MembreOrganisationRepo;
 import sn.isra.seed.order_service.repo.StockOrderRepo;
+import sn.isra.seed.order_service.repo.TransfertLotOrderRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -38,6 +41,8 @@ public class OrderController {
   private final AllocationRepo allocationRepo;
   private final MembreOrganisationRepo membreRepo;
   private final StockOrderRepo stockOrderRepo;
+  private final LotQuantiteRepo lotQuantiteRepo;
+  private final TransfertLotOrderRepo transfertLotOrderRepo;
   private final OrderEventProducer producer;
   private final ObjectMapper om;
 
@@ -140,6 +145,15 @@ public class OrderController {
 
     if (req.lignes() != null) {
       for (CreateOrderRequest.Line l : req.lignes()) {
+        java.math.BigDecimal dispo = lotQuantiteRepo.sumDisponibleUpsemcl(l.idVariete(), l.idGeneration());
+        if (dispo == null) dispo = java.math.BigDecimal.ZERO;
+        if (dispo.compareTo(l.quantite()) < 0) {
+          throw new ResponseStatusException(HttpStatus.CONFLICT,
+              "Quantité insuffisante pour la variété #" + l.idVariete()
+              + " — disponible : " + dispo.toPlainString() + " kg");
+        }
+      }
+      for (CreateOrderRequest.Line l : req.lignes()) {
         LigneCommande lc = new LigneCommande();
         lc.setCommande(saved);
         lc.setIdVariete(l.idVariete());
@@ -158,7 +172,8 @@ public class OrderController {
   @Transactional
   @PutMapping("/{id}/statut")
   public ResponseEntity<Commande> updateStatut(@PathVariable Long id,
-                                               @RequestBody StatutRequest req) {
+                                               @RequestBody StatutRequest req,
+                                               @AuthenticationPrincipal Jwt jwt) {
     if (req.statut() == null || req.statut().isBlank())
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le champ 'statut' est obligatoire");
 
@@ -177,7 +192,8 @@ public class OrderController {
       Commande saved = commandeRepo.save(c);
 
       if (nouveauStatut == StatutCommande.LIVREE && c.getIdOrganisationAcheteur() != null) {
-        appliquerMouvementStock(saved);
+        String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+        appliquerMouvementStock(saved, emetteur);
       }
 
       return ResponseEntity.ok(saved);
@@ -187,8 +203,9 @@ public class OrderController {
   /**
    * Débite le stock UPSemCL et crédite le stock du multiplicateur acheteur
    * pour chaque allocation liée à la commande.
+   * Crée également un transfert_lot automatique (statut ACCEPTE) pour chaque allocation.
    */
-  private void appliquerMouvementStock(Commande commande) {
+  private void appliquerMouvementStock(Commande commande, String emetteur) {
     for (LigneCommande ligne : commande.getLignes()) {
       List<AllocationCommande> allocs = allocationRepo.findByLigne_Id(ligne.getId());
       for (AllocationCommande alloc : allocs) {
@@ -199,6 +216,18 @@ public class OrderController {
               commande.getIdOrganisationAcheteur(),
               alloc.getQuantiteAllouee(),
               ligne.getUnite() != null ? ligne.getUnite() : "kg"
+          );
+          // Débiter la quantite_nette du lot semencier source
+          lotQuantiteRepo.debitLotUpsemcl(
+              ligne.getIdVariete(), ligne.getIdGeneration(), alloc.getQuantiteAllouee());
+          // Créer le transfert_lot automatique
+          String codeTransfert = "AUTO-TL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+          transfertLotOrderRepo.createAutoTransfert(
+              codeTransfert,
+              alloc.getIdLot(),
+              emetteur,
+              commande.getUsernameAcheteur(),
+              alloc.getQuantiteAllouee()
           );
         } catch (Exception e) {
           log.error("Mouvement stock échoué — lot={} org={}: {}",

@@ -8,6 +8,8 @@ import { ChatBubble } from '../components/ChatBubble'
 import { AudioRecorder } from '../components/AudioRecorder'
 import { Toast } from '../components/Modal'
 
+interface VarieteCatalog { id: number; nomVariete: string; codeVariete: string; espece?: { codeEspece: string } }
+
 interface Props { roleKey: string; username: string }
 
 interface ConvSummary {
@@ -82,7 +84,8 @@ export function Messages({ roleKey, username }: Props) {
   const [showMobile, setShowMobile]   = useState<'list'|'chat'>('list')
   const [toast, setToast]             = useState<{msg:string;type:'success'|'error'}|null>(null)
   const [lightboxSrc, setLightboxSrc] = useState<string|null>(null)
-  const [cmdForm, setCmdForm]         = useState({ idLot: '', quantite: '', unite: 'kg', notes: '' })
+  const [cmdForm, setCmdForm]         = useState({ idVariete: '', nomVariete: '', quantite: '', unite: 'kg', notes: '' })
+  const [cmdVarieties, setCmdVarieties] = useState<VarieteCatalog[]>([])
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const fileInputRef   = useRef<HTMLInputElement>(null)
   const pollingRef     = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -110,6 +113,13 @@ export function Messages({ roleKey, username }: Props) {
   useEffect(() => {
     fetchConvs()
     fetchMembres()
+    if (roleKey === 'seed-quotataire') {
+      api.get(endpoints.varieties)
+        .then((r: any) => setCmdVarieties(
+          r.data.filter((v: any) => v.statutVariete === 'DIFFUSEE')
+        ))
+        .catch(() => {})
+    }
   }, [])
 
   /* ── Charger les messages d'une conversation ── */
@@ -190,13 +200,19 @@ export function Messages({ roleKey, username }: Props) {
     if (!selectedConv || sending) return
     setSending(true)
     try {
-      const json = JSON.stringify({ idLot: cmdForm.idLot ? Number(cmdForm.idLot) : undefined, quantite: Number(cmdForm.quantite), unite: cmdForm.unite, notes: cmdForm.notes || undefined })
+      const json = JSON.stringify({
+        idVariete:  cmdForm.idVariete  ? Number(cmdForm.idVariete) : undefined,
+        nomVariete: cmdForm.nomVariete || undefined,
+        quantite:   Number(cmdForm.quantite),
+        unite:      cmdForm.unite,
+        notes:      cmdForm.notes || undefined,
+      })
       await api.post(endpoints.chatMessages(selectedConv.id), { type: 'COMMANDE', contenu: json })
-      setCmdForm({ idLot: '', quantite: '', unite: 'kg', notes: '' })
+      setCmdForm({ idVariete: '', nomVariete: '', quantite: '', unite: 'kg', notes: '' })
       setShowCmd(false)
       await fetchMessages(selectedConv.id)
       fetchConvs()
-      setToast({ msg: 'Commande envoyée et enregistrée', type: 'success' })
+      setToast({ msg: 'Commande envoyée', type: 'success' })
     } catch { setToast({ msg: "Erreur d'envoi de la commande", type: 'error' }) }
     finally { setSending(false) }
   }
@@ -361,22 +377,44 @@ export function Messages({ roleKey, username }: Props) {
                     <button className="btn btn-ghost btn-icon" style={{ width: 24, height: 24 }} onClick={() => setShowCmd(false)}><X size={12} /></button>
                   </div>
                   <form onSubmit={sendCommande}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-                      <div>
-                        <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>ID Lot (optionnel)</label>
-                        <input type="number" value={cmdForm.idLot} onChange={e => setCmdForm(f => ({ ...f, idLot: e.target.value }))}
-                          style={{ width: '100%', padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit,sans-serif' }} placeholder="5" />
-                      </div>
-                      <div>
-                        <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Quantité *</label>
-                        <div style={{ display: 'flex', gap: 4 }}>
-                          <input type="number" required min="1" value={cmdForm.quantite} onChange={e => setCmdForm(f => ({ ...f, quantite: e.target.value }))}
-                            style={{ flex: 1, padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit,sans-serif' }} placeholder="500" />
-                          <select value={cmdForm.unite} onChange={e => setCmdForm(f => ({ ...f, unite: e.target.value }))}
-                            style={{ width: 54, padding: '5px 4px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 12, fontFamily: 'Outfit,sans-serif' }}>
-                            <option value="kg">kg</option><option value="t">t</option>
-                          </select>
-                        </div>
+                    {/* Variété */}
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Variété *</label>
+                      <select
+                        required
+                        value={cmdForm.idVariete}
+                        onChange={e => {
+                          const sel = cmdVarieties.find(v => String(v.id) === e.target.value)
+                          setCmdForm(f => ({ ...f, idVariete: e.target.value, nomVariete: sel?.nomVariete ?? '' }))
+                        }}
+                        style={{ width: '100%', padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit,sans-serif', background: 'var(--surface)' }}
+                      >
+                        <option value="">— Choisir une variété —</option>
+                        {Object.entries(
+                          cmdVarieties.reduce((acc: Record<string, VarieteCatalog[]>, v) => {
+                            const esp = v.espece?.codeEspece || 'Autre'
+                            ;(acc[esp] = acc[esp] || []).push(v)
+                            return acc
+                          }, {})
+                        ).sort(([a], [b]) => a.localeCompare(b)).map(([esp, vs]) => (
+                          <optgroup key={esp} label={esp}>
+                            {vs.map(v => (
+                              <option key={v.id} value={v.id}>{v.nomVariete} ({v.codeVariete})</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Quantité */}
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Quantité *</label>
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <input type="number" required min="1" value={cmdForm.quantite} onChange={e => setCmdForm(f => ({ ...f, quantite: e.target.value }))}
+                          style={{ flex: 1, padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit,sans-serif' }} placeholder="500" />
+                        <select value={cmdForm.unite} onChange={e => setCmdForm(f => ({ ...f, unite: e.target.value }))}
+                          style={{ width: 54, padding: '5px 4px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 12, fontFamily: 'Outfit,sans-serif' }}>
+                          <option value="kg">kg</option><option value="t">t</option>
+                        </select>
                       </div>
                     </div>
                     <div style={{ marginBottom: 8 }}>

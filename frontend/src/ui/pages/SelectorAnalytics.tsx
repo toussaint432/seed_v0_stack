@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { TrendingUp, AlertTriangle, RefreshCw, BarChart2, Activity } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { TrendingUp, AlertTriangle, RefreshCw, BarChart2, Activity, Database } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 
@@ -26,6 +26,21 @@ interface StockAlert {
   unite:       string
   site:        string
   low:         boolean
+}
+
+interface SelStockRow {
+  codeEspece: string; nomEspece: string; codeVariete: string; nomVariete: string
+  generation: string; stockKg: number; nbLots: number; demandKg: number
+}
+type SelStockSortKey = 'nomEspece' | 'nomVariete' | 'generation' | 'stockKg' | 'nbLots' | 'demandKg'
+
+const GEN_COLOR: Record<string, string> = {
+  G0:'#1d4ed8', G1:'#15803d', G2:'#92660a',
+  G3:'#6d28d9', G4:'#b91c1c', R1:'#0f766e', R2:'#16a34a',
+}
+const GEN_LABEL: Record<string, string> = {
+  G0:'Génétique', G1:'Pré-base', G2:'Base',
+  G3:'Certif. C1', G4:'Certif. C2', R1:'R1', R2:'Commerciale',
 }
 
 const REFRESH_INTERVAL = 30_000
@@ -115,22 +130,32 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
   const [demands,    setDemands]    = useState<VarietyDemand[]>([])
   const [monthly,    setMonthly]    = useState<MonthlyPoint[]>([])
   const [alerts,     setAlerts]     = useState<StockAlert[]>([])
+  const [lots,        setLots]        = useState<any[]>([])
+  const [rawStocks,   setRawStocks]   = useState<any[]>([])
+  const [rawVarieties,setRawVarieties]= useState<any[]>([])
   const [loading,    setLoading]    = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [stkSortCol, setStkSortCol] = useState<SelStockSortKey>('stockKg')
+  const [stkSortAsc, setStkSortAsc] = useState(false)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function fetchData(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
     try {
-      const [ordersRes, varietiesRes, stocksRes] = await Promise.allSettled([
+      const [ordersRes, varietiesRes, stocksRes, lotsRes] = await Promise.allSettled([
         api.get(endpoints.orders),
         api.get(endpoints.varieties),
         api.get(endpoints.stocks),
+        api.get(endpoints.lots),
       ])
 
       const orders    = ordersRes.status    === 'fulfilled' ? ordersRes.value.data    : []
       const varieties = varietiesRes.status === 'fulfilled' ? varietiesRes.value.data : []
       const stocks    = stocksRes.status    === 'fulfilled' ? stocksRes.value.data    : []
+      const lotsData  = lotsRes.status      === 'fulfilled' ? lotsRes.value.data      : []
+      setLots(lotsData)
+      setRawStocks(stocks)
+      setRawVarieties(varieties)
 
       /* ── Variétés les plus demandées ── */
       const demandMap: Record<string, number> = {}
@@ -208,6 +233,53 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
     return () => { if (timer.current) clearInterval(timer.current) }
   }, [userSpecialisation])
 
+  /* ── Stock par espèce / variété / génération (filtré par spécialisation) ── */
+  const specUp      = userSpecialisation?.toUpperCase()
+  const varById: Record<number, any> = Object.fromEntries(rawVarieties.map(v => [v.id, v]))
+  const lotById: Record<number, any> = Object.fromEntries(lots.map(l => [l.id, l]))
+  const stkRowMap: Record<string, SelStockRow> = {}
+
+  rawStocks.forEach((st: any) => {
+    const lotObj      = st.lot ?? lotById[st.idLot ?? st.lotId] ?? {}
+    const gen         = lotObj.generation?.codeGeneration ?? st.generation ?? '?'
+    if (gen === '?') return
+    let variety: any  = lotObj.variete ?? varById[lotObj.idVariete ?? lotObj.varieteId ?? -1] ?? {}
+    if (!variety.codeVariete) variety = varById[st.idVariete ?? -1] ?? st.variete ?? {}
+    if (!variety.codeVariete) return
+    const esp         = variety.espece ?? {}
+    const codeEspece  = esp.codeEspece ?? '?'
+    if (specUp && codeEspece.toUpperCase() !== specUp) return
+    const key = `${variety.codeVariete}|${gen}`
+    if (!stkRowMap[key]) stkRowMap[key] = {
+      codeEspece, nomEspece: esp.nomEspece ?? codeEspece,
+      codeVariete: variety.codeVariete, nomVariete: variety.nomVariete ?? variety.codeVariete,
+      generation: gen, stockKg: 0, nbLots: 0, demandKg: 0,
+    }
+    stkRowMap[key].stockKg += parseFloat(st.quantiteDisponible) || 0
+  })
+
+  lots.forEach((l: any) => {
+    const gen         = l.generation?.codeGeneration ?? '?'
+    if (gen === '?') return
+    const variety     = varById[l.idVariete ?? l.varieteId ?? -1] ?? l.variete ?? {}
+    const cv          = variety.codeVariete ?? l.codeVariete
+    if (!cv) return
+    const key = `${cv}|${gen}`
+    const active = ['DISPONIBLE','EN_PRODUCTION','CERTIFIE','EN_COURS_CERT','SOUCHE']
+    if (stkRowMap[key] && active.includes((l.statut ?? '').toUpperCase()))
+      stkRowMap[key].nbLots++
+  })
+
+  const stkRows: SelStockRow[] = Object.values(stkRowMap).sort((a, b) => {
+    const va = a[stkSortCol], vb = b[stkSortCol]
+    if (typeof va === 'string') return stkSortAsc ? va.localeCompare(vb as string) : (vb as string).localeCompare(va as string)
+    return stkSortAsc ? (va as number) - (vb as number) : (vb as number) - (va as number)
+  })
+  function stkThSort(col: SelStockSortKey) {
+    if (stkSortCol === col) setStkSortAsc(v => !v)
+    else { setStkSortCol(col); setStkSortAsc(false) }
+  }
+
   const barData = demands.map((d, i) => ({
     label: d.codeVariete,
     value: d.count,
@@ -284,6 +356,150 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
               <LineChart data={monthly} height={120} color="#0369a1" />
             )}
           </div>
+        </div>
+      </div>
+
+      {/* ── Stock disponible par variété / génération ── */}
+      <div className="card">
+        <div className="card-header">
+          <span className="card-title">
+            <span className="card-title-icon"><Database size={14}/></span>
+            Stock disponible — Variétés
+            {specUp && (
+              <span style={{ marginLeft: 6, background: '#0369a120', color: '#0369a1',
+                borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>
+                {specUp}
+              </span>
+            )}
+            {!loading && (
+              <span className="badge badge-blue" style={{ marginLeft: 6, fontSize: 11 }}>
+                {stkRows.length} entrées
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                {([
+                  { col: 'nomEspece'  as SelStockSortKey, label: 'Espèce' },
+                  { col: 'nomVariete' as SelStockSortKey, label: 'Variété' },
+                  { col: 'generation' as SelStockSortKey, label: 'Gén.' },
+                  { col: 'stockKg'    as SelStockSortKey, label: 'Stock (kg)' },
+                  { col: 'nbLots'     as SelStockSortKey, label: 'Lots actifs' },
+                  { col: 'demandKg'   as SelStockSortKey, label: 'Demande (kg)' },
+                ] as { col: SelStockSortKey; label: string }[]).map(({ col, label }) => (
+                  <th key={col} onClick={() => stkThSort(col)}
+                    style={{ cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      {label}
+                      {stkSortCol === col
+                        ? <span style={{ fontSize: 9, opacity: 0.85 }}>{stkSortAsc ? '↑' : '↓'}</span>
+                        : <span style={{ fontSize: 9, opacity: 0.25 }}>↕</span>}
+                    </span>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                [0,1,2,3].map(i => (
+                  <tr key={i}><td colSpan={6}>
+                    <div className="skeleton" style={{ height: 13, borderRadius: 4 }}/>
+                  </td></tr>
+                ))
+              ) : stkRows.length === 0 ? (
+                <tr><td colSpan={6}>
+                  <div className="empty-state" style={{ padding: '28px 0' }}>
+                    <div className="empty-icon"><Database size={16}/></div>
+                    <div className="empty-title">Aucun stock enregistré</div>
+                    <div className="empty-sub">
+                      {specUp ? `Aucun stock pour la spécialisation ${specUp}` : 'Les données apparaîtront ici'}
+                    </div>
+                  </div>
+                </td></tr>
+              ) : (
+                stkRows.slice(0, 60).map((r, i) => {
+                  const genClr = GEN_COLOR[r.generation] ?? '#6b7280'
+                  const isCrit = r.demandKg > 0 && r.stockKg < r.demandKg * 0.5
+                  const isLow  = !isCrit && r.demandKg > 0 && r.stockKg < r.demandKg
+                  return (
+                    <tr key={i} style={{ background: isCrit ? '#fef2f220' : isLow ? '#fffbeb20' : 'transparent' }}>
+                      <td>
+                        <span style={{ fontWeight: 700, fontSize: 12.5 }}>{r.codeEspece}</span>
+                        {r.nomEspece !== r.codeEspece && (
+                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 5 }}>
+                            {r.nomEspece}
+                          </span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ fontSize: 12.5, fontWeight: 500 }}>{r.nomVariete}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                          {r.codeVariete}
+                        </div>
+                      </td>
+                      <td>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '3px 8px',
+                          background: `${genClr}18`, color: genClr, border: `1px solid ${genClr}35`,
+                          display: 'inline-flex', alignItems: 'center', gap: 3,
+                        }}>
+                          {r.generation}
+                          <span style={{ fontSize: 9, fontWeight: 400, opacity: 0.75 }}>
+                            {GEN_LABEL[r.generation] ?? ''}
+                          </span>
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{
+                          fontWeight: 700, fontSize: 13, fontVariantNumeric: 'tabular-nums',
+                          color: isCrit ? 'var(--red-600)' : isLow ? 'var(--gold-dark)' : 'var(--text-primary)',
+                        }}>
+                          {r.stockKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}
+                        </span>
+                        <span style={{ color: 'var(--text-muted)', marginLeft: 3, fontSize: 11 }}>kg</span>
+                        {(isCrit || isLow) && (
+                          <span style={{
+                            marginLeft: 5, fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '1px 6px',
+                            background: isCrit ? '#fef2f2' : '#fffbeb',
+                            color: isCrit ? 'var(--red-600)' : 'var(--gold-dark)',
+                            border: `1px solid ${isCrit ? '#fecaca' : '#fde68a'}`,
+                          }}>
+                            {isCrit ? '⚠ Critique' : '⚠ Bas'}
+                          </span>
+                        )}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <span style={{ fontWeight: 600, fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                          {r.nbLots}
+                        </span>
+                      </td>
+                      <td>
+                        {r.demandKg > 0 ? (
+                          <span style={{
+                            fontWeight: 600, fontSize: 12, fontVariantNumeric: 'tabular-nums',
+                            color: r.demandKg > r.stockKg ? 'var(--red-600)' : 'var(--text-secondary)',
+                          }}>
+                            {r.demandKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} kg
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+          {stkRows.length > 60 && (
+            <div style={{ textAlign: 'center', padding: '8px 0', fontSize: 12,
+              color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
+              60 / {stkRows.length} lignes affichées
+            </div>
+          )}
         </div>
       </div>
 

@@ -12,5 +12,13 @@ public enum StatutLot {
     /** Stock totalement épuisé */
     EPUISE,
     /** Retiré de la chaîne (non-conformité, péremption) */
-    RETIRE
+    RETIRE,
+    /** Déclassée : visible en stock, non vendable comme semence certifiée */
+    DECLASS,
+    /** En cours de certification par l'organisme compétent */
+    EN_COURS_CERT,
+    /** Souche génétique conservatoire */
+    SOUCHE,
+    /** Lot perdu (intempéries, maladie, accident) */
+    PERDU
 }

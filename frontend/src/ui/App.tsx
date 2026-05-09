@@ -6,6 +6,7 @@ import {
   Calendar, MapPin, Building2, Workflow, Server, Store, MessageCircle,
   Sun, Moon, Monitor, X,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { initKeycloak, keycloak } from '../lib/keycloak'
 import { Varieties }      from './pages/Varieties'
 import { Lots }           from './pages/Lots'
@@ -55,7 +56,7 @@ function getUserInfo() {
 
 /* ── Nav config par rôle ── */
 type NavSection = { section: string; items: NavItem[] }
-type NavItem = { id: Page; label: string; icon: React.ElementType; badge?: string }
+type NavItem = { id: Page; label: string; icon: LucideIcon; badge?: string }
 
 function getNavSections(roleKey: string): NavSection[] {
   // Éléments communs
