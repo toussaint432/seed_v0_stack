@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react'
+import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import {
   User, Mail, Shield, Calendar, LogOut, Key,
   Camera, Edit3, Check, X, Lock, Eye, EyeOff, RefreshCw, Trash2,
+  Clock, Globe, Bell,
 } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { Modal, Field, FormInput, FormRow, FormActions, Toast } from '../components/Modal'
@@ -11,12 +12,12 @@ interface Props { roleKey: string }
 const KEYCLOAK_BASE = 'http://localhost:18080'
 const REALM         = 'seed-v0'
 
-const ROLE_INFO: Record<string, { label: string; color: string; description: string }> = {
-  'seed-admin':         { label: 'Administrateur ISRA', color: '#7c3aed', description: 'Supervision globale — accès complet à toute la plateforme' },
-  'seed-selector':      { label: 'Sélectionneur',       color: '#0369a1', description: 'Gestion des variétés · création des lots G0/G1 · transfert vers UPSemCL' },
-  'seed-upsemcl':        { label: 'UPSemCL',             color: '#0f766e', description: 'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs' },
-  'seed-multiplicator': { label: 'Multiplicateur',      color: '#15803d', description: 'Réception G3 → production G4→R1→R2 pour commercialisation' },
-  'seed-quotataire':    { label: 'Quotataire / OP',     color: '#b45309', description: 'Consultation du catalogue et passation de commandes de semences R2' },
+const ROLE_INFO: Record<string, { label: string; color: string; bg: string; description: string; icon: string }> = {
+  'seed-admin':         { label: 'Administrateur ISRA', color: '#7c3aed', bg: '#f5f3ff', description: 'Supervision globale — accès complet à toute la plateforme', icon: '◆' },
+  'seed-selector':      { label: 'Sélectionneur',       color: '#0369a1', bg: '#eff6ff', description: 'Gestion des variétés · création des lots G0/G1 · transfert vers UPSemCL', icon: '⬡' },
+  'seed-upsemcl':       { label: 'UPSemCL',             color: '#0f766e', bg: '#f0fdfa', description: 'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs', icon: '●' },
+  'seed-multiplicator': { label: 'Multiplicateur',      color: '#15803d', bg: '#f0fdf4', description: 'Réception G3 → production G4→R1→R2 pour commercialisation', icon: '▲' },
+  'seed-quotataire':    { label: 'Quotataire / OP',     color: '#b45309', bg: '#fffbeb', description: 'Consultation du catalogue et passation de commandes de semences R2', icon: '■' },
 }
 
 export function Profile({ roleKey }: Props) {
@@ -26,8 +27,8 @@ export function Profile({ roleKey }: Props) {
   const userId   = token.sub as string
   const username = token.preferred_username || '—'
   const role     = ROLE_INFO[roleKey]
+  const accent   = role?.color || '#16a34a'
 
-  /* ── State ── */
   const [editing,    setEditing]    = useState(false)
   const [saving,     setSaving]     = useState(false)
   const [showPwd,    setShowPwd]    = useState(false)
@@ -53,13 +54,10 @@ export function Profile({ roleKey }: Props) {
   const issuedAt    = token.iat ? new Date(token.iat * 1000).toLocaleString('fr-FR') : '—'
   const expiresAt   = token.exp ? new Date(token.exp * 1000).toLocaleString('fr-FR') : '—'
 
-  /* ── Handlers ── */
-  function handlePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+  function handlePhoto(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 2 * 1024 * 1024) {
-      setToast({ msg: 'Image trop lourde (max 2 Mo)', type: 'error' }); return
-    }
+    if (file.size > 2 * 1024 * 1024) { setToast({ msg: 'Image trop lourde (max 2 Mo)', type: 'error' }); return }
     const reader = new FileReader()
     reader.onload = () => {
       const url = reader.result as string
@@ -83,16 +81,13 @@ export function Profile({ roleKey }: Props) {
     setEditing(false)
   }
 
-  async function saveProfile(e: React.FormEvent) {
+  async function saveProfile(e: FormEvent) {
     e.preventDefault()
     setSaving(true)
     try {
       const res = await fetch(`${KEYCLOAK_BASE}/realms/${REALM}/account`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${keycloak.token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${keycloak.token}` },
         body: JSON.stringify({ firstName, lastName, email, username }),
       })
       if (!res.ok) {
@@ -107,27 +102,16 @@ export function Profile({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  async function changePassword(e: React.FormEvent) {
+  async function changePassword(e: FormEvent) {
     e.preventDefault()
-    if (pwdForm.newPwd !== pwdForm.confirm) {
-      setToast({ msg: 'Les mots de passe ne correspondent pas', type: 'error' }); return
-    }
-    if (pwdForm.newPwd.length < 8) {
-      setToast({ msg: 'Minimum 8 caractères requis', type: 'error' }); return
-    }
+    if (pwdForm.newPwd !== pwdForm.confirm) { setToast({ msg: 'Les mots de passe ne correspondent pas', type: 'error' }); return }
+    if (pwdForm.newPwd.length < 8) { setToast({ msg: 'Minimum 8 caractères requis', type: 'error' }); return }
     setPwdSaving(true)
     try {
       const res = await fetch(`${KEYCLOAK_BASE}/realms/${REALM}/account/credentials/password`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${keycloak.token}`,
-        },
-        body: JSON.stringify({
-          currentPassword: pwdForm.current,
-          newPassword:     pwdForm.newPwd,
-          confirmation:    pwdForm.confirm,
-        }),
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${keycloak.token}` },
+        body: JSON.stringify({ currentPassword: pwdForm.current, newPassword: pwdForm.newPwd, confirmation: pwdForm.confirm }),
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
@@ -144,195 +128,129 @@ export function Profile({ roleKey }: Props) {
 
   /* ── Render ── */
   return (
-    <div style={{ maxWidth: 820, margin: '0 auto' }}>
+    <div style={{ maxWidth: 860, margin: '0 auto' }}>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* ── Hero ── */}
-      <div className="card" style={{ marginBottom: 20, overflow: 'hidden' }}>
+      {/* ═══════════════ HERO CARD ═══════════════ */}
+      <div className="card" style={{ marginBottom: 18, overflow: 'hidden' }}>
 
-        {/* Bannière — hauteur augmentée, gradient riche, motifs géométriques */}
+        {/* Bannière dégradée */}
         <div style={{
-          height: 160,
+          height: 170,
           background: role
-            ? `linear-gradient(135deg, ${role.color} 0%, ${role.color}bb 40%, #0a1628 100%)`
-            : 'linear-gradient(135deg, #1b4332 0%, #0a1628 100%)',
-          position: 'relative',
-          overflow: 'hidden',
+            ? `linear-gradient(135deg, ${role.color} 0%, ${role.color}cc 35%, #0c1520 100%)`
+            : 'linear-gradient(135deg, #1b4332 0%, #0c1520 100%)',
+          position: 'relative', overflow: 'hidden',
         }}>
+          {/* Motifs géométriques */}
+          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.07 }} xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.8"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+          </svg>
           {/* Cercles décoratifs */}
-          <div style={{
-            position: 'absolute', top: -40, right: -40,
-            width: 220, height: 220, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.06)',
-          }} />
-          <div style={{
-            position: 'absolute', bottom: -60, right: 120,
-            width: 160, height: 160, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.04)',
-          }} />
-          <div style={{
-            position: 'absolute', top: 20, left: '40%',
-            width: 80, height: 80, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.03)',
-          }} />
-
-          {/* Logo ISRA/CNRA en watermark */}
-          <div style={{
-            position: 'absolute', left: 28, bottom: 16,
-            fontSize: 11, fontWeight: 700, letterSpacing: '0.18em',
-            color: 'rgba(255,255,255,0.22)', fontFamily: 'DM Mono, monospace',
-            userSelect: 'none',
-          }}>
+          <div style={{ position: 'absolute', top: -50, right: -30, width: 240, height: 240, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }} />
+          <div style={{ position: 'absolute', top: 30, right: 140, width: 100, height: 100, borderRadius: '50%', background: 'rgba(255,255,255,0.04)' }} />
+          <div style={{ position: 'absolute', bottom: -40, left: '38%', width: 130, height: 130, borderRadius: '50%', background: 'rgba(255,255,255,0.03)' }} />
+          {/* Bande dégradée bas — contraste derrière identité overlap */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 110, background: `linear-gradient(to bottom, transparent 0%, ${role?.color ?? '#1b4332'}66 35%, rgba(0,0,0,0.72) 100%)`, pointerEvents: 'none' }} />
+          {/* Watermark */}
+          <div style={{ position: 'absolute', left: 28, bottom: 14, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.35)', fontFamily: 'DM Mono, monospace', userSelect: 'none', zIndex: 1 }}>
             ISRA · CNRA · BAMBEY
           </div>
-
-          {/* Boutons en haut à droite */}
+          {/* Boutons top-right */}
           <div style={{ position: 'absolute', top: 16, right: 20, display: 'flex', gap: 8 }}>
             {!editing && (
-              <button className="btn btn-secondary" onClick={() => setEditing(true)}
-                style={{
-                  background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.28)',
-                  color: '#fff', backdropFilter: 'blur(8px)',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-                }}>
+              <button className="btn" onClick={() => setEditing(true)} style={{ background: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', backdropFilter: 'blur(8px)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', height: 34, fontSize: 12.5 }}>
                 <Edit3 size={13} /> Modifier le profil
               </button>
             )}
-            <button className="btn btn-secondary"
-              style={{
-                background: 'rgba(255,255,255,0.12)', borderColor: 'rgba(255,255,255,0.28)',
-                color: '#fff', backdropFilter: 'blur(8px)',
-                boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-              }}
+            <button className="btn" style={{ background: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff', backdropFilter: 'blur(8px)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)', height: 34, fontSize: 12.5 }}
               onClick={() => keycloak.logout({ redirectUri: window.location.origin })}>
               <LogOut size={13} /> Déconnexion
             </button>
           </div>
         </div>
 
-        {/* Corps */}
-        <div style={{ padding: '0 32px 28px' }}>
-
-          {/* Ligne avatar + identité */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, marginTop: -56 }}>
-
-            {/* Avatar — plus grand, anneau coloré */}
+        {/* Corps hero */}
+        <div style={{ padding: '0 32px 26px' }}>
+          {/* Avatar + identité */}
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22, marginTop: -56 }}>
+            {/* Avatar */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <div style={{
-                width: 112, height: 112, borderRadius: '50%',
-                background: role
-                  ? `linear-gradient(145deg, ${role.color}, ${role.color}88)`
-                  : 'linear-gradient(145deg, #374151, #1f2937)',
-                border: `4px solid white`,
-                outline: `3px solid ${role?.color || '#374151'}`,
-                boxShadow: `0 8px 24px rgba(0,0,0,0.22), 0 0 0 1px ${role?.color || '#374151'}33`,
+                width: 108, height: 108, borderRadius: '50%',
+                background: role ? `linear-gradient(145deg, ${role.color}, ${role.color}99)` : 'linear-gradient(145deg, #374151, #1f2937)',
+                border: '4px solid white',
+                outline: `3px solid ${accent}`,
+                boxShadow: `0 6px 20px rgba(0,0,0,0.25), 0 0 0 6px ${accent}22`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 38, fontWeight: 800, color: '#fff',
-                overflow: 'hidden', userSelect: 'none',
-                letterSpacing: '-0.02em',
+                fontSize: 36, fontWeight: 800, color: '#fff',
+                overflow: 'hidden', userSelect: 'none', letterSpacing: '-0.02em',
               }}>
                 {photoUrl
                   ? <img src={photoUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : initials
                 }
               </div>
-              <button onClick={() => fileRef.current?.click()} title="Changer la photo" style={{
-                position: 'absolute', bottom: 4, right: 4,
-                width: 30, height: 30, borderRadius: '50%',
-                background: role?.color || 'var(--green-600)',
-                border: '3px solid white',
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
-              }}>
-                <Camera size={13} />
+              <button onClick={() => fileRef.current?.click()} title="Changer la photo"
+                style={{ position: 'absolute', bottom: 4, right: 2, width: 28, height: 28, borderRadius: '50%', background: accent, border: '2.5px solid white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
+                <Camera size={12} />
               </button>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
             </div>
 
-            {/* Nom + identité */}
-            <div style={{ paddingBottom: 8, flex: 1 }}>
-              {/* Badge rôle au-dessus du nom */}
+            {/* Nom + rôle */}
+            <div style={{ paddingBottom: 6, flex: 1, minWidth: 0 }}>
               {role && (
-                <div style={{ marginBottom: 6 }}>
+                <div style={{ marginBottom: 7 }}>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
-                    background: role.color, color: '#fff',
-                    borderRadius: 20, padding: '4px 14px',
-                    fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
-                    boxShadow: `0 2px 10px ${role.color}55`,
-                    textTransform: 'uppercase',
+                    background: accent, color: '#fff', borderRadius: 99,
+                    padding: '3px 12px', fontSize: 10.5, fontWeight: 700,
+                    letterSpacing: '0.07em', textTransform: 'uppercase',
+                    boxShadow: `0 2px 10px ${accent}44`,
                   }}>
-                    <Shield size={10} />
-                    {role.label}
+                    <Shield size={9} /> {role.label}
                   </span>
                 </div>
               )}
-              {/* Nom complet */}
-              <div style={{
-                fontSize: 26, fontWeight: 800, color: 'var(--text-primary)',
-                letterSpacing: '-0.03em', lineHeight: 1.1,
-              }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.1, fontFamily: 'Fraunces, serif', textShadow: '0 1px 6px rgba(0,0,0,0.45)' }}>
                 {displayName}
               </div>
-              {/* Username + email sur une ligne */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8, flexWrap: 'wrap' }}>
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  fontSize: 12.5, color: 'var(--text-secondary)',
-                  background: 'var(--surface-2)', border: '1px solid var(--border)',
-                  borderRadius: 6, padding: '3px 10px', fontFamily: 'DM Mono, monospace',
-                }}>
-                  <User size={11} /> {username}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'rgba(255,255,255,0.92)', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.28)', borderRadius: 6, padding: '3px 10px', fontFamily: 'DM Mono, monospace', backdropFilter: 'blur(6px)' }}>
+                  <User size={10} /> {username}
                 </span>
                 {token.email && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    fontSize: 12.5, color: 'var(--text-muted)',
-                  }}>
-                    <Mail size={11} /> {token.email}
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>
+                    <Mail size={10} /> {token.email}
                   </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* Description du rôle — bandeau distinct */}
+          {/* Bandeau description rôle */}
           {role && (
-            <div style={{
-              marginTop: 20,
-              display: 'flex', alignItems: 'center', gap: 12,
-              background: `linear-gradient(90deg, ${role.color}15, ${role.color}05)`,
-              border: `1px solid ${role.color}30`,
-              borderLeft: `4px solid ${role.color}`,
-              borderRadius: 8, padding: '10px 16px',
-            }}>
-              <Shield size={15} color={role.color} style={{ flexShrink: 0 }} />
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                {role.description}
-              </span>
+            <div style={{ marginTop: 18, display: 'flex', alignItems: 'center', gap: 12, background: `${accent}0d`, border: `1px solid ${accent}28`, borderLeft: `3px solid ${accent}`, borderRadius: 8, padding: '10px 16px' }}>
+              <Shield size={14} color={accent} style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{role.description}</span>
             </div>
           )}
 
-          {/* ── Gestion photo — toujours visible ── */}
-          <div style={{
-            marginTop: 16, paddingTop: 14,
-            borderTop: '1px solid var(--border)',
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}>
+          {/* Gestion photo */}
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {photoUrl
-                ? <div style={{
-                    width: 36, height: 36, borderRadius: '50%', overflow: 'hidden',
-                    border: '2px solid var(--border)',
-                  }}>
-                    <img src={photoUrl} alt="miniature" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ? <div style={{ width: 34, height: 34, borderRadius: '50%', overflow: 'hidden', border: '2px solid var(--border)' }}>
+                    <img src={photoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   </div>
-                : <div style={{
-                    width: 36, height: 36, borderRadius: '50%',
-                    background: 'var(--surface-2)', border: '2px dashed var(--border)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <User size={15} style={{ color: 'var(--text-muted)' }} />
+                : <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--surface-2)', border: '2px dashed var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <User size={14} style={{ color: 'var(--text-muted)' }} />
                   </div>
               }
               <div>
@@ -342,30 +260,31 @@ export function Profile({ roleKey }: Props) {
                 </div>
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button type="button" className="btn btn-secondary"
-                onClick={() => fileRef.current?.click()}
-                style={{ fontSize: 12 }}>
-                <Camera size={13} /> {photoUrl ? 'Modifier' : 'Ajouter une photo'}
+            <div style={{ display: 'flex', gap: 7, flexShrink: 0 }}>
+              <button type="button" className="btn btn-secondary" onClick={() => fileRef.current?.click()} style={{ fontSize: 12, height: 32 }}>
+                <Camera size={12} /> {photoUrl ? 'Modifier' : 'Ajouter une photo'}
               </button>
               {photoUrl && (
-                <button type="button" className="btn btn-secondary"
-                  onClick={deletePhoto}
-                  style={{ fontSize: 12, color: '#dc2626', borderColor: '#fca5a5' }}>
-                  <Trash2 size={13} /> Supprimer
+                <button type="button" className="btn btn-secondary" onClick={deletePhoto} style={{ fontSize: 12, height: 32, color: '#dc2626', borderColor: '#fca5a5' }}>
+                  <Trash2 size={12} /> Supprimer
                 </button>
               )}
             </div>
           </div>
-
         </div>
       </div>
 
-      {/* ── Formulaire d'édition ── */}
+      {/* ═══════════════ FORMULAIRE ÉDITION / INFO CARDS ═══════════════ */}
       {editing ? (
-        <div className="card" style={{ marginBottom: 20, padding: '24px 28px' }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 20 }}>
-            Modifier les informations personnelles
+        <div className="card" style={{ marginBottom: 18, padding: '24px 28px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: `${accent}18`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Edit3 size={13} />
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Modifier les informations</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Les modifications sont appliquées via Keycloak</div>
+            </div>
           </div>
           <form onSubmit={saveProfile}>
             <FormRow>
@@ -388,10 +307,8 @@ export function Profile({ roleKey }: Props) {
               </Field>
             </FormRow>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 8 }}>
-              <button type="button" className="btn btn-ghost" onClick={cancelEdit}>
-                <X size={13} /> Annuler
-              </button>
-              <button type="submit" className="btn btn-primary" disabled={saving}>
+              <button type="button" className="btn btn-ghost" onClick={cancelEdit}><X size={13} /> Annuler</button>
+              <button type="submit" className="btn btn-primary" disabled={saving} style={{ background: accent, borderColor: accent }}>
                 {saving
                   ? <><RefreshCw size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> Enregistrement…</>
                   : <><Check size={13} /> Enregistrer</>
@@ -401,51 +318,76 @@ export function Profile({ roleKey }: Props) {
           </form>
         </div>
       ) : (
-        /* ── Affichage lecture ── */
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
-          <div className="card" style={{ padding: '20px 24px' }}>
-            <SectionTitle icon={<User size={13} />}>Informations personnelles</SectionTitle>
-            <InfoRow label="Prénom"           value={token.given_name  || '—'} />
-            <InfoRow label="Nom"              value={token.family_name || '—'} />
-            <InfoRow label="Nom d'utilisateur" value={username} mono />
-            <InfoRow label="Email"            value={token.email || '—'} icon={<Mail size={12} />} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 18 }}>
+
+          {/* Informations personnelles */}
+          <div className="card" style={{ padding: '20px 22px' }}>
+            <SectionTitle icon={<User size={12} />} color={accent}>Informations personnelles</SectionTitle>
+            <InfoRow label="Prénom"            value={token.given_name  || '—'} icon={<User size={12} />}     accent={accent} />
+            <InfoRow label="Nom"               value={token.family_name || '—'} icon={<User size={12} />}     accent={accent} />
+            <InfoRow label="Nom d'utilisateur" value={username}                  icon={<User size={12} />} accent={accent} mono />
+            <InfoRow label="Email"             value={token.email || '—'}        icon={<Mail size={12} />}     accent={accent} last />
           </div>
-          <div className="card" style={{ padding: '20px 24px' }}>
-            <SectionTitle icon={<Shield size={13} />}>Accès & Session</SectionTitle>
-            <InfoRow label="Rôle"            value={role?.label || roleKey || 'Non assigné'} icon={<Shield size={12} />} />
-            <InfoRow label="Connecté depuis" value={issuedAt}  icon={<Calendar size={12} />} />
-            <InfoRow label="Session expire"  value={expiresAt} icon={<Calendar size={12} />} />
-            <InfoRow label="Realm"           value="seed-v0"   mono />
+
+          {/* Accès & Session */}
+          <div className="card" style={{ padding: '20px 22px' }}>
+            <SectionTitle icon={<Shield size={12} />} color={accent}>Accès &amp; Session</SectionTitle>
+            <InfoRow
+              label="Rôle"
+              value={role?.label || roleKey || 'Non assigné'}
+              icon={<Shield size={12} />}
+              accent={accent}
+              valueStyle={{ color: accent, fontWeight: 700 }}
+            />
+            <InfoRow label="Connecté depuis" value={issuedAt}  icon={<Clock size={12} />}    accent={accent} />
+            <InfoRow label="Session expire"  value={expiresAt} icon={<Calendar size={12} />} accent={accent} />
+            <InfoRow label="Realm"           value="seed-v0"   icon={<Globe size={12} />}    accent={accent} mono last />
           </div>
         </div>
       )}
 
-      {/* ── Sécurité ── */}
-      <div className="card" style={{ padding: '20px 24px' }}>
-        <SectionTitle icon={<Lock size={13} />}>Sécurité</SectionTitle>
+      {/* ═══════════════ SÉCURITÉ ═══════════════ */}
+      <div className="card" style={{ padding: '20px 22px' }}>
+        <SectionTitle icon={<Lock size={12} />} color={accent}>Sécurité</SectionTitle>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Mot de passe</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>Changer votre mot de passe de connexion</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          {/* Mot de passe */}
+          <div style={{ padding: '16px 18px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: `${accent}14`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Key size={17} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text-primary)', marginBottom: 3 }}>Mot de passe</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4 }}>Modifier votre mot de passe de connexion</div>
+              </div>
+            </div>
+            <button className="btn btn-secondary" onClick={() => setShowPwd(true)} style={{ fontSize: 12, height: 32, marginTop: 2 }}>
+              <Lock size={12} /> Modifier le mot de passe
+            </button>
           </div>
-          <button className="btn btn-secondary" onClick={() => setShowPwd(true)}>
-            <Lock size={13} /> Modifier le mot de passe
-          </button>
-        </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 0' }}>
-          <div>
-            <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)' }}>Session active</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>Expire le {expiresAt}</div>
+          {/* Session */}
+          <div style={{ padding: '16px 18px', borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: `${accent}14`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Bell size={17} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--text-primary)', marginBottom: 3 }}>Session active</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  Expire le <strong style={{ color: 'var(--text-secondary)' }}>{expiresAt}</strong>
+                </div>
+              </div>
+            </div>
+            <button className="btn btn-secondary" onClick={() => keycloak.updateToken(300).catch(() => keycloak.login())} style={{ fontSize: 12, height: 32, marginTop: 2 }}>
+              <RefreshCw size={12} /> Renouveler la session
+            </button>
           </div>
-          <button className="btn btn-secondary" onClick={() => keycloak.updateToken(300).catch(() => keycloak.login())}>
-            <RefreshCw size={13} /> Renouveler la session
-          </button>
         </div>
       </div>
 
-      {/* ── Modal mot de passe ── */}
+      {/* Modal mot de passe */}
       {showPwd && (
         <Modal
           title="Modifier le mot de passe"
@@ -456,57 +398,29 @@ export function Profile({ roleKey }: Props) {
           <form onSubmit={changePassword}>
             <Field label="Mot de passe actuel" required>
               <div style={{ position: 'relative' }}>
-                <FormInput
-                  type={showCurrent ? 'text' : 'password'}
-                  value={pwdForm.current}
-                  onChange={e => setPwdForm(f => ({ ...f, current: e.target.value }))}
-                  placeholder="••••••••"
-                  required
-                  style={{ paddingRight: 40 }}
-                />
+                <FormInput type={showCurrent ? 'text' : 'password'} value={pwdForm.current} onChange={e => setPwdForm(f => ({ ...f, current: e.target.value }))} placeholder="••••••••" required style={{ paddingRight: 40 }} />
                 <EyeToggle show={showCurrent} onToggle={() => setShowCurrent(s => !s)} />
               </div>
             </Field>
-
             <Field label="Nouveau mot de passe" required hint="Minimum 8 caractères">
               <div style={{ position: 'relative' }}>
-                <FormInput
-                  type={showNew ? 'text' : 'password'}
-                  value={pwdForm.newPwd}
-                  onChange={e => setPwdForm(f => ({ ...f, newPwd: e.target.value }))}
-                  placeholder="••••••••"
-                  required
-                  style={{ paddingRight: 40 }}
-                />
+                <FormInput type={showNew ? 'text' : 'password'} value={pwdForm.newPwd} onChange={e => setPwdForm(f => ({ ...f, newPwd: e.target.value }))} placeholder="••••••••" required style={{ paddingRight: 40 }} />
                 <EyeToggle show={showNew} onToggle={() => setShowNew(s => !s)} />
               </div>
               {pwdForm.newPwd.length > 0 && pwdForm.newPwd.length < 8 && (
                 <p style={{ fontSize: 11, color: 'var(--red-600)', marginTop: 4 }}>Trop court — minimum 8 caractères</p>
               )}
             </Field>
-
             <Field label="Confirmer le nouveau mot de passe" required>
               <div style={{ position: 'relative' }}>
-                <FormInput
-                  type={showConfirm ? 'text' : 'password'}
-                  value={pwdForm.confirm}
-                  onChange={e => setPwdForm(f => ({ ...f, confirm: e.target.value }))}
-                  placeholder="••••••••"
-                  required
-                  style={{ paddingRight: 40 }}
-                />
+                <FormInput type={showConfirm ? 'text' : 'password'} value={pwdForm.confirm} onChange={e => setPwdForm(f => ({ ...f, confirm: e.target.value }))} placeholder="••••••••" required style={{ paddingRight: 40 }} />
                 <EyeToggle show={showConfirm} onToggle={() => setShowConfirm(s => !s)} />
               </div>
               {pwdForm.confirm && pwdForm.newPwd !== pwdForm.confirm && (
                 <p style={{ fontSize: 11, color: 'var(--red-600)', marginTop: 4 }}>Les mots de passe ne correspondent pas</p>
               )}
             </Field>
-
-            <FormActions
-              onCancel={() => { setShowPwd(false); setPwdForm({ current: '', newPwd: '', confirm: '' }) }}
-              loading={pwdSaving}
-              submitLabel="Changer le mot de passe"
-            />
+            <FormActions onCancel={() => { setShowPwd(false); setPwdForm({ current: '', newPwd: '', confirm: '' }) }} loading={pwdSaving} submitLabel="Changer le mot de passe" />
           </form>
         </Modal>
       )}
@@ -517,24 +431,45 @@ export function Profile({ roleKey }: Props) {
 }
 
 /* ── Sub-components ── */
-function SectionTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
+function SectionTitle({ icon, children, color }: { icon: ReactNode; children: ReactNode; color?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-      {icon} {children}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 16 }}>
+      <div style={{ width: 22, height: 22, borderRadius: 5, background: color ? `${color}18` : 'var(--surface-3)', color: color || 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {icon}
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        {children}
+      </span>
     </div>
   )
 }
 
-function InfoRow({ label, value, icon, mono }: { label: string; value: string; icon?: React.ReactNode; mono?: boolean }) {
+function InfoRow({
+  label, value, icon, mono, accent, last, valueStyle,
+}: {
+  label: string; value: string; icon?: ReactNode
+  mono?: boolean; accent?: string; last?: boolean; valueStyle?: { [k: string]: string | number }
+}) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label}</span>
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '10px 0',
+      borderBottom: last ? 'none' : '1px solid var(--border)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {icon && (
+          <div style={{ width: 22, height: 22, borderRadius: 5, background: accent ? `${accent}12` : 'var(--surface-3)', color: accent || 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {icon}
+          </div>
+        )}
+        <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 500 }}>{label}</span>
+      </div>
       <span style={{
-        fontSize: 13, fontWeight: 500, color: 'var(--text-primary)',
-        display: 'flex', alignItems: 'center', gap: 5,
+        fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
         fontFamily: mono ? 'DM Mono, monospace' : undefined,
+        ...valueStyle,
       }}>
-        {icon}{value}
+        {value}
       </span>
     </div>
   )
@@ -542,15 +477,7 @@ function InfoRow({ label, value, icon, mono }: { label: string; value: string; i
 
 function EyeToggle({ show, onToggle }: { show: boolean; onToggle: () => void }) {
   return (
-    <button
-      type="button"
-      onClick={onToggle}
-      style={{
-        position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-        background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)',
-        display: 'flex', padding: 2,
-      }}
-    >
+    <button type="button" onClick={onToggle} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', display: 'flex', padding: 2 }}>
       {show ? <EyeOff size={14} /> : <Eye size={14} />}
     </button>
   )
