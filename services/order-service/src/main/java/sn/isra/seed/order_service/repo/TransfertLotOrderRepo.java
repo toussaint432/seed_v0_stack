@@ -1,17 +1,19 @@
 package sn.isra.seed.order_service.repo;
 
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import sn.isra.seed.order_service.entity.TransfertLot;
 
 import java.math.BigDecimal;
 
 /**
  * Repo order-service pour créer automatiquement un transfert_lot
  * lors du passage d'une commande au statut LIVREE.
- * Partagé via la même base PostgreSQL.
+ * Partagé via la même base PostgreSQL (pattern base partagée).
  */
-public interface TransfertLotOrderRepo extends org.springframework.data.repository.Repository<Object, Long> {
+public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long> {
 
     @Modifying
     @Query(value = """

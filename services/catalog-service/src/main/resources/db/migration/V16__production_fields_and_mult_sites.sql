@@ -26,10 +26,11 @@ COMMENT ON COLUMN lot_semencier.niveau_semence          IS 'Libellé officiel ex
 COMMENT ON COLUMN lot_semencier.quantite_semence_src_kg IS 'Kg de semences du lot parent utilisés pour cette campagne (planting seed)';
 
 -- ── 2. Site de stockage par organisation multiplicatrice ─────
-INSERT INTO site (code_site, nom_site, id_organisation)
+INSERT INTO site (code_site, nom_site, type_site, id_organisation)
 SELECT
   'STOCK-' || UPPER(REPLACE(o.code_organisation, '-', '')),
   'Site de stockage — ' || o.nom_organisation,
+  'MAGASIN',
   o.id
 FROM organisation o
 WHERE o.type_organisation = 'MULTIPLICATEUR'

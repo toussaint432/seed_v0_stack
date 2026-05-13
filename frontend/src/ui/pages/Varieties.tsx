@@ -4,6 +4,7 @@ import {
   RefreshCw, Edit2, FlaskConical, ChevronRight,
   Archive, Trash2, AlertTriangle, Eye, EyeOff, MessageSquare, MapPin,
   RotateCcw, Clock, User, TrendingUp, Wheat, LucideIcon,
+  ChevronUp, ChevronDown,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -47,6 +48,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
 
   const [showArchived, setShowArchived] = useState(false)
   const [selectedVarietyId, setSelectedVarietyId] = useState<number | null>(null)
+  const [sortField, setSortField] = useState<string>('nomVariete')
+  const [sortDir,   setSortDir]   = useState<'asc' | 'desc'>('asc')
 
   const [desarchiveTarget, setDesarchiveTarget] = useState<any>(null)
   const [desarchiving,     setDesarchiving]     = useState(false)
@@ -119,6 +122,29 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   })
 
   const archivedCount = varieties.filter(v => v.statutVariete === 'ARCHIVEE').length
+
+  function toggleSort(field: string) {
+    if (sortField === field) {
+      setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDir('asc')
+    }
+  }
+
+  const sorted = [...filtered].sort((a, b) => {
+    let av: any, bv: any
+    switch (sortField) {
+      case 'codeVariete':  av = a.codeVariete ?? '';  bv = b.codeVariete ?? '';  break
+      case 'espece':       av = a.espece?.nomCommun ?? ''; bv = b.espece?.nomCommun ?? ''; break
+      case 'cycleMin':     av = a.cycleMin ?? 0;  bv = b.cycleMin ?? 0;  break
+      case 'rendementMin': av = a.rendementMin ?? 0; bv = b.rendementMin ?? 0; break
+      case 'statutVariete': av = a.statutVariete ?? ''; bv = b.statutVariete ?? ''; break
+      default:             av = a.nomVariete ?? '';  bv = b.nomVariete ?? ''
+    }
+    const cmp = typeof av === 'number' ? av - bv : av.localeCompare(bv, 'fr')
+    return sortDir === 'asc' ? cmp : -cmp
+  })
 
   function varietyCountForSpecies(s: any) {
     return varieties.filter(v => v.espece?.id === s.id && v.statutVariete !== 'ARCHIVEE').length
@@ -699,12 +725,29 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             <table>
               <thead>
                 <tr>
-                  <th style={{ paddingLeft: 20 }}>Code</th>
-                  <th>Nom variété</th>
-                  <th>Espèce</th>
-                  <th>Cycle</th>
-                  <th>Rendement</th>
-                  <th>Statut</th>
+                  {[
+                    { field: 'codeVariete',   label: 'Code',        paddingLeft: 20 as number | undefined },
+                    { field: 'nomVariete',    label: 'Nom variété', paddingLeft: undefined },
+                    { field: 'espece',        label: 'Espèce',      paddingLeft: undefined },
+                    { field: 'cycleMin',      label: 'Cycle',       paddingLeft: undefined },
+                    { field: 'rendementMin',  label: 'Rendement',   paddingLeft: undefined },
+                    { field: 'statutVariete', label: 'Statut',      paddingLeft: undefined },
+                  ].map(col => {
+                    const active = sortField === col.field
+                    const Icon   = active && sortDir === 'desc' ? ChevronDown : ChevronUp
+                    return (
+                      <th
+                        key={col.field}
+                        style={{ paddingLeft: col.paddingLeft, cursor: 'pointer', userSelect: 'none', whiteSpace: 'nowrap' }}
+                        onClick={() => toggleSort(col.field)}
+                      >
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          {col.label}
+                          <Icon size={11} style={{ opacity: active ? 1 : 0.3, flexShrink: 0 }} />
+                        </span>
+                      </th>
+                    )
+                  })}
                   {isAdminOrSelector && <th style={{ width: 96, textAlign: 'right', paddingRight: 18 }}>Actions</th>}
                 </tr>
               </thead>
@@ -717,7 +760,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                         </td>
                       </tr>
                     ))
-                  : filtered.length === 0
+                  : sorted.length === 0
                   ? (
                       <tr>
                         <td colSpan={isAdminOrSelector ? 7 : 6}>
@@ -736,7 +779,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                         </td>
                       </tr>
                     )
-                  : filtered.map(v => {
+                  : sorted.map(v => {
                       const isArchived = v.statutVariete === 'ARCHIVEE'
                       const st         = STATUT_CONFIG[v.statutVariete] ?? { label: v.statutVariete, cls: 'badge-gray' }
                       const allowed    = canEdit(v.espece?.codeEspece)

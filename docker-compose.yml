@@ -42,8 +42,12 @@ services:
       JAVA_OPTS_APPEND: "-Xms128m -Xmx640m -Dquarkus.live-reload.enabled=false"
     ports:
       - "18080:8080"
+      # Port management Keycloak 25 — health/ready, métriques Micrometer
+      - "19000:9000"
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import:ro
+      # Thème personnalisé ISRA — monté en lecture seule
+      - ./infra/keycloak/themes:/opt/keycloak/themes:ro
       # Cache des artefacts Quarkus — le build n'est exécuté qu'UNE SEULE FOIS
       # puis chargé depuis le volume (~300m au lieu de ~1500m)
       - keycloak_quarkus_cache:/opt/keycloak/lib/quarkus

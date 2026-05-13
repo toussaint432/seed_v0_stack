@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { initKeycloak, keycloak } from '../lib/keycloak'
+import { LandingPage }    from './pages/LandingPage'
 import { Varieties }      from './pages/Varieties'
 import { Lots }           from './pages/Lots'
 import { Stocks }         from './pages/Stocks'
@@ -245,6 +246,10 @@ export function App() {
         <div className="loading-text">Connexion en cours…</div>
       </div>
     )
+  }
+
+  if (!keycloak.authenticated) {
+    return <LandingPage />
   }
 
   const user        = getUserInfo()

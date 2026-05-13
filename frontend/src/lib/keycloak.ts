@@ -29,7 +29,7 @@ export async function initKeycloak(): Promise<boolean> {
   }
   WIN.__keycloakInitialized = true
   const authenticated = await keycloak.init({
-    onLoad:           'login-required',
+    onLoad:           'check-sso',
     pkceMethod:       'S256',
     checkLoginIframe: false,
   })
