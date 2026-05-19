@@ -90,7 +90,7 @@ function getNavSections(roleKey: string): NavSection[] {
       return [
         { section: 'Général', items: [dashboard] },
         { section: 'Recherche', items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
-        { section: 'Gestion', items: [transfers, certifications, orders] },
+        { section: 'Gestion', items: [stocks, transfers, certifications, orders] },
         { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 

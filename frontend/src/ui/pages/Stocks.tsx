@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react'
+import type { FormEvent, MouseEvent } from 'react'
 import {
   Database, RefreshCw, Plus, MapPin, Package, TrendingUp,
-  X, Edit2, Trash2, Archive, Search, ChevronDown
+  X, Edit2, Trash2, Archive, Search, ChevronDown,
+  ArrowRightLeft, FileText, Download, CheckCircle2,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
+import { keycloak } from '../../lib/keycloak'
+import {
+  generateTransferDoc, generateNumero,
+  TransferDocData, LotPdfData, PartiePdf,
+} from '../../lib/pdf/generateTransferDoc'
 
 interface Props { roleKey: string }
 
@@ -17,7 +24,22 @@ const GEN_BADGE: Record<string, string> = {
   G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray',
   G4: 'badge-gray', R1: 'badge-blue', R2: 'badge-green'
 }
-const UPSEMCL_GENS = ['G1', 'G2', 'G3']
+const UPSEMCL_GENS   = ['G1', 'G2', 'G3']
+const SELECTOR_GENS  = ['G0', 'G1']
+
+/* ── Règles de transfert inter-organisations par rôle ── */
+const TRANSFER_RULES_STOCK: Record<string, { allowedGens: string[]; source: string; destination: string; destRoleKey: string }> = {
+  'seed-selector': { allowedGens: ['G1'], source: 'ISRA/CNRA',  destination: 'UPSemCL',       destRoleKey: 'seed-upsemcl'       },
+  'seed-upsemcl':  { allowedGens: ['G3'], source: 'UPSemCL',    destination: 'Multiplicateur', destRoleKey: 'seed-multiplicator' },
+}
+
+const ROLE_LABELS_PDF: Record<string, string> = {
+  'seed-selector':      'Sélectionneur ISRA/CNRA',
+  'seed-upsemcl':       'Unité de Production UPSemCL',
+  'seed-multiplicator': 'Multiplicateur Agréé',
+  'seed-quotataire':    'Distributeur / Quotataire',
+  'seed-admin':         'Administrateur',
+}
 
 const STATUT_STYLE: Record<string, { label: string; color: string; bg: string }> = {
   DISPONIBLE:    { label: 'Disponible',    color: '#15803d', bg: '#f0fdf4' },
@@ -168,8 +190,8 @@ function LotDropdown({ lots, value, onChange, placeholder = 'Sélectionner un lo
                     <div
                       key={l.id}
                       style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, background: isSel ? 'var(--surface-2)' : 'transparent', transition: 'background 0.1s' }}
-                      onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => (e.currentTarget.style.background = 'var(--surface-2)')}
-                      onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => (e.currentTarget.style.background = isSel ? 'var(--surface-2)' : 'transparent')}
+                      onMouseEnter={(e: MouseEvent<HTMLDivElement>) => (e.currentTarget.style.background = 'var(--surface-2)')}
+                      onMouseLeave={(e: MouseEvent<HTMLDivElement>) => (e.currentTarget.style.background = isSel ? 'var(--surface-2)' : 'transparent')}
                       onClick={() => { onChange(String(l.id)); setOpen(false); setQ('') }}
                     >
                       <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: (GEN_COLOR[gen] ?? '#6b7280') + '22', color: GEN_COLOR[gen] ?? '#6b7280', flexShrink: 0 }}>{gen}</span>
@@ -209,20 +231,34 @@ export function Stocks({ roleKey }: Props) {
   const [editStock,     setEditStock]     = useState<any | null>(null)
   const [deleteTarget,  setDeleteTarget]  = useState<any | null>(null)
 
-  const isUPSemCL = roleKey === 'seed-upsemcl'
-  const isMulti   = roleKey === 'seed-multiplicator'
-  const isAdmin   = roleKey === 'seed-admin'
-  const canManage = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
+  const isUPSemCL  = roleKey === 'seed-upsemcl'
+  const isSelector = roleKey === 'seed-selector'
+  const isMulti    = roleKey === 'seed-multiplicator'
+  const isAdmin    = roleKey === 'seed-admin'
+  const canManage  = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator', 'seed-selector'].includes(roleKey)
 
   const [stockForm, setStockForm] = useState({ idLot: '', siteCode: '', quantite: '', unite: 'kg' })
   const [mvtForm,   setMvtForm]   = useState({ idLot: '', type: 'IN', siteSourceCode: '', siteDestinationCode: '', quantite: '', unite: 'kg', reference: '' })
   const [editForm,  setEditForm]  = useState({ quantite: '', unite: 'kg' })
+
+  /* ── Transfert inter-organisations depuis le stock ── */
+  const transferRule = TRANSFER_RULES_STOCK[roleKey] as typeof TRANSFER_RULES_STOCK[string] | undefined
+  const [showTransferForm,  setShowTransferForm]  = useState(false)
+  const [transferSource,    setTransferSource]    = useState<{ stock: any; lot: any } | null>(null)
+  const [transferForm,      setTransferForm]      = useState({
+    usernameDestinataire: '', quantite: '', observations: '',
+  })
+  const [transferSaving, setTransferSaving] = useState(false)
+  const [lastTransfer,   setLastTransfer]   = useState<any>(null)
+  const [membres,        setMembres]        = useState<any[]>([])
 
   const varMap: Record<number, any> = Object.fromEntries(varieties.map(v => [v.id, v]))
   const lotMap: Record<number, any> = Object.fromEntries(lots.map(l => [l.id, l]))
 
   const availableLots = isUPSemCL
     ? lots.filter(l => UPSEMCL_GENS.includes(l.generation?.codeGeneration))
+    : isSelector
+    ? lots.filter(l => SELECTOR_GENS.includes(l.generation?.codeGeneration))
     : lots
 
   async function fetchAll(isRefresh = false) {
@@ -235,6 +271,7 @@ export function Stocks({ roleKey }: Props) {
       api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {}),
       api.get(endpoints.sites).then(r     => setSitesList(r.data)).catch(() => {}),
       api.get(endpoints.movements).then(r => setMovements(r.data)).catch(() => {}),
+      transferRule ? api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {}) : Promise.resolve(),
     ])
     setLoading(false)
     setRefreshing(false)
@@ -244,9 +281,8 @@ export function Stocks({ roleKey }: Props) {
 
   const stocks = (() => {
     let s = allStocks
-    if (isUPSemCL) {
-      s = s.filter(st => UPSEMCL_GENS.includes(lotMap[st.idLot]?.generation?.codeGeneration))
-    }
+    if (isUPSemCL)  s = s.filter(st => UPSEMCL_GENS.includes(lotMap[st.idLot]?.generation?.codeGeneration))
+    if (isSelector) s = s.filter(st => SELECTOR_GENS.includes(lotMap[st.idLot]?.generation?.codeGeneration))
     if (site)        s = s.filter(st => st.site?.codeSite === site)
     if (filterGen)   s = s.filter(st => lotMap[st.idLot]?.generation?.codeGeneration === filterGen)
     if (filterSearch) {
@@ -298,7 +334,7 @@ export function Stocks({ roleKey }: Props) {
     setToast({ msg, type: 'error' })
   }
 
-  async function submitStock(e: React.FormEvent) {
+  async function submitStock(e: FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
       await api.post(endpoints.stocks, {
@@ -313,7 +349,7 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  async function submitMvt(e: React.FormEvent) {
+  async function submitMvt(e: FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
       await api.post(endpoints.movements, {
@@ -332,7 +368,7 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  async function submitEdit(e: React.FormEvent) {
+  async function submitEdit(e: FormEvent) {
     e.preventDefault(); setSaving(true)
     if (!editStock) return
     try {
@@ -359,17 +395,157 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  const genOptions = isUPSemCL ? UPSEMCL_GENS : ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
+  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
+
+  /* ── Transfert inter-orgs depuis le stock ── */
+  function openTransferFromStock(stock: any, lot: any) {
+    setTransferSource({ stock, lot })
+    setTransferForm({
+      usernameDestinataire: '',
+      quantite:             String(Math.floor(parseFloat(stock.quantiteDisponible) || 0)),
+      observations:         '',
+    })
+    setLastTransfer(null)
+    setShowTransferForm(true)
+  }
+
+  async function submitTransferFromStock(e: FormEvent) {
+    e.preventDefault()
+    if (!transferSource || !transferRule) return
+    if (!transferForm.usernameDestinataire) {
+      toastErr(null, 'Veuillez sélectionner un destinataire')
+      return
+    }
+    setTransferSaving(true)
+    try {
+      /* Le backend génère codeTransfert, usernameEmetteur et roleEmetteur depuis le JWT.
+         Seul le lot-service crée le TransfertLot ET déclenche Kafka → débit stock. */
+      const resp = await api.post(endpoints.lotTransfer(transferSource.lot.id), {
+        usernameDestinataire: transferForm.usernameDestinataire,
+        quantite:             Number(transferForm.quantite),
+        observations:         transferForm.observations || undefined,
+      })
+      setLastTransfer({ ...resp.data, _lot: transferSource.lot })
+      setShowTransferForm(false)
+      setTransferSource(null)
+      setToast({ msg: `Transfert ${resp.data.codeTransfert} initié → ${transferForm.usernameDestinataire}`, type: 'success' })
+      fetchAll(true)
+    } catch (err: any) {
+      toastErr(err, 'Erreur lors du transfert')
+    } finally { setTransferSaving(false) }
+  }
+
+  function downloadTransferDoc(t: any, docType: 'BORDEREAU' | 'ACCUSE_RECEPTION') {
+    const lot     = t._lot ?? lotMap[t.idLot]
+    const variete = varMap[lot?.idVariete]
+    const gen     = lot?.generation?.codeGeneration || ''
+    const jwt     = keycloak.tokenParsed as Record<string, unknown>
+    const me      = (jwt?.preferred_username as string) || ''
+
+    const lotData: LotPdfData = {
+      codeLot:         lot?.codeLot || `LOT-${t.idLot}`,
+      nomVariete:      variete?.nomVariete || 'N/D',
+      nomEspece:       variete?.espece?.nomCommun || variete?.espece?.nomEspece || 'Semence',
+      generationCode:  gen || '—',
+      quantiteNette:   Number(t.quantite ?? lot?.quantiteNette ?? 0),
+      unite:           lot?.unite || 'kg',
+      tauxGermination: lot?.tauxGermination,
+      puretePhysique:  lot?.puretePhysique,
+      statutLot:       lot?.statutLot || 'TRANSFERE',
+      dateProduction:  lot?.dateProduction,
+      campagne:        lot?.campagne,
+      lotParentCode:   lot?.lotParent?.codeLot,
+    }
+    const expediteur: PartiePdf = {
+      username: t.usernameEmetteur || me,
+      nom:      t.usernameEmetteur || me,
+      roleKey,
+      roleLabel: ROLE_LABELS_PDF[roleKey] || roleKey,
+    }
+    const destinataire: PartiePdf = {
+      username:  t.usernameDestinataire || transferRule?.destination || '—',
+      nom:       t.usernameDestinataire || transferRule?.destination || '—',
+      roleKey:   transferRule?.destRoleKey || 'seed-upsemcl',
+      roleLabel: ROLE_LABELS_PDF[transferRule?.destRoleKey || 'seed-upsemcl'],
+    }
+    const docData: TransferDocData = {
+      type:               docType,
+      codeTransfert:      t.codeTransfert,
+      numero:             generateNumero(t.id),
+      lot:                lotData,
+      expediteur,
+      destinataire,
+      quantiteTransferee: Number(t.quantite ?? 0),
+      dateDemande:        t.dateDemande || new Date().toISOString().split('T')[0],
+      observations:       t.observations,
+      dateAcceptation:    docType === 'ACCUSE_RECEPTION' ? (t.dateAcceptation || new Date().toISOString().split('T')[0]) : undefined,
+      nomReceptionnaire:  docType === 'ACCUSE_RECEPTION' ? me : undefined,
+      quantiteRecue:      docType === 'ACCUSE_RECEPTION' ? Number(t.quantite ?? 0) : undefined,
+    }
+    generateTransferDoc(docData)
+  }
 
   return (
     <div>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+
+      {lastTransfer && (
+        <div style={{ marginBottom: 16, padding: '14px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#f3e8ff,#ede9fe)', border: '1px solid #c4b5fd', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <CheckCircle2 size={20} style={{ color: '#7e22ce', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#581c87' }}>
+              Transfert <span style={{ fontFamily: 'monospace' }}>{lastTransfer.codeTransfert}</span> créé avec succès
+            </div>
+            <div style={{ fontSize: 12, color: '#7e22ce', marginTop: 2 }}>
+              {lastTransfer.quantite} {lastTransfer._lot?.unite || 'kg'} → {lastTransfer.usernameDestinataire || transferRule?.destination}
+              {lastTransfer.statut && (
+                <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: '#7e22ce22', color: '#7e22ce' }}>
+                  {lastTransfer.statut}
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
+              onClick={() => downloadTransferDoc(lastTransfer, 'BORDEREAU')}
+            >
+              <FileText size={12} /> Bordereau PDF
+            </button>
+            {lastTransfer.statut === 'ACCEPTE' && (
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
+                onClick={() => downloadTransferDoc(lastTransfer, 'ACCUSE_RECEPTION')}
+              >
+                <Download size={12} /> Accusé de réception
+              </button>
+            )}
+          </div>
+          <button
+            className="btn btn-ghost btn-icon"
+            style={{ padding: '4px 6px', flexShrink: 0 }}
+            onClick={() => setLastTransfer(null)}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {isUPSemCL && (
         <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 8, background: 'linear-gradient(135deg,#0ea5e922,#22c55e11)', border: '1px solid #0ea5e933', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: '#0ea5e9', background: '#0ea5e915', borderRadius: 4, padding: '2px 8px' }}>UPSEMCL</span>
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs</span>
           <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#22c55e' }}>Périmètre : G1 · G2 · G3</span>
+        </div>
+      )}
+
+      {isSelector && (
+        <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 8, background: 'linear-gradient(135deg,#6366f122,#0369a111)', border: '1px solid #0369a133', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#0369a115', borderRadius: 4, padding: '2px 8px' }}>SÉLECTIONNEUR</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Conservation noyau génétique G0 · production pré-base G1 → transfert vers UPSemCL</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#6366f1' }}>Périmètre : G0 · G1</span>
         </div>
       )}
 
@@ -411,7 +587,8 @@ export function Stocks({ roleKey }: Props) {
           <span className="card-title">
             <span className="card-title-icon"><TrendingUp size={15} /></span>
             Visualisation stock par variété
-            {isUPSemCL && <span style={{ marginLeft: 6, fontSize: 10, color: '#0ea5e9', background: '#0ea5e915', borderRadius: 3, padding: '1px 5px' }}>G1/G2/G3</span>}
+            {isUPSemCL   && <span style={{ marginLeft: 6, fontSize: 10, color: '#0ea5e9', background: '#0ea5e915', borderRadius: 3, padding: '1px 5px' }}>G1/G2/G3</span>}
+            {isSelector  && <span style={{ marginLeft: 6, fontSize: 10, color: '#6366f1', background: '#6366f115', borderRadius: 3, padding: '1px 5px' }}>G0/G1</span>}
             <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>{showChart ? '▲' : '▼'}</span>
           </span>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{barData.length} variété(s) · stock illimité</span>
@@ -536,7 +713,9 @@ export function Stocks({ roleKey }: Props) {
                       <td colSpan={canManage ? 8 : 7}>
                         <div className="empty-state">
                           <div className="empty-icon"><Database size={20} /></div>
-                          <div className="empty-title">Aucun stock{isUPSemCL ? ' G1/G2/G3' : ''} trouvé</div>
+                          <div className="empty-title">
+                            Aucun stock{isUPSemCL ? ' G1/G2/G3' : isSelector ? ' G0/G1' : ''} trouvé
+                          </div>
                           {canManage && (
                             <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowMvtForm(true)}>+ Enregistrer un mouvement</button>
                           )}
@@ -622,6 +801,16 @@ export function Stocks({ roleKey }: Props) {
                                 >
                                   <Archive size={13} />
                                 </button>
+                                {transferRule && transferRule.allowedGens.includes(gen) && parseFloat(s.quantiteDisponible) > 0 && lot?.statutLot === 'DISPONIBLE' && (
+                                  <button
+                                    className="btn btn-ghost btn-icon"
+                                    style={{ padding: '4px 6px', color: '#7e22ce' }}
+                                    title={`Transférer vers ${transferRule.destination}`}
+                                    onClick={() => openTransferFromStock(s, lot)}
+                                  >
+                                    <ArrowRightLeft size={13} />
+                                  </button>
+                                )}
                                 {isAdmin && (
                                   <button
                                     className="btn btn-ghost btn-icon"
@@ -872,6 +1061,119 @@ export function Stocks({ roleKey }: Props) {
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {showTransferForm && transferSource && transferRule && (
+        <Modal
+          title="Transférer vers l'organisation"
+          subtitle={`${transferRule.source}  →  ${transferRule.destination}`}
+          onClose={() => { setShowTransferForm(false); setTransferSource(null) }}
+          size="sm"
+        >
+          <form onSubmit={submitTransferFromStock}>
+            {/* Lot info — lecture seule */}
+            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                    Lot sélectionné
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                      background: (GEN_COLOR[transferSource.lot?.generation?.codeGeneration] ?? '#6b7280') + '22',
+                      color: GEN_COLOR[transferSource.lot?.generation?.codeGeneration] ?? '#6b7280',
+                    }}>
+                      {transferSource.lot?.generation?.codeGeneration || '—'}
+                    </span>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{transferSource.lot?.codeLot}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                    {varMap[transferSource.lot?.idVariete]?.nomVariete || '—'}
+                    {varMap[transferSource.lot?.idVariete]?.espece?.nomCommun && ` · ${varMap[transferSource.lot?.idVariete].espece.nomCommun}`}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Disponible</div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
+                    {parseFloat(transferSource.stock.quantiteDisponible).toLocaleString('fr-FR')}
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 3 }}>{transferSource.stock.unite || 'kg'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Flux organisations */}
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, padding: '8px 12px', borderRadius: 6, background: '#0369a115', border: '1px solid #0369a133', textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Source</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#0c4a6e', marginTop: 2 }}>{transferRule.source}</div>
+              </div>
+              <ArrowRightLeft size={16} style={{ color: '#7e22ce', flexShrink: 0 }} />
+              <div style={{ flex: 1, padding: '8px 12px', borderRadius: 6, background: '#7e22ce15', border: '1px solid #7e22ce33', textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Destination</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#581c87', marginTop: 2 }}>{transferRule.destination}</div>
+              </div>
+            </div>
+
+            {(() => {
+              const eligibles = membres.filter((m: any) => m.keycloakRole === transferRule.destRoleKey)
+              return (
+                <Field label="Destinataire" required hint={`Rôle : ${transferRule.destination}`}>
+                  <FormSelect
+                    value={transferForm.usernameDestinataire}
+                    onChange={(e: { target: { value: string } }) => setTransferForm(f => ({ ...f, usernameDestinataire: e.target.value }))}
+                    required
+                  >
+                    <option value="">— Sélectionner un destinataire —</option>
+                    {eligibles.length === 0
+                      ? <option disabled value="">Aucun membre {transferRule.destination} enregistré</option>
+                      : eligibles.map((m: any) => (
+                        <option key={m.id} value={m.keycloakUsername}>
+                          {m.nomComplet || m.keycloakUsername}{m.organisation?.nomOrganisation ? ` — ${m.organisation.nomOrganisation}` : ''}
+                        </option>
+                      ))
+                    }
+                  </FormSelect>
+                </Field>
+              )
+            })()}
+
+            <Field
+              label="Quantité à transférer"
+              required
+              hint={`Max disponible : ${parseFloat(transferSource.stock.quantiteDisponible).toLocaleString('fr-FR')} ${transferSource.stock.unite || 'kg'}`}
+            >
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <FormInput
+                  type="number"
+                  value={transferForm.quantite}
+                  onChange={(e: { target: { value: string } }) => setTransferForm(f => ({ ...f, quantite: e.target.value }))}
+                  min="0.01"
+                  max={String(parseFloat(transferSource.stock.quantiteDisponible) || 0)}
+                  step="0.01"
+                  required
+                  style={{ flex: 1 }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{transferSource.stock.unite || 'kg'}</span>
+              </div>
+            </Field>
+
+            <Field label="Observations">
+              <FormInput
+                value={transferForm.observations}
+                onChange={(e: { target: { value: string } }) => setTransferForm(f => ({ ...f, observations: e.target.value }))}
+                placeholder="Commentaires, conditions de transfert…"
+              />
+            </Field>
+
+            <FormActions
+              onCancel={() => { setShowTransferForm(false); setTransferSource(null) }}
+              loading={transferSaving}
+              submitLabel={`Initier le transfert vers ${transferRule.destination}`}
+            />
+          </form>
         </Modal>
       )}
     </div>

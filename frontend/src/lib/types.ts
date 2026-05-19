@@ -346,7 +346,7 @@ export type StatutTransfert = 'DEMANDE' | 'VALIDE' | 'EXPEDIE' | 'RECEPTIONNE' |
 export type StatutCertification = 'EN_COURS' | 'CERTIFIE' | 'REJETE' | 'EXPIRE'
 export type StatutProgramme = 'PLANIFIE' | 'EN_COURS' | 'TERMINE' | 'ANNULE'
 
-export const GEN_ORDER = ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2'] as const
+export const GEN_ORDER = ['G0', 'G1', 'G2', 'G3', 'R1', 'R2'] as const
 export type GenerationCode = typeof GEN_ORDER[number]
 
 export const GEN_LABELS: Record<string, string> = {
@@ -354,7 +354,6 @@ export const GEN_LABELS: Record<string, string> = {
   G1: 'Pré-base',
   G2: 'Base',
   G3: 'Certifiée C1',
-  G4: 'Certifiée C2',
   R1: 'R1',
   R2: 'Commerciale R2',
 }
@@ -364,7 +363,6 @@ export const GEN_COLORS: Record<string, { bg: string; border: string; text: stri
   G1: { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', badge: 'badge-green' },
   G2: { bg: '#fef9ed', border: '#fde68a', text: '#92660a', badge: 'badge-gold' },
   G3: { bg: '#faf5ff', border: '#e9d5ff', text: '#6d28d9', badge: 'badge-violet' },
-  G4: { bg: '#f9fafb', border: '#e5e7eb', text: '#374151', badge: 'badge-gray' },
   R1: { bg: '#f0fdfa', border: '#99f6e4', text: '#0f766e', badge: 'badge-teal' },
   R2: { bg: '#dcfce7', border: '#86efac', text: '#15803d', badge: 'badge-green' },
 }

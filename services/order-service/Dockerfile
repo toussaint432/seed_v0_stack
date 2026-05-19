@@ -1,18 +1,21 @@
+# syntax=docker/dockerfile:1
 # Étape 1 : build avec Maven + JDK 21
 FROM maven:3.9.8-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Copier le pom.xml et télécharger les dépendances (cache Docker layer)
+# Cache BuildKit pour le dépôt Maven local — évite de re-télécharger entre les builds
 COPY pom.xml .
-RUN mvn -B dependency:resolve dependency:resolve-plugins -q
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -B dependency:resolve dependency:resolve-plugins -q \
+    -Dmaven.wagon.http.retryHandler.count=3 \
+    -Dmaven.wagon.http.retryHandler.requestSentRetryEnabled=true
 
-# Copier le code source
 COPY src ./src
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -B -DskipTests package -q \
+    -Dmaven.wagon.http.retryHandler.count=3 \
+    -Dmaven.wagon.http.retryHandler.requestSentRetryEnabled=true
 
-# Compiler l'application
-RUN mvn -B -DskipTests package -q
-
-# Récupérer le jar exécutable (exclure *.original si présent)
 RUN ls -lah target && \
     JAR="$(ls -1 target/*.jar | grep -v '\.original$' | head -n 1)" && \
     echo "Using jar: $JAR" && \

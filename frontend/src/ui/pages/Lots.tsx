@@ -803,7 +803,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const canChild    = ['seed-admin','seed-upsemcl','seed-multiplicator'].includes(roleKey)
   const canReception = roleKey === 'seed-quotataire'
 
-  const [newLotForm, setNewLotForm] = useState({ codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '' })
+  const NEW_LOT_INIT = { codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '' }
+  const [newLotForm, setNewLotForm] = useState(NEW_LOT_INIT)
   const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '' })
   const [transferForm, setTransferForm] = useState({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
   const [membres, setMembres] = useState<any[]>([])
@@ -846,7 +847,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     e.preventDefault(); setSaving(true)
     try {
       const selectedVariety = (varieties as any[]).find(v => v.id === Number(newLotForm.idVariete))
-      await api.post(endpoints.lots, {
+      const resp = await api.post(endpoints.lots, {
         codeLot: newLotForm.codeLot, idVariete: Number(newLotForm.idVariete),
         generation: { id: GEN_IDS[newLotForm.generationCode] || 1 },
         campagne: newLotForm.campagne, dateProduction: newLotForm.dateProduction || undefined,
@@ -859,9 +860,21 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         cycle: newLotForm.cycle || null,
         niveauSemence: newLotForm.niveauSemence || null,
       })
-      setToast({ msg: "Lot " + newLotForm.codeLot + " créé avec succès", type: 'success' })
+      // Enregistrement automatique en stock si un site a été sélectionné
+      if (newLotForm.siteCode && Number(newLotForm.quantiteNette) > 0) {
+        try {
+          await api.post(endpoints.movements, {
+            idLot: resp.data.id, type: 'IN',
+            siteDestinationCode: newLotForm.siteCode,
+            quantite: Number(newLotForm.quantiteNette),
+            unite: newLotForm.unite,
+            reference: `ENTREE-${newLotForm.codeLot}-${new Date().toISOString().slice(0, 10)}`,
+          })
+        } catch { /* erreur stock non bloquante */ }
+      }
+      setToast({ msg: `Lot ${newLotForm.codeLot} créé${newLotForm.siteCode ? ' · stock enregistré' : ''}`, type: 'success' })
       setShowNewLot(false)
-      setNewLotForm({ codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '' })
+      setNewLotForm(NEW_LOT_INIT)
       fetchLots()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur lors de la création', type: 'error' })
@@ -1164,15 +1177,24 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         </div>
       </div>
 
-      {showNewLot && (
+      {showNewLot && (() => {
+        // Variétés filtrées par spécialisation pour le sélectionneur
+        const formVarieties = (roleKey === 'seed-selector' && userSpecialisation)
+          ? varieties.filter((v: any) => v.espece?.codeEspece?.toUpperCase() === userSpecialisation.toUpperCase())
+          : varieties
+        // Sites filtrés : stations de recherche ISRA pour le sélectionneur, tous sinon
+        const formSites = roleKey === 'seed-selector'
+          ? sites.filter((s: any) => s.typeSite === 'STATION_RECHERCHE')
+          : sites
+        return (
         <Modal title="Nouveau Lot Semencier" subtitle="Enregistrer un nouveau lot dans la chaîne semencière" onClose={() => setShowNewLot(false)}>
           <form onSubmit={submitNewLot}>
             <FormRow>
               <Field label="Code lot" required hint="Ex: G0-MIL-SOUNA3-2026"><FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G0-MIL-SOUNA3-2026" required /></Field>
-              <Field label="Variété" required>
+              <Field label="Variété" required hint={roleKey === 'seed-selector' && userSpecialisation ? `Filtrées : ${userSpecialisation}` : undefined}>
                 <FormSelect value={newLotForm.idVariete} onChange={e => setNewLotForm(f => ({ ...f, idVariete: e.target.value }))} required>
                   <option value="">-- Choisir une variété --</option>
-                  {varieties.map(v => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
+                  {formVarieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
                 </FormSelect>
               </Field>
             </FormRow>
@@ -1239,10 +1261,17 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 <option value="RETIRE">Retiré</option>
               </FormSelect>
             </Field>
+            <Field label="Site de stockage initial" hint="Optionnel — enregistre directement la quantité en stock">
+              <FormSelect value={newLotForm.siteCode} onChange={e => setNewLotForm(f => ({ ...f, siteCode: e.target.value }))}>
+                <option value="">— Sans enregistrement stock immédiat —</option>
+                {formSites.map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}</option>)}
+              </FormSelect>
+            </Field>
             <FormActions onCancel={() => setShowNewLot(false)} loading={saving} submitLabel="Créer le lot" />
           </form>
         </Modal>
-      )}
+        )
+      })()}
 
       {showChildLot && parentLot && (
         <Modal title="Créer un Lot Enfant" subtitle={"Lot parent : " + parentLot.codeLot + " — " + parentLot.generation?.codeGeneration} onClose={() => setShowChildLot(false)}>

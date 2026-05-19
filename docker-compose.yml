@@ -37,22 +37,17 @@ services:
       KC_PROXY_HEADERS: "xforwarded"
       KC_METRICS_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
-      # Plafond heap explicite — évite que MaxRAMPercentage=70 alloue 980m+
-      # et dépasse le mem_limit avec le metaspace (256m) + natif (~350m)
-      JAVA_OPTS_APPEND: "-Xms128m -Xmx640m -Dquarkus.live-reload.enabled=false"
+      # heap réduit pour coexister avec ~2.5 GB d'autres services sur 3.8 GB Docker
+      JAVA_OPTS_APPEND: "-Xms64m -Xmx384m -XX:MaxMetaspaceSize=192m -Dquarkus.live-reload.enabled=false"
     ports:
       - "18080:8080"
-      # Port management Keycloak 25 — health/ready, métriques Micrometer
       - "19000:9000"
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import:ro
-      # Thème personnalisé ISRA — monté en lecture seule
       - ./infra/keycloak/themes:/opt/keycloak/themes:ro
-      # Cache des artefacts Quarkus — le build n'est exécuté qu'UNE SEULE FOIS
-      # puis chargé depuis le volume (~300m au lieu de ~1500m)
       - keycloak_quarkus_cache:/opt/keycloak/lib/quarkus
-    # heap 640m + metaspace 256m + natif ~300m = ~1196m < 1300m ✓
-    mem_limit: 1300m
+    # heap 384m + metaspace 192m + natif ~300m + cache Infinispan ≈ 900m < 1024m ✓
+    mem_limit: 1024m
     restart: no
 
   zookeeper:
@@ -195,6 +190,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
+    mem_limit: 512m
     ports:
       - "18081:8080"
 
@@ -216,7 +212,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-seed}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
-      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx256m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
@@ -224,6 +220,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
+    mem_limit: 512m
     ports:
       - "18082:8080"
 
@@ -253,6 +250,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
+    mem_limit: 512m
     ports:
       - "18083:8080"
 
@@ -282,6 +280,7 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
+    mem_limit: 512m
     ports:
       - "18084:8080"
 

@@ -109,7 +109,19 @@ public class LotController {
             if (lot.getResponsableRole() == null)
                 lot.setResponsableRole(detectSeedRole(extractRealmRoles(jwt)));
         }
+        // Charger la génération complète (pas un proxy) — sera réinjectée après save
+        Generation resolvedGen = null;
+        if (lot.getGeneration() != null && lot.getGeneration().getId() != null)
+            resolvedGen = generationRepo.findById(lot.getGeneration().getId()).orElse(null);
+        if (resolvedGen != null) lot.setGeneration(resolvedGen);
+
+        // Valeurs par défaut pour les champs @NotBlank/@NotNull
+        if (lot.getUnite() == null || lot.getUnite().isBlank()) lot.setUnite("kg");
+        if (lot.getStatutLot() == null) lot.setStatutLot(StatutLot.DISPONIBLE);
+
         LotSemencier saved = lotRepo.save(lot);
+        // save() peut remplacer generation par un proxy bytecode → on réinjecte l'entité pleine
+        if (resolvedGen != null) saved.setGeneration(resolvedGen);
         producer.lotCreated(om.writeValueAsString(saved));
         return saved;
     }

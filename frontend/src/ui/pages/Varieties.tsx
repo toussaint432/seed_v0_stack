@@ -504,41 +504,115 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       ) : (
 
         /* Niveau 1 : vue globale */
-        <div className="stats-grid" style={{ marginBottom: 22 }}>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--green-500)' }}>
-            <div className="stat-icon green"><Leaf size={18} /></div>
-            <div className="stat-body">
-              <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : species.length}</div>
-              <div className="stat-label">Espèces</div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiArchived > 0 ? 5 : 4}, 1fr)`, gap: 14, marginBottom: 22 }}>
+
+          {/* Espèces */}
+          <div style={{
+            background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative',
+            border: '1px solid #bbf7d0', boxShadow: '0 2px 10px rgba(22,163,74,0.07)',
+          }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#16a34a,#16a34a44)' }} />
+            <div style={{ padding: '18px 18px 18px 22px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#f0fdf4', border: '1.5px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+                  <Leaf size={16} />
+                </div>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ESPÈCES</span>
+              </div>
+              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#15803d', lineHeight: 1 }}>
+                {loading ? '…' : species.length}
+              </div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8 }}>espèces cultivées</div>
             </div>
           </div>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--gold)' }}>
-            <div className="stat-icon gold"><Sprout size={18} /></div>
-            <div className="stat-body">
-              <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiActive}</div>
-              <div className="stat-label">Variétés actives</div>
+
+          {/* Variétés actives */}
+          <div style={{
+            background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative',
+            border: '1px solid #fde68a', boxShadow: '0 2px 10px rgba(180,83,9,0.07)',
+          }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#b45309,#b4530944)' }} />
+            <div style={{ padding: '18px 18px 18px 22px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fffbeb', border: '1.5px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309' }}>
+                  <Sprout size={16} />
+                </div>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#92660a', textTransform: 'uppercase', letterSpacing: '0.1em' }}>VARIÉTÉS</span>
+              </div>
+              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#b45309', lineHeight: 1 }}>
+                {loading ? '…' : kpiActive}
+              </div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8 }}>variétés actives</div>
             </div>
           </div>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--green-500)' }}>
-            <div className="stat-icon green"><CheckCircle2 size={18} /></div>
-            <div className="stat-body">
-              <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiDiffusee}</div>
-              <div className="stat-label">Diffusées</div>
+
+          {/* Diffusées + barre de progression */}
+          <div style={{
+            background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative',
+            border: '1px solid #bfdbfe', boxShadow: '0 2px 10px rgba(3,105,161,0.07)',
+          }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#0369a1,#0369a144)' }} />
+            <div style={{ padding: '18px 18px 18px 22px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eff6ff', border: '1.5px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369a1' }}>
+                  <CheckCircle2 size={16} />
+                </div>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>DIFFUSÉES</span>
+              </div>
+              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#0369a1', lineHeight: 1 }}>
+                {loading ? '…' : kpiDiffusee}
+              </div>
+              {!loading && kpiActive > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ height: 4, background: '#dbeafe', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.round((kpiDiffusee / kpiActive) * 100)}%`, background: 'linear-gradient(90deg,#0369a1,#60a5fa)', borderRadius: 99, transition: 'width 0.8s ease' }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>
+                    {Math.round((kpiDiffusee / kpiActive) * 100)}% des variétés actives
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-          <div className="stat-card" style={{ borderLeft: '3px solid var(--gold)' }}>
-            <div className="stat-icon gold"><FlaskConical size={18} /></div>
-            <div className="stat-body">
-              <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiEnTest}</div>
-              <div className="stat-label">En test</div>
+
+          {/* En test */}
+          <div style={{
+            background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative',
+            border: '1px solid #ddd6fe', boxShadow: '0 2px 10px rgba(124,58,237,0.07)',
+          }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#7c3aed,#7c3aed44)' }} />
+            <div style={{ padding: '18px 18px 18px 22px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#faf5ff', border: '1.5px solid #ddd6fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed' }}>
+                  <FlaskConical size={16} />
+                </div>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.1em' }}>EN TEST</span>
+              </div>
+              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#7c3aed', lineHeight: 1 }}>
+                {loading ? '…' : kpiEnTest}
+              </div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8 }}>en cours d'évaluation</div>
             </div>
           </div>
+
+          {/* Archivées (conditionnel) */}
           {kpiArchived > 0 && (
-            <div className="stat-card" style={{ opacity: 0.7, borderLeft: '3px solid var(--text-muted)' }}>
-              <div className="stat-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-muted)' }}><Archive size={18} /></div>
-              <div className="stat-body">
-                <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{kpiArchived}</div>
-                <div className="stat-label">Archivées</div>
+            <div style={{
+              background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative', opacity: 0.75,
+              border: '1px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+            }}>
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#6b7280,#6b728044)' }} />
+              <div style={{ padding: '18px 18px 18px 22px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--surface-3)', border: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
+                    <Archive size={16} />
+                  </div>
+                  <span style={{ fontSize: 9.5, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ARCHIVÉES</span>
+                </div>
+                <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#6b7280', lineHeight: 1 }}>
+                  {kpiArchived}
+                </div>
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8 }}>hors catalogue actif</div>
               </div>
             </div>
           )}

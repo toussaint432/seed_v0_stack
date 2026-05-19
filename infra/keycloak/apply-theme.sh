@@ -63,37 +63,49 @@ HTTP_STATUS=$(curl -so /dev/null -w "%{http_code}" \
 [ "$HTTP_STATUS" != "200" ] && \
   fail "Realm '${REALM}' introuvable (HTTP ${HTTP_STATUS})."
 
-# ── 4. Patcher loginTheme / accountTheme / emailTheme ───────────────────────
-log "Application du thème 'seed' sur le realm '${REALM}'…"
+# ── 4. Patcher thème + internationalisation (locale fr par défaut) ───────────
+log "Application du thème 'seed' et de la locale 'fr' sur le realm '${REALM}'…"
 
 PATCH_RESULT=$(curl -so /dev/null -w "%{http_code}" -X PUT \
   "${KC_URL}/admin/realms/${REALM}" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
-    "loginTheme":   "seed",
-    "accountTheme": "seed",
-    "emailTheme":   "seed"
+    "loginTheme":                "seed",
+    "accountTheme":              "seed",
+    "emailTheme":                "seed",
+    "internationalizationEnabled": true,
+    "supportedLocales":          ["fr", "en"],
+    "defaultLocale":             "fr"
   }')
 
 if [ "$PATCH_RESULT" = "204" ]; then
-  log "Thème appliqué avec succès (HTTP 204)."
+  log "Thème et locale appliqués avec succès (HTTP 204)."
 else
   fail "Échec du patch (HTTP ${PATCH_RESULT})."
 fi
 
 # ── 5. Vérification ──────────────────────────────────────────────────────────
-CURRENT_THEME=$(curl -sf \
+RESULT=$(curl -sf \
   "${KC_URL}/admin/realms/${REALM}" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
-  | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('loginTheme','<non défini>'))")
+  | python3 -c "
+import sys, json
+d = json.load(sys.stdin)
+print('theme=' + d.get('loginTheme','<non défini>'))
+print('locale=' + d.get('defaultLocale','<non défini>'))
+print('i18n='   + str(d.get('internationalizationEnabled', False)))
+")
 
-log "Vérification : loginTheme = '${CURRENT_THEME}'"
+CURRENT_THEME=$(echo "$RESULT" | grep theme= | cut -d= -f2)
+CURRENT_LOCALE=$(echo "$RESULT" | grep locale= | cut -d= -f2)
 
-if [ "$CURRENT_THEME" = "seed" ]; then
+log "Vérification : loginTheme = '${CURRENT_THEME}' | defaultLocale = '${CURRENT_LOCALE}'"
+
+if [ "$CURRENT_THEME" = "seed" ] && [ "$CURRENT_LOCALE" = "fr" ]; then
   echo
-  log "✓ Thème SEED actif sur ${KC_URL}/realms/${REALM}"
+  log "✓ Thème SEED actif + interface en français sur ${KC_URL}/realms/${REALM}"
   log "  → Testez : ${KC_URL}/realms/${REALM}/account/"
 else
-  warn "Le thème appliqué est '${CURRENT_THEME}' — vérifier que les fichiers theme sont montés."
+  warn "Vérifier la configuration — thème='${CURRENT_THEME}' locale='${CURRENT_LOCALE}'"
 fi

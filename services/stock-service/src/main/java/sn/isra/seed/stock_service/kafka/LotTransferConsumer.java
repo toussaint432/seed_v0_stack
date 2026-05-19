@@ -30,10 +30,8 @@ import java.util.Map;
 public class LotTransferConsumer {
 
     private static final Map<String, String> ROLE_TO_ORG_TYPE = Map.of(
-        "ROLE_UPSEMCL",        "UPSEMCL",
-        "ROLE_MULTIPLICATEUR", "MULTIPLICATEUR",
-        "ROLE_DISTRIBUTEUR",   "DISTRIBUTEUR",
-        "ROLE_DETAILLANT",     "DETAILLANT"
+        "seed-upsemcl",       "UPSEMCL",
+        "seed-multiplicator", "MULTIPLICATEUR"
     );
 
     private final StockRepo            stockRepo;
