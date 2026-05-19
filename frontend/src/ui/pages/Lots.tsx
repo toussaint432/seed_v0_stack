@@ -7,12 +7,12 @@ import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from
 import { generateTransferDoc, generateNumero, type TransferDocData, type LotPdfData, type PartiePdf } from '../../lib/pdf/generateTransferDoc'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
-const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', G4: 'badge-gray', R1: 'badge-blue', R2: 'badge-green' }
-const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef9ed', G3: '#f9fafb', G4: '#f9fafb', R1: '#eff6ff', R2: '#f0fdf4' }
-const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', G4: '#e5e7eb', R1: '#bfdbfe', R2: '#bbf7d0' }
-const ALL_GENS = ['G0','G1','G2','G3','G4','R1','R2']
-const GEN_IDS: Record<string, number> = { G0: 1, G1: 2, G2: 3, G3: 4, G4: 5, R1: 6, R2: 7 }
-const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upsemcl': ['G1','G2','G3'], 'seed-multiplicator': ['G3','G4','R1','R2'], 'seed-quotataire': ['R2'] }
+const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', R1: 'badge-blue', R2: 'badge-green' }
+const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef9ed', G3: '#f9fafb', R1: '#eff6ff', R2: '#f0fdf4' }
+const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', R1: '#bfdbfe', R2: '#bbf7d0' }
+const ALL_GENS = ['G0','G1','G2','G3','R1','R2']
+const GEN_IDS: Record<string, number> = { G0: 1, G1: 2, G2: 3, G3: 4, R1: 6, R2: 7 }
+const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upsemcl': ['G1','G2','G3'], 'seed-multiplicator': ['G3','R1','R2'], 'seed-quotataire': ['R2'] }
 
 /* ── Couleurs nœud généalogie par rôle acteur ── */
 const ROLE_NODE_COLORS: Record<string, { bg: string; border: string; label: string }> = {
@@ -252,7 +252,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   ]
 
   const childGenOptions = (gen: string) => {
-    if (gen === 'G3' || gen === 'G4') return ['R1']
+    if (gen === 'G3') return ['R1']
     if (gen === 'R1') return ['R2']
     return []
   }

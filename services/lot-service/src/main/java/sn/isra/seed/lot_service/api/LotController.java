@@ -108,6 +108,14 @@ public class LotController {
             }
             if (lot.getResponsableRole() == null)
                 lot.setResponsableRole(detectSeedRole(extractRealmRoles(jwt)));
+            // Auto-résolution de l'organisation productrice depuis le claim JWT
+            if (lot.getIdOrgProducteur() == null) {
+                Object orgClaim = jwt.getClaim("org_id");
+                if (orgClaim != null) {
+                    try { lot.setIdOrgProducteur(Long.parseLong(orgClaim.toString())); }
+                    catch (NumberFormatException ignored) {}
+                }
+            }
         }
         // Charger la génération complète (pas un proxy) — sera réinjectée après save
         Generation resolvedGen = null;
@@ -175,7 +183,16 @@ public class LotController {
             child.setResponsableRole(req.responsableRole() != null
                     ? req.responsableRole()
                     : detectSeedRole(extractRealmRoles(jwt)));
-            child.setIdOrgProducteur(req.idOrgProducteur());
+            // Priorité : valeur explicite de la requête, sinon org du JWT connecté
+            if (req.idOrgProducteur() != null) {
+                child.setIdOrgProducteur(req.idOrgProducteur());
+            } else {
+                Object orgClaim = jwt.getClaim("org_id");
+                if (orgClaim != null) {
+                    try { child.setIdOrgProducteur(Long.parseLong(orgClaim.toString())); }
+                    catch (NumberFormatException ignored) {}
+                }
+            }
         }
 
         LotSemencier saved = lotRepo.save(child);

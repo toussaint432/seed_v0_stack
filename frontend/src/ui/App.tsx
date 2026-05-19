@@ -149,7 +149,7 @@ const roleDescriptions: Record<string, string> = {
   'seed-admin':         'Supervision globale — accès complet à toute la plateforme',
   'seed-selector':      'Gestion des variétés · création des lots G0 / G1 · transfert vers UPSemCL',
   'seed-upsemcl':        'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs',
-  'seed-multiplicator': 'Réception G3 → production G4→R1→R2 pour commercialisation',
+  'seed-multiplicator': 'Réception G3 → multiplication R1→R2 pour commercialisation',
   'seed-quotataire':    'Consultation du catalogue et passation de commandes de semences R2',
 }
 
