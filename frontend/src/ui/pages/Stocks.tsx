@@ -18,11 +18,11 @@ interface Props { roleKey: string }
 
 const GEN_COLOR: Record<string, string> = {
   G0: '#6366f1', G1: '#0ea5e9', G2: '#22c55e', G3: '#f59e0b',
-  G4: '#f97316', R1: '#ec4899', R2: '#14b8a6'
+  R1: '#ec4899', R2: '#14b8a6'
 }
 const GEN_BADGE: Record<string, string> = {
   G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray',
-  G4: 'badge-gray', R1: 'badge-blue', R2: 'badge-green'
+  R1: 'badge-blue', R2: 'badge-green'
 }
 const UPSEMCL_GENS   = ['G1', 'G2', 'G3']
 const SELECTOR_GENS  = ['G0', 'G1']
@@ -395,14 +395,14 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
+  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'R1', 'R2']
 
   /* ── Transfert inter-orgs depuis le stock ── */
   function openTransferFromStock(stock: any, lot: any) {
     setTransferSource({ stock, lot })
     setTransferForm({
       usernameDestinataire: '',
-      quantite:             String(Math.floor(parseFloat(stock.quantiteDisponible) || 0)),
+      quantite:             '',   // champ vide : l'utilisateur saisit explicitement la quantité partielle
       observations:         '',
     })
     setLastTransfer(null)
@@ -414,6 +414,16 @@ export function Stocks({ roleKey }: Props) {
     if (!transferSource || !transferRule) return
     if (!transferForm.usernameDestinataire) {
       toastErr(null, 'Veuillez sélectionner un destinataire')
+      return
+    }
+    const saisi = parseFloat(transferForm.quantite) || 0
+    const dispo  = parseFloat(transferSource.stock.quantiteDisponible) || 0
+    if (saisi <= 0) {
+      toastErr(null, 'La quantité à transférer doit être strictement positive')
+      return
+    }
+    if (saisi > dispo) {
+      toastErr(null, `Quantité insuffisante : stock disponible ${dispo.toLocaleString('fr-FR')} kg`)
       return
     }
     setTransferSaving(true)
@@ -1140,25 +1150,55 @@ export function Stocks({ roleKey }: Props) {
               )
             })()}
 
-            <Field
-              label="Quantité à transférer"
-              required
-              hint={`Max disponible : ${parseFloat(transferSource.stock.quantiteDisponible).toLocaleString('fr-FR')} ${transferSource.stock.unite || 'kg'}`}
-            >
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <FormInput
-                  type="number"
-                  value={transferForm.quantite}
-                  onChange={(e: { target: { value: string } }) => setTransferForm(f => ({ ...f, quantite: e.target.value }))}
-                  min="0.01"
-                  max={String(parseFloat(transferSource.stock.quantiteDisponible) || 0)}
-                  step="0.01"
+            {(() => {
+              const dispo    = parseFloat(transferSource.stock.quantiteDisponible) || 0
+              const saisi    = parseFloat(transferForm.quantite) || 0
+              const restant  = dispo - saisi
+              const trop     = saisi > dispo
+              const total    = saisi > 0 && saisi === dispo
+              const unite    = transferSource.stock.unite || 'kg'
+              return (
+                <Field
+                  label="Quantité à transférer"
                   required
-                  style={{ flex: 1 }}
-                />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{transferSource.stock.unite || 'kg'}</span>
-              </div>
-            </Field>
+                  hint={`Stock disponible : ${dispo.toLocaleString('fr-FR')} ${unite}`}
+                >
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <FormInput
+                      type="number"
+                      value={transferForm.quantite}
+                      onChange={(e: { target: { value: string } }) => setTransferForm(f => ({ ...f, quantite: e.target.value }))}
+                      min="0.01"
+                      max={String(dispo)}
+                      step="0.01"
+                      required
+                      placeholder={`ex. ${Math.round(dispo / 2).toLocaleString('fr-FR')}`}
+                      style={{ flex: 1, borderColor: trop ? 'var(--red-500)' : undefined }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{unite}</span>
+                  </div>
+                  {saisi > 0 && (
+                    <div style={{ marginTop: 6, fontSize: 11.5, display: 'flex', gap: 12 }}>
+                      {trop ? (
+                        <span style={{ color: '#dc2626', fontWeight: 600 }}>
+                          ✗ Dépasse le stock disponible ({dispo.toLocaleString('fr-FR')} {unite})
+                        </span>
+                      ) : (
+                        <>
+                          <span style={{ color: '#15803d', fontWeight: 600 }}>
+                            → Transféré : {saisi.toLocaleString('fr-FR')} {unite}
+                          </span>
+                          <span style={{ color: total ? '#b45309' : 'var(--text-muted)', fontWeight: total ? 600 : 400 }}>
+                            · Restant : {restant.toLocaleString('fr-FR')} {unite}
+                            {total && ' ⚠ Lot entièrement transféré'}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </Field>
+              )
+            })()}
 
             <Field label="Observations">
               <FormInput

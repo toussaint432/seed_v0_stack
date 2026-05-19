@@ -64,13 +64,14 @@ public class TransfertController {
         t.setStatut(StatutTransfert.ACCEPTE);
         t.setDateAcceptation(LocalDate.now());
 
-        // Déduire la quantité transférée du stock du lot source
+        // La quantite_nette a été réservée (déduite) dès l'initiation du transfert.
+        // À l'acceptation : on s'assure que le statut est cohérent avec la quantité restante.
         lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
-            lot.setStatutLot(StatutLot.TRANSFERE);
-            if (t.getQuantite() != null && lot.getQuantiteNette() != null) {
-                BigDecimal restant = lot.getQuantiteNette().subtract(t.getQuantite());
-                lot.setQuantiteNette(restant.compareTo(BigDecimal.ZERO) >= 0 ? restant : BigDecimal.ZERO);
-            }
+            boolean lotEncore = lot.getQuantiteNette() != null
+                    && lot.getQuantiteNette().compareTo(BigDecimal.ZERO) > 0;
+            // Si le lot a encore du stock → il est toujours DISPONIBLE
+            if (lotEncore) lot.setStatutLot(StatutLot.DISPONIBLE);
+            // Sinon il reste TRANSFERE (défini à l'initiation)
             lotRepo.save(lot);
         });
 
@@ -117,7 +118,18 @@ public class TransfertController {
 
             t.setStatut(StatutTransfert.REJETE);
             t.setMotifRefus(body.getOrDefault("motif", "Refusé par le destinataire"));
-            return ResponseEntity.<Object>ok(transfertRepo.save(t));
+            TransfertLot saved = transfertRepo.save(t);
+            // Restituer la quantité réservée au lot source
+            lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
+                if (t.getQuantite() != null) {
+                    BigDecimal avant = lot.getQuantiteNette() != null
+                            ? lot.getQuantiteNette() : BigDecimal.ZERO;
+                    lot.setQuantiteNette(avant.add(t.getQuantite()));
+                }
+                lot.setStatutLot(StatutLot.DISPONIBLE);
+                lotRepo.save(lot);
+            });
+            return ResponseEntity.<Object>ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
 }

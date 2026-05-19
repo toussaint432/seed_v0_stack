@@ -279,6 +279,22 @@ public class LotController {
             }
         }
 
+        BigDecimal quantiteTransfert = (qte instanceof Number)
+                ? new BigDecimal(qte.toString()) : null;
+
+        // Validation métier : quantité obligatoire et ≤ stock disponible
+        if (quantiteTransfert == null || quantiteTransfert.compareTo(BigDecimal.ZERO) <= 0)
+            return ResponseEntity.badRequest().body(
+                Map.of("message", "La quantité à transférer doit être strictement positive"));
+
+        if (lot.getQuantiteNette() != null
+                && quantiteTransfert.compareTo(lot.getQuantiteNette()) > 0)
+            return ResponseEntity.badRequest().body(
+                Map.of("message", "Quantité insuffisante : disponible "
+                    + lot.getQuantiteNette().toPlainString()
+                    + " " + (lot.getUnite() != null ? lot.getUnite() : "kg")
+                    + ", demandé " + quantiteTransfert.toPlainString()));
+
         TransfertLot t = new TransfertLot();
         t.setCodeTransfert("TL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase());
         t.setIdLot(id);
@@ -288,21 +304,33 @@ public class LotController {
         t.setRoleDestinataire(roleDestinataire);
         t.setGenerationTransferee(gen);
         t.setObservations(observations);
-        if (qte instanceof Number) t.setQuantite(new BigDecimal(qte.toString()));
+        t.setQuantite(quantiteTransfert);
 
         TransfertLot saved = transfertRepo.save(t);
 
-        // ── Journal d'audit : transition DISPONIBLE → TRANSFERE ──
+        // ── Réservation immédiate : débit de la quantité sur le lot source ──
+        // Le statut TRANSFERE est posé uniquement si tout le lot est parti.
+        // Pour un transfert partiel la quantite_nette restante reste DISPONIBLE.
         StatutLot ancienStatut = lot.getStatutLot();
-        lot.setStatutLot(StatutLot.TRANSFERE);
+        BigDecimal restant = lot.getQuantiteNette() != null
+                ? lot.getQuantiteNette().subtract(quantiteTransfert)
+                : BigDecimal.ZERO;
+        lot.setQuantiteNette(restant.compareTo(BigDecimal.ZERO) >= 0 ? restant : BigDecimal.ZERO);
+        StatutLot nouveauStatut = restant.compareTo(BigDecimal.ZERO) <= 0
+                ? StatutLot.TRANSFERE : ancienStatut;
+        lot.setStatutLot(nouveauStatut);
         lotRepo.save(lot);
+
         historiqueRepo.save(HistoriqueStatutLot.of(
             id,
             ancienStatut,
-            StatutLot.TRANSFERE,
+            nouveauStatut,
             usernameEmetteur,
-            "Transfert " + gen + " vers " + usernameDestinataire
+            "Transfert " + gen + " — " + quantiteTransfert.toPlainString() + " kg"
+                + " vers " + usernameDestinataire
                 + " [" + roleDestinataire + "] — code: " + saved.getCodeTransfert()
+                + (restant.compareTo(BigDecimal.ZERO) > 0
+                    ? " — restant: " + restant.toPlainString() + " kg" : " (lot complet)")
         ));
 
         return ResponseEntity.status(201).body(saved);
