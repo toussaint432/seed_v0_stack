@@ -83,6 +83,14 @@ public class TransfertLot {
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
+    /** Horodatage précis de l'acceptation — pour piste d'audit à la seconde */
+    @Column(name = "accepted_at")
+    private Instant acceptedAt;
+
+    /** Horodatage précis du refus — pour piste d'audit à la seconde */
+    @Column(name = "refused_at")
+    private Instant refusedAt;
+
     /** Navigation lecture seule — LAZY pour éviter N+1 */
     @JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)

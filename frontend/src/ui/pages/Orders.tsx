@@ -50,6 +50,18 @@ const GENERATIONS_CMD = [
   { id: '7', label: 'R2 — Certifiée' },
 ]
 
+/** Formate un Instant ISO en "dd/MM/yyyy à HH:mm:ss" pour la piste d'audit. */
+function fmtDatetime(value?: string | null): string {
+  if (!value) return '—'
+  try {
+    const d = new Date(value)
+    if (isNaN(d.getTime())) return value
+    const date = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return `${date} à ${time}`
+  } catch { return value }
+}
+
 // KPI filter predicates
 type KpiKey = 'pending' | 'accepted' | 'rejected' | 'delivered'
 const KPI_FILTER: Record<KpiKey, (o: any) => boolean> = {
@@ -270,7 +282,7 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
                     <td><StatusBadge statut={o.statut} /></td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{orgName(o.idOrganisationFournisseur)}</td>
                     {extraColumns.map(c => <td key={c.head}>{c.cell(o)}</td>)}
-                    <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.createdAt ? new Date(o.createdAt).toLocaleDateString('fr-FR') : '—'}</td>
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{fmtDatetime(o.createdAt)}</td>
                     <td><button className="btn btn-ghost btn-icon" style={{ width: 30, height: 30 }} onClick={() => setDetail(o)}><Eye size={13} /></button></td>
                   </tr>
                 ))
@@ -294,7 +306,7 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
       {detail && (
         <Modal
           title={`Commande — ${detail.codeCommande}`}
-          subtitle={`${detail.usernameAcheteur || '—'} · ${detail.createdAt ? new Date(detail.createdAt).toLocaleDateString('fr-FR') : ''}`}
+          subtitle={`${detail.usernameAcheteur || '—'} · ${fmtDatetime(detail.createdAt)}`}
           onClose={() => setDetail(null)} size="md"
         >
           <StatusPipeline statut={detail.statut} />
@@ -303,6 +315,7 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
               ['Client',          detail.client || '—'],
               ['Fournisseur',     orgName(detail.idOrganisationFournisseur)],
               ['Org acheteur',    orgName(detail.idOrganisationAcheteur)],
+              ['Soumise le',      fmtDatetime(detail.createdAt)],
               ['Observations',    detail.observations || '—'],
             ] as [string,string][]).map(([k,v]) => (
               <div key={k} style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>

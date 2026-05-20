@@ -17,4 +17,19 @@ public interface TransfertLotRepo extends JpaRepository<TransfertLot, Long> {
 
     @Query("SELECT t FROM TransfertLot t WHERE (t.usernameEmetteur = :username OR t.usernameDestinataire = :username) ORDER BY t.createdAt DESC")
     List<TransfertLot> findByParticipant(@Param("username") String username);
+
+    /**
+     * Visibilité organisation : tous les transferts où le rôle émetteur OU destinataire
+     * correspond au rôle donné. Utilisé pour UPSemCL (seed-upsemcl) afin de voir
+     * tous les transferts de l'organisation, pas seulement ceux liés à un username.
+     */
+    @Query("SELECT t FROM TransfertLot t WHERE (t.roleEmetteur = :role OR t.roleDestinataire = :role) ORDER BY t.createdAt DESC")
+    List<TransfertLot> findByRoleParticipant(@Param("role") String role);
+
+    /**
+     * Transferts EN_ATTENTE destinés à un rôle organisationnel.
+     * Permet à tout agent UPSemCL d'accepter/refuser les demandes de son organisation.
+     */
+    @Query("SELECT t FROM TransfertLot t WHERE t.roleDestinataire = :role AND t.statut = 'EN_ATTENTE' ORDER BY t.createdAt DESC")
+    List<TransfertLot> findPendingForRole(@Param("role") String role);
 }

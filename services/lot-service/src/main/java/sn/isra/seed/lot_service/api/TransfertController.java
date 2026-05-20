@@ -16,6 +16,8 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -33,16 +35,24 @@ public class TransfertController {
     private final ObjectMapper     om;
 
     /* ── GET /api/transferts — tous les transferts du connecté ── */
+    // Pour UPSemCL : visibilité org-level (tous les transferts du rôle seed-upsemcl,
+    // qu'ils soient reçus de Sélectionneur ou émis vers Multiplicateur).
     @GetMapping
     public List<TransfertLot> mesTransferts(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
+        List<String> roles = extractRealmRoles(jwt);
+        if (roles.contains("seed-upsemcl"))
+            return transfertRepo.findByRoleParticipant("seed-upsemcl");
         return transfertRepo.findByParticipant(username);
     }
 
-    /* ── GET /api/transferts/recus — EN_ATTENTE pour le connecté ── */
+    /* ── GET /api/transferts/recus — EN_ATTENTE pour le connecté ou l'org ── */
     @GetMapping("/recus")
     public List<TransfertLot> transfertsRecus(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
+        List<String> roles = extractRealmRoles(jwt);
+        if (roles.contains("seed-upsemcl"))
+            return transfertRepo.findPendingForRole("seed-upsemcl");
         return transfertRepo.findPendingForDestinataire(username);
     }
 
@@ -54,15 +64,22 @@ public class TransfertController {
             @AuthenticationPrincipal Jwt jwt) {
 
         String username = jwt.getClaimAsString("preferred_username");
+        List<String> roles = extractRealmRoles(jwt);
         TransfertLot t = transfertRepo.findById(id).orElse(null);
         if (t == null) return ResponseEntity.notFound().build();
-        if (!t.getUsernameDestinataire().equals(username))
+
+        // Autorisation : destinataire nommé OU tout agent du même rôle organisationnel
+        boolean isDestinataire  = t.getUsernameDestinataire().equals(username);
+        boolean sameOrgRole     = t.getRoleDestinataire() != null && roles.contains(t.getRoleDestinataire());
+        if (!isDestinataire && !sameOrgRole)
             return ResponseEntity.status(403).<Object>body(Map.of("message", "Non autorisé"));
+
         if (StatutTransfert.EN_ATTENTE != t.getStatut())
             return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
 
         t.setStatut(StatutTransfert.ACCEPTE);
         t.setDateAcceptation(LocalDate.now());
+        t.setAcceptedAt(java.time.Instant.now());
 
         // La quantite_nette a été réservée (déduite) dès l'initiation du transfert.
         // À l'acceptation : on s'assure que le statut est cohérent avec la quantité restante.
@@ -110,14 +127,18 @@ public class TransfertController {
             @AuthenticationPrincipal Jwt jwt) {
 
         String username = jwt.getClaimAsString("preferred_username");
+        List<String> roles = extractRealmRoles(jwt);
         return transfertRepo.findById(id).map(t -> {
-            if (!t.getUsernameDestinataire().equals(username))
+            boolean isDestinataire = t.getUsernameDestinataire().equals(username);
+            boolean sameOrgRole    = t.getRoleDestinataire() != null && roles.contains(t.getRoleDestinataire());
+            if (!isDestinataire && !sameOrgRole)
                 return ResponseEntity.status(403).<Object>body(Map.of("message", "Non autorisé"));
             if (StatutTransfert.EN_ATTENTE != t.getStatut())
                 return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
 
             t.setStatut(StatutTransfert.REJETE);
             t.setMotifRefus(body.getOrDefault("motif", "Refusé par le destinataire"));
+            t.setRefusedAt(java.time.Instant.now());
             TransfertLot saved = transfertRepo.save(t);
             // Restituer la quantité réservée au lot source
             lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
@@ -131,5 +152,14 @@ public class TransfertController {
             });
             return ResponseEntity.<Object>ok(saved);
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> extractRealmRoles(Jwt jwt) {
+        java.util.Map<String, Object> realmAccess = jwt.getClaim("realm_access");
+        if (realmAccess == null) return List.of();
+        Object roles = realmAccess.get("roles");
+        if (roles instanceof List<?>) return (List<String>) roles;
+        return List.of();
     }
 }

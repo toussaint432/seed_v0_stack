@@ -46,6 +46,18 @@ const STATUT_TRANSFERT = [
   { value: 'ANNULE', label: 'Annulé' },
 ]
 
+/** Formate un Instant (ISO string) en "dd/MM/yyyy à HH:mm:ss" pour la piste d'audit. */
+function fmtDatetime(value?: string | null): string {
+  if (!value) return '—'
+  try {
+    const d = new Date(value)
+    if (isNaN(d.getTime())) return value
+    const date = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    const time = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    return `${date} à ${time}`
+  } catch { return value }
+}
+
 export function Transfers({ roleKey }: Props) {
   const [transfers, setTransfers] = useState<any[]>([])
   const [lots, setLots] = useState<any[]>([])
@@ -74,6 +86,9 @@ export function Transfers({ roleKey }: Props) {
     quantiteTransferee: '', dateDemande: new Date().toISOString().split('T')[0],
     observations: '',
   })
+
+  const isUpsemcl = roleKey === 'seed-upsemcl'
+  const [filterDir, setFilterDir] = useState<'tous'|'recus'|'emis'>('tous')
 
   const [recus, setRecus] = useState<any[]>([])
   const [refusModal, setRefusModal] = useState<any>(null)
@@ -109,7 +124,10 @@ export function Transfers({ roleKey }: Props) {
       t.usernameEmetteur?.toLowerCase().includes(search.toLowerCase()) ||
       t.usernameDestinataire?.toLowerCase().includes(search.toLowerCase())
     const matchStatus = !filterStatus || t.statut === filterStatus
-    return matchSearch && matchStatus
+    const matchDir = !isUpsemcl || filterDir === 'tous'
+      || (filterDir === 'recus' && t.roleDestinataire === 'seed-upsemcl')
+      || (filterDir === 'emis'  && t.roleEmetteur    === 'seed-upsemcl')
+    return matchSearch && matchStatus && matchDir
   })
 
   const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
@@ -295,6 +313,7 @@ export function Transfers({ roleKey }: Props) {
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                     De <strong>{t.usernameEmetteur}</strong> ({t.roleEmetteur}) · Lot #{t.idLot} · {t.generationTransferee}
                     {t.quantite && <> · {Number(t.quantite).toLocaleString('fr-FR')} kg</>}
+                    {t.createdAt && <> · <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtDatetime(t.createdAt)}</span></>}
                   </div>
                   {t.observations && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{t.observations}</div>}
                 </div>
@@ -356,12 +375,31 @@ export function Transfers({ roleKey }: Props) {
               {STATUT_TRANSFERT.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </div>
+          {isUpsemcl && (
+            <div className="filter-group">
+              <label className="filter-label">Direction</label>
+              <div style={{ display: 'flex', gap: 3, background: 'var(--surface-2)', borderRadius: 7, padding: 3, border: '1px solid var(--border)' }}>
+                {([['tous','Tous'],['recus','⬇ Reçus'],['emis','⬆ Émis']] as const).map(([k, l]) => (
+                  <button key={k}
+                    onClick={() => { setFilterDir(k); setCurrentPage(1) }}
+                    style={{
+                      padding: '4px 12px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontWeight: 600,
+                      background: filterDir === k ? 'var(--green-600)' : 'transparent',
+                      color:      filterDir === k ? '#fff' : 'var(--text-muted)',
+                      transition: 'all .15s',
+                    }}
+                  >{l}</button>
+                ))}
+              </div>
+            </div>
+          )}
           {(search || filterStatus) && <button className="btn btn-ghost" onClick={() => { setSearch(''); setFilterStatus(''); setCurrentPage(1) }}><X size={12} /> Effacer</button>}
         </div>
 
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Code</th><th>Lot</th><th>Émetteur → Destinataire</th><th>Génération</th><th>Demande</th><th>Statut</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Code</th><th>Lot</th><th>Émetteur → Destinataire</th><th>Génération</th><th>Initié le</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody>
               {loading ? [0, 1, 2, 3].map(i => <tr key={i}><td colSpan={7}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
                 pageItems.length === 0 ? (
@@ -376,7 +414,7 @@ export function Transfers({ roleKey }: Props) {
                       <span style={{ fontWeight: 500 }}>{t.usernameDestinataire || t.organisationDestination || '—'}</span>
                     </td>
                     <td><span className="badge badge-generation">{t.generationTransferee || '—'}</span></td>
-                    <td style={{ fontSize: 12.5 }}>{t.dateDemande ? new Date(t.dateDemande).toLocaleDateString('fr-FR') : '—'}</td>
+                    <td style={{ fontSize: 11, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{fmtDatetime(t.createdAt)}</td>
                     <td><StatusBadge status={t.statut || t.statutTransfert} showIcon /></td>
                     <td>
                       <div style={{ display: 'flex', gap: 4 }}>
@@ -464,8 +502,22 @@ export function Transfers({ roleKey }: Props) {
             <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Génération transférée</div><span className="badge badge-generation">{showDetail.generationTransferee || '—'}</span></div>
             <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Quantité</div><div style={{ fontSize: 20, fontWeight: 700 }}>{showDetail.quantite ? Number(showDetail.quantite).toLocaleString('fr-FR') + ' kg' : '—'}</div></div>
             <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Statut</div><StatusBadge status={showDetail.statut || showDetail.statutTransfert} showIcon size="md" /></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date demande</div><div style={{ fontSize: 13 }}>{showDetail.dateDemande || '—'}</div></div>
-            <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date acceptation</div><div style={{ fontSize: 13 }}>{showDetail.dateAcceptation || '—'}</div></div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Initié le</div>
+              <div style={{ fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>{fmtDatetime(showDetail.createdAt)}</div>
+            </div>
+            {showDetail.acceptedAt && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 4 }}>Accepté le</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#15803d', fontVariantNumeric: 'tabular-nums' }}>{fmtDatetime(showDetail.acceptedAt)}</div>
+              </div>
+            )}
+            {showDetail.refusedAt && (
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 4 }}>Refusé le</div>
+                <div style={{ fontSize: 12.5, fontWeight: 600, color: '#dc2626', fontVariantNumeric: 'tabular-nums' }}>{fmtDatetime(showDetail.refusedAt)}</div>
+              </div>
+            )}
             {showDetail.motifRefus && (
               <div style={{ gridColumn: '1 / -1' }}><div style={{ fontSize: 10, fontWeight: 700, color: '#ef4444', textTransform: 'uppercase', marginBottom: 4 }}>Motif de refus</div><div style={{ fontSize: 13, color: '#ef4444' }}>{showDetail.motifRefus}</div></div>
             )}
