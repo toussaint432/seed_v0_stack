@@ -188,7 +188,24 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
 
   useEffect(() => {
     fetch(`${CATALOG}/species`, { headers }).then(r => r.json()).then(setEspeces).catch(() => {})
-    fetch(`${CATALOG}/zones`).then(r => r.json()).then(setZones).catch(() => {})
+
+    // Charge les zones puis pré-sélectionne celle de l'utilisateur connecté
+    fetch(`${CATALOG}/zones`)
+      .then(r => r.json())
+      .then((loadedZones: ZoneAgro[]) => {
+        setZones(loadedZones)
+        // Résolution de la ZAE de l'utilisateur via son profil d'organisation
+        fetch(`${CATALOG}/zones/ma-zone`, { headers })
+          .then(r => r.status === 204 ? null : r.json())
+          .then((userZone: ZoneAgro | null) => {
+            if (userZone) {
+              const matched = loadedZones.find(z => z.id === userZone.id)
+              if (matched) setSelectedZone(matched)
+            }
+          })
+          .catch(() => { /* pas de zone configurée → Toutes zones par défaut */ })
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -410,7 +427,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCartItemQty(item.varieteId, Number(e.target.value))}
                       style={{ width: 80, height: 32, borderRadius: 6, border: '1px solid var(--border)', padding: '0 8px', fontSize: 13, fontFamily: 'inherit' }} />
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      kg / {item.disponible.toLocaleString('fr-FR')} dispo
+                      kg / {item.disponible.toLocaleString('fr-FR')} kg dispo
                     </span>
                   </div>
                 </div>
@@ -625,9 +642,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
                 const inCart   = cart.find(c => c.varieteId === v.varieteId)
                 const nCfg     = v.niveauAdaptation ? NIVEAU_CONFIG[v.niveauAdaptation] : null
                 const accent   = nCfg?.color ?? '#6b7280'
-                const stockTonnes = v.stockTotal >= 1000
-                  ? `${(v.stockTotal / 1000).toFixed(1)} t`
-                  : `${v.stockTotal.toLocaleString('fr-FR')} kg`
+                const stockTonnes = `${v.stockTotal.toLocaleString('fr-FR')} kg`
 
                 return (
                   <div key={v.varieteId} style={{ background: 'var(--surface)', borderRadius: 14, border: inCart ? '2px solid #16a34a' : '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.15s, border-color 0.15s' }}>

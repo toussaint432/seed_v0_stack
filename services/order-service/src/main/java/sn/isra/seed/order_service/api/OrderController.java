@@ -145,7 +145,14 @@ public class OrderController {
 
     if (req.lignes() != null) {
       for (CreateOrderRequest.Line l : req.lignes()) {
-        java.math.BigDecimal dispo = lotQuantiteRepo.sumDisponibleUpsemcl(l.idVariete(), l.idGeneration());
+        java.math.BigDecimal dispo;
+        // R1 (id=6) et R2 (id=7) : lots détenus par multiplicateurs → table stock
+        if (l.idGeneration() != null && (l.idGeneration() == 6L || l.idGeneration() == 7L)) {
+          dispo = stockOrderRepo.sumDisponibleR1R2(l.idVariete(), l.idGeneration());
+        } else {
+          // G1-G3 : lots UPSemCL → table lot_semencier.quantite_nette
+          dispo = lotQuantiteRepo.sumDisponibleUpsemcl(l.idVariete(), l.idGeneration());
+        }
         if (dispo == null) dispo = java.math.BigDecimal.ZERO;
         if (dispo.compareTo(l.quantite()) < 0) {
           throw new ResponseStatusException(HttpStatus.CONFLICT,

@@ -1,23 +1,45 @@
 import { useEffect, useState } from 'react'
+import type { FormEvent, MouseEvent } from 'react'
 import {
   Database, RefreshCw, Plus, MapPin, Package, TrendingUp,
-  X, Edit2, Trash2, Archive, Search, ChevronDown
+  X, Archive, Search, ChevronDown,
+  ArrowRightLeft, FileText, Download, CheckCircle2,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
+import { keycloak } from '../../lib/keycloak'
+import {
+  generateTransferDoc, generateNumero,
+  TransferDocData, LotPdfData, PartiePdf,
+} from '../../lib/pdf/generateTransferDoc'
 
 interface Props { roleKey: string }
 
 const GEN_COLOR: Record<string, string> = {
   G0: '#6366f1', G1: '#0ea5e9', G2: '#22c55e', G3: '#f59e0b',
-  G4: '#f97316', R1: '#ec4899', R2: '#14b8a6'
+  R1: '#ec4899', R2: '#14b8a6'
 }
 const GEN_BADGE: Record<string, string> = {
   G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray',
-  G4: 'badge-gray', R1: 'badge-blue', R2: 'badge-green'
+  R1: 'badge-blue', R2: 'badge-green'
 }
-const UPSEMCL_GENS = ['G1', 'G2', 'G3']
+const UPSEMCL_GENS   = ['G1', 'G2', 'G3']
+const SELECTOR_GENS  = ['G0', 'G1']
+
+/* ── Règles de transfert inter-organisations par rôle ── */
+const TRANSFER_RULES_STOCK: Record<string, { allowedGens: string[]; source: string; destination: string; destRoleKey: string }> = {
+  'seed-selector': { allowedGens: ['G1'], source: 'ISRA/CNRA',  destination: 'UPSemCL',       destRoleKey: 'seed-upsemcl'       },
+  'seed-upsemcl':  { allowedGens: ['G3'], source: 'UPSemCL',    destination: 'Multiplicateur', destRoleKey: 'seed-multiplicator' },
+}
+
+const ROLE_LABELS_PDF: Record<string, string> = {
+  'seed-selector':      'Sélectionneur ISRA/CNRA',
+  'seed-upsemcl':       'Unité de Production UPSemCL',
+  'seed-multiplicator': 'Multiplicateur Agréé',
+  'seed-quotataire':    'Distributeur / Quotataire',
+  'seed-admin':         'Administrateur',
+}
 
 const STATUT_STYLE: Record<string, { label: string; color: string; bg: string }> = {
   DISPONIBLE:    { label: 'Disponible',    color: '#15803d', bg: '#f0fdf4' },
@@ -168,8 +190,8 @@ function LotDropdown({ lots, value, onChange, placeholder = 'Sélectionner un lo
                     <div
                       key={l.id}
                       style={{ padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, background: isSel ? 'var(--surface-2)' : 'transparent', transition: 'background 0.1s' }}
-                      onMouseEnter={(e: React.MouseEvent<HTMLDivElement>) => (e.currentTarget.style.background = 'var(--surface-2)')}
-                      onMouseLeave={(e: React.MouseEvent<HTMLDivElement>) => (e.currentTarget.style.background = isSel ? 'var(--surface-2)' : 'transparent')}
+                      onMouseEnter={(e: MouseEvent<HTMLDivElement>) => (e.currentTarget.style.background = 'var(--surface-2)')}
+                      onMouseLeave={(e: MouseEvent<HTMLDivElement>) => (e.currentTarget.style.background = isSel ? 'var(--surface-2)' : 'transparent')}
                       onClick={() => { onChange(String(l.id)); setOpen(false); setQ('') }}
                     >
                       <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3, background: (GEN_COLOR[gen] ?? '#6b7280') + '22', color: GEN_COLOR[gen] ?? '#6b7280', flexShrink: 0 }}>{gen}</span>
@@ -187,15 +209,16 @@ function LotDropdown({ lots, value, onChange, placeholder = 'Sélectionner un lo
 }
 
 export function Stocks({ roleKey }: Props) {
-  const [allStocks,  setAllStocks]  = useState<any[]>([])
-  const [lots,       setLots]       = useState<any[]>([])
-  const [varieties,  setVarieties]  = useState<any[]>([])
-  const [sitesList,  setSitesList]  = useState<any[]>([])
-  const [movements,  setMovements]  = useState<any[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [toast,      setToast]      = useState<{ msg: string; type: 'success'|'error' } | null>(null)
-  const [saving,     setSaving]     = useState(false)
+  const [agregeStocks, setAgregeStocks] = useState<any[]>([])
+  const [lots,         setLots]         = useState<any[]>([])
+  const [varieties,    setVarieties]    = useState<any[]>([])
+  const [sitesList,    setSitesList]    = useState<any[]>([])
+  const [movements,    setMovements]    = useState<any[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [refreshing,   setRefreshing]   = useState(false)
+  const [toast,        setToast]        = useState<{ msg: string; type: 'success'|'error' } | null>(null)
+  const [saving,       setSaving]       = useState(false)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const [site,         setSite]         = useState('')
   const [filterGen,    setFilterGen]    = useState('')
@@ -209,32 +232,55 @@ export function Stocks({ roleKey }: Props) {
   const [editStock,     setEditStock]     = useState<any | null>(null)
   const [deleteTarget,  setDeleteTarget]  = useState<any | null>(null)
 
-  const isUPSemCL = roleKey === 'seed-upsemcl'
-  const isMulti   = roleKey === 'seed-multiplicator'
-  const isAdmin   = roleKey === 'seed-admin'
-  const canManage = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
+  const isUPSemCL  = roleKey === 'seed-upsemcl'
+  const isSelector = roleKey === 'seed-selector'
+  const isMulti    = roleKey === 'seed-multiplicator'
+  const isAdmin    = roleKey === 'seed-admin'
+  const canManage  = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator', 'seed-selector'].includes(roleKey)
 
   const [stockForm, setStockForm] = useState({ idLot: '', siteCode: '', quantite: '', unite: 'kg' })
   const [mvtForm,   setMvtForm]   = useState({ idLot: '', type: 'IN', siteSourceCode: '', siteDestinationCode: '', quantite: '', unite: 'kg', reference: '' })
   const [editForm,  setEditForm]  = useState({ quantite: '', unite: 'kg' })
+
+  /* ── Transfert inter-organisations depuis le stock ── */
+  const transferRule = TRANSFER_RULES_STOCK[roleKey] as typeof TRANSFER_RULES_STOCK[string] | undefined
+  const [showTransferForm,  setShowTransferForm]  = useState(false)
+  const [transferSource,    setTransferSource]    = useState<{ stock: any; lot: any } | null>(null)
+  const [transferForm,      setTransferForm]      = useState({
+    usernameDestinataire: '', quantite: '', observations: '',
+  })
+  const [transferSaving, setTransferSaving] = useState(false)
+  const [lastTransfer,   setLastTransfer]   = useState<any>(null)
+  const [membres,        setMembres]        = useState<any[]>([])
 
   const varMap: Record<number, any> = Object.fromEntries(varieties.map(v => [v.id, v]))
   const lotMap: Record<number, any> = Object.fromEntries(lots.map(l => [l.id, l]))
 
   const availableLots = isUPSemCL
     ? lots.filter(l => UPSEMCL_GENS.includes(l.generation?.codeGeneration))
+    : isSelector
+    ? lots.filter(l => SELECTOR_GENS.includes(l.generation?.codeGeneration))
     : lots
+
+  function toggleRow(key: string) {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
 
   async function fetchAll(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
-    const stockUrl = isMulti ? endpoints.stockMonStock : endpoints.stocks
-    const lotsUrl  = isMulti ? endpoints.lotsMesLots   : endpoints.lots
+    const lotsUrl = isMulti ? endpoints.lotsMesLots : endpoints.lots
     await Promise.all([
-      api.get(stockUrl).then(r          => setAllStocks(r.data)).catch(() => setAllStocks([])),
-      api.get(lotsUrl).then(r           => setLots(r.data)).catch(() => {}),
-      api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {}),
-      api.get(endpoints.sites).then(r     => setSitesList(r.data)).catch(() => {}),
-      api.get(endpoints.movements).then(r => setMovements(r.data)).catch(() => {}),
+      api.get(endpoints.stocksAgrege).then(r => setAgregeStocks(r.data)).catch(() => setAgregeStocks([])),
+      api.get(lotsUrl).then(r              => setLots(r.data)).catch(() => {}),
+      api.get(endpoints.varieties).then(r  => setVarieties(r.data)).catch(() => {}),
+      api.get(endpoints.sites).then(r      => setSitesList(r.data)).catch(() => {}),
+      api.get(endpoints.movements).then(r  => setMovements(r.data)).catch(() => {}),
+      transferRule ? api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {}) : Promise.resolve(),
     ])
     setLoading(false)
     setRefreshing(false)
@@ -243,40 +289,38 @@ export function Stocks({ roleKey }: Props) {
   useEffect(() => { fetchAll() }, [])
 
   const stocks = (() => {
-    let s = allStocks
-    if (isUPSemCL) {
-      s = s.filter(st => UPSEMCL_GENS.includes(lotMap[st.idLot]?.generation?.codeGeneration))
-    }
-    if (site)        s = s.filter(st => st.site?.codeSite === site)
-    if (filterGen)   s = s.filter(st => lotMap[st.idLot]?.generation?.codeGeneration === filterGen)
+    let s = agregeStocks
+    // Generation filter is already applied server-side; client-side is a safety guard
+    if (isUPSemCL)  s = s.filter(st => UPSEMCL_GENS.includes(st.codeGeneration))
+    if (isSelector) s = s.filter(st => SELECTOR_GENS.includes(st.codeGeneration))
+    if (site)       s = s.filter(st => st.codeSite === site)
+    if (filterGen)  s = s.filter(st => st.codeGeneration === filterGen)
     if (filterSearch) {
       const term = filterSearch.toLowerCase()
-      s = s.filter(st => {
-        const lot     = lotMap[st.idLot]
-        const variete = lot ? varMap[lot.idVariete] : null
-        return lot?.codeLot?.toLowerCase().includes(term)
-          || variete?.nomVariete?.toLowerCase().includes(term)
-          || variete?.espece?.nomCommun?.toLowerCase().includes(term)
-          || variete?.espece?.nomEspece?.toLowerCase().includes(term)
-          || st.site?.codeSite?.toLowerCase().includes(term)
-      })
+      s = s.filter(st =>
+        st.nomVariete?.toLowerCase().includes(term)
+        || st.codeVariete?.toLowerCase().includes(term)
+        || st.nomEspece?.toLowerCase().includes(term)
+        || st.codeSite?.toLowerCase().includes(term)
+        || st.lotsDetail?.some((d: any) => d.codeLot?.toLowerCase().includes(term))
+      )
     }
     return s
   })()
 
-  const totalQty = stocks.reduce((s, st) => s + (parseFloat(st.quantiteDisponible) || 0), 0)
-  const siteList = [...new Set(allStocks.map((s: any) => s.site?.codeSite).filter(Boolean))]
-  const maxQty   = Math.max(...stocks.map((s: any) => parseFloat(s.quantiteDisponible) || 0), 1)
+  const totalQty   = stocks.reduce((s, st) => s + (parseFloat(st.quantiteTotale) || 0), 0)
+  const totalLots  = stocks.reduce((s, st) => s + (Number(st.nbLots) || 0), 0)
+  const varietySet = new Set(stocks.map((s: any) => s.nomVariete).filter(Boolean))
+  const siteList   = [...new Set(agregeStocks.map((s: any) => s.codeSite).filter(Boolean))]
+  const maxQty     = Math.max(...stocks.map((s: any) => parseFloat(s.quantiteTotale) || 0), 1)
 
   const barData: BarDatum[] = (() => {
     const agg: Record<string, { qty: number; gen: string }> = {}
     stocks.forEach(st => {
-      const lot  = lotMap[st.idLot]
-      if (!lot) return
-      const key  = varMap[lot.idVariete]?.nomVariete ?? varMap[lot.idVariete]?.codeVariete ?? `Lot#${lot.id}`
-      const gen  = lot.generation?.codeGeneration ?? '?'
+      const key = st.nomVariete ?? st.codeVariete ?? `Var#${st.idVariete}`
+      const gen = st.codeGeneration ?? '?'
       if (!agg[key]) agg[key] = { qty: 0, gen }
-      agg[key].qty += parseFloat(st.quantiteDisponible) || 0
+      agg[key].qty += parseFloat(st.quantiteTotale) || 0
     })
     return Object.entries(agg)
       .map(([label, { qty, gen }]) => ({ label, value: Math.round(qty), color: GEN_COLOR[gen] ?? '#6b7280' }))
@@ -298,7 +342,7 @@ export function Stocks({ roleKey }: Props) {
     setToast({ msg, type: 'error' })
   }
 
-  async function submitStock(e: React.FormEvent) {
+  async function submitStock(e: FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
       await api.post(endpoints.stocks, {
@@ -313,7 +357,7 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  async function submitMvt(e: React.FormEvent) {
+  async function submitMvt(e: FormEvent) {
     e.preventDefault(); setSaving(true)
     try {
       await api.post(endpoints.movements, {
@@ -332,7 +376,7 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  async function submitEdit(e: React.FormEvent) {
+  async function submitEdit(e: FormEvent) {
     e.preventDefault(); setSaving(true)
     if (!editStock) return
     try {
@@ -359,11 +403,153 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  const genOptions = isUPSemCL ? UPSEMCL_GENS : ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
+  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'R1', 'R2']
+
+  /* ── Transfert inter-orgs depuis le stock ── */
+  function openTransferFromStock(stock: any, lot: any) {
+    setTransferSource({ stock, lot })
+    setTransferForm({
+      usernameDestinataire: '',
+      quantite:             '',   // champ vide : l'utilisateur saisit explicitement la quantité partielle
+      observations:         '',
+    })
+    setLastTransfer(null)
+    setShowTransferForm(true)
+  }
+
+  async function submitTransferFromStock(e: FormEvent) {
+    e.preventDefault()
+    if (!transferSource || !transferRule) return
+    if (!transferForm.usernameDestinataire) {
+      toastErr(null, 'Veuillez sélectionner un destinataire')
+      return
+    }
+    const saisi = parseFloat(transferForm.quantite) || 0
+    const dispo  = parseFloat(transferSource.stock.quantiteDisponible) || 0
+    if (saisi <= 0) {
+      toastErr(null, 'La quantité à transférer doit être strictement positive')
+      return
+    }
+    if (saisi > dispo) {
+      toastErr(null, `Quantité insuffisante : stock disponible ${dispo.toLocaleString('fr-FR')} kg`)
+      return
+    }
+    setTransferSaving(true)
+    try {
+      /* Le backend génère codeTransfert, usernameEmetteur et roleEmetteur depuis le JWT.
+         Seul le lot-service crée le TransfertLot ET déclenche Kafka → débit stock. */
+      const resp = await api.post(endpoints.lotTransfer(transferSource.lot.id), {
+        usernameDestinataire: transferForm.usernameDestinataire,
+        quantite:             Number(transferForm.quantite),
+        observations:         transferForm.observations || undefined,
+      })
+      setLastTransfer({ ...resp.data, _lot: transferSource.lot })
+      setShowTransferForm(false)
+      setTransferSource(null)
+      setToast({ msg: `Transfert ${resp.data.codeTransfert} initié → ${transferForm.usernameDestinataire}`, type: 'success' })
+      fetchAll(true)
+    } catch (err: any) {
+      toastErr(err, 'Erreur lors du transfert')
+    } finally { setTransferSaving(false) }
+  }
+
+  function downloadTransferDoc(t: any, docType: 'BORDEREAU' | 'ACCUSE_RECEPTION') {
+    const lot     = t._lot ?? lotMap[t.idLot]
+    const variete = varMap[lot?.idVariete]
+    const gen     = lot?.generation?.codeGeneration || ''
+    const jwt     = keycloak.tokenParsed as Record<string, unknown>
+    const me      = (jwt?.preferred_username as string) || ''
+
+    const lotData: LotPdfData = {
+      codeLot:         lot?.codeLot || `LOT-${t.idLot}`,
+      nomVariete:      variete?.nomVariete || 'N/D',
+      nomEspece:       variete?.espece?.nomCommun || variete?.espece?.nomEspece || 'Semence',
+      generationCode:  gen || '—',
+      quantiteNette:   Number(t.quantite ?? lot?.quantiteNette ?? 0),
+      unite:           lot?.unite || 'kg',
+      tauxGermination: lot?.tauxGermination,
+      puretePhysique:  lot?.puretePhysique,
+      statutLot:       lot?.statutLot || 'TRANSFERE',
+      dateProduction:  lot?.dateProduction,
+      campagne:        lot?.campagne,
+      lotParentCode:   lot?.lotParent?.codeLot,
+    }
+    const expediteur: PartiePdf = {
+      username: t.usernameEmetteur || me,
+      nom:      t.usernameEmetteur || me,
+      roleKey,
+      roleLabel: ROLE_LABELS_PDF[roleKey] || roleKey,
+    }
+    const destinataire: PartiePdf = {
+      username:  t.usernameDestinataire || transferRule?.destination || '—',
+      nom:       t.usernameDestinataire || transferRule?.destination || '—',
+      roleKey:   transferRule?.destRoleKey || 'seed-upsemcl',
+      roleLabel: ROLE_LABELS_PDF[transferRule?.destRoleKey || 'seed-upsemcl'],
+    }
+    const docData: TransferDocData = {
+      type:               docType,
+      codeTransfert:      t.codeTransfert,
+      numero:             generateNumero(t.id),
+      lot:                lotData,
+      expediteur,
+      destinataire,
+      quantiteTransferee: Number(t.quantite ?? 0),
+      dateDemande:        t.dateDemande || new Date().toISOString().split('T')[0],
+      observations:       t.observations,
+      dateAcceptation:    docType === 'ACCUSE_RECEPTION' ? (t.dateAcceptation || new Date().toISOString().split('T')[0]) : undefined,
+      nomReceptionnaire:  docType === 'ACCUSE_RECEPTION' ? me : undefined,
+      quantiteRecue:      docType === 'ACCUSE_RECEPTION' ? Number(t.quantite ?? 0) : undefined,
+    }
+    generateTransferDoc(docData)
+  }
 
   return (
     <div>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
+
+      {lastTransfer && (
+        <div style={{ marginBottom: 16, padding: '14px 18px', borderRadius: 10, background: 'linear-gradient(135deg,#f3e8ff,#ede9fe)', border: '1px solid #c4b5fd', display: 'flex', alignItems: 'center', gap: 14 }}>
+          <CheckCircle2 size={20} style={{ color: '#7e22ce', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#581c87' }}>
+              Transfert <span style={{ fontFamily: 'monospace' }}>{lastTransfer.codeTransfert}</span> créé avec succès
+            </div>
+            <div style={{ fontSize: 12, color: '#7e22ce', marginTop: 2 }}>
+              {lastTransfer.quantite} {lastTransfer._lot?.unite || 'kg'} → {lastTransfer.usernameDestinataire || transferRule?.destination}
+              {lastTransfer.statut && (
+                <span style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 3, background: '#7e22ce22', color: '#7e22ce' }}>
+                  {lastTransfer.statut}
+                </span>
+              )}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
+              onClick={() => downloadTransferDoc(lastTransfer, 'BORDEREAU')}
+            >
+              <FileText size={12} /> Bordereau PDF
+            </button>
+            {lastTransfer.statut === 'ACCEPTE' && (
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 11, padding: '5px 10px', gap: 5 }}
+                onClick={() => downloadTransferDoc(lastTransfer, 'ACCUSE_RECEPTION')}
+              >
+                <Download size={12} /> Accusé de réception
+              </button>
+            )}
+          </div>
+          <button
+            className="btn btn-ghost btn-icon"
+            style={{ padding: '4px 6px', flexShrink: 0 }}
+            onClick={() => setLastTransfer(null)}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {isUPSemCL && (
         <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 8, background: 'linear-gradient(135deg,#0ea5e922,#22c55e11)', border: '1px solid #0ea5e933', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -373,20 +559,28 @@ export function Stocks({ roleKey }: Props) {
         </div>
       )}
 
+      {isSelector && (
+        <div style={{ marginBottom: 16, padding: '10px 16px', borderRadius: 8, background: 'linear-gradient(135deg,#6366f122,#0369a111)', border: '1px solid #0369a133', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#0369a1', background: '#0369a115', borderRadius: 4, padding: '2px 8px' }}>SÉLECTIONNEUR</span>
+          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Conservation noyau génétique G0 · production pré-base G1 → transfert vers UPSemCL</span>
+          <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: '#6366f1' }}>Périmètre : G0 · G1</span>
+        </div>
+      )}
+
       {/* KPI cards */}
       <div className="stats-grid">
         <div className="stat-card">
           <div className="stat-icon green"><Database size={18} /></div>
           <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : stocks.length}</div>
-            <div className="stat-label">Entrées stock</div>
+            <div className="stat-value">{loading ? '…' : varietySet.size}</div>
+            <div className="stat-label">Variétés en stock</div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon blue"><MapPin size={18} /></div>
           <div className="stat-body">
             <div className="stat-value">{loading ? '…' : siteList.length}</div>
-            <div className="stat-label">Sites de stockage</div>
+            <div className="stat-label">Sites actifs</div>
           </div>
         </div>
         <div className="stat-card">
@@ -399,8 +593,8 @@ export function Stocks({ roleKey }: Props) {
         <div className="stat-card">
           <div className="stat-icon violet"><TrendingUp size={18} /></div>
           <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : stocks.length > 0 ? Math.round(totalQty / stocks.length).toLocaleString('fr-FR') : 0}</div>
-            <div className="stat-label">Moyenne / entrée (kg)</div>
+            <div className="stat-value">{loading ? '…' : totalLots}</div>
+            <div className="stat-label">Lots en stock</div>
           </div>
         </div>
       </div>
@@ -411,7 +605,8 @@ export function Stocks({ roleKey }: Props) {
           <span className="card-title">
             <span className="card-title-icon"><TrendingUp size={15} /></span>
             Visualisation stock par variété
-            {isUPSemCL && <span style={{ marginLeft: 6, fontSize: 10, color: '#0ea5e9', background: '#0ea5e915', borderRadius: 3, padding: '1px 5px' }}>G1/G2/G3</span>}
+            {isUPSemCL   && <span style={{ marginLeft: 6, fontSize: 10, color: '#0ea5e9', background: '#0ea5e915', borderRadius: 3, padding: '1px 5px' }}>G1/G2/G3</span>}
+            {isSelector  && <span style={{ marginLeft: 6, fontSize: 10, color: '#6366f1', background: '#6366f115', borderRadius: 3, padding: '1px 5px' }}>G0/G1</span>}
             <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>{showChart ? '▲' : '▼'}</span>
           </span>
           <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{barData.length} variété(s) · stock illimité</span>
@@ -439,8 +634,8 @@ export function Stocks({ roleKey }: Props) {
         <div className="card-header">
           <span className="card-title">
             <span className="card-title-icon"><Database size={15} /></span>
-            Inventaire par site
-            <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{stocks.length}</span>
+            Inventaire agrégé par variété / site
+            <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{stocks.length} groupe{stocks.length > 1 ? 's' : ''}</span>
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             {canManage && (
@@ -510,33 +705,35 @@ export function Stocks({ roleKey }: Props) {
           )}
         </div>
 
-        {/* Table */}
+        {/* Table agrégée */}
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>Site</th>
+                <th style={{ width: 32 }} />
+                <th>Génération</th>
                 <th>Espèce</th>
                 <th>Variété</th>
-                <th>Génération</th>
-                <th>Code Lot</th>
-                <th>Quantité disponible</th>
+                <th>Site</th>
+                <th>Quantité totale</th>
+                <th>Lots</th>
                 <th style={{ width: 120 }}>Niveau relatif</th>
-                {canManage && <th style={{ width: 110 }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {loading
                 ? [0, 1, 2, 3, 4].map(i => (
-                    <tr key={i}><td colSpan={canManage ? 8 : 7}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
+                    <tr key={i}><td colSpan={8}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
                   ))
                 : stocks.length === 0
                   ? (
                     <tr>
-                      <td colSpan={canManage ? 8 : 7}>
+                      <td colSpan={8}>
                         <div className="empty-state">
                           <div className="empty-icon"><Database size={20} /></div>
-                          <div className="empty-title">Aucun stock{isUPSemCL ? ' G1/G2/G3' : ''} trouvé</div>
+                          <div className="empty-title">
+                            Aucun stock{isUPSemCL ? ' G1/G2/G3' : isSelector ? ' G0/G1' : ''} trouvé
+                          </div>
                           {canManage && (
                             <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowMvtForm(true)}>+ Enregistrer un mouvement</button>
                           )}
@@ -544,37 +741,29 @@ export function Stocks({ roleKey }: Props) {
                       </td>
                     </tr>
                   )
-                  : stocks.map(s => {
-                      const qty      = parseFloat(s.quantiteDisponible || 0)
+                  : stocks.flatMap(row => {
+                      const rowKey   = `${row.idVariete}-${row.idGeneration}-${row.idSite}`
+                      const isExp    = expandedRows.has(rowKey)
+                      const qty      = parseFloat(row.quantiteTotale) || 0
                       const pct      = Math.min(100, Math.round((qty / maxQty) * 100))
                       const barColor = pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'
-                      const lot      = lotMap[s.idLot]
-                      const variete  = lot ? varMap[lot.idVariete] : null
-                      const gen      = lot?.generation?.codeGeneration || '—'
-                      return (
-                        <tr key={s.id}>
-                          <td>
-                            <span className="badge badge-blue" style={{ gap: 4 }}>
-                              <MapPin size={10} />{s.site?.codeSite || '—'}
-                            </span>
-                          </td>
-                          <td>
-                            {variete?.espece
-                              ? <div>
-                                  <div style={{ fontSize: 12, fontWeight: 600 }}>{variete.espece.nomCommun ?? variete.espece.nomEspece}</div>
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{variete.espece.codeEspece}</div>
-                                </div>
-                              : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
-                            }
-                          </td>
-                          <td>
-                            {variete
-                              ? <div>
-                                  <div style={{ fontSize: 12, fontWeight: 600 }}>{variete.nomVariete}</div>
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{variete.codeVariete}</div>
-                                </div>
-                              : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
-                            }
+                      const gen      = row.codeGeneration || '—'
+
+                      const rows: any[] = [
+                        <tr
+                          key={rowKey}
+                          style={{ cursor: 'pointer', background: isExp ? 'var(--surface-2)' : undefined }}
+                          onClick={() => toggleRow(rowKey)}
+                        >
+                          <td style={{ textAlign: 'center' }}>
+                            <ChevronDown
+                              size={13}
+                              style={{
+                                color: 'var(--text-muted)',
+                                transform: isExp ? 'rotate(0deg)' : 'rotate(-90deg)',
+                                transition: 'transform 0.18s',
+                              }}
+                            />
                           </td>
                           <td>
                             {gen !== '—'
@@ -583,17 +772,29 @@ export function Stocks({ roleKey }: Props) {
                             }
                           </td>
                           <td>
-                            {lot
-                              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                  <span className="td-mono" style={{ fontSize: 11 }}>{lot.codeLot}</span>
-                                  <StatutBadge statut={lot.statutLot} />
-                                </div>
-                              : <span className="td-mono" style={{ color: 'var(--text-muted)' }}>#{s.idLot}</span>
-                            }
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{row.nomEspece || '—'}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.codeEspece}</div>
+                          </td>
+                          <td>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{row.nomVariete}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.codeVariete}</div>
+                          </td>
+                          <td>
+                            <span className="badge badge-blue" style={{ gap: 4 }}>
+                              <MapPin size={10} />{row.codeSite}
+                            </span>
+                            {row.nomSite && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{row.nomSite}</div>
+                            )}
                           </td>
                           <td>
                             <span style={{ fontWeight: 700, fontSize: 15 }}>{qty.toLocaleString('fr-FR')}</span>
-                            <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 12 }}>{s.unite || 'kg'}</span>
+                            <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 12 }}>{row.unite || 'kg'}</span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              {row.nbLots} lot{row.nbLots > 1 ? 's' : ''}
+                            </span>
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -603,40 +804,91 @@ export function Stocks({ roleKey }: Props) {
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', minWidth: 28, textAlign: 'right' }}>{pct}%</span>
                             </div>
                           </td>
-                          {canManage && (
-                            <td>
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button
-                                  className="btn btn-ghost btn-icon"
-                                  style={{ padding: '4px 6px' }}
-                                  title="Modifier la quantité"
-                                  onClick={() => { setEditStock(s); setEditForm({ quantite: String(qty), unite: s.unite || 'kg' }) }}
-                                >
-                                  <Edit2 size={13} />
-                                </button>
-                                <button
-                                  className="btn btn-ghost btn-icon"
-                                  style={{ padding: '4px 6px' }}
-                                  title="Historique des mouvements de ce lot"
-                                  onClick={() => { setHistoryLotId(s.idLot); setShowHistory(true) }}
-                                >
-                                  <Archive size={13} />
-                                </button>
-                                {isAdmin && (
-                                  <button
-                                    className="btn btn-ghost btn-icon"
-                                    style={{ padding: '4px 6px', color: '#dc2626' }}
-                                    title="Supprimer cette entrée"
-                                    onClick={() => setDeleteTarget(s)}
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                )}
+                        </tr>
+                      ]
+
+                      if (isExp) {
+                        rows.push(
+                          <tr key={`${rowKey}-detail`}>
+                            <td colSpan={8} style={{ padding: 0, borderTop: 'none' }}>
+                              <div style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', padding: '8px 16px 14px 48px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Code lot</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Quantité</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Statut</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Campagne</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Créé le</th>
+                                      {canManage && <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', paddingBottom: 6, borderBottom: '1px solid var(--border)' }} />}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(row.lotsDetail ?? []).map((d: any) => {
+                                      const dQty   = parseFloat(d.quantite) || 0
+                                      const dDate  = d.createdAt
+                                        ? new Date(d.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                        : '—'
+                                      const canTransfer = transferRule
+                                        && transferRule.allowedGens.includes(gen)
+                                        && dQty > 0
+                                        && d.statut === 'DISPONIBLE'
+                                      return (
+                                        <tr key={d.idLot}>
+                                          <td style={{ padding: '6px 8px 6px 0', fontSize: 12 }}>
+                                            <span className="td-mono" style={{ fontSize: 11 }}>{d.codeLot}</span>
+                                          </td>
+                                          <td style={{ padding: '6px 8px', fontSize: 12 }}>
+                                            <span style={{ fontWeight: 700 }}>{dQty.toLocaleString('fr-FR')}</span>
+                                            <span style={{ color: 'var(--text-muted)', marginLeft: 3, fontSize: 11 }}>{d.unite || row.unite}</span>
+                                          </td>
+                                          <td style={{ padding: '6px 8px', fontSize: 12 }}>
+                                            <StatutBadge statut={d.statut} />
+                                          </td>
+                                          <td style={{ padding: '6px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{d.campagne || '—'}</td>
+                                          <td style={{ padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{dDate}</td>
+                                          {canManage && (
+                                            <td style={{ padding: '6px 0 6px 8px', textAlign: 'right' }}>
+                                              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                                <button
+                                                  className="btn btn-ghost btn-icon"
+                                                  style={{ padding: '3px 5px' }}
+                                                  title="Historique des mouvements"
+                                                  onClick={e => { e.stopPropagation(); setHistoryLotId(d.idLot); setShowHistory(true) }}
+                                                >
+                                                  <Archive size={12} />
+                                                </button>
+                                                {canTransfer && (
+                                                  <button
+                                                    className="btn btn-ghost btn-icon"
+                                                    style={{ padding: '3px 5px', color: '#7e22ce' }}
+                                                    title={`Transférer vers ${transferRule!.destination}`}
+                                                    onClick={e => {
+                                                      e.stopPropagation()
+                                                      openTransferFromStock(
+                                                        { id: d.idStock, idLot: d.idLot, quantiteDisponible: d.quantite, unite: d.unite || row.unite },
+                                                        { id: d.idLot, codeLot: d.codeLot, statutLot: d.statut, campagne: d.campagne, idVariete: row.idVariete, generation: { codeGeneration: gen } }
+                                                      )
+                                                    }}
+                                                  >
+                                                    <ArrowRightLeft size={12} />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </td>
+                                          )}
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
                               </div>
                             </td>
-                          )}
-                        </tr>
-                      )
+                          </tr>
+                        )
+                      }
+
+                      return rows
                     })
               }
             </tbody>
@@ -872,6 +1124,149 @@ export function Stocks({ roleKey }: Props) {
               </button>
             </div>
           </div>
+        </Modal>
+      )}
+
+      {showTransferForm && transferSource && transferRule && (
+        <Modal
+          title="Transférer vers l'organisation"
+          subtitle={`${transferRule.source}  →  ${transferRule.destination}`}
+          onClose={() => { setShowTransferForm(false); setTransferSource(null) }}
+          size="sm"
+        >
+          <form onSubmit={submitTransferFromStock}>
+            {/* Lot info — lecture seule */}
+            <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>
+                    Lot sélectionné
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{
+                      fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 3,
+                      background: (GEN_COLOR[transferSource.lot?.generation?.codeGeneration] ?? '#6b7280') + '22',
+                      color: GEN_COLOR[transferSource.lot?.generation?.codeGeneration] ?? '#6b7280',
+                    }}>
+                      {transferSource.lot?.generation?.codeGeneration || '—'}
+                    </span>
+                    <span style={{ fontWeight: 600, fontSize: 13 }}>{transferSource.lot?.codeLot}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                    {varMap[transferSource.lot?.idVariete]?.nomVariete || '—'}
+                    {varMap[transferSource.lot?.idVariete]?.espece?.nomCommun && ` · ${varMap[transferSource.lot?.idVariete].espece.nomCommun}`}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 3 }}>Disponible</div>
+                  <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--text-primary)' }}>
+                    {parseFloat(transferSource.stock.quantiteDisponible).toLocaleString('fr-FR')}
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 3 }}>{transferSource.stock.unite || 'kg'}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Flux organisations */}
+            <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ flex: 1, padding: '8px 12px', borderRadius: 6, background: '#0369a115', border: '1px solid #0369a133', textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Source</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#0c4a6e', marginTop: 2 }}>{transferRule.source}</div>
+              </div>
+              <ArrowRightLeft size={16} style={{ color: '#7e22ce', flexShrink: 0 }} />
+              <div style={{ flex: 1, padding: '8px 12px', borderRadius: 6, background: '#7e22ce15', border: '1px solid #7e22ce33', textAlign: 'center' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#7e22ce', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Destination</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#581c87', marginTop: 2 }}>{transferRule.destination}</div>
+              </div>
+            </div>
+
+            {(() => {
+              const eligibles = membres.filter((m: any) => m.keycloakRole === transferRule.destRoleKey)
+              return (
+                <Field label="Destinataire" required hint={`Rôle : ${transferRule.destination}`}>
+                  <FormSelect
+                    value={transferForm.usernameDestinataire}
+                    onChange={(e: { target: { value: string } }) => setTransferForm(f => ({ ...f, usernameDestinataire: e.target.value }))}
+                    required
+                  >
+                    <option value="">— Sélectionner un destinataire —</option>
+                    {eligibles.length === 0
+                      ? <option disabled value="">Aucun membre {transferRule.destination} enregistré</option>
+                      : eligibles.map((m: any) => (
+                        <option key={m.id} value={m.keycloakUsername}>
+                          {m.nomComplet || m.keycloakUsername}{m.organisation?.nomOrganisation ? ` — ${m.organisation.nomOrganisation}` : ''}
+                        </option>
+                      ))
+                    }
+                  </FormSelect>
+                </Field>
+              )
+            })()}
+
+            {(() => {
+              const dispo    = parseFloat(transferSource.stock.quantiteDisponible) || 0
+              const saisi    = parseFloat(transferForm.quantite) || 0
+              const restant  = dispo - saisi
+              const trop     = saisi > dispo
+              const total    = saisi > 0 && saisi === dispo
+              const unite    = transferSource.stock.unite || 'kg'
+              return (
+                <Field
+                  label="Quantité à transférer"
+                  required
+                  hint={`Stock disponible : ${dispo.toLocaleString('fr-FR')} ${unite}`}
+                >
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <FormInput
+                      type="number"
+                      value={transferForm.quantite}
+                      onChange={(e: { target: { value: string } }) => setTransferForm(f => ({ ...f, quantite: e.target.value }))}
+                      min="0.01"
+                      max={String(dispo)}
+                      step="0.01"
+                      required
+                      placeholder={`ex. ${Math.round(dispo / 2).toLocaleString('fr-FR')}`}
+                      style={{ flex: 1, borderColor: trop ? 'var(--red-500)' : undefined }}
+                    />
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{unite}</span>
+                  </div>
+                  {saisi > 0 && (
+                    <div style={{ marginTop: 6, fontSize: 11.5, display: 'flex', gap: 12 }}>
+                      {trop ? (
+                        <span style={{ color: '#dc2626', fontWeight: 600 }}>
+                          ✗ Dépasse le stock disponible ({dispo.toLocaleString('fr-FR')} {unite})
+                        </span>
+                      ) : (
+                        <>
+                          <span style={{ color: '#15803d', fontWeight: 600 }}>
+                            → Transféré : {saisi.toLocaleString('fr-FR')} {unite}
+                          </span>
+                          <span style={{ color: total ? '#b45309' : 'var(--text-muted)', fontWeight: total ? 600 : 400 }}>
+                            · Restant : {restant.toLocaleString('fr-FR')} {unite}
+                            {total && ' ⚠ Lot entièrement transféré'}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </Field>
+              )
+            })()}
+
+            <Field label="Observations">
+              <FormInput
+                value={transferForm.observations}
+                onChange={(e: { target: { value: string } }) => setTransferForm(f => ({ ...f, observations: e.target.value }))}
+                placeholder="Commentaires, conditions de transfert…"
+              />
+            </Field>
+
+            <FormActions
+              onCancel={() => { setShowTransferForm(false); setTransferSource(null) }}
+              loading={transferSaving}
+              submitLabel={`Initier le transfert vers ${transferRule.destination}`}
+            />
+          </form>
         </Modal>
       )}
     </div>

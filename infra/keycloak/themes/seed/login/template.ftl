@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="robots" content="noindex, nofollow"/>
-  <title>SEED · ISRA<#if realm.displayName??> — ${realm.displayName}</#if></title>
+  <title>Sen Jiw<#if realm.displayName??> — ${realm.displayName}</#if></title>
   <link rel="stylesheet" href="${url.resourcesPath}/css/login.css"/>
   <#if properties.scripts?has_content>
     <#list properties.scripts?split(' ') as script>
@@ -35,13 +35,13 @@
     <div class="seed-brand-inner">
 
       <!-- Logo -->
-      <a href="${(url.loginUrl)!"#"}" class="seed-logo">
+      <a href="${properties.frontendUrl}" class="seed-logo">
         <div class="seed-logo-mark">
-          <img src="${url.resourcesPath}/img/logo-isra.png" alt="ISRA" class="seed-logo-img"/>
+          <img src="${url.resourcesPath}/img/SENJIW.svg" alt="Sen Jiw" class="seed-logo-img"/>
         </div>
         <div class="seed-logo-text">
-          <strong>SEED Platform</strong>
-          <small>ISRA · CNRA</small>
+          <strong>Sen Jiw</strong>
+          <small>Filière semencière nationale</small>
         </div>
       </a>
 
@@ -83,6 +83,11 @@
           <div class="seed-gen-wrap">
             <span class="seed-gen seed-gen-g3">G3</span>
             <span class="seed-gen-sub">R1</span>
+          </div>
+          <span class="seed-pipeline-arrow">→</span>
+          <div class="seed-gen-wrap">
+            <span class="seed-gen seed-gen-g4">G4</span>
+            <span class="seed-gen-sub">C1</span>
           </div>
           <span class="seed-pipeline-arrow">→</span>
           <div class="seed-gen-wrap">
@@ -131,7 +136,7 @@
 
       <!-- Footer -->
       <div class="seed-brand-footer">
-        <span>© ${.now?string("yyyy")} ISRA / CNRA · République du Sénégal</span>
+        <span>© ${.now?string("yyyy")} Sen Jiw · République du Sénégal</span>
         <span class="seed-brand-footer-sep">·</span>
         <span>v2.0</span>
       </div>
@@ -145,14 +150,22 @@
     <!-- Dot grid décoratif -->
     <div class="seed-dot-grid" aria-hidden="true"></div>
 
-    <!-- Logo ISRA en haut du panneau droit -->
+    <!-- Bouton retour accueil -->
+    <a href="${properties.frontendUrl}" class="seed-home-btn" title="Retour à la page d'accueil">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M19 12H5M12 19l-7-7 7-7"/>
+      </svg>
+      Accueil
+    </a>
+
+    <!-- Logo Sen Jiw en haut du panneau droit -->
     <div class="seed-panel-logo">
       <div class="seed-panel-logo-mark">
-        <img src="${url.resourcesPath}/img/logo-isra.png" alt="ISRA"/>
+        <img src="${url.resourcesPath}/img/SENJIW.svg" alt="Sen Jiw"/>
       </div>
       <div class="seed-panel-logo-text">
-        <strong>SEED Platform</strong>
-        <span>Institut Sénégalais de Recherches Agricoles</span>
+        <strong>Sen Jiw</strong>
+        <span>Plateforme semencière nationale — ISRA</span>
       </div>
     </div>
 
@@ -173,9 +186,9 @@
         <!-- En-tête -->
         <div class="seed-card-header">
           <div class="seed-card-logo-sm">
-            <img src="${url.resourcesPath}/img/logo-isra.png" alt="ISRA"/>
+            <img src="${url.resourcesPath}/img/SENJIW.svg" alt="Sen Jiw"/>
           </div>
-          <div class="seed-card-greeting">Bienvenue sur SEED</div>
+          <div class="seed-card-greeting">Bienvenue sur Sen Jiw</div>
           <h1 class="seed-card-title">
             <#nested "header">
           </h1>
@@ -214,7 +227,7 @@
         <span class="seed-form-footer-sep">·</span>
         <span class="seed-form-footer-item">Données chiffrées TLS 1.3</span>
         <span class="seed-form-footer-sep">·</span>
-        <span class="seed-form-footer-item">ISRA Sénégal</span>
+        <span class="seed-form-footer-item">Sen Jiw · ISRA Sénégal</span>
       </div>
 
     </div>

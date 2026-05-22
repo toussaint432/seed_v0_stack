@@ -7,9 +7,19 @@ import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from
 import { generateTransferDoc, generateNumero, type TransferDocData, type LotPdfData, type PartiePdf } from '../../lib/pdf/generateTransferDoc'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
-const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', G4: 'badge-gray', R1: 'badge-blue', R2: 'badge-green' }
-const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef9ed', G3: '#f9fafb', G4: '#f9fafb', R1: '#eff6ff', R2: '#f0fdf4' }
-const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', G4: '#e5e7eb', R1: '#bfdbfe', R2: '#bbf7d0' }
+// Chaîne stricte G0→G1→G2→G3→G4→R1→R2
+const NEXT_GEN: Record<string, string> = { G0:'G1', G1:'G2', G2:'G3', G3:'G4', G4:'R1', R1:'R2' }
+
+function suggestChildCode(parentCode: string, parentGen: string, childGen: string): string {
+  const base = parentCode.startsWith(parentGen + '-')
+    ? childGen + parentCode.slice(parentGen.length)
+    : childGen + '-' + parentCode
+  return base + '-01'
+}
+
+const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', G4: 'badge-gold', R1: 'badge-blue', R2: 'badge-green' }
+const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef9ed', G3: '#f9fafb', G4: '#fff7ed', R1: '#eff6ff', R2: '#f0fdf4' }
+const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', G4: '#fed7aa', R1: '#bfdbfe', R2: '#bbf7d0' }
 const ALL_GENS = ['G0','G1','G2','G3','G4','R1','R2']
 const GEN_IDS: Record<string, number> = { G0: 1, G1: 2, G2: 3, G3: 4, G4: 5, R1: 6, R2: 7 }
 const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upsemcl': ['G1','G2','G3'], 'seed-multiplicator': ['G3','G4','R1','R2'], 'seed-quotataire': ['R2'] }
@@ -120,6 +130,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [showNewLot, setShowNewLot]     = useState(false)
   const [showChildLot, setShowChildLot] = useState(false)
   const [parentLot, setParentLot]       = useState<any>(null)
+  const [sites, setSites]               = useState<any[]>([])
   const MULT_NEW_FORM_INIT = {
     codeLot: '', idVariete: '', generationCode: 'G3',
     campagne: new Date().getFullYear().toString(),
@@ -134,12 +145,13 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     dateProduction: '', quantiteNette: '', unite: 'kg',
     tauxGermination: '', puretePhysique: '',
     quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '',
-    cycle: 'C', niveauSemence: ''
+    cycle: 'C', niveauSemence: '', siteCode: ''
   }
   const [childForm, setChildForm] = useState(MULT_CHILD_FORM_INIT)
 
   async function fetchAll() {
     setLoadingCat(true); setLoadingMes(true)
+    api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
     const [catRes, mesRes, stockRes, varRes, orgRes] = await Promise.allSettled([
       api.get(endpoints.lotsCatalogueG3),
       api.get(endpoints.lotsMesLots),
@@ -211,11 +223,15 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         productionBruteKg: childForm.productionBruteKg ? Number(childForm.productionBruteKg) : undefined,
         cycle: childForm.cycle || undefined,
         niveauSemence: childForm.niveauSemence || undefined,
+        siteCode: childForm.siteCode || undefined,
       })
-      setToast({ msg: `Lot ${childForm.codeLot} créé (${childForm.generationCode})`, type: 'success' })
+      setToast({ msg: `Lot ${childForm.codeLot} créé (${childForm.generationCode})${childForm.siteCode ? ' · stock synchronisé' : ''}`, type: 'success' })
       setShowChildLot(false); setChildForm(MULT_CHILD_FORM_INIT); fetchAll()
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur création lot enfant', type: 'error' })
+      const status = err?.response?.status
+      const msg = err?.response?.data?.message || err?.response?.data?.detail
+        || (status === 409 ? `Code lot déjà utilisé — modifiez le suffixe (ex : -02, -03…)` : status === 400 ? 'Données invalides — vérifiez les champs.' : 'Erreur création lot enfant')
+      setToast({ msg, type: 'error' })
     } finally { setSaving(false) }
   }
 
@@ -231,6 +247,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
 
   // KPIs mes lots
   const mesLotsG3    = mesLots.filter(l => l.generation?.codeGeneration === 'G3').length
+  const mesLotsG4    = mesLots.filter(l => l.generation?.codeGeneration === 'G4').length
   const mesLotsR1    = mesLots.filter(l => l.generation?.codeGeneration === 'R1').length
   const mesLotsR2    = mesLots.filter(l => l.generation?.codeGeneration === 'R2').length
   const mesLotsR1R2  = mesLotsR1 + mesLotsR2
@@ -247,12 +264,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
 
   const NIVEAU_SEMENCE_MULT = [
     '3 Semences de base G3',
+    '3b Semences certifiées G4',
     '4 Semences Certifiés R1',
     '5 Semences Certifiés R2',
   ]
 
   const childGenOptions = (gen: string) => {
-    if (gen === 'G3' || gen === 'G4') return ['R1']
+    if (gen === 'G3') return ['G4']
+    if (gen === 'G4') return ['R1']
     if (gen === 'R1') return ['R2']
     return []
   }
@@ -326,7 +345,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         </div>
         <div className="stat-card">
           <div className="stat-icon blue"><Layers size={18} /></div>
-          <div className="stat-body"><div className="stat-value">{loadingMes ? '…' : mesLotsG3}</div><div className="stat-label">Mes lots G3</div></div>
+          <div className="stat-body"><div className="stat-value">{loadingMes ? '…' : mesLotsG3 + mesLotsG4}</div><div className="stat-label">Mes lots G3 / G4</div></div>
         </div>
         <div className="stat-card">
           <div className="stat-icon gold"><Package size={18} /></div>
@@ -444,7 +463,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       {onglet === 'meslots' && (
         <div className="card" style={{ borderRadius: '0 0 var(--radius) var(--radius)', borderTop: 'none' }}>
           <div className="card-header">
-            <span className="card-title"><span className="card-title-icon"><Layers size={15} /></span>Mes Lots — G3 reçus · R1 · R2 produits <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{mesLots.length}</span></span>
+            <span className="card-title"><span className="card-title-icon"><Layers size={15} /></span>Mes Lots — G3/G4 reçus · R1 · R2 produits <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{mesLots.length}</span></span>
             <div style={{ display: 'flex', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', height: 32 }}>
                 <Package size={12} color="var(--text-muted)" />
@@ -494,7 +513,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                           <div className="empty-icon"><Layers size={20} /></div>
                           <div className="empty-title">Aucun lot enregistré pour votre organisation</div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Commandez un lot G3 dans l'onglet Catalogue, ou cliquez <strong>Nouveau lot</strong> pour enregistrer directement</div>
-                          <button className="btn btn-primary" style={{ marginTop: 12, height: 32, fontSize: 12 }} onClick={() => { setNewLotForm(MULT_NEW_FORM_INIT); setShowNewLot(true) }}><Plus size={13} /> Nouveau lot G3 / R1 / R2</button>
+                          <button className="btn btn-primary" style={{ marginTop: 12, height: 32, fontSize: 12 }} onClick={() => { setNewLotForm(MULT_NEW_FORM_INIT); setShowNewLot(true) }}><Plus size={13} /> Nouveau lot G3 / G4 / R1 / R2</button>
                         </div>
                       </td></tr>
                     )
@@ -536,8 +555,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                     style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: 'var(--green-700)' }}
                                     title={`Créer lot ${childGenOptions(gen)[0]} depuis ce ${gen}`}
                                     onClick={() => {
+                                      const nextGen = childGenOptions(gen)[0]
                                       setParentLot(l)
-                                      setChildForm({ ...MULT_CHILD_FORM_INIT, generationCode: childGenOptions(gen)[0] })
+                                      setChildForm({
+                                        ...MULT_CHILD_FORM_INIT,
+                                        generationCode: nextGen,
+                                        codeLot: suggestChildCode(l.codeLot || '', gen, nextGen),
+                                        campagne: l.campagne || new Date().getFullYear().toString(),
+                                      })
                                       setShowChildLot(true)
                                     }}
                                   ><GitBranch size={13} /></button>
@@ -564,7 +589,8 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               </Field>
               <Field label="Génération" required>
                 <FormSelect value={newLotForm.generationCode} onChange={e => setNewLotForm(f => ({ ...f, generationCode: e.target.value }))}>
-                  <option value="G3">G3</option>
+                  <option value="G3">G3 — Certifiée C1</option>
+                  <option value="G4">G4 — Certifiée C2</option>
                   <option value="R1">R1</option>
                   <option value="R2">R2</option>
                 </FormSelect>
@@ -629,30 +655,33 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         </Modal>
       )}
 
-      {/* ── Modal Lot enfant (G3→R1 ou R1→R2) ─────────────────── */}
+      {/* ── Modal Lot enfant (G3→G4, G4→R1, R1→R2) ─────────────── */}
       {showChildLot && parentLot && (
         <Modal
-          title={`Créer un lot ${childGenOptions(parentLot.generation?.codeGeneration || '')[0] || 'enfant'}`}
-          subtitle={`Lot parent : ${parentLot.codeLot} — ${parentLot.generation?.codeGeneration}`}
+          title={`Créer un lot ${childForm.generationCode || 'enfant'}`}
+          subtitle={`Lot parent : ${parentLot.codeLot} (${parentLot.generation?.codeGeneration}) → ${childForm.generationCode}`}
           onClose={() => setShowChildLot(false)}
           size="lg"
         >
           <div style={{ background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: 'var(--green-800)' }}>
             <div style={{ display: 'grid', gap: 3 }}>
-              <div><strong>Parent :</strong> {parentLot.codeLot} ({parentLot.generation?.codeGeneration})</div>
-              <div><strong>Variété :</strong> {varietyMap[parentLot.idVariete]?.nomVariete ?? `#${parentLot.idVariete}`}</div>
+              <div><strong>Parent :</strong> {parentLot.codeLot} <span style={{ color: 'var(--text-muted)' }}>({parentLot.generation?.codeGeneration})</span></div>
+              <div><strong>Variété :</strong> {varietyMap[parentLot.idVariete]?.nomVariete ?? `#${parentLot.idVariete}`} — <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{varietyMap[parentLot.idVariete]?.codeVariete}</span></div>
+              <div><strong>Espèce :</strong> {varietyMap[parentLot.idVariete]?.espece?.nomEspece ?? '—'}</div>
               <div><strong>Disponible :</strong> {parentLot.quantiteNette != null ? Number(parentLot.quantiteNette).toLocaleString('fr-FR') : '—'} {parentLot.unite}</div>
             </div>
           </div>
           <form onSubmit={submitChildLot}>
             <FormRow>
               <Field label="Code lot enfant" required>
-                <FormInput value={childForm.codeLot} onChange={e => setChildForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder={`R1-MIL-SOUNA3-2026`} required />
+                <FormInput value={childForm.codeLot} onChange={e => setChildForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder={`${childForm.generationCode}-MIL-SOUNA3-2026`} required />
               </Field>
-              <Field label="Génération cible" required>
-                <FormSelect value={childForm.generationCode} onChange={e => setChildForm(f => ({ ...f, generationCode: e.target.value }))}>
-                  {childGenOptions(parentLot.generation?.codeGeneration || '').map(g => <option key={g} value={g}>{g}</option>)}
-                </FormSelect>
+              <Field label="Génération cible">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: GEN_BG[childForm.generationCode] ? '#c2410c' : 'var(--text-primary)' }}>{childForm.generationCode}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>— déduite automatiquement du parent ({parentLot.generation?.codeGeneration})</span>
+                  <input type="hidden" value={childForm.generationCode} />
+                </div>
               </Field>
             </FormRow>
             <FormRow>
@@ -670,8 +699,38 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                   <FormSelect value={childForm.unite} onChange={e => setChildForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}><option value="kg">kg</option><option value="t">t</option></FormSelect>
                 </div>
               </Field>
-              <Field label="Semences utilisées (kg)" hint="kg du lot parent plantés">
-                <FormInput type="number" value={childForm.quantiteSemenceSrcKg} onChange={e => setChildForm(f => ({ ...f, quantiteSemenceSrcKg: e.target.value }))} placeholder="200" min="0" step="0.01" />
+              <Field label="Semences utilisées (kg)" hint={`max ${parentLot.quantiteNette != null ? Number(parentLot.quantiteNette).toLocaleString('fr-FR') : '?'} kg disponibles`}>
+                <FormInput
+                  type="number"
+                  value={childForm.quantiteSemenceSrcKg}
+                  onChange={e => setChildForm(f => ({ ...f, quantiteSemenceSrcKg: e.target.value }))}
+                  placeholder="200"
+                  min="0.01"
+                  max={parentLot.quantiteNette != null ? String(parentLot.quantiteNette) : undefined}
+                  step="0.01"
+                />
+                {parentLot.quantiteNette != null && childForm.quantiteSemenceSrcKg && Number(childForm.quantiteSemenceSrcKg) > 0 && (() => {
+                  const used = Number(childForm.quantiteSemenceSrcKg)
+                  const total = Number(parentLot.quantiteNette)
+                  const pct = Math.min(100, (used / total) * 100)
+                  const over = used > total
+                  return (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4, color: over ? '#dc2626' : 'var(--text-muted)' }}>
+                        <span>{used.toLocaleString('fr-FR')} kg utilisés</span>
+                        <span style={{ color: over ? '#dc2626' : '#15803d', fontWeight: 600 }}>
+                          {over ? `Dépassement de ${(used - total).toLocaleString('fr-FR')} kg !` : `${(total - used).toLocaleString('fr-FR')} kg restants`}
+                        </span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, borderRadius: 4, background: over ? '#dc2626' : pct > 80 ? '#f59e0b' : '#16a34a', transition: 'width 0.2s' }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                        {pct.toFixed(1)} % du lot parent ({total.toLocaleString('fr-FR')} kg {parentLot.unite})
+                      </div>
+                    </div>
+                  )
+                })()}
               </Field>
             </FormRow>
             <FormRow>
@@ -699,6 +758,12 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               <FormSelect value={childForm.niveauSemence} onChange={e => setChildForm(f => ({ ...f, niveauSemence: e.target.value }))}>
                 <option value="">— Sélectionner —</option>
                 {NIVEAU_SEMENCE_MULT.map(n => <option key={n} value={n}>{n}</option>)}
+              </FormSelect>
+            </Field>
+            <Field label="Site de stockage" hint="Optionnel — enregistre automatiquement ce lot en stock">
+              <FormSelect value={childForm.siteCode} onChange={e => setChildForm(f => ({ ...f, siteCode: e.target.value }))}>
+                <option value="">— Sans enregistrement stock immédiat —</option>
+                {sites.map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}</option>)}
               </FormSelect>
             </Field>
             <FormActions onCancel={() => setShowChildLot(false)} loading={saving} submitLabel={`Créer le lot ${childForm.generationCode}`} />
@@ -801,10 +866,17 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     return false
   }
   const canChild    = ['seed-admin','seed-upsemcl','seed-multiplicator'].includes(roleKey)
+  // Sélectionneur : uniquement G0→G1 sur ses propres lots
+  function canChildForLot(lot: any): boolean {
+    if (canChild) return true
+    if (roleKey === 'seed-selector') return lot.generation?.codeGeneration === 'G0'
+    return false
+  }
   const canReception = roleKey === 'seed-quotataire'
 
-  const [newLotForm, setNewLotForm] = useState({ codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '' })
-  const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '' })
+  const NEW_LOT_INIT = { codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '' }
+  const [newLotForm, setNewLotForm] = useState(NEW_LOT_INIT)
+  const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '' })
   const [transferForm, setTransferForm] = useState({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
   const [membres, setMembres] = useState<any[]>([])
 
@@ -846,7 +918,10 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     e.preventDefault(); setSaving(true)
     try {
       const selectedVariety = (varieties as any[]).find(v => v.id === Number(newLotForm.idVariete))
-      await api.post(endpoints.lots, {
+      const url = newLotForm.siteCode
+        ? `${endpoints.lots}?siteCode=${encodeURIComponent(newLotForm.siteCode)}`
+        : endpoints.lots
+      await api.post(url, {
         codeLot: newLotForm.codeLot, idVariete: Number(newLotForm.idVariete),
         generation: { id: GEN_IDS[newLotForm.generationCode] || 1 },
         campagne: newLotForm.campagne, dateProduction: newLotForm.dateProduction || undefined,
@@ -859,9 +934,9 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         cycle: newLotForm.cycle || null,
         niveauSemence: newLotForm.niveauSemence || null,
       })
-      setToast({ msg: "Lot " + newLotForm.codeLot + " créé avec succès", type: 'success' })
+      setToast({ msg: `Lot ${newLotForm.codeLot} créé${newLotForm.siteCode ? ' · stock synchronisé automatiquement' : ''}`, type: 'success' })
       setShowNewLot(false)
-      setNewLotForm({ codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '' })
+      setNewLotForm(NEW_LOT_INIT)
       fetchLots()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur lors de la création', type: 'error' })
@@ -883,11 +958,15 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         productionBruteKg: childForm.productionBruteKg ? Number(childForm.productionBruteKg) : undefined,
         cycle: childForm.cycle || undefined,
         niveauSemence: childForm.niveauSemence || undefined,
+        siteCode: childForm.siteCode || undefined,
       })
-      setToast({ msg: "Lot enfant " + childForm.codeLot + " créé", type: 'success' })
+      setToast({ msg: `Lot enfant ${childForm.codeLot} créé${childForm.siteCode ? ' · stock synchronisé' : ''}`, type: 'success' })
       setShowChildLot(false); fetchLots()
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
+      const status = err?.response?.status
+      const msg = err?.response?.data?.message || err?.response?.data?.detail
+        || (status === 409 ? `Code lot déjà utilisé — modifiez le suffixe (ex : -02, -03…)` : status === 400 ? 'Données invalides — vérifiez les champs.' : 'Erreur création lot enfant')
+      setToast({ msg, type: 'error' })
     } finally { setSaving(false) }
   }
 
@@ -1067,13 +1146,19 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         </div>
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Code Lot</th><th>Variété</th><th>Génération</th><th>Lot Parent</th><th>Quantité</th><th>Campagne</th><th>Producteur</th><th>Statut</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Code Lot</th><th>Variété</th><th>Génération</th><th>Lot Parent</th><th>Quantité</th><th>Campagne</th><th>Enregistré le</th><th>Producteur</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody>
-              {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
+              {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={10}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
                displayLots.length === 0 ? (
-                <tr><td colSpan={9}><div className="empty-state"><div className="empty-icon"><Package size={20} /></div><div className="empty-title">Aucun lot</div>{canCreate && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}</div></td></tr>
+                <tr><td colSpan={10}><div className="empty-state"><div className="empty-icon"><Package size={20} /></div><div className="empty-title">Aucun lot</div>{canCreate && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}</div></td></tr>
                ) : displayLots.map(l => {
                 const gen = l.generation?.codeGeneration || 'N/A'
+                const createdAtStr = l.createdAt
+                  ? new Date(l.createdAt).toLocaleString('fr-FR', {
+                      day: '2-digit', month: '2-digit', year: 'numeric',
+                      hour: '2-digit', minute: '2-digit',
+                    })
+                  : '—'
                 return (
                   <tr key={l.id}>
                     <td><span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span></td>
@@ -1089,7 +1174,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                     <td>{l.lotParent?.codeLot ? <span className="td-mono" style={{ fontSize: 11 }}>{l.lotParent.codeLot}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
                     <td><span style={{ fontWeight: 600 }}>{Number(l.quantiteNette).toLocaleString('fr-FR')}</span><span style={{ color: 'var(--text-muted)', marginLeft: 3, fontSize: 12 }}>{l.unite}</span></td>
                     <td style={{ fontSize: 12 }}>{l.campagne || '—'}</td>
-                    {/* Phase 1 : colonne Producteur */}
+                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>{createdAtStr}</td>
                     <td>
                       {l.responsableNom ? (
                         <div>
@@ -1111,12 +1196,24 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                             ? <RefreshCw size={13} style={{ animation: 'spin 0.8s linear infinite' }} />
                             : <Eye size={13} />}
                         </button>
-                        {canChild && (
+                        {canChildForLot(l) && NEXT_GEN[gen] && (
                           <button
                             className="btn btn-ghost"
-                            style={{ width: 30, height: 30, padding: 0, borderRadius: 6 }}
-                            title="Créer un Lot Enfant"
-                            onClick={() => { setParentLot(l); setChildForm({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '' }); setShowChildLot(true) }}
+                            style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: 'var(--green-700)' }}
+                            title={`Créer lot ${NEXT_GEN[gen]} depuis ce ${gen}`}
+                            onClick={() => {
+                              const nextGen = NEXT_GEN[gen]
+                              setParentLot(l)
+                              setChildForm({
+                                codeLot: suggestChildCode(l.codeLot || '', gen, nextGen),
+                                generationCode: nextGen,
+                                campagne: l.campagne || new Date().getFullYear().toString(),
+                                dateProduction: '', quantiteNette: '', unite: 'kg',
+                                tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '',
+                                superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '',
+                              })
+                              setShowChildLot(true)
+                            }}
                           >
                             <GitBranch size={13} />
                           </button>
@@ -1164,15 +1261,24 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         </div>
       </div>
 
-      {showNewLot && (
+      {showNewLot && (() => {
+        // Variétés filtrées par spécialisation pour le sélectionneur
+        const formVarieties = (roleKey === 'seed-selector' && userSpecialisation)
+          ? varieties.filter((v: any) => v.espece?.codeEspece?.toUpperCase() === userSpecialisation.toUpperCase())
+          : varieties
+        // Sites filtrés : stations de recherche ISRA pour le sélectionneur, tous sinon
+        const formSites = roleKey === 'seed-selector'
+          ? sites.filter((s: any) => s.typeSite === 'STATION_RECHERCHE')
+          : sites
+        return (
         <Modal title="Nouveau Lot Semencier" subtitle="Enregistrer un nouveau lot dans la chaîne semencière" onClose={() => setShowNewLot(false)}>
           <form onSubmit={submitNewLot}>
             <FormRow>
               <Field label="Code lot" required hint="Ex: G0-MIL-SOUNA3-2026"><FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G0-MIL-SOUNA3-2026" required /></Field>
-              <Field label="Variété" required>
+              <Field label="Variété" required hint={roleKey === 'seed-selector' && userSpecialisation ? `Filtrées : ${userSpecialisation}` : undefined}>
                 <FormSelect value={newLotForm.idVariete} onChange={e => setNewLotForm(f => ({ ...f, idVariete: e.target.value }))} required>
                   <option value="">-- Choisir une variété --</option>
-                  {varieties.map(v => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
+                  {formVarieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
                 </FormSelect>
               </Field>
             </FormRow>
@@ -1239,24 +1345,41 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 <option value="RETIRE">Retiré</option>
               </FormSelect>
             </Field>
+            <Field label="Site de stockage initial" hint="Optionnel — enregistre directement la quantité en stock">
+              <FormSelect value={newLotForm.siteCode} onChange={e => setNewLotForm(f => ({ ...f, siteCode: e.target.value }))}>
+                <option value="">— Sans enregistrement stock immédiat —</option>
+                {formSites.map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}</option>)}
+              </FormSelect>
+            </Field>
             <FormActions onCancel={() => setShowNewLot(false)} loading={saving} submitLabel="Créer le lot" />
           </form>
         </Modal>
-      )}
+        )
+      })()}
 
       {showChildLot && parentLot && (
-        <Modal title="Créer un Lot Enfant" subtitle={"Lot parent : " + parentLot.codeLot + " — " + parentLot.generation?.codeGeneration} onClose={() => setShowChildLot(false)}>
+        <Modal
+          title={`Créer un lot ${childForm.generationCode || 'enfant'}`}
+          subtitle={`${parentLot.codeLot} (${parentLot.generation?.codeGeneration}) → ${childForm.generationCode}`}
+          onClose={() => setShowChildLot(false)}
+        >
           <div style={{ background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: 'var(--green-800)' }}>
-            Ce lot sera lié au lot parent et aura la génération cible sélectionnée.
+            <div style={{ display: 'grid', gap: 3 }}>
+              <div><strong>Parent :</strong> {parentLot.codeLot} <span style={{ color: 'var(--text-muted)' }}>({parentLot.generation?.codeGeneration})</span></div>
+              <div><strong>Variété :</strong> {varietyMap[parentLot.idVariete]?.nomVariete ?? `#${parentLot.idVariete}`}</div>
+              <div><strong>Disponible :</strong> {parentLot.quantiteNette != null ? Number(parentLot.quantiteNette).toLocaleString('fr-FR') : '—'} {parentLot.unite}</div>
+            </div>
           </div>
           <form onSubmit={submitChildLot}>
             <FormRow>
-              <Field label="Code du lot enfant" required><FormInput value={childForm.codeLot} onChange={e => setChildForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G1-MIL-SOUNA3-2026" required /></Field>
-              <Field label="Génération cible" required>
-                <FormSelect value={childForm.generationCode} onChange={e => setChildForm(f => ({ ...f, generationCode: e.target.value }))} required>
-                  <option value="">-- Sélectionner --</option>
-                  {ALL_GENS.map(g => <option key={g} value={g}>{g}</option>)}
-                </FormSelect>
+              <Field label="Code du lot enfant" required>
+                <FormInput value={childForm.codeLot} onChange={e => setChildForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder={`${childForm.generationCode}-MIL-SOUNA3-2026`} required />
+              </Field>
+              <Field label="Génération cible">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 13, color: GEN_COLORS[childForm.generationCode] ? 'var(--green-700)' : 'var(--text-primary)' }}>{childForm.generationCode}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>— déduite du parent ({parentLot.generation?.codeGeneration})</span>
+                </div>
               </Field>
             </FormRow>
             <FormRow>
@@ -1270,8 +1393,39 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   <FormSelect value={childForm.unite} onChange={e => setChildForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}><option value="kg">kg</option><option value="t">t</option></FormSelect>
                 </div>
               </Field>
-              <Field label="Quantité semences utilisées (kg)" hint="kg du lot parent plantés">
-                <FormInput type="number" value={childForm.quantiteSemenceSrcKg} onChange={e => setChildForm(f => ({ ...f, quantiteSemenceSrcKg: e.target.value }))} placeholder="200" min="0" step="0.01" />
+              <Field label="Quantité semences utilisées (kg)" hint={roleKey === 'seed-selector' ? `Obligatoire — max ${Number(parentLot.quantiteNette).toLocaleString('fr-FR')} kg disponibles sur ${parentLot.codeLot}` : 'kg du lot parent plantés'} required={roleKey === 'seed-selector'}>
+                <FormInput
+                  type="number"
+                  value={childForm.quantiteSemenceSrcKg}
+                  onChange={e => setChildForm(f => ({ ...f, quantiteSemenceSrcKg: e.target.value }))}
+                  placeholder="200"
+                  min="0.01"
+                  max={parentLot.quantiteNette != null ? String(parentLot.quantiteNette) : undefined}
+                  step="0.01"
+                  required={roleKey === 'seed-selector'}
+                />
+                {parentLot.quantiteNette != null && childForm.quantiteSemenceSrcKg && Number(childForm.quantiteSemenceSrcKg) > 0 && (() => {
+                  const used = Number(childForm.quantiteSemenceSrcKg)
+                  const total = Number(parentLot.quantiteNette)
+                  const pct = Math.min(100, (used / total) * 100)
+                  const over = used > total
+                  return (
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11.5, marginBottom: 4, color: over ? '#dc2626' : 'var(--text-muted)' }}>
+                        <span>{used.toLocaleString('fr-FR')} kg utilisés</span>
+                        <span style={{ color: over ? '#dc2626' : '#15803d', fontWeight: 600 }}>
+                          {over ? `Dépassement de ${(used - total).toLocaleString('fr-FR')} kg !` : `${(total - used).toLocaleString('fr-FR')} kg restants`}
+                        </span>
+                      </div>
+                      <div style={{ height: 7, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${pct}%`, borderRadius: 4, background: over ? '#dc2626' : pct > 80 ? '#f59e0b' : '#16a34a', transition: 'width 0.2s' }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                        {pct.toFixed(1)} % du lot parent ({total.toLocaleString('fr-FR')} kg {parentLot.unite})
+                      </div>
+                    </div>
+                  )
+                })()}
               </Field>
             </FormRow>
             <FormRow>
@@ -1306,6 +1460,13 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 Rendement estimé : <strong>{(Number(childForm.productionBruteKg) / Number(childForm.superficieHa)).toFixed(2)} kg/ha</strong>
               </div>
             )}
+            <Field label="Site de stockage" hint="Optionnel — crée ou incrémente automatiquement le stock à ce site">
+              <FormSelect value={childForm.siteCode} onChange={e => setChildForm(f => ({ ...f, siteCode: e.target.value }))}>
+                <option value="">— Sans enregistrement stock immédiat —</option>
+                {(roleKey === 'seed-selector' ? sites.filter((s: any) => s.typeSite === 'STATION_RECHERCHE') : sites)
+                  .map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}</option>)}
+              </FormSelect>
+            </Field>
             <FormActions onCancel={() => setShowChildLot(false)} loading={saving} submitLabel="Créer le lot enfant" />
           </form>
         </Modal>

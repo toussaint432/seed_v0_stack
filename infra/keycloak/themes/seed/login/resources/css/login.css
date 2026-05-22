@@ -1,7 +1,7 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   SEED · ISRA — Thème Keycloak "seed" v2
+   Sen Jiw — Thème Keycloak "seed" v2
    Design system: Bricolage Grotesque / Manrope / JetBrains Mono
-   Palette: vert ISRA #00693e · or #e8b04b · encre #131814
+   Palette: vert #00693e · or #e8b04b · encre #131814
    ═══════════════════════════════════════════════════════════════════════════ */
 
 @import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -348,10 +348,15 @@ body {
   color: #86efac;
   animation: pulseBadge 4s ease-in-out 1.8s infinite;
 }
+.seed-gen-g4 {
+  background: rgba(22,101,52,0.3);
+  color: #6ee7b7;
+  animation: pulseBadge 4s ease-in-out 2.1s infinite;
+}
 .seed-gen-r1 {
   background: rgba(180,83,9,0.3);
   color: #fcd34d;
-  animation: pulseBadge 4s ease-in-out 2.4s infinite;
+  animation: pulseBadge 4s ease-in-out 2.7s infinite;
 }
 .seed-gen-r2 {
   background: rgba(185,28,28,0.3);
@@ -480,7 +485,43 @@ body {
   gap: 32px;
 }
 
-/* ── Logo ISRA panneau droit ── */
+/* ── Bouton retour accueil ── */
+.seed-home-btn {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 18px;
+  border-radius: 99px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--line);
+  color: var(--ink) !important;
+  font-family: var(--body) !important;
+  font-size: 13px;
+  font-weight: 500;
+  text-decoration: none !important;
+  transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  letter-spacing: 0.01em;
+}
+.seed-home-btn:hover {
+  background: #fff !important;
+  border-color: var(--green) !important;
+  color: var(--green) !important;
+  box-shadow: 0 4px 14px rgba(0,105,62,0.14) !important;
+  text-decoration: none !important;
+  transform: translateY(-1px);
+}
+.seed-home-btn svg {
+  flex-shrink: 0;
+  transition: transform 0.2s;
+}
+.seed-home-btn:hover svg { transform: translateX(-2px); }
+
+/* ── Logo Sen Jiw panneau droit ── */
 .seed-panel-logo {
   display: flex;
   align-items: center;

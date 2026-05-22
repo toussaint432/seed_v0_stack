@@ -118,10 +118,11 @@ body {
 .sidebar-logo-mark {
   width: 34px; height: 34px;
   border-radius: 9px;
-  background: linear-gradient(135deg, #2db56a 0%, #148a40 100%);
+  background: #fff;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 3px 10px rgba(45,181,106,0.35);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  overflow: hidden;
 }
 
 .sidebar-logo-text { overflow: hidden; white-space: nowrap; }

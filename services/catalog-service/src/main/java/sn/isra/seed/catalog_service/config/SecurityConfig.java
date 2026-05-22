@@ -37,7 +37,13 @@ public class SecurityConfig {
           "/swagger-ui.html",
           "/swagger-ui/index.html"
         ).permitAll()
-        .requestMatchers(HttpMethod.GET, "/api/zones", "/api/varieties/*/zones").permitAll()
+        .requestMatchers(HttpMethod.GET,
+            "/api/zones",
+            "/api/zones/par-departement/**",
+            "/api/regions",
+            "/api/departements",
+            "/api/varieties/*/zones"
+        ).permitAll()
         .anyRequest().authenticated()
       )
       .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakJwtConverter())));

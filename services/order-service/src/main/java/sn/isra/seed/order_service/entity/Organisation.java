@@ -30,6 +30,13 @@ public class Organisation {
     @Size(max = 100)
     private String localite;
 
+    @Size(max = 60)
+    @Column(length = 60)
+    private String departement;
+
+    @Column(name = "id_zone_agro")
+    private Long idZoneAgro;
+
     @Size(max = 150)
     private String contact;
 
