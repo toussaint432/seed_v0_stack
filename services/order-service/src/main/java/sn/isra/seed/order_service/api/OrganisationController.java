@@ -69,6 +69,8 @@ public class OrganisationController {
             if (body.getLatitude() != null) o.setLatitude(body.getLatitude());
             if (body.getLongitude() != null) o.setLongitude(body.getLongitude());
             if (body.getActive() != null) o.setActive(body.getActive());
+            if (body.getDepartement() != null) o.setDepartement(body.getDepartement());
+            if (body.getIdZoneAgro() != null) o.setIdZoneAgro(body.getIdZoneAgro());
             return ResponseEntity.ok(organisationRepo.save(o));
         }).orElse(ResponseEntity.notFound().build());
     }

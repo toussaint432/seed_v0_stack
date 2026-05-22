@@ -90,7 +90,7 @@ function getNavSections(roleKey: string): NavSection[] {
       return [
         { section: 'Général', items: [dashboard] },
         { section: 'Recherche', items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
-        { section: 'Gestion', items: [transfers, certifications, orders] },
+        { section: 'Gestion', items: [stocks, transfers, certifications, orders] },
         { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
@@ -149,7 +149,7 @@ const roleDescriptions: Record<string, string> = {
   'seed-admin':         'Supervision globale — accès complet à toute la plateforme',
   'seed-selector':      'Gestion des variétés · création des lots G0 / G1 · transfert vers UPSemCL',
   'seed-upsemcl':        'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs',
-  'seed-multiplicator': 'Réception G3 → production G4→R1→R2 pour commercialisation',
+  'seed-multiplicator': 'Réception G3 → multiplication G4→R1→R2 pour commercialisation',
   'seed-quotataire':    'Consultation du catalogue et passation de commandes de semences R2',
 }
 
@@ -162,6 +162,11 @@ const adminTools = [
 
 export function App() {
   const [ready,     setReady]     = useState(false)
+  // Vrai seulement quand l'URL contient le code OAuth2 (retour post-login KC).
+  // Dans ce cas on affiche un loading le temps du token exchange (~200 ms).
+  // Pour une visite normale (pas de code dans l'URL), on affiche
+  // LandingPage immédiatement sans attendre l'init KC.
+  const [isKcCallback] = useState(() => new URLSearchParams(window.location.search).has('code'))
   const [page,      setPage]      = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [unread,    setUnread]    = useState(0)
@@ -238,6 +243,9 @@ export function App() {
   }, [ready])
 
   if (!ready) {
+    // Visite normale : LandingPage s'affiche immédiatement, l'init KC tourne en arrière-plan.
+    // Callback post-login (code OAuth2 dans l'URL) : loading le temps du token exchange (~200 ms).
+    if (!isKcCallback) return <LandingPage />
     return (
       <div className="loading-screen">
         <div className="loading-logo">
@@ -279,7 +287,7 @@ export function App() {
   const notifications: Array<{ id: number; type: 'message' | 'transfer' | 'system'; title: string; sub: string; time: string; read: boolean }> = [
     ...(unread > 0 ? [{ id: 1, type: 'message' as const, title: `${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''}`, sub: 'Messagerie plateforme', time: 'maintenant', read: false }] : []),
     { id: 2, type: 'transfer' as const, title: 'Transfert en attente de validation', sub: 'Un lot G3 attend votre approbation', time: 'il y a 2h', read: false },
-    { id: 3, type: 'system' as const, title: 'Plateforme SEED opérationnelle', sub: 'Tous les services sont actifs', time: 'il y a 5h', read: true },
+    { id: 3, type: 'system' as const, title: 'Plateforme Sen Jiw opérationnelle', sub: 'Tous les services sont actifs', time: 'il y a 5h', read: true },
   ]
   const unreadNotif = notifications.filter(n => !n.read).length
 
@@ -293,11 +301,11 @@ export function App() {
         {/* Logo */}
         <div className="sidebar-logo">
           <div className="sidebar-logo-mark">
-            <Leaf size={18} color="#fff" />
+            <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 26, width: 26, objectFit: 'contain' }} />
           </div>
           <div className="sidebar-logo-text">
-            <h1>Seed Platform</h1>
-            <p>ISRA · CNRA</p>
+            <h1>Sen Jiw</h1>
+            <p>Filière semencière</p>
           </div>
         </div>
 

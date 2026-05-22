@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
+import type { ReactNode, MouseEvent } from 'react'
 import { keycloak } from '../../lib/keycloak'
 
 /* ── Design tokens ─────────────────────────────────────────────────────── */
 const T = {
   green:       '#00693e',
-  greenDeep:   '#003d24',
+  greenDeep:   '#00393d',
   greenSoft:   '#e8f1ec',
   greenBright: '#01b400',
   greenLeaf:   '#048a14',
@@ -28,12 +29,13 @@ const I18N: Record<Lang, Record<string, string>> = {
     navMission: 'Mission',
     navActeurs: 'Acteurs',
     navPipeline: 'Pipeline',
+    navHowto: 'Fonctionnement',
     navFAQ: 'FAQ',
     login: 'Se connecter',
     heroEyebrow: 'Plateforme nationale',
     heroTitle1: 'La filière semencière',
     heroTitle2: 'nationale, numérisée.',
-    heroDesc: "SEED centralise la traçabilité de chaque lot du G0 génétique jusqu'au R2 commercial — certification intégrée, gestion des stocks et pilotage en temps réel.",
+    heroDesc: "Sen Jiw centralise la traçabilité de chaque lot du G0 génétique jusqu'au R2 commercial — certification intégrée, gestion des stocks et pilotage en temps réel.",
     heroCTA: 'Accéder à la plateforme',
     heroDemo: 'Voir la démo',
     trustLabel: 'Soutenu par',
@@ -47,7 +49,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     f6t: 'Messagerie intégrée', f6d: 'Communication directe entre acteurs de la chaîne semencière sans quitter la plateforme.',
     statsLabel: 'La filière en chiffres',
     s1n: '5', s1l: 'Rôles acteurs',
-    s2n: '7', s2l: 'Générations tracées',
+    s2n: '6', s2l: 'Générations tracées',
     s3n: '100%', s3l: 'Données certifiées',
     s4n: '4', s4l: 'Microservices',
     pipeTitle: 'De la génétique au champ',
@@ -59,31 +61,43 @@ const I18N: Record<Lang, Record<string, string>> = {
     r3t: 'Multiplicateur', r3d: 'Produit les lots G4→R2 pour la commercialisation.',
     r4t: 'Quotataire', r4d: 'Consulte le catalogue et passe commande de semences R2.',
     r5t: 'Administrateur', r5d: 'Supervision globale, gestion des utilisateurs et monitoring.',
+    howtoTitle: 'Comment ça marche ?',
+    howtoDesc: "En quatre étapes simples, de la demande d'accès à la traçabilité complète de votre production semencière.",
+    ht1Title: 'Demandez vos accès',
+    ht1Desc: "Contactez l'équipe Sen Jiw — opérée par l'ISRA — pour obtenir un compte adapté à votre rôle dans la filière semencière nationale.",
+    ht2Title: 'Connexion sécurisée',
+    ht2Desc: 'Authentifiez-vous via OAuth 2.0 / PKCE. Chaque identifiant est unique, chiffré et associé à un rôle précis.',
+    ht3Title: 'Votre espace personnalisé',
+    ht3Desc: 'Accédez à un tableau de bord sur mesure selon votre profil : sélectionneur, multiplicateur ou quotataire.',
+    ht4Title: 'Tracez et certifiez',
+    ht4Desc: 'Gérez vos lots G0→R2, soumettez aux organismes certificateurs et générez vos rapports de campagne.',
     ctaTitle: 'Prêt à rejoindre la plateforme ?',
-    ctaDesc: "Contactez l'équipe ISRA pour obtenir vos accès et commencer à tracer votre production.",
+    ctaDesc: "Contactez l'équipe Sen Jiw pour obtenir vos accès et commencer à tracer votre production semencière.",
     ctaBtn: 'Demander un accès',
     faqTitle: 'Questions fréquentes',
-    q1: 'Qui peut utiliser SEED ?', a1: 'Tout acteur accrédité de la filière semencière nationale : sélectionneurs ISRA/CNRA, structures de multiplication (UPSemCL), multiplicateurs agréés et quotataires/OP.',
+    q1: 'Qui peut utiliser Sen Jiw ?', a1: 'Tout acteur accrédité de la filière semencière nationale : sélectionneurs ISRA/CNRA, structures de multiplication (UPSemCL), multiplicateurs agréés et quotataires/OP.',
     q2: 'Les données sont-elles sécurisées ?', a2: "Oui. L'authentification est gérée par Keycloak avec PKCE OAuth2. Chaque utilisateur n'accède qu'aux données correspondant à son rôle.",
-    q3: 'Comment obtenir un compte ?', a3: "Les comptes sont créés par l'administrateur ISRA. Contactez la Direction Technique ISRA pour soumettre une demande d'accès.",
+    q3: 'Comment obtenir un compte ?', a3: "Les comptes sont créés par l'équipe Sen Jiw, en lien avec la Direction Technique ISRA. Contactez-nous pour soumettre une demande d'accès.",
     q4: 'La plateforme fonctionne-t-elle hors-ligne ?', a4: "La version actuelle est en ligne. Une version mobile allégée avec synchronisation est prévue dans une prochaine itération.",
     footerTagline: "Système d'information national de la filière semencière du Sénégal.",
     footerLinks1: 'Plateforme', footerLinks2: 'Légal', footerLinks3: 'Support',
     fl1: 'Tableau de bord', fl2: 'Lots & générations', fl3: 'Stocks & commandes',
     fl4: 'Politique de confidentialité', fl5: "Conditions d'utilisation",
     fl6: 'Documentation', fl7: 'Contact technique',
-    copyright: '© 2026 ISRA / CNRA — République du Sénégal. Tous droits réservés.',
+    copyright: '© 2026 Sen Jiw — République du Sénégal. Tous droits réservés.',
+    loginOverlayText: 'Ouverture de la session sécurisée…',
   },
   en: {
     navMission: 'Mission',
     navActeurs: 'Actors',
     navPipeline: 'Pipeline',
+    navHowto: 'How it works',
     navFAQ: 'FAQ',
     login: 'Sign in',
     heroEyebrow: 'National platform',
     heroTitle1: 'The national seed',
     heroTitle2: 'industry, digitalized.',
-    heroDesc: 'SEED centralises traceability of every lot from genetic G0 to commercial R2 — integrated certification, stock management and real-time monitoring.',
+    heroDesc: 'Sen Jiw centralises traceability of every lot from genetic G0 to commercial R2 — integrated certification, stock management and real-time monitoring.',
     heroCTA: 'Access the platform',
     heroDemo: 'Watch demo',
     trustLabel: 'Supported by',
@@ -109,20 +123,31 @@ const I18N: Record<Lang, Record<string, string>> = {
     r3t: 'Multiplier', r3d: 'Produces G4→R2 lots for commercialisation.',
     r4t: 'Quotataire', r4d: 'Browses the catalogue and places R2 seed orders.',
     r5t: 'Administrator', r5d: 'Global oversight, user management and monitoring.',
+    howtoTitle: 'How does it work?',
+    howtoDesc: 'In four simple steps, from access request to full traceability of your seed production.',
+    ht1Title: 'Request access',
+    ht1Desc: 'Contact the Sen Jiw team — operated by ISRA — to get an account adapted to your role in the national seed industry.',
+    ht2Title: 'Secure sign-in',
+    ht2Desc: 'Authenticate via OAuth 2.0 / PKCE. Every credential is unique, encrypted and tied to a specific role.',
+    ht3Title: 'Your personalised space',
+    ht3Desc: 'Access a tailored dashboard based on your profile: breeder, multiplier or quotataire.',
+    ht4Title: 'Trace and certify',
+    ht4Desc: 'Manage your G0→R2 lots, submit to certifying bodies and generate your campaign reports.',
     ctaTitle: 'Ready to join the platform?',
-    ctaDesc: 'Contact the ISRA team to get your credentials and start tracing your production.',
+    ctaDesc: 'Contact the Sen Jiw team to get your credentials and start tracing your seed production.',
     ctaBtn: 'Request access',
     faqTitle: 'Frequently asked questions',
-    q1: 'Who can use SEED?', a1: 'Any accredited actor of the national seed industry: ISRA/CNRA breeders, multiplication structures (UPSemCL), approved multipliers and quotataires/POs.',
+    q1: 'Who can use Sen Jiw?', a1: 'Any accredited actor of the national seed industry: ISRA/CNRA breeders, multiplication structures (UPSemCL), approved multipliers and quotataires/POs.',
     q2: 'Is data secure?', a2: 'Yes. Authentication is managed by Keycloak with PKCE OAuth2. Each user only accesses data corresponding to their role.',
-    q3: 'How to get an account?', a3: 'Accounts are created by the ISRA administrator. Contact the ISRA Technical Department to submit an access request.',
+    q3: 'How to get an account?', a3: 'Accounts are created by the Sen Jiw team, in coordination with the ISRA Technical Department. Contact us to submit an access request.',
     q4: 'Does the platform work offline?', a4: 'The current version is online. A lightweight mobile version with synchronisation is planned for a future iteration.',
     footerTagline: 'National information system for the Senegalese seed industry.',
     footerLinks1: 'Platform', footerLinks2: 'Legal', footerLinks3: 'Support',
     fl1: 'Dashboard', fl2: 'Lots & generations', fl3: 'Stocks & orders',
     fl4: 'Privacy policy', fl5: 'Terms of use',
     fl6: 'Documentation', fl7: 'Technical contact',
-    copyright: '© 2026 ISRA / CNRA — Republic of Senegal. All rights reserved.',
+    copyright: '© 2026 Sen Jiw — Republic of Senegal. All rights reserved.',
+    loginOverlayText: 'Opening secure session…',
   },
 }
 
@@ -164,6 +189,7 @@ export function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [statsVisible, setStatsVisible] = useState(false)
   const [openFAQ, setOpenFAQ] = useState<number | null>(null)
+  const [loggingIn, setLoggingIn] = useState(false)
   const statsRef = useRef<HTMLDivElement>(null)
   const t = I18N[lang]
 
@@ -182,7 +208,10 @@ export function LandingPage() {
     return () => obs.disconnect()
   }, [])
 
-  const handleLogin = () => keycloak.login()
+  const handleLogin = () => {
+    setLoggingIn(true)
+    setTimeout(() => keycloak.login(), 650)
+  }
 
   /* ── Styles utilitaires inline ── */
   const S = {
@@ -223,6 +252,96 @@ export function LandingPage() {
   return (
     <div style={{ fontFamily: T.body, background: T.paper, color: T.ink, overflowX: 'hidden' }}>
 
+      {/* ══ KEYFRAMES ═════════════════════════════════════════════════════ */}
+      <style>{`
+        @keyframes lp-spin { to { transform: rotate(360deg) } }
+        @keyframes lp-overlay-in {
+          from { opacity: 0; transform: scale(1.02) }
+          to   { opacity: 1; transform: scale(1) }
+        }
+        @keyframes lp-logo-float {
+          0%, 100% { transform: translateY(0) }
+          50%       { transform: translateY(-6px) }
+        }
+        @keyframes lp-dot-pulse {
+          0%, 80%, 100% { transform: scale(0); opacity: 0.4 }
+          40%            { transform: scale(1);   opacity: 1   }
+        }
+        @keyframes lp-step-in {
+          from { opacity: 0; transform: translateY(16px) }
+          to   { opacity: 1; transform: none }
+        }
+      `}</style>
+
+      {/* ══ LOGIN OVERLAY ═════════════════════════════════════════════════ */}
+      {loggingIn && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          background: `linear-gradient(135deg, ${T.greenDeep} 0%, #00502e 50%, ${T.greenDeep} 100%)`,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 28,
+          animation: 'lp-overlay-in 0.4s cubic-bezier(0.16,1,0.3,1) both',
+        }}>
+          {/* Grain texture */}
+          <div style={{
+            position: 'absolute', inset: 0, opacity: 0.04,
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+            backgroundSize: '180px',
+          }} />
+          {/* Halos */}
+          <div style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none',
+            background: `radial-gradient(circle at 30% 30%, rgba(232,176,75,0.12), transparent 55%),
+                         radial-gradient(circle at 70% 70%, rgba(0,105,62,0.3), transparent 55%)`,
+          }} />
+
+          {/* Logo */}
+          <div style={{ position: 'relative', zIndex: 2, textAlign: 'center' }}>
+            <div style={{
+              width: 80, height: 80, borderRadius: 20,
+              background: 'rgba(255,255,255,0.95)',
+              display: 'grid', placeItems: 'center',
+              margin: '0 auto 20px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
+              animation: 'lp-logo-float 2.5s ease-in-out infinite',
+            }}>
+              <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 52, width: 'auto', objectFit: 'contain' }} />
+            </div>
+            <div style={{ fontFamily: T.display, fontWeight: 700, fontSize: 26, color: '#fff', letterSpacing: '-0.025em', marginBottom: 6 }}>
+              Sen Jiw
+            </div>
+            <div style={{ fontFamily: T.mono, fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+              Filière semencière nationale
+            </div>
+          </div>
+
+          {/* Loader dots */}
+          <div style={{ display: 'flex', gap: 8, position: 'relative', zIndex: 2 }}>
+            {[0, 1, 2].map(i => (
+              <div key={i} style={{
+                width: 8, height: 8, borderRadius: '50%', background: T.gold,
+                animation: `lp-dot-pulse 1.4s ease-in-out ${i * 0.2}s infinite`,
+              }} />
+            ))}
+          </div>
+
+          {/* Security badge */}
+          <div style={{
+            position: 'relative', zIndex: 2,
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '8px 16px', borderRadius: 999,
+            background: 'rgba(255,255,255,0.07)',
+            border: '1px solid rgba(255,255,255,0.12)',
+          }}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1L10 3v4c0 2-4 4-4 4S2 9 2 7V3L6 1Z" stroke="rgba(255,255,255,0.6)" strokeWidth="1" fill="rgba(255,255,255,0.06)"/>
+            </svg>
+            <span style={{ fontFamily: T.mono, fontSize: 10.5, color: 'rgba(255,255,255,0.55)', letterSpacing: '0.05em' }}>
+              {t.loginOverlayText}
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* ══ HEADER ════════════════════════════════════════════════════════ */}
       <header style={{
         position: 'sticky', top: 0, zIndex: 100,
@@ -236,24 +355,22 @@ export function LandingPage() {
 
           {/* Logo */}
           <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: T.ink }}>
-            <img src="/logo-isra.png" alt="ISRA" style={{ height: 36, width: 'auto', objectFit: 'contain' }} />
-            <div style={{ lineHeight: 1 }}>
-              <strong style={{ fontFamily: T.display, fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', display: 'block' }}>
-                SEED
-              </strong>
-              <small style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted, letterSpacing: '0.08em', marginTop: 4, display: 'block' }}>
-                ISRA · CNRA
-              </small>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fff', border: `1.5px solid ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+              <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
             </div>
+            <strong style={{ fontFamily: T.display, fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em' }}>
+              Sen Jiw
+            </strong>
           </a>
 
           {/* Nav principale */}
           <nav style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
             {([
-              [t.navMission, '#mission'],
-              [t.navActeurs, '#acteurs'],
+              [t.navMission,  '#mission'],
+              [t.navActeurs,  '#acteurs'],
               [t.navPipeline, '#pipeline'],
-              [t.navFAQ, '#faq'],
+              [t.navHowto,    '#howto'],
+              [t.navFAQ,      '#faq'],
             ] as [string, string][]).map(([label, href]) => (
               <a key={href} href={href} style={{
                 textDecoration: 'none', color: T.ink, fontSize: 14, fontWeight: 500,
@@ -286,17 +403,27 @@ export function LandingPage() {
             </div>
 
             {/* Bouton connexion */}
-            <button onClick={handleLogin} style={{
+            <button onClick={handleLogin} disabled={loggingIn} style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '10px 18px', borderRadius: 10,
-              background: T.green, color: '#fff', border: 'none',
-              fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: T.body,
+              background: loggingIn ? T.greenDeep : T.green,
+              color: '#fff', border: 'none',
+              fontSize: 14, fontWeight: 600, cursor: loggingIn ? 'default' : 'pointer',
+              fontFamily: T.body,
               boxShadow: '0 1px 0 rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.1)',
               transition: 'all 0.2s',
+              opacity: loggingIn ? 0.7 : 1,
             }}
-              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = T.greenDeep; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = T.green; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)' }}
+              onMouseEnter={e => { if (!loggingIn) { (e.currentTarget as HTMLButtonElement).style.background = T.greenDeep; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-1px)' } }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = loggingIn ? T.greenDeep : T.green; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)' }}
             >
+              {loggingIn ? (
+                <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', animation: 'lp-spin 0.7s linear infinite' }} />
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                  <path d="M6 2H3a1 1 0 00-1 1v8a1 1 0 001 1h3M9 10l3-3-3-3M12 7H5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
               {t.login}
             </button>
           </div>
@@ -365,7 +492,7 @@ export function LandingPage() {
 
               {/* CTA */}
               <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 48 }}>
-                <button onClick={handleLogin} style={{
+                <button onClick={handleLogin} disabled={loggingIn} style={{
                   display: 'inline-flex', alignItems: 'center', gap: 8,
                   padding: '13px 24px', borderRadius: 12,
                   background: T.green, color: '#fff', border: 'none',
@@ -509,6 +636,92 @@ export function LandingPage() {
         </div>
       </section>
 
+      {/* ══ COMMENT ÇA MARCHE ═════════════════════════════════════════════ */}
+      <section id="howto" style={{ ...S.section, background: T.paper }}>
+        <div style={{ ...S.container }}>
+
+          <div style={{ textAlign: 'center', maxWidth: 620, margin: '0 auto 72px' }}>
+            <span style={S.eyebrow}>Fonctionnement</span>
+            <h2 style={S.sectionTitle}>{t.howtoTitle}</h2>
+            <p style={{ ...S.sectionDesc, margin: '0 auto' }}>{t.howtoDesc}</p>
+          </div>
+
+          {/* Steps grid */}
+          <div style={{ position: 'relative' }}>
+
+            {/* Connector line (desktop) */}
+            <div style={{
+              position: 'absolute', top: 44, left: 'calc(12.5% + 44px)', right: 'calc(12.5% + 44px)',
+              height: 2,
+              backgroundImage: `repeating-linear-gradient(90deg, ${T.line} 0, ${T.line} 8px, transparent 8px, transparent 18px)`,
+              pointerEvents: 'none',
+            }} />
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 32, position: 'relative', zIndex: 2 }}>
+              {([
+                {
+                  n: '01', title: t.ht1Title, desc: t.ht1Desc,
+                  color: '#0369a1', icon: (
+                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                      <path d="M11 2a4 4 0 100 8 4 4 0 000-8zM3 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+                    </svg>
+                  ),
+                },
+                {
+                  n: '02', title: t.ht2Title, desc: t.ht2Desc,
+                  color: T.greenDeep, icon: (
+                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                      <rect x="3" y="10" width="16" height="10" rx="2" stroke="currentColor" strokeWidth="1.7"/>
+                      <path d="M7 10V7a4 4 0 018 0v3" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+                      <circle cx="11" cy="15" r="1.5" fill="currentColor"/>
+                    </svg>
+                  ),
+                },
+                {
+                  n: '03', title: t.ht3Title, desc: t.ht3Desc,
+                  color: T.green, icon: (
+                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                      <rect x="2" y="3" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="1.7"/>
+                      <path d="M7 7h8M7 11h5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+                      <path d="M7 19h8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+                    </svg>
+                  ),
+                },
+                {
+                  n: '04', title: t.ht4Title, desc: t.ht4Desc,
+                  color: T.goldDeep, icon: (
+                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+                      <path d="M3 17L8 12L12 16L19 5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ),
+                },
+              ] as { n: string; title: string; desc: string; color: string; icon: ReactNode }[]).map((step, i) => (
+                <HowToStep key={step.n} step={step} delay={i * 80} />
+              ))}
+            </div>
+          </div>
+
+          {/* CTA inline */}
+          <div style={{ textAlign: 'center', marginTop: 64 }}>
+            <button onClick={handleLogin} disabled={loggingIn} style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              padding: '14px 28px', borderRadius: 12,
+              background: T.green, color: '#fff', border: 'none',
+              fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: T.body,
+              boxShadow: '0 4px 16px rgba(0,105,62,0.22)',
+              transition: 'all 0.2s',
+            }}
+              onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = T.greenDeep; e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 10px 28px rgba(0,105,62,0.3)' }}
+              onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = T.green; e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,105,62,0.22)' }}
+            >
+              {t.heroCTA}
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            </button>
+          </div>
+
+        </div>
+      </section>
+
       {/* ══ CTA ═══════════════════════════════════════════════════════════ */}
       <section style={{ padding: '80px 28px' }}>
         <div style={{ ...S.container }}>
@@ -530,7 +743,7 @@ export function LandingPage() {
               <p style={{ color: 'rgba(255,255,255,0.68)', fontSize: 16, marginBottom: 28, lineHeight: 1.65 }}>
                 {t.ctaDesc}
               </p>
-              <button onClick={handleLogin} style={{
+              <button onClick={handleLogin} disabled={loggingIn} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
                 padding: '13px 24px', borderRadius: 12,
                 background: T.gold, color: T.greenDeep,
@@ -577,13 +790,24 @@ export function LandingPage() {
             {/* Brand */}
             <div>
               <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', marginBottom: 18 }}>
-                <img src="/logo-isra.png" alt="ISRA" style={{ height: 32, filter: 'brightness(0) invert(1)', opacity: 0.9 }} />
-                <div>
-                  <strong style={{ fontFamily: T.display, fontWeight: 700, fontSize: 18, color: '#fff', letterSpacing: '-0.02em', display: 'block' }}>SEED</strong>
-                  <small style={{ fontFamily: T.mono, fontSize: 9.5, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em' }}>ISRA · CNRA</small>
+                <div style={{ width: 38, height: 38, borderRadius: 9, background: 'rgba(255,255,255,0.96)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                  <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 28, width: 'auto', objectFit: 'contain' }} />
                 </div>
+                <strong style={{ fontFamily: T.display, fontWeight: 700, fontSize: 18, color: '#fff', letterSpacing: '-0.02em' }}>Sen Jiw</strong>
               </a>
               <p style={{ fontSize: 14, lineHeight: 1.7, maxWidth: 300 }}>{t.footerTagline}</p>
+              {/* Partenaires */}
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                <span style={{ fontFamily: T.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', display: 'block', marginBottom: 12 }}>Partenaires</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ height: 34, padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                    <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 22, width: 'auto', objectFit: 'contain' }} />
+                  </div>
+                  <div style={{ height: 34, padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                    <img src="/logo-isra.png" alt="ISRA" style={{ height: 22, filter: 'brightness(0) invert(1)', opacity: 0.75 }} />
+                  </div>
+                </div>
+              </div>
             </div>
             {/* Links */}
             {[
@@ -732,6 +956,69 @@ function RoleCard({ title, desc, color, icon, gens }: { title: string; desc: str
       }}>
         {gens}
       </span>
+    </div>
+  )
+}
+
+function HowToStep({ step, delay }: {
+  step: { n: string; title: string; desc: string; color: string; icon: ReactNode }
+  delay: number
+}) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <div
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+        padding: '32px 24px',
+        background: hovered ? '#fff' : 'transparent',
+        border: `1px solid ${hovered ? step.color + '30' : 'transparent'}`,
+        borderRadius: 20,
+        transition: 'all 0.28s',
+        boxShadow: hovered ? `0 8px 28px rgba(0,0,0,0.06)` : 'none',
+        transform: hovered ? 'translateY(-4px)' : 'none',
+        animation: `lp-step-in 0.5s cubic-bezier(0.16,1,0.3,1) ${delay}ms both`,
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Number + icon circle */}
+      <div style={{ position: 'relative', marginBottom: 24 }}>
+        <div style={{
+          width: 88, height: 88, borderRadius: '50%',
+          background: step.color + '10',
+          border: `2px solid ${step.color}25`,
+          display: 'grid', placeItems: 'center',
+          color: step.color,
+          transition: 'all 0.28s',
+          ...(hovered ? { background: step.color + '18', borderColor: step.color + '45' } : {}),
+        }}>
+          {step.icon}
+        </div>
+        {/* Step number badge */}
+        <div style={{
+          position: 'absolute', bottom: -4, right: -4,
+          width: 26, height: 26, borderRadius: '50%',
+          background: hovered ? step.color : T.paper2,
+          border: `2px solid ${hovered ? step.color : T.line}`,
+          color: hovered ? '#fff' : step.color,
+          fontFamily: T.mono, fontWeight: 700, fontSize: 10,
+          display: 'grid', placeItems: 'center',
+          transition: 'all 0.28s',
+        }}>
+          {step.n}
+        </div>
+      </div>
+
+      <h3 style={{
+        fontFamily: T.display, fontWeight: 600, fontSize: 17,
+        color: T.ink, marginBottom: 12, letterSpacing: '-0.01em',
+        lineHeight: 1.2,
+      }}>
+        {step.title}
+      </h3>
+      <p style={{ fontSize: 13.5, color: T.muted, lineHeight: 1.7, maxWidth: 220 }}>
+        {step.desc}
+      </p>
     </div>
   )
 }

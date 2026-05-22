@@ -18,4 +18,12 @@ public class LotEventProducer {
       log.warn("Kafka indisponible — événement lot.created non publié : {}", e.getMessage());
     }
   }
+
+  public void lotStockSync(String payloadJson) {
+    try {
+      kafkaTemplate.send("lot.stock.sync", payloadJson);
+    } catch (Exception e) {
+      log.warn("Kafka indisponible — événement lot.stock.sync non publié : {}", e.getMessage());
+    }
+  }
 }

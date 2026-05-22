@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Package, Layers, ShoppingCart, Leaf,
+  Package, ShoppingCart, Leaf,
   RefreshCw, Plus, Database, ArrowRight,
   Search, Filter, X,
 } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
 import { api }             from '../../lib/api'
 import { endpoints }       from '../../lib/endpoints'
 import { SelectorAnalytics } from './SelectorAnalytics'
@@ -43,7 +42,7 @@ const GEN_CFG: Record<string, { bg: string; color: string }> = {
   G1: { bg: '#f0fdf4', color: '#15803d' },
   G2: { bg: '#fef9ed', color: '#92660a' },
   G3: { bg: '#faf5ff', color: '#6d28d9' },
-  G4: { bg: '#fef2f2', color: '#b91c1c' },
+  G4: { bg: '#fff7ed', color: '#c2410c' },
   R1: { bg: '#f0fdfa', color: '#0f766e' },
   R2: { bg: '#dcfce7', color: '#16a34a' },
 }
@@ -53,7 +52,7 @@ const GEN_LABELS: Record<string, string> = {
 }
 const GEN_COLOR: Record<string, string> = {
   G0: '#1d4ed8', G1: '#15803d', G2: '#92660a',
-  G3: '#6d28d9', G4: '#b91c1c', R1: '#0f766e', R2: '#16a34a',
+  G3: '#6d28d9', G4: '#c2410c', R1: '#0f766e', R2: '#16a34a',
 }
 const GEN_LABEL: Record<string, string> = {
   G0: 'Génétique', G1: 'Pré-base', G2: 'Base',
@@ -75,6 +74,24 @@ const GREETINGS: Record<string, { title: string; sub: string }> = {
 }
 
 const REFRESH_MS = 30_000
+
+/* ── Design tokens (alignés avec design-b-innovation-sahel.html) ── */
+const D = {
+  paper:      '#fafaf7',
+  paper2:     '#f3f1ea',
+  line:       '#e2dfd3',
+  ink:        '#131814',
+  muted:      '#6e6f6a',
+  green:      '#00693e',
+  greenDeep:  '#003d24',
+  greenSoft:  '#e8f1ec',
+  gold:       '#e8b04b',
+  goldDeep:   '#c08a2a',
+  terra:      '#c44536',
+  display:    "'Bricolage Grotesque', system-ui, sans-serif",
+  body:       "'Manrope', system-ui, sans-serif",
+  mono:       "'JetBrains Mono', ui-monospace, monospace",
+} as const
 
 /* ────────────────── hook count-up ────────────────── */
 function useCountUp(target: number, delay = 0, enabled = true) {
@@ -100,49 +117,131 @@ function useCountUp(target: number, delay = 0, enabled = true) {
 }
 
 /* ────────────────── KPI Card ────────────────── */
-function KpiCard({ icon: Icon, label, value, sub, accent, delay, suffix }: {
-  icon: LucideIcon; label: string; value: number
+function KpiCard({ index, label, value, sub, accent, delay, suffix }: {
+  index: number; label: string; value: number
   sub?: string; accent: string; delay: number; suffix?: string
 }) {
-  const [vis, setVis] = useState(false)
+  const [vis,     setVis]     = useState(false)
+  const [hovered, setHovered] = useState(false)
   useEffect(() => { const t = setTimeout(() => setVis(true), delay); return () => clearTimeout(t) }, [delay])
   const displayed = useCountUp(value, delay + 80, vis)
+  const seq = String(index + 1).padStart(2, '0')
 
   return (
     <div
       style={{
-        background: '#fff', borderRadius: 14,
-        border: '1px solid var(--border)', overflow: 'hidden',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.05)',
+        background: '#fff',
+        borderRadius: 12,
+        border: `1px solid ${D.line}`,
+        padding: '20px 22px 22px',
+        position: 'relative',
         opacity: vis ? 1 : 0,
         transform: vis ? 'translateY(0)' : 'translateY(18px)',
-        transition: 'opacity 0.45s ease, transform 0.45s ease, box-shadow 0.2s ease',
+        transition: 'opacity 0.44s ease, transform 0.44s ease, box-shadow 0.22s ease',
+        boxShadow: hovered ? '0 4px 16px rgba(0,0,0,0.07)' : '0 1px 3px rgba(0,0,0,0.04)',
+        cursor: 'default',
       }}
-      onMouseEnter={e => { e.currentTarget.style.boxShadow = `0 8px 28px ${accent}20, 0 2px 8px rgba(0,0,0,0.06)` }}
-      onMouseLeave={e => { e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.05)' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
-      <div style={{ height: 3, background: `linear-gradient(90deg, ${accent}, ${accent}55)` }} />
-      <div style={{ padding: '18px 20px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-          <div style={{
-            width: 40, height: 40, borderRadius: 10,
-            background: `linear-gradient(135deg, ${accent}1c, ${accent}08)`,
-            border: `1px solid ${accent}1e`,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent,
-          }}>
-            <Icon size={17} />
+      {/* Numéro séquentiel */}
+      <div style={{
+        fontFamily: D.mono, fontSize: 10, fontWeight: 500,
+        color: D.muted, letterSpacing: '0.06em', marginBottom: 16,
+      }}>
+        {seq}
+      </div>
+
+      {/* Valeur principale */}
+      <div style={{ lineHeight: 1, marginBottom: 10 }}>
+        <span style={{
+          fontFamily: D.display, fontSize: 46, fontWeight: 700,
+          letterSpacing: '-0.03em', color: D.ink,
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          {displayed.toLocaleString('fr-FR')}
+        </span>
+        {suffix && (
+          <span style={{ fontFamily: D.mono, fontSize: 15, fontWeight: 500, color: D.muted, marginLeft: 5 }}>
+            {suffix}
+          </span>
+        )}
+      </div>
+
+      {/* Label */}
+      <div style={{
+        fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
+        letterSpacing: '0.12em', color: D.muted, marginBottom: sub ? 8 : 0,
+      }}>
+        {label}
+      </div>
+
+      {/* Sous-info */}
+      {sub && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: accent, display: 'inline-block', opacity: 0.8 }} />
+          <span style={{ fontFamily: D.body, fontSize: 11, color: D.muted, lineHeight: 1 }}>{sub}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ────────────────── Donut Chart ────────────────── */
+function DonutChart({ data }: { data: { label: string; value: number; color: string; gen: string }[] }) {
+  const [hov, setHov] = useState<number | null>(null)
+  const total = data.reduce((s, d) => s + d.value, 0)
+  if (total === 0) return null
+
+  const R = 54; const ri = 36; const cx = 66; const cy = 66
+  let angle = -Math.PI / 2
+
+  const arcs = data.map((d) => {
+    const sweep = (d.value / total) * 2 * Math.PI
+    const x1 = cx + R * Math.cos(angle);        const y1 = cy + R * Math.sin(angle)
+    const x2 = cx + R * Math.cos(angle + sweep); const y2 = cy + R * Math.sin(angle + sweep)
+    const xi1 = cx + ri * Math.cos(angle);        const yi1 = cy + ri * Math.sin(angle)
+    const xi2 = cx + ri * Math.cos(angle + sweep); const yi2 = cy + ri * Math.sin(angle + sweep)
+    const large = sweep > Math.PI ? 1 : 0
+    const path = `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${x2.toFixed(2)} ${y2.toFixed(2)} L ${xi2.toFixed(2)} ${yi2.toFixed(2)} A ${ri} ${ri} 0 ${large} 0 ${xi1.toFixed(2)} ${yi1.toFixed(2)} Z`
+    angle += sweep
+    return { ...d, path, pct: Math.round((d.value / total) * 100) }
+  })
+
+  const active = hov !== null ? arcs[hov] : null
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+      <svg width={132} height={132} style={{ flexShrink: 0, overflow: 'visible' }}>
+        {arcs.map((arc, i) => (
+          <path key={i} d={arc.path}
+            fill={arc.color}
+            opacity={hov === null ? 0.88 : hov === i ? 1 : 0.3}
+            stroke={D.paper} strokeWidth={2.5}
+            style={{ cursor: 'pointer', transition: 'opacity 0.15s' }}
+            onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
+          />
+        ))}
+        <text x={cx} y={cy - 7} textAnchor="middle" fontSize={20} fontWeight={700} fontFamily={D.display} fill={active ? active.color : D.ink}>
+          {active ? active.value : total}
+        </text>
+        <text x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fontFamily={D.mono} fill={D.muted}>
+          {active ? active.gen : 'LOTS'}
+        </text>
+      </svg>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
+        {arcs.map((arc, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
+            opacity: hov === null ? 1 : hov === i ? 1 : 0.35,
+            transition: 'opacity 0.15s',
+          }} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}>
+            <span style={{ width: 7, height: 7, borderRadius: 2, background: arc.color, flexShrink: 0 }} />
+            <span style={{ fontFamily: D.mono, fontSize: 9.5, fontWeight: 500, color: D.muted, flex: 1, letterSpacing: '0.04em' }}>{arc.gen}</span>
+            <span style={{ fontFamily: D.mono, fontSize: 11, fontWeight: 700, color: arc.color }}>{arc.value}</span>
+            <span style={{ fontFamily: D.mono, fontSize: 9, color: D.muted, width: 28, textAlign: 'right' }}>{arc.pct}%</span>
           </div>
-          <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.09em', paddingTop: 2 }}>
-            {label}
-          </span>
-        </div>
-        <div style={{ lineHeight: 1 }}>
-          <span style={{ fontSize: 38, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em' }}>
-            {displayed.toLocaleString('fr-FR')}
-          </span>
-          {suffix && <span style={{ fontSize: 15, fontWeight: 600, color: accent, marginLeft: 5 }}>{suffix}</span>}
-        </div>
-        {sub && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 6 }}>{sub}</div>}
+        ))}
       </div>
     </div>
   )
@@ -328,6 +427,15 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const role     = ROLE_CFG[roleKey] || { color: '#16a34a', label: 'Tableau de bord' }
   const accent   = role.color
   const greeting = GREETINGS[roleKey] || { title: 'Tableau de bord', sub: "Vue d'ensemble" }
+
+  const HERO_CFG: Record<string, { border: string; tagBg: string; tagColor: string; tagBorder: string }> = {
+    'seed-admin':         { border: '#6d28d9', tagBg: '#f5f3ff', tagColor: '#5b21b6', tagBorder: '#ddd6fe' },
+    'seed-selector':      { border: '#0369a1', tagBg: '#eff6ff', tagColor: '#1e40af', tagBorder: '#bfdbfe' },
+    'seed-upsemcl':       { border: '#0f766e', tagBg: '#f0fdfa', tagColor: '#0f766e', tagBorder: '#99f6e4' },
+    'seed-multiplicator': { border: '#15803d', tagBg: '#f0fdf4', tagColor: '#15803d', tagBorder: '#bbf7d0' },
+    'seed-quotataire':    { border: '#b45309', tagBg: '#fffbeb', tagColor: '#92400e', tagBorder: '#fde68a' },
+  }
+  const heroCfg = HERO_CFG[roleKey] ?? { border: accent, tagBg: '#f8faf8', tagColor: accent, tagBorder: '#e3e8e3' }
   const maxGen   = Math.max(1, ...Object.values(stats.genCounts))
 
   const isQuotaire   = roleKey === 'seed-quotataire'
@@ -340,18 +448,18 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   /* Items KPI selon le rôle */
   const kpiItems = [
     ...(showStats ? [
-      { icon: Package,      label: 'Total lots',        value: stats.lotsCount,              sub: 'tous statuts',          accent: '#16a34a', delay: 0,   suffix: undefined },
-      { icon: Database,     label: 'Stock total',       value: Math.round(stats.stockTotal), sub: undefined,               accent: '#2563eb', delay: 80,  suffix: 'kg' },
+      { label: 'Total lots',       value: stats.lotsCount,              sub: 'tous statuts',          accent, delay: 0,   suffix: undefined },
+      { label: 'Stock total',      value: Math.round(stats.stockTotal), sub: undefined,               accent, delay: 80,  suffix: 'kg' },
     ] : []),
-    { icon: Leaf,           label: 'Variétés actives',  value: stats.varietiesCount,          sub: 'espèces enregistrées', accent: '#b45309', delay: showStats ? 160 : 0,  suffix: undefined },
+    { label: 'Variétés actives',   value: stats.varietiesCount,         sub: 'espèces enregistrées',  accent, delay: showStats ? 160 : 0,  suffix: undefined },
     ...(showOrders ? [
-      { icon: ShoppingCart, label: roleKey === 'seed-multiplicator' ? 'Cmdes reçues' : 'Commandes',
+      { label: roleKey === 'seed-multiplicator' ? 'Cmdes reçues' : 'Commandes',
         value: stats.ordersCount, sub: `${stats.ordersPending} en attente`, accent, delay: showStats ? 240 : 80, suffix: undefined },
     ] : []),
   ]
 
   /* ── Stock computation ── */
-  const allowedStockGens = ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2']
+  const allowedStockGens = ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','R1','R2']
   const varietyMap: Record<number, any> = Object.fromEntries(rawVarieties.map((v: any) => [v.id, v]))
   const lotMap: Record<number, any>     = Object.fromEntries(rawLots.map((l: any) => [l.id, l]))
 
@@ -486,87 +594,85 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
       {/* ═══════════════ HERO BANNIÈRE ═══════════════ */}
       <div style={{
-        marginBottom: 20, borderRadius: 16, overflow: 'hidden',
-        border: '1px solid var(--border)',
-        boxShadow: `0 4px 24px ${accent}18, 0 1px 4px rgba(0,0,0,0.06)`,
+        marginBottom: 20,
+        borderRadius: 12,
+        background: '#fff',
+        border: `1px solid ${D.line}`,
+        padding: '24px 28px',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 20,
         opacity: heroVis ? 1 : 0,
-        transform: heroVis ? 'translateY(0)' : 'translateY(-10px)',
-        transition: 'opacity 0.5s ease, transform 0.5s ease',
+        transform: heroVis ? 'translateY(0)' : 'translateY(-8px)',
+        transition: 'opacity 0.45s ease, transform 0.45s ease',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
       }}>
-        <div style={{
-          background: `linear-gradient(135deg, ${accent} 0%, ${accent}bb 42%, #0c1520 100%)`,
-          padding: '22px 28px 20px', position: 'relative', overflow: 'hidden',
-        }}>
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.07, pointerEvents: 'none' }} xmlns="http://www.w3.org/2000/svg">
-            <defs><pattern id="db-grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="white" strokeWidth="0.8"/></pattern></defs>
-            <rect width="100%" height="100%" fill="url(#db-grid)" />
-          </svg>
-          <div style={{ position: 'absolute', top: -60, right: -40,  width: 220, height: 220, borderRadius: '50%', background: 'rgba(255,255,255,0.05)', pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', bottom: -30, right: 200, width: 90,  height: 90,  borderRadius: '50%', background: 'rgba(255,255,255,0.04)', pointerEvents: 'none' }} />
+        <div>
+          {/* Badge rôle */}
+          <span style={{
+            display: 'inline-block',
+            fontFamily: D.mono, fontSize: 10, fontWeight: 600,
+            color: heroCfg.tagColor,
+            background: heroCfg.tagBg,
+            border: `1px solid ${heroCfg.tagBorder}`,
+            borderRadius: 6, padding: '3px 10px',
+            textTransform: 'uppercase', letterSpacing: '0.1em',
+            marginBottom: 14,
+          }}>
+            {role.label}
+          </span>
 
-          <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-            <div>
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 99, padding: '3px 12px', marginBottom: 10, backdropFilter: 'blur(6px)' }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#4ade80', boxShadow: '0 0 6px #4ade80', display: 'inline-block' }} />
-                <span style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(255,255,255,0.9)', textTransform: 'uppercase', letterSpacing: '0.09em' }}>{role.label}</span>
-              </div>
-              <h1 style={{ fontSize: 26, fontWeight: 800, color: '#fff', fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em', lineHeight: 1.15, marginBottom: 6 }}>
-                {greeting.title}
-              </h1>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)', lineHeight: 1.4 }}>
-                {greeting.sub} · <span style={{ color: 'rgba(255,255,255,0.4)' }}>{today}</span>
-              </p>
-            </div>
-            <button
-              className="btn"
-              onClick={() => fetchAll(true)}
-              disabled={refreshing}
-              style={{ background: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.28)', color: '#fff', backdropFilter: 'blur(8px)', height: 36, fontSize: 12.5, flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}
-            >
-              <RefreshCw size={13} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
-              Actualiser
-            </button>
-          </div>
+          {/* Titre */}
+          <h1 style={{
+            fontFamily: D.display, fontSize: 26, fontWeight: 700,
+            letterSpacing: '-0.025em', color: D.ink,
+            lineHeight: 1.1, marginBottom: 6,
+          }}>
+            {greeting.title}
+          </h1>
+
+          {/* Sous-titre + date */}
+          <p style={{ fontFamily: D.body, fontSize: 13, color: D.muted, lineHeight: 1.4 }}>
+            {greeting.sub}
+            <span style={{ color: D.line, margin: '0 8px' }}>·</span>
+            <span style={{ color: D.muted, opacity: 0.7 }}>{today}</span>
+          </p>
         </div>
 
-        {/* Strip résumé */}
-        {!loading && (
-          <div style={{ background: '#fff', borderTop: `3px solid ${accent}18`, display: 'flex', alignItems: 'center' }}>
-            {([
-              showStats  && { label: 'lots actifs',  value: stats.lotsCount.toLocaleString('fr-FR'),              color: '#16a34a' },
-              showStats  && { label: 'kg en stock',  value: Math.round(stats.stockTotal).toLocaleString('fr-FR'), color: '#2563eb' },
-              true       && { label: 'variétés',     value: stats.varietiesCount.toLocaleString('fr-FR'),         color: '#b45309' },
-              showOrders && { label: 'commandes',    value: stats.ordersCount.toLocaleString('fr-FR'),            color: accent },
-            ] as const).filter(Boolean).map((item: any, i, arr) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '12px 0' }}>
-                  <span style={{ fontSize: 20, fontWeight: 800, color: item.color, fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em' }}>{item.value}</span>
-                  <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>{item.label}</span>
-                </div>
-                {i < arr.length - 1 && <div style={{ width: 1, height: 26, background: 'var(--border)', flexShrink: 0 }} />}
-              </div>
-            ))}
-          </div>
-        )}
+        {/* Bouton actualiser */}
+        <button
+          onClick={() => fetchAll(true)}
+          disabled={refreshing}
+          style={{
+            background: '#fff', border: `1px solid ${D.line}`,
+            color: D.muted, fontFamily: D.body, fontSize: 12, fontWeight: 500,
+            borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+            transition: 'border-color 0.15s, color 0.15s',
+          }}
+          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = heroCfg.border; (e.currentTarget as HTMLButtonElement).style.color = heroCfg.border }}
+          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = D.line; (e.currentTarget as HTMLButtonElement).style.color = D.muted }}
+        >
+          <RefreshCw size={12} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+          Actualiser
+        </button>
       </div>
 
       {/* ═══════════════ KPI CARDS ═══════════════ */}
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiItems.length}, 1fr)`, gap: 14, marginBottom: 20 }}>
         {loading
           ? kpiItems.map((_, i) => (
-              <div key={i} style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', overflow: 'hidden' }}>
-                <div style={{ height: 3, background: 'var(--surface-3)' }} />
-                <div style={{ padding: '18px 20px' }}>
-                  <div className="skeleton" style={{ width: 40, height: 40, borderRadius: 10, marginBottom: 14 }} />
-                  <div className="skeleton" style={{ width: 64, height: 30, borderRadius: 6,  marginBottom: 8  }} />
-                  <div className="skeleton" style={{ width: 96, height: 11, borderRadius: 4  }} />
-                </div>
+              <div key={i} style={{ background: D.paper, borderRadius: 12, border: `1px solid ${D.line}`, borderLeft: `3px solid ${D.line}`, padding: '20px 22px' }}>
+                <div className="skeleton" style={{ width: 20, height: 10, borderRadius: 3, marginBottom: 18 }} />
+                <div className="skeleton" style={{ width: 72, height: 36, borderRadius: 6, marginBottom: 12 }} />
+                <div className="skeleton" style={{ width: 100, height: 10, borderRadius: 3 }} />
               </div>
             ))
           : kpiItems.map((item, i) => (
               <KpiCard key={i}
-                icon={item.icon} label={item.label} value={item.value}
-                sub={item.sub}   accent={item.accent} delay={item.delay} suffix={item.suffix}
+                index={i} label={item.label} value={item.value}
+                sub={item.sub} accent={item.accent} delay={item.delay} suffix={item.suffix}
               />
             ))
         }
@@ -583,25 +689,20 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         }}>
           {/* En-tête */}
           <div style={{
-            padding: '13px 22px', display: 'flex', alignItems: 'center', gap: 10,
-            background: criticalCov > 0 ? 'linear-gradient(90deg,#fef2f2,#fff)' : hasAnyAlerts ? 'linear-gradient(90deg,#fffbeb,#fff)' : 'var(--surface-2)',
-            borderBottom: `1px solid ${hasAnyAlerts ? (criticalCov > 0 ? '#fecaca' : '#fde68a') : 'var(--border)'}`,
+            padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12,
+            background: D.paper2,
+            borderBottom: `1px solid ${hasAnyAlerts ? (criticalCov > 0 ? '#fecaca' : '#fde68a') : D.line}`,
           }}>
-            <div style={{
-              width: 28, height: 28, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-              background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? '#fffbeb' : `${accent}12`,
-              color: criticalCov > 0 ? '#dc2626' : hasAnyAlerts ? '#92660a' : accent,
-              border: `1px solid ${criticalCov > 0 ? '#fecaca' : hasAnyAlerts ? '#fde68a' : accent + '28'}`,
-            }}>
-              <span style={{ fontSize: 13 }}>{criticalCov > 0 ? '⚠' : hasAnyAlerts ? '◎' : '✓'}</span>
-            </div>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Centre de pilotage</span>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— alertes &amp; décisions</span>
+            <span style={{ fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', color: criticalCov > 0 ? D.terra : hasAnyAlerts ? D.goldDeep : D.green, background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? '#fffbeb' : D.greenSoft, padding: '3px 10px', borderRadius: 999 }}>
+              {criticalCov > 0 ? 'Alerte' : hasAnyAlerts ? 'Surveillance' : 'Nominal'}
+            </span>
+            <span style={{ fontFamily: D.display, fontSize: 15, fontWeight: 600, color: D.ink }}>Centre de pilotage</span>
+            <span style={{ fontFamily: D.body, fontSize: 12, color: D.muted }}>— alertes &amp; décisions</span>
             {!loading && (
               <span style={{
-                marginLeft: 'auto', fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '2px 10px',
-                background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? '#fffbeb' : '#f0fdf4',
-                color:      criticalCov > 0 ? '#dc2626' : hasAnyAlerts ? '#92660a' : '#15803d',
+                marginLeft: 'auto', fontFamily: D.mono, fontSize: 10, fontWeight: 500, borderRadius: 999, padding: '3px 12px',
+                background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? '#fffbeb' : D.greenSoft,
+                color:      criticalCov > 0 ? D.terra : hasAnyAlerts ? D.goldDeep : D.green,
                 border:     `1px solid ${criticalCov > 0 ? '#fecaca' : hasAnyAlerts ? '#fde68a' : '#bbf7d0'}`,
               }}>
                 {criticalCov > 0 ? 'Action requise' : hasAnyAlerts ? 'À surveiller' : 'Situation nominale'}
@@ -621,13 +722,11 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               ))}
             </div>
           ) : !hasAnyAlerts ? (
-            <div style={{ padding: '20px 22px', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#15803d', flexShrink: 0 }}>
-                <span style={{ fontSize: 18 }}>✓</span>
-              </div>
+            <div style={{ padding: '18px 22px', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: D.green, flexShrink: 0, display: 'inline-block' }} />
               <div>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: '#15803d' }}>Situation nominale</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                <div style={{ fontFamily: D.display, fontSize: 13, fontWeight: 600, color: D.green }}>Situation nominale</div>
+                <div style={{ fontFamily: D.body, fontSize: 12, color: D.muted, marginTop: 2 }}>
                   Stock couvert, aucun lot en attente de certification, commandes traitées.
                 </div>
               </div>
@@ -637,23 +736,25 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               {/* 4 tuiles */}
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', background: '#fff' }}>
                 {[
-                  { count: criticalCov,          label: 'Espèces critiques',    sub: 'stock < demande',          emoji: '🔴', clr: '#dc2626', bg: '#fef2f2', brd: '#fecaca' },
-                  { count: warningCov,            label: 'En tension',           sub: 'stock < 2× demande',       emoji: '🟡', clr: '#92660a', bg: '#fffbeb', brd: '#fde68a' },
-                  { count: lotsACertifierCount,   label: 'Lots à certifier',     sub: 'certification en cours',   emoji: '📋', clr: '#0369a1', bg: '#eff6ff', brd: '#bfdbfe' },
-                  { count: stats.ordersPending,   label: 'Cmdes en attente',     sub: 'nécessitent traitement',   emoji: '🕐', clr: accent,    bg: `${accent}0e`, brd: `${accent}30` },
+                  { count: criticalCov,          label: 'Espèces critiques',    sub: 'stock < demande',        clr: '#b91c1c', bg: '#fef2f2', brd: '#fecaca' },
+                  { count: warningCov,            label: 'En tension',           sub: 'stock < 2× demande',     clr: '#92400e', bg: '#fefce8', brd: '#fde68a' },
+                  { count: lotsACertifierCount,   label: 'Lots à certifier',     sub: 'certification en cours', clr: '#1e40af', bg: '#eff6ff', brd: '#bfdbfe' },
+                  { count: stats.ordersPending,   label: 'Cmdes en attente',     sub: 'nécessitent traitement', clr: accent,    bg: `${accent}08`, brd: `${accent}28` },
                 ].map((t, i) => (
                   <div key={i} style={{
                     padding: '18px 22px',
-                    borderRight: i < 3 ? '1px solid var(--border)' : 'none',
-                    background: t.count > 0 ? t.bg : '#fff',
+                    borderRight: i < 3 ? `1px solid ${D.line}` : 'none',
+                    background: '#fff',
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                      <span style={{ fontSize: 20 }}>{t.emoji}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.count > 0 ? t.clr : D.line, display: 'inline-block' }} />
                       {t.count > 0 && (
-                        <span style={{ width: 8, height: 8, borderRadius: '50%', background: t.clr, display: 'inline-block', animation: t.clr === '#dc2626' ? 'pulse-dot 1.5s ease infinite' : 'none' }} />
+                        <span style={{ fontFamily: D.mono, fontSize: 9, color: t.clr, letterSpacing: '0.06em', background: t.bg, border: `1px solid ${t.brd}`, borderRadius: 4, padding: '2px 6px' }}>
+                          {t.count > 0 ? '!' : ''}
+                        </span>
                       )}
                     </div>
-                    <div style={{ fontSize: 28, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: t.count > 0 ? t.clr : 'var(--text-muted)', lineHeight: 1 }}>
+                    <div style={{ fontSize: 30, fontWeight: 700, fontFamily: D.display, letterSpacing: '-0.025em', color: t.count > 0 ? t.clr : D.muted, lineHeight: 1 }}>
                       {t.count}
                     </div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 6 }}>{t.label}</div>
@@ -710,57 +811,84 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
       {/* ═══════════════ PIPELINE GÉNÉRATIONNEL ═══════════════ */}
       {showPipeline && (
-        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', marginBottom: 20, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
-          <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 9 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 7, background: `${accent}15`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Layers size={13} />
-            </div>
-            <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Pipeline générationnel</span>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>— campagne en cours</span>
+        <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, marginBottom: 20, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+          <div style={{ padding: '14px 24px', borderBottom: `1px solid ${D.line}`, display: 'flex', alignItems: 'center', gap: 12, background: D.paper2 }}>
+            <span style={{ fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', color: D.green, background: D.greenSoft, padding: '3px 10px', borderRadius: 999 }}>Pipeline</span>
+            <span style={{ fontFamily: D.display, fontSize: 15, fontWeight: 600, color: D.ink }}>Générations — campagne en cours</span>
             {!loading && (
-              <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 99, padding: '2px 10px' }}>
-                {stats.lotsCount} lots au total
+              <span style={{ marginLeft: 'auto', fontFamily: D.mono, fontSize: 10, fontWeight: 500, color: D.muted, background: D.paper2, border: `1px solid ${D.line}`, borderRadius: 999, padding: '3px 12px' }}>
+                {stats.lotsCount} lots
               </span>
             )}
           </div>
-          <div style={{ padding: '22px 24px', display: 'flex', alignItems: 'center' }}>
-            {['G0','G1','G2','G3','G4','R1','R2'].map((g, idx, arr) => {
-              const cfg   = GEN_CFG[g]
-              const count = loading ? 0 : (stats.genCounts[g] || 0)
-              const pct   = Math.round((count / maxGen) * 100)
-              return (
-                <div key={g} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-                    <div style={{
-                      width: 40, height: 40, borderRadius: 11,
-                      background: cfg.bg, border: `2px solid ${cfg.color}28`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 800, color: cfg.color,
-                      boxShadow: count > 0 ? `0 3px 10px ${cfg.color}28` : 'none',
-                      transition: 'box-shadow 0.3s ease',
-                    }}>{g}</div>
-                    <div style={{ fontSize: 24, fontWeight: 800, lineHeight: 1, fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em', color: count > 0 ? 'var(--text-primary)' : 'var(--text-muted)' }}>
-                      {loading ? <div className="skeleton" style={{ width: 24, height: 24, borderRadius: 4 }} /> : count}
-                    </div>
-                    <div style={{ width: '76%', height: 5, background: 'var(--surface-3)', borderRadius: 99, overflow: 'hidden' }}>
+          <div style={{ padding: '24px 28px', display: 'grid', gridTemplateColumns: '1fr 200px', gap: 32, alignItems: 'center' }}>
+
+            {/* ── Flow générationnel ── */}
+            <div style={{ display: 'flex', alignItems: 'center' }}>
+              {['G0','G1','G2','G3','G4','R1','R2'].map((g, idx, arr) => {
+                const cfg    = GEN_CFG[g]
+                const count  = loading ? 0 : (stats.genCounts[g] || 0)
+                const active = count > 0
+                const pct    = Math.round((count / maxGen) * 100)
+                return (
+                  <div key={g} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+                      {/* Cercle génération */}
                       <div style={{
-                        height: '100%', width: loading ? '0%' : `${pct}%`,
-                        background: `linear-gradient(90deg, ${cfg.color}, ${cfg.color}77)`,
-                        borderRadius: 99, transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)',
-                      }} />
+                        width: 44, height: 44, borderRadius: '50%',
+                        background: active ? cfg.bg : D.paper2,
+                        border: `2px solid ${active ? cfg.color : D.line}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontFamily: D.mono, fontSize: 11, fontWeight: 700,
+                        color: active ? cfg.color : D.muted,
+                        boxShadow: active ? `0 2px 10px ${cfg.color}28` : 'none',
+                        transition: 'all 0.3s ease',
+                      }}>{g}</div>
+
+                      {/* Compteur */}
+                      <div style={{ textAlign: 'center', lineHeight: 1 }}>
+                        {loading
+                          ? <div className="skeleton" style={{ width: 22, height: 22, borderRadius: 4, margin: '0 auto' }} />
+                          : <>
+                              <div style={{ fontFamily: D.display, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: active ? cfg.color : D.muted, transition: 'color 0.3s' }}>
+                                {count}
+                              </div>
+                              <div style={{ fontFamily: D.mono, fontSize: 9, color: D.muted, marginTop: 2 }}>
+                                lot{count !== 1 ? 's' : ''}
+                              </div>
+                            </>
+                        }
+                      </div>
+
+                      {/* Barre */}
+                      <div style={{ width: '70%', height: 3, background: D.line, borderRadius: 99, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: loading ? '0%' : `${pct}%`, background: cfg.color, borderRadius: 99, transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)' }} />
+                      </div>
+
+                      {/* Label */}
+                      <div style={{ fontFamily: D.body, fontSize: 9, color: active ? cfg.color : D.muted, textAlign: 'center', fontWeight: active ? 600 : 400, lineHeight: 1.3, maxWidth: 64, transition: 'color 0.3s' }}>
+                        {GEN_LABELS[g]}
+                      </div>
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 500, lineHeight: 1.3, maxWidth: 68 }}>
-                      {GEN_LABELS[g]}
-                    </div>
+
+                    {idx < arr.length - 1 && (
+                      <div style={{ color: D.line, opacity: active ? 1 : 0.4, flexShrink: 0, paddingBottom: 28, transition: 'opacity 0.3s' }}>
+                        <ArrowRight size={12} />
+                      </div>
+                    )}
                   </div>
-                  {idx < arr.length - 1 && (
-                    <div style={{ color: 'var(--border-strong)', flexShrink: 0, paddingBottom: 24 }}>
-                      <ArrowRight size={13} />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
+
+            {/* ── Donut distribution ── */}
+            {!loading && (
+              <DonutChart data={
+                ['G0','G1','G2','G3','G4','R1','R2']
+                  .filter(g => (stats.genCounts[g] || 0) > 0)
+                  .map(g => ({ label: GEN_LABEL[g] ?? g, value: stats.genCounts[g], color: GEN_COLOR[g], gen: g }))
+              } />
+            )}
           </div>
         </div>
       )}
@@ -846,8 +974,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   return (
                     <tr key={l.id}
                       style={{ borderBottom: isLast ? 'none' : '1px solid var(--border)', transition: 'background 0.12s' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
-                      onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                      onMouseEnter={(e: { currentTarget: HTMLElement }) => (e.currentTarget.style.background = 'var(--surface-2)')}
+                      onMouseLeave={(e: { currentTarget: HTMLElement }) => (e.currentTarget.style.background = 'transparent')}
                     >
                       <td style={{ padding: '11px 22px', borderLeft: `3px solid ${cfg ? cfg.color : 'var(--border)'}` }}>
                         <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
@@ -950,8 +1078,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                 borderRadius: 8, padding: '0 10px',
                 transition: 'border-color 0.15s',
               }}
-                onFocusCapture={e => (e.currentTarget.style.borderColor = accent)}
-                onBlurCapture={e  => (e.currentTarget.style.borderColor = 'var(--border)')}
+                onFocusCapture={(e: { currentTarget: HTMLElement }) => (e.currentTarget.style.borderColor = accent)}
+                onBlurCapture={(e: { currentTarget: HTMLElement })  => (e.currentTarget.style.borderColor = 'var(--border)')}
               >
                 <Search size={12} color="var(--text-muted)" style={{ flexShrink: 0 }} />
                 <input

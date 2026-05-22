@@ -23,5 +23,7 @@ public record CreateChildLotRequest(
     BigDecimal superficieHa,
     BigDecimal productionBruteKg,
     String cycle,
-    String niveauSemence
+    String niveauSemence,
+    // Enregistrement stock automatique — optionnel
+    String siteCode
 ) {}

@@ -9,6 +9,23 @@ import java.math.BigDecimal;
 
 public interface StockOrderRepo extends JpaRepository<Stock, Long> {
 
+    /**
+     * Somme des stocks disponibles toutes organisations confondues pour une variété/génération.
+     * Utilisé pour valider les commandes R1/R2 (quotataire) dont les lots appartiennent
+     * aux multiplicateurs mais peuvent être détenus sur n'importe quel site.
+     */
+    @Query(value = """
+        SELECT COALESCE(SUM(s.quantite_disponible), 0)
+        FROM stock s
+        JOIN lot_semencier l ON s.id_lot = l.id
+        WHERE l.id_variete    = :idVariete
+          AND l.id_generation = :idGeneration
+          AND s.quantite_disponible > 0
+          AND l.statut_lot IN ('DISPONIBLE','CERTIFIE','EN_COURS_CERT')
+        """, nativeQuery = true)
+    BigDecimal sumDisponibleR1R2(@Param("idVariete") Long idVariete,
+                                 @Param("idGeneration") Long idGeneration);
+
     /** Débite le stock du site UPSemCL pour un lot donné. */
     @Modifying
     @Query(value = """

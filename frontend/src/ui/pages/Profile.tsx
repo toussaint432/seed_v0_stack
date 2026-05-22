@@ -159,7 +159,7 @@ export function Profile({ roleKey }: Props) {
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 110, background: `linear-gradient(to bottom, transparent 0%, ${role?.color ?? '#1b4332'}66 35%, rgba(0,0,0,0.72) 100%)`, pointerEvents: 'none' }} />
           {/* Watermark */}
           <div style={{ position: 'absolute', left: 28, bottom: 14, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.35)', fontFamily: 'DM Mono, monospace', userSelect: 'none', zIndex: 1 }}>
-            ISRA · CNRA · BAMBEY
+            SEN JIW · ISRA · SÉNÉGAL
           </div>
           {/* Boutons top-right */}
           <div style={{ position: 'absolute', top: 16, right: 20, display: 'flex', gap: 8 }}>

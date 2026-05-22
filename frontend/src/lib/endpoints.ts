@@ -1,6 +1,6 @@
 /* ══════════════════════════════════════════════════════════════
    Endpoints centralisés — évite les URLs hardcodées partout
-   V1.5 — Phase 2 : zones agro-écologiques + catalogue quotataire
+   V1.6 — Phase 3 : ZAE réelles Sénégal + géo admin + auto-sélection
    ══════════════════════════════════════════════════════════════ */
 
 const CATALOG  = 'http://localhost:18081/api'
@@ -34,9 +34,14 @@ export const endpoints = {
   programs:         `${LOT}/programs`,
   programById:      (id: number) => `${LOT}/programs/${id}`,
 
-  // ── Catalog Service — Zones agro-écologiques (Phase 2) ──
-  zones:            `${CATALOG}/zones`,
-  varietyZones:     (id: number) => `${CATALOG}/varieties/${id}/zones`,
+  // ── Catalog Service — Zones agro-écologiques & géographie admin ──
+  zones:                `${CATALOG}/zones`,
+  maZone:               `${CATALOG}/zones/ma-zone`,
+  zoneParDepartement:   (deptId: number) => `${CATALOG}/zones/par-departement/${deptId}`,
+  regions:              `${CATALOG}/regions`,
+  departements:         `${CATALOG}/departements`,
+  departementsParRegion:(regionId: number) => `${CATALOG}/departements?regionId=${regionId}`,
+  varietyZones:         (id: number) => `${CATALOG}/varieties/${id}/zones`,
 
   // ── Lot Service — Multiplicateur (isolation par org) ──
   lotsCatalogueG3: `${LOT}/lots/catalogue-g3`,
@@ -49,7 +54,8 @@ export const endpoints = {
   transfertRefuser:  (id: number) => `${LOT}/transferts/${id}/refuser`,
 
   // ── Stock Service (18083) ──
-  stocks:     `${STOCK}/stocks`,
+  stocks:       `${STOCK}/stocks`,
+  stocksAgrege: `${STOCK}/stocks/agrege`,
   stockById:        (id: number) => `${STOCK}/stocks/${id}`,
   movements:  `${STOCK}/movements`,
   sites:      `${STOCK}/sites`,
