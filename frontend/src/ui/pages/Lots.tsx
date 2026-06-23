@@ -200,7 +200,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       setToast({ msg: `Lot ${newLotForm.codeLot} enregistré`, type: 'success' })
       setShowNewLot(false); setNewLotForm(MULT_NEW_FORM_INIT); fetchAll()
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur création lot', type: 'error' })
+      const status = err?.response?.status
+      const msg = err?.response?.data?.message
+        || (status === 409 ? `Code lot déjà utilisé — modifiez le code (ex : -02, -03…)` : 'Erreur lors de la création du lot')
+      setToast({ msg, type: 'error' })
     } finally { setSaving(false) }
   }
 

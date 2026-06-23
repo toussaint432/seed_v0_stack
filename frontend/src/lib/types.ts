@@ -1,6 +1,7 @@
 /* ══════════════════════════════════════════════════════════════
-   Types métier — Plateforme de gestion des semences agricoles
-   Basés sur schema_semences.sql
+   Types métier — Plateforme Sen Jiw (ISRA/CNRA)
+   Synchronisés avec le schéma PostgreSQL (V1→V23) et les DTOs
+   Java de chaque micro-service.
    ══════════════════════════════════════════════════════════════ */
 
 // ── Référentiels ──
@@ -79,8 +80,18 @@ export interface Variete {
   descriptionMorphologique?: string
   caracteristiquesAgronomiques?: string
   zoneRecommandee?: string
-  statutVariete: 'DIFFUSEE' | 'EN_TEST' | 'RETIREE'
+  statutVariete: StatutVariete
   dateCreation?: string
+}
+
+// ── Zones agro-écologiques ──
+
+export interface ZoneAgro {
+  id: number
+  codeZae: string
+  nomZae: string
+  description?: string
+  superficieKm2?: number
 }
 
 // ── Campagne ──
@@ -108,6 +119,7 @@ export interface Site {
   longitude?: number
   organisation?: Organisation
   idOrganisation?: number
+  createdAt?: string
 }
 
 // ── Lots ──
@@ -117,11 +129,13 @@ export interface LotSemencier {
   codeLot: string
   idVariete?: number
   variete?: Variete
+  idGeneration?: number
   generation?: GenerationSemence
   classe?: ClasseSemence
   lotParent?: LotSemencier
   campagne?: string
   organisationResponsable?: Organisation
+  idOrgProducteur?: number
   siteOrigine?: Site
   dateProduction?: string
   dateRecolte?: string
@@ -133,9 +147,40 @@ export interface LotSemencier {
   tauxHumidite?: number
   puretePhysique?: number
   conformiteVarietale?: string
-  statutLot: string
+  statutLot: StatutLot
   observations?: string
-  dateCreation?: string
+  createdAt?: string
+  // Champs dénormalisés pour performance (évite jointures répétées)
+  codeEspece?: string
+  // Champs PCAE — suivi de production sur parcelle
+  superficieHa?: number
+  productionBruteKg?: number
+  quantiteSemenceSrcKg?: number
+  rendementKgHa?: number
+  cycle?: string
+  niveauSemence?: string
+  // Traçabilité acteur
+  usernameCreateur?: string
+  responsableNom?: string
+  responsableRole?: string
+}
+
+// ── Transferts de lots inter-acteurs (lot-service) ──
+
+export interface TransfertLot {
+  id: number
+  codeTransfert: string
+  idLot: number
+  usernameEmetteur: string
+  roleEmetteur: string
+  usernameDestinataire: string
+  roleDestinataire: string
+  generationTransferee: string
+  quantite: number
+  statut: 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE'
+  observations?: string
+  createdAt?: string
+  acceptedAt?: string
 }
 
 // ── Programme de multiplication ──
@@ -154,7 +199,7 @@ export interface ProgrammeMultiplication {
   surfacePrevueHa?: number
   quantiteSemenceAllouee?: number
   dateAttribution?: string
-  statutProgramme: string
+  statutProgramme: StatutProgramme
   observations?: string
   lotProduit?: LotSemencier
 }
@@ -224,8 +269,8 @@ export interface Stock {
   idSite?: number
   quantiteDisponible: number
   unite: string
-  dateMiseAJour?: string
-  statutStock?: string
+  updatedAt?: string
+  createdAt?: string
 }
 
 export interface MouvementStock {
@@ -236,13 +281,12 @@ export interface MouvementStock {
   siteDestination?: Site
   quantite: number
   unite: string
-  dateMouvement?: string
+  createdAt?: string
   referenceOperation?: string
-  utilisateur?: Utilisateur
   observations?: string
 }
 
-// ── Transferts ──
+// ── Transferts de stock entre sites (stock-service) ──
 
 export interface Transfert {
   id: number
@@ -257,9 +301,7 @@ export interface Transfert {
   dateDemande: string
   dateValidation?: string
   dateReception?: string
-  statutTransfert: string
-  validePar?: Utilisateur
-  receptionnePar?: Utilisateur
+  statutTransfert: StatutTransfert
   observations?: string
 }
 
@@ -272,7 +314,7 @@ export interface Commande {
   idClientOrg?: number
   client?: string
   dateCommande?: string
-  statut: string
+  statut: StatutCommande
   montantEstime?: number
   observations?: string
   lignes?: LigneCommande[]
@@ -291,6 +333,7 @@ export interface LigneCommande {
   quantiteValidee?: number
   quantiteLivree?: number
   observations?: string
+  createdAt?: string
 }
 
 export interface AttributionCommande {
@@ -314,6 +357,27 @@ export interface Distribution {
   observations?: string
 }
 
+// ── Messagerie ──
+
+export interface Conversation {
+  id: number
+  sujet: string
+  participants: string[]
+  dernierMessageAt?: string
+  createdAt?: string
+  nombreNonLus?: number
+}
+
+export interface Message {
+  id: number
+  idConversation: number
+  expediteur: string
+  contenu: string
+  lu: boolean
+  createdAt: string
+  pieceJointe?: string
+}
+
 // ── Documents ──
 
 export interface DocumentJoint {
@@ -331,20 +395,65 @@ export interface DocumentJoint {
 export interface HistoriqueStatutLot {
   id: number
   idLot: number
-  ancienStatut?: string
-  nouveauStatut: string
+  ancienStatut?: StatutLot
+  nouveauStatut: StatutLot
   dateChangement: string
-  utilisateur?: Utilisateur
+  utilisateur?: string
   motif?: string
 }
 
-// ── Helpers ──
+// ── Membre organisation (lien Keycloak ↔ org) ──
 
-export type StatutLot = 'EN_PRODUCTION' | 'DISPONIBLE' | 'TRANSFERE' | 'EPUISE' | 'CERTIFIE' | 'REJETE'
-export type StatutCommande = 'PENDING' | 'EN_ATTENTE' | 'CONFIRMED' | 'CONFIRMEE' | 'ALLOCATED' | 'ALLOUEE' | 'CANCELLED' | 'ANNULEE'
-export type StatutTransfert = 'DEMANDE' | 'VALIDE' | 'EXPEDIE' | 'RECEPTIONNE' | 'ANNULE'
-export type StatutCertification = 'EN_COURS' | 'CERTIFIE' | 'REJETE' | 'EXPIRE'
-export type StatutProgramme = 'PLANIFIE' | 'EN_COURS' | 'TERMINE' | 'ANNULE'
+export interface MembreOrganisation {
+  id: number
+  username: string
+  email?: string
+  nomComplet?: string
+  role: string
+  organisation?: Organisation
+  idOrganisation?: number
+  actif: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+// ── Helpers — types union stricts (synchronisés avec les enums Java) ──
+
+// lot-service : StatutLot.java
+export type StatutLot =
+  | 'DISPONIBLE'
+  | 'EN_PRODUCTION'
+  | 'CERTIFIE'
+  | 'TRANSFERE'
+  | 'EPUISE'
+  | 'RETIRE'
+  | 'DECLASS'
+  | 'EN_COURS_CERT'
+  | 'SOUCHE'
+  | 'PERDU'
+
+// order-service : StatutCommande.java
+export type StatutCommande =
+  | 'SOUMISE'
+  | 'ACCEPTEE'
+  | 'EN_PREPARATION'
+  | 'LIVREE'
+  | 'ANNULEE'
+  | 'REJETEE'
+
+// lot-service & stock-service : StatutTransfert.java
+export type StatutTransfert = 'EN_ATTENTE' | 'ACCEPTE' | 'REJETE' | 'ANNULE'
+
+// lot-service : StatutTransfertLot (TransfertLot.statut)
+export type StatutTransfertLot = 'EN_ATTENTE' | 'ACCEPTE' | 'REFUSE'
+
+// lot-service : StatutProgramme.java
+export type StatutProgramme = 'PLANIFIE' | 'EN_COURS' | 'TERMINE' | 'SUSPENDU' | 'ANNULE'
+
+// catalog-service : StatutVariete.java
+export type StatutVariete = 'DIFFUSEE' | 'EN_TEST' | 'RETIREE' | 'ARCHIVEE'
+
+// ── Générations — ordre canonique et helpers visuels ──
 
 export const GEN_ORDER = ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2'] as const
 export type GenerationCode = typeof GEN_ORDER[number]
@@ -367,4 +476,50 @@ export const GEN_COLORS: Record<string, { bg: string; border: string; text: stri
   G4: { bg: '#f9fafb', border: '#e5e7eb', text: '#374151', badge: 'badge-gray' },
   R1: { bg: '#f0fdfa', border: '#99f6e4', text: '#0f766e', badge: 'badge-teal' },
   R2: { bg: '#dcfce7', border: '#86efac', text: '#15803d', badge: 'badge-green' },
+}
+
+// ── Statuts lot — couleurs cohérentes avec GEN_COLORS ──
+
+export const STATUT_LOT_COLORS: Record<StatutLot, { bg: string; border: string; text: string }> = {
+  DISPONIBLE:    { bg: '#dcfce7', border: '#86efac', text: '#15803d' },
+  EN_PRODUCTION: { bg: '#fef3c7', border: '#fde68a', text: '#92660a' },
+  CERTIFIE:      { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
+  TRANSFERE:     { bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },
+  EPUISE:        { bg: '#f9fafb', border: '#e5e7eb', text: '#6b7280' },
+  RETIRE:        { bg: '#fef2f2', border: '#fecaca', text: '#dc2626' },
+  DECLASS:       { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c' },
+  EN_COURS_CERT: { bg: '#f5f3ff', border: '#ddd6fe', text: '#6d28d9' },
+  SOUCHE:        { bg: '#ecfdf5', border: '#a7f3d0', text: '#047857' },
+  PERDU:         { bg: '#fdf2f8', border: '#f9a8d4', text: '#9d174d' },
+}
+
+export const STATUT_LOT_LABELS: Record<StatutLot, string> = {
+  DISPONIBLE:    'Disponible',
+  EN_PRODUCTION: 'En production',
+  CERTIFIE:      'Certifié',
+  TRANSFERE:     'Transféré',
+  EPUISE:        'Épuisé',
+  RETIRE:        'Retiré',
+  DECLASS:       'Déclassé',
+  EN_COURS_CERT: 'En certification',
+  SOUCHE:        'Souche conservatoire',
+  PERDU:         'Perdu',
+}
+
+export const STATUT_COMMANDE_LABELS: Record<StatutCommande, string> = {
+  SOUMISE:        'Soumise',
+  ACCEPTEE:       'Acceptée',
+  EN_PREPARATION: 'En préparation',
+  LIVREE:         'Livrée',
+  ANNULEE:        'Annulée',
+  REJETEE:        'Rejetée',
+}
+
+export const STATUT_COMMANDE_COLORS: Record<StatutCommande, { bg: string; border: string; text: string }> = {
+  SOUMISE:        { bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },
+  ACCEPTEE:       { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
+  EN_PREPARATION: { bg: '#fef3c7', border: '#fde68a', text: '#92660a' },
+  LIVREE:         { bg: '#dcfce7', border: '#86efac', text: '#166534' },
+  ANNULEE:        { bg: '#f9fafb', border: '#e5e7eb', text: '#6b7280' },
+  REJETEE:        { bg: '#fef2f2', border: '#fecaca', text: '#dc2626' },
 }

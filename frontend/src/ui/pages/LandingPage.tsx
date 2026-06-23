@@ -155,11 +155,11 @@ const I18N: Record<Lang, Record<string, string>> = {
 const GENS = [
   { code: 'G0', color: '#7c3aed', bg: 'rgba(124,58,237,0.12)', label: 'Génétique' },
   { code: 'G1', color: '#0369a1', bg: 'rgba(3,105,161,0.12)',   label: 'Pré-base' },
-  { code: 'G2', color: '#0f766e', bg: 'rgba(15,118,110,0.12)',  label: 'Pré-base II' },
-  { code: 'G3', color: '#15803d', bg: 'rgba(21,128,61,0.12)',   label: 'Base' },
-  { code: 'G4', color: '#166534', bg: 'rgba(22,101,52,0.12)',   label: 'Certifiée C1' },
-  { code: 'R1', color: '#b45309', bg: 'rgba(180,83,9,0.12)',    label: 'Certifiée C2' },
-  { code: 'R2', color: '#c44536', bg: 'rgba(196,69,54,0.12)',   label: 'Commerciale' },
+  { code: 'G2', color: '#0f766e', bg: 'rgba(15,118,110,0.12)',  label: 'Base' },
+  { code: 'G3', color: '#15803d', bg: 'rgba(21,128,61,0.12)',   label: 'Certif. C1' },
+  { code: 'G4', color: '#b45309', bg: 'rgba(180,83,9,0.12)',    label: 'Certif. C2' },
+  { code: 'R1', color: '#c2410c', bg: 'rgba(194,65,12,0.12)',   label: 'Commerciale R1' },
+  { code: 'R2', color: '#c44536', bg: 'rgba(196,69,54,0.12)',   label: 'Commerciale R2' },
 ]
 
 /* ── CountUp hook ──────────────────────────────────────────────────────── */

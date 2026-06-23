@@ -2,7 +2,7 @@ package sn.isra.seed.order_service.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Entity
 @Table(name = "conversation")
@@ -19,8 +19,14 @@ public class Conversation {
     private String participant2;
 
     @Column(name = "dernier_message_at")
-    private LocalDateTime dernierMessageAt = LocalDateTime.now();
+    private Instant dernierMessageAt = Instant.now();
 
-    @Column(name = "created_at")
-    private LocalDateTime createdAt = LocalDateTime.now();
+    @Column(name = "created_at", updatable = false)
+    private Instant createdAt;
+
+    @PrePersist
+    void prePersist() {
+        if (createdAt == null) createdAt = Instant.now();
+        if (dernierMessageAt == null) dernierMessageAt = Instant.now();
+    }
 }

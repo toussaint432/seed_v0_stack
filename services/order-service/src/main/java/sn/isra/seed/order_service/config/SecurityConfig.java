@@ -4,9 +4,12 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import java.util.Arrays;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -22,6 +25,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
+
+  @Value("${cors.allowed-origins}")
+  private String corsAllowedOrigins;
 
   @Bean
   SecurityFilterChain securityFilterChain(HttpSecurity http,
@@ -85,10 +91,7 @@ public class SecurityConfig {
   @Bean
   CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration config = new CorsConfiguration();
-    config.setAllowedOrigins(List.of(
-      "http://localhost:5173",
-      "http://localhost:3000"
-    ));
+    config.setAllowedOrigins(Arrays.asList(corsAllowedOrigins.split(",\\s*")));
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     // CORS : headers explicites — jamais de wildcard avec credentials=true
     config.setAllowedHeaders(List.of(

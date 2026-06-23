@@ -97,7 +97,7 @@ public class StockController {
         v.getIdVariete(), v.getIdGeneration(), v.getIdSite(),
         v.getCodeSite(), v.getNomSite(), v.getCodeGeneration(),
         v.getNomVariete(), v.getCodeVariete(), v.getNomEspece(), v.getCodeEspece(),
-        v.getUnite(), v.getQuantiteTotale(), v.getNbLots(), v.getDerniereMaj(), details
+        v.getUnite(), v.getQuantiteTotale(), v.getNbLots(), v.getDerniereMaj(), v.getCreatedAt(), details
     );
   }
 

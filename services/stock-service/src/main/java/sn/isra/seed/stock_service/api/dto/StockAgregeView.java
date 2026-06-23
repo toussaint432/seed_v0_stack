@@ -18,5 +18,6 @@ public interface StockAgregeView {
     BigDecimal getQuantiteTotale();
     Long       getNbLots();
     String     getDerniereMaj();  // ISO-8601 castée en SQL
+    String     getCreatedAt();    // ISO-8601 — première entrée en stock du groupe
     String     getLotsDetail();   // JSON array castée en text
 }

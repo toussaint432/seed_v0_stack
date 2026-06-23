@@ -17,8 +17,17 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
   List<Stock> findBySite_CodeSite(String codeSite);
   Optional<Stock> findByIdLotAndSite_CodeSite(Long idLot, String codeSite);
 
-  /** Tous les stocks positifs d'un lot (pour trouver le site source lors d'un transfert). */
-  @Query("SELECT s FROM Stock s WHERE s.idLot = :idLot AND s.quantiteDisponible > 0 ORDER BY s.updatedAt DESC")
+  /**
+   * Stocks positifs d'un lot, triés selon la règle FIFO (Premier Entré, Premier Sorti).
+   *
+   * La règle FIFO garantit que lors d'un débit de stock (sortie ou transfert),
+   * on consomme en priorité les semences les plus anciennes (date d'enregistrement
+   * la plus ancienne), ce qui préserve la fraîcheur et la qualité des lots récents.
+   *
+   * @param idLot identifiant du lot semencier concerné
+   * @return liste des entrées de stock disponibles, ordonnées par date de création ASC
+   */
+  @Query("SELECT s FROM Stock s WHERE s.idLot = :idLot AND s.quantiteDisponible > 0 ORDER BY s.createdAt ASC")
   List<Stock> findPositiveByIdLot(@Param("idLot") Long idLot);
 
   /**
@@ -58,12 +67,13 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
    */
   @Modifying
   @Query(value = """
-      INSERT INTO stock (id_lot, id_site, quantite_disponible, unite, updated_at)
+      INSERT INTO stock (id_lot, id_site, quantite_disponible, unite, updated_at, created_at)
       VALUES (
           :idLot,
           (SELECT id FROM site WHERE code_site = :codeSite),
           :delta,
           :unite,
+          NOW(),
           NOW()
       )
       ON CONFLICT (id_lot, id_site)
@@ -101,6 +111,8 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
           nb_lots          AS nbLots,
           TO_CHAR(derniere_maj AT TIME ZONE 'UTC',
                   'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS derniereMaj,
+          TO_CHAR(premiere_entree AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS createdAt,
           lots_detail::text AS lotsDetail
       FROM v_stock_agrege
       ORDER BY code_generation, nom_variete, code_site
@@ -125,6 +137,8 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
           va.nb_lots          AS nbLots,
           TO_CHAR(va.derniere_maj AT TIME ZONE 'UTC',
                   'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS derniereMaj,
+          TO_CHAR(va.premiere_entree AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS createdAt,
           va.lots_detail::text AS lotsDetail
       FROM v_stock_agrege va
       JOIN site si ON va.id_site = si.id

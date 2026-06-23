@@ -129,7 +129,14 @@ public class LotController {
         if (lot.getUnite() == null || lot.getUnite().isBlank()) lot.setUnite("kg");
         if (lot.getStatutLot() == null) lot.setStatutLot(StatutLot.DISPONIBLE);
 
-        LotSemencier saved = lotRepo.save(lot);
+        LotSemencier saved;
+        try {
+            saved = lotRepo.save(lot);
+            lotRepo.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Le code lot '" + lot.getCodeLot() + "' existe déjà — modifiez le code (ex : ajoutez -02, -03…).");
+        }
         // save() peut remplacer generation par un proxy bytecode → on réinjecte l'entité pleine
         if (resolvedGen != null) saved.setGeneration(resolvedGen);
         producer.lotCreated(om.writeValueAsString(saved));
