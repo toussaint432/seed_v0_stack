@@ -28,15 +28,7 @@ export async function initKeycloak(): Promise<boolean> {
     return keycloak.authenticated ?? false
   }
   WIN.__keycloakInitialized = true
-  /*
-   * onLoad intentionnellement omis :
-   *  - 'check-sso' déclenche un redirect silencieux (prompt=none) vers KC
-   *    qui redirige sur la page de login si le serveur ne le gère pas,
-   *    provoquant le flash de LandingPage avant l'auth.
-   *  - Sans onLoad, KC-JS vérifie uniquement le sessionStorage et traite
-   *    le code OAuth2 présent dans l'URL (retour post-login). Aucun
-   *    redirect automatique n'est initié.
-   */
+
   const authenticated = await keycloak.init({
     pkceMethod:               'S256',
     checkLoginIframe:         false,

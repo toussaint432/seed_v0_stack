@@ -18,11 +18,11 @@ interface Props { roleKey: string }
 
 const GEN_COLOR: Record<string, string> = {
   G0: '#6366f1', G1: '#0ea5e9', G2: '#22c55e', G3: '#f59e0b',
-  R1: '#ec4899', R2: '#14b8a6'
+  G4: '#c2410c', R1: '#ec4899', R2: '#14b8a6'
 }
 const GEN_BADGE: Record<string, string> = {
   G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray',
-  R1: 'badge-blue', R2: 'badge-green'
+  G4: 'badge-gold', R1: 'badge-blue',  R2: 'badge-green'
 }
 const UPSEMCL_GENS   = ['G1', 'G2', 'G3']
 const SELECTOR_GENS  = ['G0', 'G1']
@@ -235,7 +235,6 @@ export function Stocks({ roleKey }: Props) {
   const isUPSemCL  = roleKey === 'seed-upsemcl'
   const isSelector = roleKey === 'seed-selector'
   const isMulti    = roleKey === 'seed-multiplicator'
-  const isAdmin    = roleKey === 'seed-admin'
   const canManage  = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator', 'seed-selector'].includes(roleKey)
 
   const [stockForm, setStockForm] = useState({ idLot: '', siteCode: '', quantite: '', unite: 'kg' })
@@ -403,7 +402,7 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'R1', 'R2']
+  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
 
   /* ── Transfert inter-orgs depuis le stock ── */
   function openTransferFromStock(stock: any, lot: any) {
@@ -717,18 +716,19 @@ export function Stocks({ roleKey }: Props) {
                 <th>Site</th>
                 <th>Quantité totale</th>
                 <th>Lots</th>
+                <th>Enregistré le</th>
                 <th style={{ width: 120 }}>Niveau relatif</th>
               </tr>
             </thead>
             <tbody>
               {loading
                 ? [0, 1, 2, 3, 4].map(i => (
-                    <tr key={i}><td colSpan={8}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
+                    <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
                   ))
                 : stocks.length === 0
                   ? (
                     <tr>
-                      <td colSpan={8}>
+                      <td colSpan={9}>
                         <div className="empty-state">
                           <div className="empty-icon"><Database size={20} /></div>
                           <div className="empty-title">
@@ -797,6 +797,19 @@ export function Stocks({ roleKey }: Props) {
                             </span>
                           </td>
                           <td>
+                            {row.createdAt
+                              ? <div>
+                                  <div style={{ fontSize: 12, fontWeight: 500 }}>
+                                    {new Date(row.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                    {new Date(row.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              : <span style={{ color: 'var(--text-muted)' }}>—</span>
+                            }
+                          </td>
+                          <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <div style={{ flex: 1, height: 5, background: 'var(--surface-3)', borderRadius: 99, overflow: 'hidden' }}>
                                 <div style={{ width: pct + '%', height: '100%', background: barColor, borderRadius: 99, transition: 'width 0.4s ease' }} />
@@ -810,7 +823,7 @@ export function Stocks({ roleKey }: Props) {
                       if (isExp) {
                         rows.push(
                           <tr key={`${rowKey}-detail`}>
-                            <td colSpan={8} style={{ padding: 0, borderTop: 'none' }}>
+                            <td colSpan={9} style={{ padding: 0, borderTop: 'none' }}>
                               <div style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', padding: '8px 16px 14px 48px' }}>
                                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                   <thead>
@@ -819,7 +832,7 @@ export function Stocks({ roleKey }: Props) {
                                       <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Quantité</th>
                                       <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Statut</th>
                                       <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Campagne</th>
-                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Créé le</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Enregistré le</th>
                                       {canManage && <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', paddingBottom: 6, borderBottom: '1px solid var(--border)' }} />}
                                     </tr>
                                   </thead>
@@ -854,7 +867,7 @@ export function Stocks({ roleKey }: Props) {
                                                   className="btn btn-ghost btn-icon"
                                                   style={{ padding: '3px 5px' }}
                                                   title="Historique des mouvements"
-                                                  onClick={e => { e.stopPropagation(); setHistoryLotId(d.idLot); setShowHistory(true) }}
+                                                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); setHistoryLotId(d.idLot); setShowHistory(true) }}
                                                 >
                                                   <Archive size={12} />
                                                 </button>
@@ -863,7 +876,7 @@ export function Stocks({ roleKey }: Props) {
                                                     className="btn btn-ghost btn-icon"
                                                     style={{ padding: '3px 5px', color: '#7e22ce' }}
                                                     title={`Transférer vers ${transferRule!.destination}`}
-                                                    onClick={e => {
+                                                    onClick={(e: React.MouseEvent) => {
                                                       e.stopPropagation()
                                                       openTransferFromStock(
                                                         { id: d.idStock, idLot: d.idLot, quantiteDisponible: d.quantite, unite: d.unite || row.unite },

@@ -1,12 +1,15 @@
 /* ══════════════════════════════════════════════════════════════
    Endpoints centralisés — évite les URLs hardcodées partout
-   V1.6 — Phase 3 : ZAE réelles Sénégal + géo admin + auto-sélection
+   Base d'URL configurée via VITE_API_BASE (variable d'environnement Vite).
+   Valeur par défaut : http://localhost (dev local / Docker Desktop).
+   En production, définir VITE_API_BASE=https://api.votre-domaine.sn
    ══════════════════════════════════════════════════════════════ */
 
-const CATALOG  = 'http://localhost:18081/api'
-const LOT      = 'http://localhost:18082/api'
-const STOCK    = 'http://localhost:18083/api'
-const ORDER    = 'http://localhost:18084/api'
+const BASE     = (import.meta.env.VITE_API_BASE ?? 'http://localhost').replace(/\/$/, '')
+const CATALOG  = `${BASE}:18081/api`
+const LOT      = `${BASE}:18082/api`
+const STOCK    = `${BASE}:18083/api`
+const ORDER    = `${BASE}:18084/api`
 
 export const endpoints = {
   // ── Catalog Service (18081) ──
@@ -93,9 +96,9 @@ export const endpoints = {
 
   // ── Swagger UI links ──
   swagger: {
-    catalog: 'http://localhost:18081/swagger-ui/index.html',
-    lot:     'http://localhost:18082/swagger-ui/index.html',
-    stock:   'http://localhost:18083/swagger-ui/index.html',
-    order:   'http://localhost:18084/swagger-ui/index.html',
+    catalog: `${BASE}:18081/swagger-ui/index.html`,
+    lot:     `${BASE}:18082/swagger-ui/index.html`,
+    stock:   `${BASE}:18083/swagger-ui/index.html`,
+    order:   `${BASE}:18084/swagger-ui/index.html`,
   }
 } as const

@@ -18,6 +18,7 @@ public record StockAgregeDto(
     BigDecimal quantiteTotale,
     Long       nbLots,
     String     derniereMaj,
+    String     createdAt,
     List<LotDetailDto> lotsDetail
 ) {
     public record LotDetailDto(

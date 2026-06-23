@@ -1,0 +1,10 @@
+{
+  "properties": [
+    {
+      "name": "cors.allowed-origins",
+      "type": "java.lang.String",
+      "description": "Origines CORS autorisées, séparées par virgule. Surcharger via CORS_ALLOWED_ORIGINS en production.",
+      "defaultValue": "http://localhost:5173,http://localhost:3000"
+    }
+  ]
+}

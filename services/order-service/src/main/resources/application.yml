@@ -1,7 +1,13 @@
 server:
   port: ${SERVER_PORT:8080}
   error:
-    include-message: always
+    include-message: on_param
+  tomcat:
+    threads:
+      max: 30
+      min-spare: 5
+    connection-timeout: 20000
+    accept-count: 100
 
 spring:
   application:
@@ -10,6 +16,14 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/seed}
     username: ${SPRING_DATASOURCE_USERNAME:seed}
     password: ${SPRING_DATASOURCE_PASSWORD:seed}
+    hikari:
+      pool-name: HikariPool-order
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
   jpa:
     hibernate:
       ddl-auto: none
@@ -46,6 +60,9 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
 
 logging:
   level:

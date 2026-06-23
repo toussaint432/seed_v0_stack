@@ -44,6 +44,16 @@ public class Stock {
     @Column(name = "updated_at")
     private Instant updatedAt;
 
-    @PrePersist @PreUpdate
-    void touch() { updatedAt = Instant.now(); }
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
+    @PrePersist
+    void onCreate() {
+        Instant now = Instant.now();
+        createdAt  = now;
+        updatedAt  = now;
+    }
+
+    @PreUpdate
+    void onUpdate() { updatedAt = Instant.now(); }
 }

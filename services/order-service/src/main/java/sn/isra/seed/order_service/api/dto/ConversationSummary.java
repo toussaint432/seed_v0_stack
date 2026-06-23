@@ -1,6 +1,6 @@
 package sn.isra.seed.order_service.api.dto;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 public record ConversationSummary(
     Long id,
@@ -10,6 +10,6 @@ public record ConversationSummary(
     String autreParticipantOrg,
     String dernierMessage,
     String dernierMessageType,
-    LocalDateTime dernierMessageAt,
+    Instant dernierMessageAt,
     long nonLus
 ) {}

@@ -14,17 +14,10 @@ interface Props { roleKey: string }
 const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> = {
   SOUMISE:        { label: 'Soumise',        bg: '#eff6ff', color: '#1d4ed8' },
   ACCEPTEE:       { label: 'Acceptée',       bg: '#f0fdf4', color: '#15803d' },
-  CONFIRMEE:      { label: 'Confirmée',      bg: '#f0fdf4', color: '#15803d' },
   EN_PREPARATION: { label: 'En préparation', bg: '#fef9ed', color: '#92660a' },
   LIVREE:         { label: 'Livrée',         bg: '#ecfdf5', color: '#065f46' },
   ANNULEE:        { label: 'Annulée',        bg: '#fef2f2', color: '#dc2626' },
   REJETEE:        { label: 'Rejetée',        bg: '#fef2f2', color: '#dc2626' },
-  ALLOUEE:        { label: 'Allouée',        bg: '#fdf4ff', color: '#7e22ce' },
-  PENDING:        { label: 'En attente',     bg: '#fef9ed', color: '#92660a' },
-  EN_ATTENTE:     { label: 'En attente',     bg: '#fef9ed', color: '#92660a' },
-  CONFIRMED:      { label: 'Confirmée',      bg: '#f0fdf4', color: '#15803d' },
-  ALLOCATED:      { label: 'Allouée',        bg: '#fdf4ff', color: '#7e22ce' },
-  CANCELLED:      { label: 'Annulée',        bg: '#fef2f2', color: '#dc2626' },
 }
 const PAGE_SIZE = 10
 const PIPELINE_STEPS = [
@@ -34,14 +27,13 @@ const PIPELINE_STEPS = [
   { key: 'LIVREE',         label: 'Livrée' },
 ]
 const PIPELINE_IDX: Record<string, number> = {
-  SOUMISE: 0, ACCEPTEE: 1, CONFIRMEE: 1, EN_PREPARATION: 2, LIVREE: 3,
+  SOUMISE: 0, ACCEPTEE: 1, EN_PREPARATION: 2, LIVREE: 3,
 }
-const TERMINAL = ['ANNULEE', 'REJETEE', 'CANCELLED']
+const TERMINAL = ['ANNULEE', 'REJETEE']
 const NEXT_ACTIONS: Record<string, { statut: string; label: string; danger?: boolean }[]> = {
-  SOUMISE:        [{ statut: 'ACCEPTEE',       label: 'Accepter'           }, { statut: 'REJETEE',  label: 'Rejeter',  danger: true }],
-  ACCEPTEE:       [{ statut: 'EN_PREPARATION', label: 'Démarrer préparation' }, { statut: 'ANNULEE', label: 'Annuler', danger: true }],
-  CONFIRMEE:      [{ statut: 'EN_PREPARATION', label: 'Démarrer préparation' }, { statut: 'ANNULEE', label: 'Annuler', danger: true }],
-  EN_PREPARATION: [{ statut: 'LIVREE',         label: 'Marquer livrée'    }, { statut: 'ANNULEE',  label: 'Annuler',  danger: true }],
+  SOUMISE:        [{ statut: 'ACCEPTEE',       label: 'Accepter'            }, { statut: 'REJETEE',  label: 'Rejeter',  danger: true }],
+  ACCEPTEE:       [{ statut: 'EN_PREPARATION', label: 'Démarrer préparation'}, { statut: 'ANNULEE',  label: 'Annuler',  danger: true }],
+  EN_PREPARATION: [{ statut: 'LIVREE',         label: 'Marquer livrée'     }, { statut: 'ANNULEE',  label: 'Annuler',  danger: true }],
 }
 const GENERATIONS_CMD = [
   { id: '1', label: 'G0 — Pré-base' }, { id: '2', label: 'G1 — Base' },
@@ -53,26 +45,115 @@ const GENERATIONS_CMD = [
 // KPI filter predicates
 type KpiKey = 'pending' | 'accepted' | 'rejected' | 'delivered'
 const KPI_FILTER: Record<KpiKey, (o: any) => boolean> = {
-  pending:   o => ['SOUMISE','PENDING','EN_ATTENTE'].includes(o.statut),
-  accepted:  o => ['ACCEPTEE','CONFIRMEE','ALLOUEE','ALLOCATED','EN_PREPARATION'].includes(o.statut),
-  rejected:  o => ['ANNULEE','REJETEE','CANCELLED'].includes(o.statut),
+  pending:   o => o.statut === 'SOUMISE',
+  accepted:  o => ['ACCEPTEE','EN_PREPARATION'].includes(o.statut),
+  rejected:  o => ['ANNULEE','REJETEE'].includes(o.statut),
   delivered: o => o.statut === 'LIVREE',
 }
 
-// ─── Helper : calcul mensuel pour le graphe ───────────────────────────────────
-function computeMonthly(orders: any[]) {
+// ─── Types et constantes du graphe d'évolution ────────────────────────────────
+type Periode  = '7J' | '4S' | '3M' | '6M' | '12M'
+type SerieKey = 'LIVREE' | 'ACCEPTEE' | 'EN_PREPARATION' | 'SOUMISE' | 'ANNULEE'
+
+interface PointData extends Record<SerieKey, number> {
+  label: string; sublabel: string; total: number
+}
+
+const SERIE_CFG: ReadonlyArray<{ key: SerieKey; label: string; couleur: string }> = [
+  { key: 'LIVREE',         label: 'Livrées',             couleur: '#10b981' },
+  { key: 'ACCEPTEE',       label: 'Acceptées',           couleur: '#22c55e' },
+  { key: 'EN_PREPARATION', label: 'En préparation',      couleur: '#f59e0b' },
+  { key: 'SOUMISE',        label: 'Soumises',            couleur: '#3b82f6' },
+  { key: 'ANNULEE',        label: 'Annulées/Rejetées',   couleur: '#ef4444' },
+]
+
+const SERIE_COULEUR: Record<SerieKey, string> = {
+  LIVREE: '#10b981', ACCEPTEE: '#22c55e', EN_PREPARATION: '#f59e0b', SOUMISE: '#3b82f6', ANNULEE: '#ef4444',
+}
+
+// Calcul des ticks de l'axe Y à intervalles lisibles
+function calcTicksY(max: number): number[] {
+  if (max <= 0) return [0, 1]
+  const pas = max <= 5 ? 1 : max <= 10 ? 2 : max <= 25 ? 5 : max <= 60 ? 10 : max <= 120 ? 20 : 50
+  const ticks: number[] = []
+  for (let t = 0; t <= max; t += pas) ticks.push(t)
+  if (ticks[ticks.length - 1] < max) ticks.push(ticks[ticks.length - 1] + pas)
+  return ticks
+}
+
+// Construction d'un point de données à partir d'un tableau de commandes
+function buildPointData(label: string, sublabel: string, cmds: any[]): PointData {
+  const nb = (ss: string[]) => cmds.filter(o => ss.includes(o.statut)).length
+  return {
+    label, sublabel, total: cmds.length,
+    SOUMISE:        nb(['SOUMISE']),
+    ACCEPTEE:       nb(['ACCEPTEE']),
+    EN_PREPARATION: nb(['EN_PREPARATION']),
+    LIVREE:         nb(['LIVREE']),
+    ANNULEE:        nb(['ANNULEE', 'REJETEE']),
+  }
+}
+
+// Agrégation des commandes selon la granularité temporelle choisie
+function calcPeriode(orders: any[], periode: Periode): PointData[] {
   const now = new Date()
-  return Array.from({ length: 6 }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-    const label = d.toLocaleDateString('fr-FR', { month: 'short' })
-    const count = orders.filter(o => {
-      if (!o.createdAt) return false
-      const od = new Date(o.createdAt)
-      return od.getFullYear() === d.getFullYear() && od.getMonth() === d.getMonth()
-    }).length
-    const isCurrent = d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-    return { label, count, isCurrent }
+
+  // Granularité jour : 7 derniers jours glissants
+  if (periode === '7J') {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d0 = new Date(now); d0.setDate(now.getDate() - (6 - i)); d0.setHours(0, 0, 0, 0)
+      const d1 = new Date(d0); d1.setHours(23, 59, 59, 999)
+      return buildPointData(
+        d0.toLocaleDateString('fr-FR', { weekday: 'short' }),
+        d0.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        orders.filter(o => { if (!o.createdAt) return false; const t = new Date(o.createdAt); return t >= d0 && t <= d1 })
+      )
+    })
+  }
+
+  // Granularité semaine : 4 dernières semaines glissantes (lun–dim)
+  if (periode === '4S') {
+    return Array.from({ length: 4 }, (_, i) => {
+      const fin   = new Date(now); fin.setDate(now.getDate() - i * 7); fin.setHours(23, 59, 59, 999)
+      const debut = new Date(fin); debut.setDate(fin.getDate() - 6); debut.setHours(0, 0, 0, 0)
+      return buildPointData(
+        `S${4 - i}`,
+        debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }),
+        orders.filter(o => { if (!o.createdAt) return false; const t = new Date(o.createdAt); return t >= debut && t <= fin })
+      )
+    }).reverse()
+  }
+
+  // Granularité mois : 3M / 6M / 12M
+  const nbMois = periode === '3M' ? 3 : periode === '6M' ? 6 : 12
+  return Array.from({ length: nbMois }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth() - (nbMois - 1 - i), 1)
+    return buildPointData(
+      d.toLocaleDateString('fr-FR', { month: 'short' }),
+      d.toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' }),
+      orders.filter(o => {
+        if (!o.createdAt) return false
+        const od = new Date(o.createdAt)
+        return od.getFullYear() === d.getFullYear() && od.getMonth() === d.getMonth()
+      })
+    )
   })
+}
+
+// Mini indicateur statistique de synthèse
+function StatMini({ label, value, couleur, icon }: {
+  label: string; value: string | number; couleur?: string; icon?: React.ReactNode
+}) {
+  return (
+    <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', border: '1px solid var(--border)' }}>
+      <div style={{ fontSize: 14, fontWeight: 800, color: couleur ?? 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, lineHeight: 1.2 }}>
+        {icon}{value}
+      </div>
+      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+        {label}
+      </div>
+    </div>
+  )
 }
 
 // ─── Composants partagés ──────────────────────────────────────────────────────
@@ -122,62 +203,183 @@ function KpiCard({ icon, value, label, accent, active, onClick, loading }: KpiPr
   )
 }
 
-// Graphe d'évolution — 6 derniers mois
+// Graphe d'évolution avancé avec sélecteur de période et barres empilées par statut
 function EvolutionChart({ orders }: { orders: any[] }) {
-  const data = useMemo(() => computeMonthly(orders), [orders])
-  const max  = Math.max(...data.map(d => d.count), 1)
-  const last = data[data.length - 1].count
-  const prev = data[data.length - 2].count
-  const trend = last - prev
-  const BAR_W = 44, GAP = 14, H = 72
-  const W = data.length * BAR_W + (data.length - 1) * GAP
+  const [periode, setPeriode] = useState<Periode>('6M')
+  const [hovered, setHovered] = useState<number | null>(null)
+
+  const data     = useMemo(() => calcPeriode(orders, periode), [orders, periode])
+  const maxTotal = Math.max(...data.map(d => d.total), 1)
+  const yTicks   = useMemo(() => calcTicksY(maxTotal), [maxTotal])
+
+  // ── KPI de synthèse sur la période affichée ──
+  const totalP = data.reduce((s, d) => s + d.total,   0)
+  const totalL = data.reduce((s, d) => s + d.LIVREE,  0)
+  const totalA = data.reduce((s, d) => s + d.ANNULEE, 0)
+  const tauxL  = totalP > 0 ? Math.round(totalL / totalP * 100) : 0
+  const tauxA  = totalP > 0 ? Math.round(totalA / totalP * 100) : 0
+  // Tendance : 1re moitié vs 2e moitié de la période
+  const mid   = Math.floor(data.length / 2)
+  const avant = data.slice(0, mid).reduce((s, d) => s + d.total, 0)
+  const apres = data.slice(mid).reduce((s, d)  => s + d.total,   0)
+  const delta = avant > 0 ? Math.round((apres - avant) / avant * 100) : null
+
+  // ── Dimensions SVG ──
+  const W = 560, PL = 28, PR = 8, PB = 22, PT = 10, PH = 90
+  const n    = data.length
+  const GAP  = n > 8 ? 3 : 6
+  const BARW = Math.max(Math.floor((W - PL - PR - GAP * (n - 1)) / n), 6)
+  const yFor = (v: number) => PT + PH - Math.round((v / maxTotal) * PH)
+
+  // Tooltip HTML : position en pourcentage de la largeur du SVG
+  const hovData    = hovered !== null ? data[hovered] : null
+  const tooltipPct = hovered !== null
+    ? Math.min(Math.max((PL + hovered * (BARW + GAP) + BARW / 2) / W * 100, 12), 88)
+    : 50
+
+  // Ordre d'empilement bas → haut (annulées au fond, livrées au sommet)
+  const ORDRE: SerieKey[] = ['ANNULEE', 'SOUMISE', 'EN_PREPARATION', 'ACCEPTEE', 'LIVREE']
 
   return (
-    <div className="card" style={{ padding: '16px 22px', marginBottom: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+    <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
+
+      {/* ── En-tête + sélecteur de période ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <BarChart2 size={15} color="var(--text-muted)" />
           <span style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--text-muted)' }}>
-            Évolution des commandes — 6 mois
+            Évolution des commandes
           </span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {trend !== 0 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              {trend > 0 ? <TrendingUp size={13} color="#22c55e" /> : <TrendingDown size={13} color="#ef4444" />}
-              <span style={{ fontSize: 12, fontWeight: 700, color: trend > 0 ? '#22c55e' : '#ef4444' }}>
-                {trend > 0 ? '+' : ''}{trend} ce mois
-              </span>
-            </div>
-          )}
-          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total : <strong>{orders.length}</strong></span>
+        <div style={{ display: 'flex', background: 'var(--surface-2)', borderRadius: 8, padding: 3, border: '1px solid var(--border)', gap: 2 }}>
+          {(['7J', '4S', '3M', '6M', '12M'] as Periode[]).map(p => (
+            <button key={p} onClick={() => { setPeriode(p); setHovered(null) }}
+              style={{
+                padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                fontSize: 11, fontWeight: 700,
+                background: periode === p ? '#16a34a' : 'transparent',
+                color:      periode === p ? '#fff'    : 'var(--text-muted)',
+                transition: 'all .12s',
+              }}
+            >{p}</button>
+          ))}
         </div>
       </div>
-      <svg width="100%" viewBox={`-4 -14 ${W + 8} ${H + 28}`} preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
-        {data.map((d, i) => {
-          const barH  = max > 0 ? Math.max(Math.round((d.count / max) * H), d.count > 0 ? 5 : 2) : 2
-          const x     = i * (BAR_W + GAP)
-          const y     = H - barH
-          const fill  = d.isCurrent ? '#16a34a' : '#86efac'
-          const tFill = d.isCurrent ? '#166534' : 'var(--text-muted)'
-          return (
-            <g key={i}>
-              {/* fond de barre */}
-              <rect x={x} y={0} width={BAR_W} height={H} rx={6} fill="var(--surface-2,#f1f5f9)" />
-              {/* barre valeur */}
-              <rect x={x} y={y} width={BAR_W} height={barH} rx={6} fill={fill} opacity={0.9} />
-              {d.count > 0 && (
-                <text x={x + BAR_W / 2} y={y - 5} textAnchor="middle" fontSize={9.5} fontWeight="700" fill={tFill}>
-                  {d.count}
-                </text>
-              )}
-              <text x={x + BAR_W / 2} y={H + 15} textAnchor="middle" fontSize={9.5} fill={tFill} fontWeight={d.isCurrent ? '700' : '400'}>
-                {d.label}
-              </text>
-            </g>
-          )
-        })}
-      </svg>
+
+      {/* ── Indicateurs de synthèse ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
+        <StatMini label="Total commandes"        value={totalP} />
+        <StatMini label={`Livrées · ${tauxL}%`}  value={totalL} couleur="#10b981" icon={<Truck   size={11} />} />
+        <StatMini label={`Annulées · ${tauxA}%`} value={totalA} couleur="#ef4444" icon={<XCircle size={11} />} />
+        <StatMini
+          label="Tendance période"
+          value={delta !== null ? `${delta >= 0 ? '+' : ''}${delta}%` : '—'}
+          couleur={delta === null ? undefined : delta >= 0 ? '#22c55e' : '#ef4444'}
+          icon={delta !== null ? (delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />) : undefined}
+        />
+      </div>
+
+      {/* ── Graphe SVG barres empilées ── */}
+      <div style={{ position: 'relative' }}>
+        <svg width="100%" viewBox={`0 0 ${W} ${PT + PH + PB}`}
+          preserveAspectRatio="xMidYMid meet"
+          style={{ overflow: 'visible', display: 'block' }}
+        >
+          {/* Axe Y : lignes de grille et labels */}
+          {yTicks.filter(t => t <= maxTotal + 1).map(t => {
+            const y = yFor(t)
+            return (
+              <g key={t}>
+                <line x1={PL} y1={y} x2={W - PR} y2={y}
+                  stroke={t === 0 ? 'var(--border-strong,#cbd5e1)' : 'var(--border,#e2e8f0)'}
+                  strokeWidth={t === 0 ? 1 : 0.6}
+                  strokeDasharray={t === 0 ? undefined : '3,3'} />
+                <text x={PL - 4} y={y + 3.5} textAnchor="end" fontSize={8}
+                  fill="var(--text-muted)" fontFamily="Outfit,sans-serif">{t}</text>
+              </g>
+            )
+          })}
+
+          {/* Barres empilées par statut */}
+          {data.map((d, i) => {
+            const bx    = PL + i * (BARW + GAP)
+            const isHov = hovered === i
+            let yBot    = PT + PH   // curseur de l'empilement (bas → haut)
+
+            return (
+              <g key={i}
+                onMouseEnter={() => setHovered(i)}
+                onMouseLeave={() => setHovered(null)}
+                style={{ cursor: 'pointer' }}
+              >
+                {/* Fond de la barre */}
+                <rect x={bx} y={PT} width={BARW} height={PH} rx={4}
+                  fill="var(--surface-2,#f1f5f9)" opacity={isHov ? 0.9 : 0.55} />
+
+                {/* Segments colorés par statut */}
+                {ORDRE.map(key => {
+                  const val = d[key]; if (!val) return null
+                  const bh  = Math.max(Math.round((val / maxTotal) * PH), 2)
+                  const by  = yBot - bh; yBot -= bh
+                  return (
+                    <rect key={key} x={bx} y={by} width={BARW} height={bh}
+                      fill={SERIE_COULEUR[key]} opacity={isHov ? 1 : 0.84} rx={0} />
+                  )
+                })}
+
+                {/* Total affiché au-dessus */}
+                {d.total > 0 && (
+                  <text x={bx + BARW / 2} y={yBot - 3} textAnchor="middle" fontSize={8}
+                    fontWeight="700"
+                    fill={isHov ? 'var(--text-primary)' : 'var(--text-muted)'}
+                    fontFamily="Outfit,sans-serif">{d.total}</text>
+                )}
+
+                {/* Label axe X */}
+                <text x={bx + BARW / 2} y={PT + PH + 14} textAnchor="middle" fontSize={8}
+                  fontWeight={isHov ? '700' : '400'}
+                  fill={isHov ? 'var(--text-primary)' : 'var(--text-muted)'}
+                  fontFamily="Outfit,sans-serif">{d.label}</text>
+              </g>
+            )
+          })}
+        </svg>
+
+        {/* Tooltip HTML absolu sur la barre survolée */}
+        {hovData && (
+          <div style={{
+            position: 'absolute', top: 0, left: `${tooltipPct}%`,
+            transform: 'translateX(-50%) translateY(-105%)',
+            background: 'var(--surface)', border: '1px solid var(--border-strong)',
+            borderRadius: 8, padding: '8px 11px', fontSize: 11,
+            pointerEvents: 'none', zIndex: 20, minWidth: 150,
+            boxShadow: '0 4px 16px rgba(0,0,0,.13)',
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 11.5, marginBottom: 6, paddingBottom: 5, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+              {hovData.sublabel || hovData.label}
+              <span style={{ marginLeft: 6, color: '#16a34a', fontWeight: 800 }}>{hovData.total}</span>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> cmd{hovData.total > 1 ? 's' : ''}</span>
+            </div>
+            {SERIE_CFG.filter(s => hovData[s.key] > 0).map(s => (
+              <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                <div style={{ width: 8, height: 8, borderRadius: 2, background: s.couleur, flexShrink: 0 }} />
+                <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{s.label}</span>
+                <span style={{ fontWeight: 700, color: s.couleur }}>{hovData[s.key]}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Légende ── */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10, justifyContent: 'center' }}>
+        {SERIE_CFG.map(s => (
+          <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 9, height: 9, borderRadius: 2, background: s.couleur, flexShrink: 0 }} />
+            <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}>{s.label}</span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -424,9 +626,9 @@ function VueQuotataire({ setToast }: { setToast: any }) {
     } finally { setSaving(false) }
   }
 
-  const pending   = orders.filter(o => ['SOUMISE','EN_ATTENTE'].includes(o.statut)).length
-  const confirmed = orders.filter(o => ['CONFIRMEE','ACCEPTEE'].includes(o.statut)).length
-  const cancelled = orders.filter(o => ['ANNULEE','CANCELLED'].includes(o.statut)).length
+  const pending   = orders.filter(o => o.statut === 'SOUMISE').length
+  const confirmed = orders.filter(o => o.statut === 'ACCEPTEE').length
+  const cancelled = orders.filter(o => ['ANNULEE','REJETEE'].includes(o.statut)).length
   const delivered = orders.filter(o => o.statut === 'LIVREE').length
 
   const toggleKpi = (k: KpiKey) => setKpiFilter(kpiFilter === k ? null : k)
@@ -587,9 +789,9 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
   const loading      = onglet === 'recues' ? loadingR : loadingD
 
   const pendingCount   = recues.filter(o => o.statut === 'SOUMISE').length
-  const confirmedCount = recues.filter(o => ['CONFIRMEE','ACCEPTEE'].includes(o.statut)).length
+  const confirmedCount = recues.filter(o => o.statut === 'ACCEPTEE').length
   const demandesTotal  = demandes.length
-  const demandesAccept = demandes.filter(o => ['CONFIRMEE','ACCEPTEE','LIVREE'].includes(o.statut)).length
+  const demandesAccept = demandes.filter(o => ['ACCEPTEE','EN_PREPARATION','LIVREE'].includes(o.statut)).length
 
   const toggleKpi = (k: KpiKey) => { setKpiFilter(kpiFilter === k ? null : k); setSearch('') }
 
@@ -735,7 +937,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
   useEffect(() => { fetchAll() }, [])
 
   const aTraiter  = orders.filter(o => o.statut === 'SOUMISE').length
-  const acceptees = orders.filter(o => ['ACCEPTEE','CONFIRMEE','EN_PREPARATION'].includes(o.statut)).length
+  const acceptees = orders.filter(o => ['ACCEPTEE','EN_PREPARATION'].includes(o.statut)).length
   const rejetees  = orders.filter(o => ['ANNULEE','REJETEE'].includes(o.statut)).length
   const livrees   = orders.filter(o => o.statut === 'LIVREE').length
 
@@ -859,9 +1061,9 @@ function VueAdmin({ setToast }: { setToast: any }) {
   }
   useEffect(() => { fetchOrders() }, [])
 
-  const pending   = orders.filter(o => ['SOUMISE','PENDING','EN_ATTENTE'].includes(o.statut)).length
-  const accepted  = orders.filter(o => ['ACCEPTEE','CONFIRMEE','ALLOUEE','ALLOCATED','EN_PREPARATION'].includes(o.statut)).length
-  const rejected  = orders.filter(o => ['ANNULEE','CANCELLED','REJETEE'].includes(o.statut)).length
+  const pending   = orders.filter(o => o.statut === 'SOUMISE').length
+  const accepted  = orders.filter(o => ['ACCEPTEE','EN_PREPARATION'].includes(o.statut)).length
+  const rejected  = orders.filter(o => ['ANNULEE','REJETEE'].includes(o.statut)).length
   const delivered = orders.filter(o => o.statut === 'LIVREE').length
 
   const toggleKpi = (k: KpiKey) => { setKpiFilter(kpiFilter === k ? null : k); setSearch('') }

@@ -23,7 +23,6 @@ import sn.isra.seed.order_service.repo.*;
 import java.io.IOException;
 import java.nio.file.*;
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.*;
 
 @RestController
@@ -166,7 +165,7 @@ public class ChatController {
             creerCommandeDepuisMessage(me, conv, msg.getContenu());
 
         Message saved = msgRepo.save(msg);
-        conv.setDernierMessageAt(LocalDateTime.now());
+        conv.setDernierMessageAt(Instant.now());
         convRepo.save(conv);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
@@ -224,7 +223,7 @@ public class ChatController {
         msg.setTailleFichier((int) file.getSize());
 
         Message saved = msgRepo.save(msg);
-        conv.setDernierMessageAt(LocalDateTime.now());
+        conv.setDernierMessageAt(Instant.now());
         convRepo.save(conv);
 
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
