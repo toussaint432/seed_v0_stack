@@ -1,12 +1,15 @@
 /* ══════════════════════════════════════════════════════════════
    Endpoints centralisés — évite les URLs hardcodées partout
-   V1.5 — Phase 2 : zones agro-écologiques + catalogue quotataire
+   Base d'URL configurée via VITE_API_BASE (variable d'environnement Vite).
+   Valeur par défaut : http://localhost (dev local / Docker Desktop).
+   En production, définir VITE_API_BASE=https://api.votre-domaine.sn
    ══════════════════════════════════════════════════════════════ */
 
-const CATALOG  = 'http://localhost:18081/api'
-const LOT      = 'http://localhost:18082/api'
-const STOCK    = 'http://localhost:18083/api'
-const ORDER    = 'http://localhost:18084/api'
+const BASE     = (import.meta.env.VITE_API_BASE ?? 'http://localhost').replace(/\/$/, '')
+const CATALOG  = `${BASE}:18081/api`
+const LOT      = `${BASE}:18082/api`
+const STOCK    = `${BASE}:18083/api`
+const ORDER    = `${BASE}:18084/api`
 
 export const endpoints = {
   // ── Catalog Service (18081) ──
@@ -34,9 +37,14 @@ export const endpoints = {
   programs:         `${LOT}/programs`,
   programById:      (id: number) => `${LOT}/programs/${id}`,
 
-  // ── Catalog Service — Zones agro-écologiques (Phase 2) ──
-  zones:            `${CATALOG}/zones`,
-  varietyZones:     (id: number) => `${CATALOG}/varieties/${id}/zones`,
+  // ── Catalog Service — Zones agro-écologiques & géographie admin ──
+  zones:                `${CATALOG}/zones`,
+  maZone:               `${CATALOG}/zones/ma-zone`,
+  zoneParDepartement:   (deptId: number) => `${CATALOG}/zones/par-departement/${deptId}`,
+  regions:              `${CATALOG}/regions`,
+  departements:         `${CATALOG}/departements`,
+  departementsParRegion:(regionId: number) => `${CATALOG}/departements?regionId=${regionId}`,
+  varietyZones:         (id: number) => `${CATALOG}/varieties/${id}/zones`,
 
   // ── Lot Service — Multiplicateur (isolation par org) ──
   lotsCatalogueG3: `${LOT}/lots/catalogue-g3`,
@@ -49,7 +57,8 @@ export const endpoints = {
   transfertRefuser:  (id: number) => `${LOT}/transferts/${id}/refuser`,
 
   // ── Stock Service (18083) ──
-  stocks:     `${STOCK}/stocks`,
+  stocks:       `${STOCK}/stocks`,
+  stocksAgrege: `${STOCK}/stocks/agrege`,
   stockById:        (id: number) => `${STOCK}/stocks/${id}`,
   movements:  `${STOCK}/movements`,
   sites:      `${STOCK}/sites`,
@@ -87,9 +96,9 @@ export const endpoints = {
 
   // ── Swagger UI links ──
   swagger: {
-    catalog: 'http://localhost:18081/swagger-ui/index.html',
-    lot:     'http://localhost:18082/swagger-ui/index.html',
-    stock:   'http://localhost:18083/swagger-ui/index.html',
-    order:   'http://localhost:18084/swagger-ui/index.html',
+    catalog: `${BASE}:18081/swagger-ui/index.html`,
+    lot:     `${BASE}:18082/swagger-ui/index.html`,
+    stock:   `${BASE}:18083/swagger-ui/index.html`,
+    order:   `${BASE}:18084/swagger-ui/index.html`,
   }
 } as const

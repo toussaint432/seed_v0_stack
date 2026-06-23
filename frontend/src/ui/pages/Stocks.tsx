@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { FormEvent, MouseEvent } from 'react'
 import {
   Database, RefreshCw, Plus, MapPin, Package, TrendingUp,
-  X, Edit2, Trash2, Archive, Search, ChevronDown,
+  X, Archive, Search, ChevronDown,
   ArrowRightLeft, FileText, Download, CheckCircle2,
 } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -18,11 +18,11 @@ interface Props { roleKey: string }
 
 const GEN_COLOR: Record<string, string> = {
   G0: '#6366f1', G1: '#0ea5e9', G2: '#22c55e', G3: '#f59e0b',
-  R1: '#ec4899', R2: '#14b8a6'
+  G4: '#c2410c', R1: '#ec4899', R2: '#14b8a6'
 }
 const GEN_BADGE: Record<string, string> = {
   G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray',
-  R1: 'badge-blue', R2: 'badge-green'
+  G4: 'badge-gold', R1: 'badge-blue',  R2: 'badge-green'
 }
 const UPSEMCL_GENS   = ['G1', 'G2', 'G3']
 const SELECTOR_GENS  = ['G0', 'G1']
@@ -209,15 +209,16 @@ function LotDropdown({ lots, value, onChange, placeholder = 'Sélectionner un lo
 }
 
 export function Stocks({ roleKey }: Props) {
-  const [allStocks,  setAllStocks]  = useState<any[]>([])
-  const [lots,       setLots]       = useState<any[]>([])
-  const [varieties,  setVarieties]  = useState<any[]>([])
-  const [sitesList,  setSitesList]  = useState<any[]>([])
-  const [movements,  setMovements]  = useState<any[]>([])
-  const [loading,    setLoading]    = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
-  const [toast,      setToast]      = useState<{ msg: string; type: 'success'|'error' } | null>(null)
-  const [saving,     setSaving]     = useState(false)
+  const [agregeStocks, setAgregeStocks] = useState<any[]>([])
+  const [lots,         setLots]         = useState<any[]>([])
+  const [varieties,    setVarieties]    = useState<any[]>([])
+  const [sitesList,    setSitesList]    = useState<any[]>([])
+  const [movements,    setMovements]    = useState<any[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [refreshing,   setRefreshing]   = useState(false)
+  const [toast,        setToast]        = useState<{ msg: string; type: 'success'|'error' } | null>(null)
+  const [saving,       setSaving]       = useState(false)
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const [site,         setSite]         = useState('')
   const [filterGen,    setFilterGen]    = useState('')
@@ -234,7 +235,6 @@ export function Stocks({ roleKey }: Props) {
   const isUPSemCL  = roleKey === 'seed-upsemcl'
   const isSelector = roleKey === 'seed-selector'
   const isMulti    = roleKey === 'seed-multiplicator'
-  const isAdmin    = roleKey === 'seed-admin'
   const canManage  = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator', 'seed-selector'].includes(roleKey)
 
   const [stockForm, setStockForm] = useState({ idLot: '', siteCode: '', quantite: '', unite: 'kg' })
@@ -261,16 +261,24 @@ export function Stocks({ roleKey }: Props) {
     ? lots.filter(l => SELECTOR_GENS.includes(l.generation?.codeGeneration))
     : lots
 
+  function toggleRow(key: string) {
+    setExpandedRows(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   async function fetchAll(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
-    const stockUrl = isMulti ? endpoints.stockMonStock : endpoints.stocks
-    const lotsUrl  = isMulti ? endpoints.lotsMesLots   : endpoints.lots
+    const lotsUrl = isMulti ? endpoints.lotsMesLots : endpoints.lots
     await Promise.all([
-      api.get(stockUrl).then(r          => setAllStocks(r.data)).catch(() => setAllStocks([])),
-      api.get(lotsUrl).then(r           => setLots(r.data)).catch(() => {}),
-      api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {}),
-      api.get(endpoints.sites).then(r     => setSitesList(r.data)).catch(() => {}),
-      api.get(endpoints.movements).then(r => setMovements(r.data)).catch(() => {}),
+      api.get(endpoints.stocksAgrege).then(r => setAgregeStocks(r.data)).catch(() => setAgregeStocks([])),
+      api.get(lotsUrl).then(r              => setLots(r.data)).catch(() => {}),
+      api.get(endpoints.varieties).then(r  => setVarieties(r.data)).catch(() => {}),
+      api.get(endpoints.sites).then(r      => setSitesList(r.data)).catch(() => {}),
+      api.get(endpoints.movements).then(r  => setMovements(r.data)).catch(() => {}),
       transferRule ? api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {}) : Promise.resolve(),
     ])
     setLoading(false)
@@ -280,39 +288,38 @@ export function Stocks({ roleKey }: Props) {
   useEffect(() => { fetchAll() }, [])
 
   const stocks = (() => {
-    let s = allStocks
-    if (isUPSemCL)  s = s.filter(st => UPSEMCL_GENS.includes(lotMap[st.idLot]?.generation?.codeGeneration))
-    if (isSelector) s = s.filter(st => SELECTOR_GENS.includes(lotMap[st.idLot]?.generation?.codeGeneration))
-    if (site)        s = s.filter(st => st.site?.codeSite === site)
-    if (filterGen)   s = s.filter(st => lotMap[st.idLot]?.generation?.codeGeneration === filterGen)
+    let s = agregeStocks
+    // Generation filter is already applied server-side; client-side is a safety guard
+    if (isUPSemCL)  s = s.filter(st => UPSEMCL_GENS.includes(st.codeGeneration))
+    if (isSelector) s = s.filter(st => SELECTOR_GENS.includes(st.codeGeneration))
+    if (site)       s = s.filter(st => st.codeSite === site)
+    if (filterGen)  s = s.filter(st => st.codeGeneration === filterGen)
     if (filterSearch) {
       const term = filterSearch.toLowerCase()
-      s = s.filter(st => {
-        const lot     = lotMap[st.idLot]
-        const variete = lot ? varMap[lot.idVariete] : null
-        return lot?.codeLot?.toLowerCase().includes(term)
-          || variete?.nomVariete?.toLowerCase().includes(term)
-          || variete?.espece?.nomCommun?.toLowerCase().includes(term)
-          || variete?.espece?.nomEspece?.toLowerCase().includes(term)
-          || st.site?.codeSite?.toLowerCase().includes(term)
-      })
+      s = s.filter(st =>
+        st.nomVariete?.toLowerCase().includes(term)
+        || st.codeVariete?.toLowerCase().includes(term)
+        || st.nomEspece?.toLowerCase().includes(term)
+        || st.codeSite?.toLowerCase().includes(term)
+        || st.lotsDetail?.some((d: any) => d.codeLot?.toLowerCase().includes(term))
+      )
     }
     return s
   })()
 
-  const totalQty = stocks.reduce((s, st) => s + (parseFloat(st.quantiteDisponible) || 0), 0)
-  const siteList = [...new Set(allStocks.map((s: any) => s.site?.codeSite).filter(Boolean))]
-  const maxQty   = Math.max(...stocks.map((s: any) => parseFloat(s.quantiteDisponible) || 0), 1)
+  const totalQty   = stocks.reduce((s, st) => s + (parseFloat(st.quantiteTotale) || 0), 0)
+  const totalLots  = stocks.reduce((s, st) => s + (Number(st.nbLots) || 0), 0)
+  const varietySet = new Set(stocks.map((s: any) => s.nomVariete).filter(Boolean))
+  const siteList   = [...new Set(agregeStocks.map((s: any) => s.codeSite).filter(Boolean))]
+  const maxQty     = Math.max(...stocks.map((s: any) => parseFloat(s.quantiteTotale) || 0), 1)
 
   const barData: BarDatum[] = (() => {
     const agg: Record<string, { qty: number; gen: string }> = {}
     stocks.forEach(st => {
-      const lot  = lotMap[st.idLot]
-      if (!lot) return
-      const key  = varMap[lot.idVariete]?.nomVariete ?? varMap[lot.idVariete]?.codeVariete ?? `Lot#${lot.id}`
-      const gen  = lot.generation?.codeGeneration ?? '?'
+      const key = st.nomVariete ?? st.codeVariete ?? `Var#${st.idVariete}`
+      const gen = st.codeGeneration ?? '?'
       if (!agg[key]) agg[key] = { qty: 0, gen }
-      agg[key].qty += parseFloat(st.quantiteDisponible) || 0
+      agg[key].qty += parseFloat(st.quantiteTotale) || 0
     })
     return Object.entries(agg)
       .map(([label, { qty, gen }]) => ({ label, value: Math.round(qty), color: GEN_COLOR[gen] ?? '#6b7280' }))
@@ -395,7 +402,7 @@ export function Stocks({ roleKey }: Props) {
     } finally { setSaving(false) }
   }
 
-  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'R1', 'R2']
+  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
 
   /* ── Transfert inter-orgs depuis le stock ── */
   function openTransferFromStock(stock: any, lot: any) {
@@ -564,15 +571,15 @@ export function Stocks({ roleKey }: Props) {
         <div className="stat-card">
           <div className="stat-icon green"><Database size={18} /></div>
           <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : stocks.length}</div>
-            <div className="stat-label">Entrées stock</div>
+            <div className="stat-value">{loading ? '…' : varietySet.size}</div>
+            <div className="stat-label">Variétés en stock</div>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon blue"><MapPin size={18} /></div>
           <div className="stat-body">
             <div className="stat-value">{loading ? '…' : siteList.length}</div>
-            <div className="stat-label">Sites de stockage</div>
+            <div className="stat-label">Sites actifs</div>
           </div>
         </div>
         <div className="stat-card">
@@ -585,8 +592,8 @@ export function Stocks({ roleKey }: Props) {
         <div className="stat-card">
           <div className="stat-icon violet"><TrendingUp size={18} /></div>
           <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : stocks.length > 0 ? Math.round(totalQty / stocks.length).toLocaleString('fr-FR') : 0}</div>
-            <div className="stat-label">Moyenne / entrée (kg)</div>
+            <div className="stat-value">{loading ? '…' : totalLots}</div>
+            <div className="stat-label">Lots en stock</div>
           </div>
         </div>
       </div>
@@ -626,8 +633,8 @@ export function Stocks({ roleKey }: Props) {
         <div className="card-header">
           <span className="card-title">
             <span className="card-title-icon"><Database size={15} /></span>
-            Inventaire par site
-            <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{stocks.length}</span>
+            Inventaire agrégé par variété / site
+            <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{stocks.length} groupe{stocks.length > 1 ? 's' : ''}</span>
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
             {canManage && (
@@ -697,30 +704,31 @@ export function Stocks({ roleKey }: Props) {
           )}
         </div>
 
-        {/* Table */}
+        {/* Table agrégée */}
         <div className="table-wrapper">
           <table>
             <thead>
               <tr>
-                <th>Site</th>
+                <th style={{ width: 32 }} />
+                <th>Génération</th>
                 <th>Espèce</th>
                 <th>Variété</th>
-                <th>Génération</th>
-                <th>Code Lot</th>
-                <th>Quantité disponible</th>
+                <th>Site</th>
+                <th>Quantité totale</th>
+                <th>Lots</th>
+                <th>Enregistré le</th>
                 <th style={{ width: 120 }}>Niveau relatif</th>
-                {canManage && <th style={{ width: 110 }}>Actions</th>}
               </tr>
             </thead>
             <tbody>
               {loading
                 ? [0, 1, 2, 3, 4].map(i => (
-                    <tr key={i}><td colSpan={canManage ? 8 : 7}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
+                    <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
                   ))
                 : stocks.length === 0
                   ? (
                     <tr>
-                      <td colSpan={canManage ? 8 : 7}>
+                      <td colSpan={9}>
                         <div className="empty-state">
                           <div className="empty-icon"><Database size={20} /></div>
                           <div className="empty-title">
@@ -733,37 +741,29 @@ export function Stocks({ roleKey }: Props) {
                       </td>
                     </tr>
                   )
-                  : stocks.map(s => {
-                      const qty      = parseFloat(s.quantiteDisponible || 0)
+                  : stocks.flatMap(row => {
+                      const rowKey   = `${row.idVariete}-${row.idGeneration}-${row.idSite}`
+                      const isExp    = expandedRows.has(rowKey)
+                      const qty      = parseFloat(row.quantiteTotale) || 0
                       const pct      = Math.min(100, Math.round((qty / maxQty) * 100))
                       const barColor = pct > 60 ? '#16a34a' : pct > 30 ? '#f59e0b' : '#ef4444'
-                      const lot      = lotMap[s.idLot]
-                      const variete  = lot ? varMap[lot.idVariete] : null
-                      const gen      = lot?.generation?.codeGeneration || '—'
-                      return (
-                        <tr key={s.id}>
-                          <td>
-                            <span className="badge badge-blue" style={{ gap: 4 }}>
-                              <MapPin size={10} />{s.site?.codeSite || '—'}
-                            </span>
-                          </td>
-                          <td>
-                            {variete?.espece
-                              ? <div>
-                                  <div style={{ fontSize: 12, fontWeight: 600 }}>{variete.espece.nomCommun ?? variete.espece.nomEspece}</div>
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{variete.espece.codeEspece}</div>
-                                </div>
-                              : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
-                            }
-                          </td>
-                          <td>
-                            {variete
-                              ? <div>
-                                  <div style={{ fontSize: 12, fontWeight: 600 }}>{variete.nomVariete}</div>
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{variete.codeVariete}</div>
-                                </div>
-                              : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
-                            }
+                      const gen      = row.codeGeneration || '—'
+
+                      const rows: any[] = [
+                        <tr
+                          key={rowKey}
+                          style={{ cursor: 'pointer', background: isExp ? 'var(--surface-2)' : undefined }}
+                          onClick={() => toggleRow(rowKey)}
+                        >
+                          <td style={{ textAlign: 'center' }}>
+                            <ChevronDown
+                              size={13}
+                              style={{
+                                color: 'var(--text-muted)',
+                                transform: isExp ? 'rotate(0deg)' : 'rotate(-90deg)',
+                                transition: 'transform 0.18s',
+                              }}
+                            />
                           </td>
                           <td>
                             {gen !== '—'
@@ -772,17 +772,42 @@ export function Stocks({ roleKey }: Props) {
                             }
                           </td>
                           <td>
-                            {lot
-                              ? <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                                  <span className="td-mono" style={{ fontSize: 11 }}>{lot.codeLot}</span>
-                                  <StatutBadge statut={lot.statutLot} />
-                                </div>
-                              : <span className="td-mono" style={{ color: 'var(--text-muted)' }}>#{s.idLot}</span>
-                            }
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{row.nomEspece || '—'}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.codeEspece}</div>
+                          </td>
+                          <td>
+                            <div style={{ fontSize: 12, fontWeight: 600 }}>{row.nomVariete}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{row.codeVariete}</div>
+                          </td>
+                          <td>
+                            <span className="badge badge-blue" style={{ gap: 4 }}>
+                              <MapPin size={10} />{row.codeSite}
+                            </span>
+                            {row.nomSite && (
+                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{row.nomSite}</div>
+                            )}
                           </td>
                           <td>
                             <span style={{ fontWeight: 700, fontSize: 15 }}>{qty.toLocaleString('fr-FR')}</span>
-                            <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 12 }}>{s.unite || 'kg'}</span>
+                            <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 12 }}>{row.unite || 'kg'}</span>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                              {row.nbLots} lot{row.nbLots > 1 ? 's' : ''}
+                            </span>
+                          </td>
+                          <td>
+                            {row.createdAt
+                              ? <div>
+                                  <div style={{ fontSize: 12, fontWeight: 500 }}>
+                                    {new Date(row.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                    {new Date(row.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              : <span style={{ color: 'var(--text-muted)' }}>—</span>
+                            }
                           </td>
                           <td>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -792,50 +817,91 @@ export function Stocks({ roleKey }: Props) {
                               <span style={{ fontSize: 10, color: 'var(--text-muted)', minWidth: 28, textAlign: 'right' }}>{pct}%</span>
                             </div>
                           </td>
-                          {canManage && (
-                            <td>
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button
-                                  className="btn btn-ghost btn-icon"
-                                  style={{ padding: '4px 6px' }}
-                                  title="Modifier la quantité"
-                                  onClick={() => { setEditStock(s); setEditForm({ quantite: String(qty), unite: s.unite || 'kg' }) }}
-                                >
-                                  <Edit2 size={13} />
-                                </button>
-                                <button
-                                  className="btn btn-ghost btn-icon"
-                                  style={{ padding: '4px 6px' }}
-                                  title="Historique des mouvements de ce lot"
-                                  onClick={() => { setHistoryLotId(s.idLot); setShowHistory(true) }}
-                                >
-                                  <Archive size={13} />
-                                </button>
-                                {transferRule && transferRule.allowedGens.includes(gen) && parseFloat(s.quantiteDisponible) > 0 && lot?.statutLot === 'DISPONIBLE' && (
-                                  <button
-                                    className="btn btn-ghost btn-icon"
-                                    style={{ padding: '4px 6px', color: '#7e22ce' }}
-                                    title={`Transférer vers ${transferRule.destination}`}
-                                    onClick={() => openTransferFromStock(s, lot)}
-                                  >
-                                    <ArrowRightLeft size={13} />
-                                  </button>
-                                )}
-                                {isAdmin && (
-                                  <button
-                                    className="btn btn-ghost btn-icon"
-                                    style={{ padding: '4px 6px', color: '#dc2626' }}
-                                    title="Supprimer cette entrée"
-                                    onClick={() => setDeleteTarget(s)}
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                )}
+                        </tr>
+                      ]
+
+                      if (isExp) {
+                        rows.push(
+                          <tr key={`${rowKey}-detail`}>
+                            <td colSpan={9} style={{ padding: 0, borderTop: 'none' }}>
+                              <div style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', padding: '8px 16px 14px 48px' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                                  <thead>
+                                    <tr>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Code lot</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Quantité</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Statut</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Campagne</th>
+                                      <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'left', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>Enregistré le</th>
+                                      {canManage && <th style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', paddingBottom: 6, borderBottom: '1px solid var(--border)' }} />}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(row.lotsDetail ?? []).map((d: any) => {
+                                      const dQty   = parseFloat(d.quantite) || 0
+                                      const dDate  = d.createdAt
+                                        ? new Date(d.createdAt).toLocaleString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+                                        : '—'
+                                      const canTransfer = transferRule
+                                        && transferRule.allowedGens.includes(gen)
+                                        && dQty > 0
+                                        && d.statut === 'DISPONIBLE'
+                                      return (
+                                        <tr key={d.idLot}>
+                                          <td style={{ padding: '6px 8px 6px 0', fontSize: 12 }}>
+                                            <span className="td-mono" style={{ fontSize: 11 }}>{d.codeLot}</span>
+                                          </td>
+                                          <td style={{ padding: '6px 8px', fontSize: 12 }}>
+                                            <span style={{ fontWeight: 700 }}>{dQty.toLocaleString('fr-FR')}</span>
+                                            <span style={{ color: 'var(--text-muted)', marginLeft: 3, fontSize: 11 }}>{d.unite || row.unite}</span>
+                                          </td>
+                                          <td style={{ padding: '6px 8px', fontSize: 12 }}>
+                                            <StatutBadge statut={d.statut} />
+                                          </td>
+                                          <td style={{ padding: '6px 8px', fontSize: 12, color: 'var(--text-muted)' }}>{d.campagne || '—'}</td>
+                                          <td style={{ padding: '6px 8px', fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{dDate}</td>
+                                          {canManage && (
+                                            <td style={{ padding: '6px 0 6px 8px', textAlign: 'right' }}>
+                                              <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                                                <button
+                                                  className="btn btn-ghost btn-icon"
+                                                  style={{ padding: '3px 5px' }}
+                                                  title="Historique des mouvements"
+                                                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); setHistoryLotId(d.idLot); setShowHistory(true) }}
+                                                >
+                                                  <Archive size={12} />
+                                                </button>
+                                                {canTransfer && (
+                                                  <button
+                                                    className="btn btn-ghost btn-icon"
+                                                    style={{ padding: '3px 5px', color: '#7e22ce' }}
+                                                    title={`Transférer vers ${transferRule!.destination}`}
+                                                    onClick={(e: React.MouseEvent) => {
+                                                      e.stopPropagation()
+                                                      openTransferFromStock(
+                                                        { id: d.idStock, idLot: d.idLot, quantiteDisponible: d.quantite, unite: d.unite || row.unite },
+                                                        { id: d.idLot, codeLot: d.codeLot, statutLot: d.statut, campagne: d.campagne, idVariete: row.idVariete, generation: { codeGeneration: gen } }
+                                                      )
+                                                    }}
+                                                  >
+                                                    <ArrowRightLeft size={12} />
+                                                  </button>
+                                                )}
+                                              </div>
+                                            </td>
+                                          )}
+                                        </tr>
+                                      )
+                                    })}
+                                  </tbody>
+                                </table>
                               </div>
                             </td>
-                          )}
-                        </tr>
-                      )
+                          </tr>
+                        )
+                      }
+
+                      return rows
                     })
               }
             </tbody>

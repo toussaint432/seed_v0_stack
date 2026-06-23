@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: seed
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seed}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - seed_pgdata:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -37,18 +37,25 @@ services:
       KC_PROXY_HEADERS: "xforwarded"
       KC_METRICS_ENABLED: "true"
       KC_HEALTH_ENABLED: "true"
-      # heap réduit pour coexister avec ~2.5 GB d'autres services sur 3.8 GB Docker
-      JAVA_OPTS_APPEND: "-Xms64m -Xmx384m -XX:MaxMetaspaceSize=192m -Dquarkus.live-reload.enabled=false"
+      # heap 512m + metaspace 200m + natif ~300m = ~1012m < 1400m ✓
+      # Réduction de Xmx (640→512) + plafond métaspace explicite pour éviter
+      # l'OOM kernel (exit 137) qui causait la boucle de redémarrage
+      JAVA_OPTS_APPEND: "-Xms64m -Xmx512m -XX:MaxMetaspaceSize=200m -XX:+UseG1GC -XX:MaxGCPauseMillis=50 -XX:+ExplicitGCInvokesConcurrent -Dquarkus.live-reload.enabled=false"
     ports:
-      - "18080:8080"
-      - "19000:9000"
+      # IPv4 explicite — évite le timeout IPv6 (Quarkus bind 0.0.0.0 pas ::)
+      - "127.0.0.1:18080:8080"
+      # Port management Keycloak 25 — health/ready, métriques Micrometer
+      - "127.0.0.1:19000:9000"
     volumes:
       - ./infra/keycloak:/opt/keycloak/data/import:ro
+      # Thème personnalisé ISRA — monté en lecture seule
       - ./infra/keycloak/themes:/opt/keycloak/themes:ro
+      # Cache des artefacts Quarkus — le build n'est exécuté qu'UNE SEULE FOIS
+      # puis chargé depuis le volume (~300m au lieu de ~1500m)
       - keycloak_quarkus_cache:/opt/keycloak/lib/quarkus
-    # heap 384m + metaspace 192m + natif ~300m + cache Infinispan ≈ 900m < 1024m ✓
-    mem_limit: 1024m
-    restart: no
+    # heap 512m + metaspace 200m + natif ~300m = ~1012m < 1400m ✓
+    mem_limit: 1400m
+    restart: unless-stopped
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
@@ -67,9 +74,15 @@ services:
     container_name: seed-kafka
     depends_on:
       - zookeeper
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:29092 --list > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
     ports:
-      - "19092:9092"
-      - "29092:29092"
+      - "127.0.0.1:19092:9092"
+      - "127.0.0.1:29092:29092"
     environment:
       # ── Identité & connectivité ────────────────────────────────────────
       KAFKA_BROKER_ID: 1
@@ -126,7 +139,7 @@ services:
     depends_on:
       - kafka
     mem_limit: 128m
-    restart: no
+    restart: unless-stopped
 
   kafka-exporter:
     image: danielqsj/kafka-exporter:latest
@@ -148,7 +161,7 @@ services:
     depends_on:
       - kafka
     ports:
-      - "18085:8080"
+      - "127.0.0.1:18085:8080"
     environment:
       KAFKA_CLUSTERS_0_NAME: "SEED — Bus de messages"
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
@@ -163,7 +176,7 @@ services:
   catalog-service:
     build: ./services/catalog-service
     container_name: seed-catalog
-    restart: no
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -190,14 +203,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 120s
-    mem_limit: 512m
     ports:
-      - "18081:8080"
+      - "127.0.0.1:18081:8080"
 
   lot-service:
     build: ./services/lot-service
     container_name: seed-lot
-    restart: no
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -212,7 +224,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-seed}
       SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
-      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx256m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
+      JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
@@ -220,21 +232,20 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
-    mem_limit: 512m
     ports:
-      - "18082:8080"
+      - "127.0.0.1:18082:8080"
 
   stock-service:
     build: ./services/stock-service
     container_name: seed-stock
-    restart: no
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       keycloak:
         condition: service_started
       kafka:
-        condition: service_started
+        condition: service_healthy
     environment:
       SERVER_PORT: "8080"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seed
@@ -250,21 +261,20 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
-    mem_limit: 512m
     ports:
-      - "18083:8080"
+      - "127.0.0.1:18083:8080"
 
   order-service:
     build: ./services/order-service
     container_name: seed-order
-    restart: no
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
       keycloak:
         condition: service_started
       kafka:
-        condition: service_started
+        condition: service_healthy
     environment:
       SERVER_PORT: "8080"
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seed
@@ -280,14 +290,13 @@ services:
       timeout: 10s
       retries: 5
       start_period: 90s
-    mem_limit: 512m
     ports:
-      - "18084:8080"
+      - "127.0.0.1:18084:8080"
 
   frontend:
     build: ./frontend
     container_name: seed-frontend
-    restart: no
+    restart: unless-stopped
     depends_on:
       keycloak:
         condition: service_started
@@ -305,7 +314,7 @@ services:
       VITE_KEYCLOAK_REALM: seed-v0
       VITE_KEYCLOAK_CLIENT_ID: seed-frontend
     ports:
-      - "5173:5173"
+      - "127.0.0.1:5173:5173"
 
 
   postgres-exporter:
@@ -336,7 +345,7 @@ services:
       - ./infra/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - seed_alertmanager_data:/alertmanager
     ports:
-      - "19093:9093"
+      - "127.0.0.1:19093:9093"
 
   prometheus:
     image: prom/prometheus:v2.52.0
@@ -354,7 +363,7 @@ services:
       - '--web.enable-admin-api'
       - '--log.level=info'
     ports:
-      - "19090:9090"
+      - "127.0.0.1:19090:9090"
     depends_on:
       - catalog-service
       - lot-service
@@ -383,7 +392,7 @@ services:
       - ./infra/grafana/provisioning/dashboards:/var/lib/grafana/dashboards:ro
       - seed_grafana_data:/var/lib/grafana
     ports:
-      - "13000:3000"
+      - "127.0.0.1:13000:3000"
     depends_on:
       - prometheus
       - alertmanager

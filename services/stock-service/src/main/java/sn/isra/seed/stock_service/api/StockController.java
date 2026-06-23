@@ -1,6 +1,8 @@
 package sn.isra.seed.stock_service.api;
 
 import sn.isra.seed.stock_service.api.dto.MovementRequest;
+import sn.isra.seed.stock_service.api.dto.StockAgregeDto;
+import sn.isra.seed.stock_service.api.dto.StockAgregeView;
 import sn.isra.seed.stock_service.api.dto.UpsertStockRequest;
 import sn.isra.seed.stock_service.entity.MouvementStock;
 import sn.isra.seed.stock_service.entity.Site;
@@ -20,9 +22,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
@@ -49,6 +53,61 @@ public class StockController {
     }
     if (site == null || site.isBlank()) return stockRepo.findAll();
     return stockRepo.findBySite_CodeSite(site);
+  }
+
+  @GetMapping("/stocks/agrege")
+  public ResponseEntity<List<StockAgregeDto>> agrege(@AuthenticationPrincipal Jwt jwt) {
+    List<StockAgregeView> views;
+
+    if (jwt != null && isMultiplicateur(jwt)) {
+      Object orgClaim = jwt.getClaim("org_id");
+      if (orgClaim == null) return ResponseEntity.ok(List.of());
+      try {
+        views = stockRepo.findAgregeByOrganisation(Long.parseLong(orgClaim.toString()));
+      } catch (NumberFormatException e) {
+        return ResponseEntity.ok(List.of());
+      }
+    } else {
+      views = stockRepo.findAllAgrege();
+    }
+
+    List<String> allowedGens = null;
+    if (jwt != null) {
+      if (hasRole(jwt, "seed-upsemcl"))   allowedGens = List.of("G1", "G2", "G3");
+      else if (hasRole(jwt, "seed-selector")) allowedGens = List.of("G0", "G1");
+    }
+
+    final List<String> finalGens = allowedGens;
+    return ResponseEntity.ok(views.stream()
+        .filter(v -> finalGens == null || finalGens.contains(v.getCodeGeneration()))
+        .map(this::toAgregeDto)
+        .collect(Collectors.toList())
+    );
+  }
+
+  private StockAgregeDto toAgregeDto(StockAgregeView v) {
+    List<StockAgregeDto.LotDetailDto> details = List.of();
+    String json = v.getLotsDetail();
+    if (json != null && !json.isBlank() && !"null".equals(json)) {
+      try {
+        details = om.readValue(json, new TypeReference<List<StockAgregeDto.LotDetailDto>>() {});
+      } catch (Exception ignored) {}
+    }
+    return new StockAgregeDto(
+        v.getIdVariete(), v.getIdGeneration(), v.getIdSite(),
+        v.getCodeSite(), v.getNomSite(), v.getCodeGeneration(),
+        v.getNomVariete(), v.getCodeVariete(), v.getNomEspece(), v.getCodeEspece(),
+        v.getUnite(), v.getQuantiteTotale(), v.getNbLots(), v.getDerniereMaj(), v.getCreatedAt(), details
+    );
+  }
+
+  private boolean hasRole(Jwt jwt, String role) {
+    try {
+      java.util.Map<String, Object> ra = jwt.getClaim("realm_access");
+      if (ra == null) return false;
+      Object roles = ra.get("roles");
+      return roles instanceof java.util.List<?> list && list.contains(role);
+    } catch (Exception e) { return false; }
   }
 
   private boolean isMultiplicateur(Jwt jwt) {

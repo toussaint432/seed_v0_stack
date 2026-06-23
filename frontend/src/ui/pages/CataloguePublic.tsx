@@ -4,6 +4,7 @@ import {
   Navigation, MessageCircle, ShoppingCart, X, Trash2, CheckCircle2,
   Search, ChevronRight, LucideIcon,
 } from 'lucide-react'
+import { MapCatalogue } from '../components/MapCatalogue'
 
 /* ── Types ─────────────────────────────────────────────── */
 interface Espece { id: number; codeEspece: string; nomCommun: string }
@@ -98,6 +99,9 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
   const [submittingOrder, setSubmittingOrder] = useState(false)
   const [orderFeedback,   setOrderFeedback]   = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
+  /* ── Vue liste / carte ── */
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
+
   /* ── Cart actions ── */
   function addToCart(v: VarieteGroup) {
     const qty = Number(qtyInputs[v.varieteId] || 500)
@@ -115,6 +119,16 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     setAddedIds(prev => { const s = new Set(prev); s.add(v.varieteId); return s })
     setTimeout(() => setAddedIds(prev => { const s = new Set(prev); s.delete(v.varieteId); return s }), 1800)
     setQtyInputs(prev => ({ ...prev, [v.varieteId]: '' }))
+  }
+
+  /* ── Ajout panier depuis la vue carte ── */
+  function addToCartFromMap(lot: CatalogueItem, qty: number) {
+    const idGen = GEN_ID_MAP[lot.generation] ?? 7
+    setCart(prev => {
+      const existing = prev.find(c => c.varieteId === lot.varieteId)
+      if (existing) return prev.map(c => c.varieteId === lot.varieteId ? { ...c, quantite: c.quantite + qty } : c)
+      return [...prev, { varieteId: lot.varieteId, nomVariete: lot.nomVariete, codeVariete: lot.codeVariete, nomEspece: lot.nomEspece, idGeneration: idGen, generation: lot.generation, quantite: qty, unite: lot.unite || 'kg', disponible: lot.quantiteDisponible }]
+    })
   }
 
   function removeFromCart(varieteId: number) {
@@ -188,7 +202,24 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
 
   useEffect(() => {
     fetch(`${CATALOG}/species`, { headers }).then(r => r.json()).then(setEspeces).catch(() => {})
-    fetch(`${CATALOG}/zones`).then(r => r.json()).then(setZones).catch(() => {})
+
+    // Charge les zones puis pré-sélectionne celle de l'utilisateur connecté
+    fetch(`${CATALOG}/zones`)
+      .then(r => r.json())
+      .then((loadedZones: ZoneAgro[]) => {
+        setZones(loadedZones)
+        // Résolution de la ZAE de l'utilisateur via son profil d'organisation
+        fetch(`${CATALOG}/zones/ma-zone`, { headers })
+          .then(r => r.status === 204 ? null : r.json())
+          .then((userZone: ZoneAgro | null) => {
+            if (userZone) {
+              const matched = loadedZones.find(z => z.id === userZone.id)
+              if (matched) setSelectedZone(matched)
+            }
+          })
+          .catch(() => { /* pas de zone configurée → Toutes zones par défaut */ })
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -410,7 +441,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateCartItemQty(item.varieteId, Number(e.target.value))}
                       style={{ width: 80, height: 32, borderRadius: 6, border: '1px solid var(--border)', padding: '0 8px', fontSize: 13, fontFamily: 'inherit' }} />
                     <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      kg / {item.disponible.toLocaleString('fr-FR')} dispo
+                      kg / {item.disponible.toLocaleString('fr-FR')} kg dispo
                     </span>
                   </div>
                 </div>
@@ -544,6 +575,20 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
             </div>
           )}
 
+          {/* Bascule vue liste / carte */}
+          <div style={{ display: 'flex', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+            <button
+              onClick={() => setViewMode('list')}
+              style={{ height: 34, padding: '0 12px', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', background: viewMode === 'list' ? '#16a34a' : 'var(--surface)', color: viewMode === 'list' ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+              📋 Liste
+            </button>
+            <button
+              onClick={() => setViewMode('map')}
+              style={{ height: 34, padding: '0 12px', border: 'none', borderLeft: '1px solid var(--border)', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', background: viewMode === 'map' ? '#16a34a' : 'var(--surface)', color: viewMode === 'map' ? '#fff' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
+              🗺️ Carte
+            </button>
+          </div>
+
           <button onClick={() => setShowCart(true)}
             style={{ height: 34, padding: '0 14px', borderRadius: 8, border: cart.length > 0 ? '1.5px solid #16a34a' : '1px solid var(--border)', background: cart.length > 0 ? '#f0fdf4' : 'var(--surface)', color: cart.length > 0 ? '#16a34a' : 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <ShoppingCart size={14} />
@@ -551,8 +596,8 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
           </button>
         </div>
 
-        {/* Zone chips */}
-        {zones.length > 0 && (
+        {/* Zone chips - masquées en mode carte (MapCatalogue a son propre filtre) */}
+        {zones.length > 0 && viewMode === 'list' && (
           <div style={{ padding: '8px 20px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', flexShrink: 0 }}>
             <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500, marginRight: 2 }}>Zone :</span>
             {[null, ...zones].map((z, i) => {
@@ -568,7 +613,22 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
           </div>
         )}
 
-        {/* Content area */}
+        {/* Vue carte interactive */}
+        {viewMode === 'map' && (
+          <MapCatalogue
+            catalogue={catalogue}
+            zones={zones}
+            selectedEspece={selectedEspece}
+            selectedZone={selectedZone}
+            cart={cart}
+            onAddToCart={addToCartFromMap}
+            onContacter={async (orgId) => { await handleContacter(orgId) }}
+            onSelectZone={setSelectedZone}
+          />
+        )}
+
+        {/* Content area - mode liste */}
+        {viewMode === 'list' && (
         <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
 
           {/* Welcome state */}
@@ -625,9 +685,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
                 const inCart   = cart.find(c => c.varieteId === v.varieteId)
                 const nCfg     = v.niveauAdaptation ? NIVEAU_CONFIG[v.niveauAdaptation] : null
                 const accent   = nCfg?.color ?? '#6b7280'
-                const stockTonnes = v.stockTotal >= 1000
-                  ? `${(v.stockTotal / 1000).toFixed(1)} t`
-                  : `${v.stockTotal.toLocaleString('fr-FR')} kg`
+                const stockTonnes = `${v.stockTotal.toLocaleString('fr-FR')} kg`
 
                 return (
                   <div key={v.varieteId} style={{ background: 'var(--surface)', borderRadius: 14, border: inCart ? '2px solid #16a34a' : '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.15s, border-color 0.15s' }}>
@@ -706,6 +764,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Feedback toast */}

@@ -17,12 +17,18 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Consomme les événements LOT_TRANSFER_ACCEPTE publiés par le lot-service
- * et synchronise le stock physique (quantite_disponible) entre les deux sites.
+ * Consommateur Kafka — événements LOT_TRANSFER_ACCEPTE.
  *
- * Résolution des sites :
- *   - source      : premier site ayant du stock positif pour ce lot (EAGER fetch)
- *   - destination : premier site actif de l'org correspondant au rôle destinataire
+ * Rôle : synchroniser le stock physique (quantite_disponible) entre les deux sites
+ * lorsqu'un transfert de lot semencier est accepté par le destinataire.
+ *
+ * Règle FIFO appliquée côté source :
+ *   - Le stock source est identifié par le premier enregistrement créé (createdAt ASC),
+ *     conformément à la règle Premier Entré, Premier Sorti.
+ *
+ * Résolution du site destination :
+ *   - Si siteCode explicite fourni dans le payload → utilisé directement (cas normal).
+ *   - Sinon → résolution automatique par type d'organisation du rôle destinataire (fallback).
  */
 @Slf4j
 @Component
@@ -31,7 +37,9 @@ public class LotTransferConsumer {
 
     private static final Map<String, String> ROLE_TO_ORG_TYPE = Map.of(
         "seed-upsemcl",       "UPSEMCL",
-        "seed-multiplicator", "MULTIPLICATEUR"
+        "seed-multiplicator", "MULTIPLICATEUR",
+        "seed-quotataire",    "DISTRIBUTEUR",
+        "seed-admin",         "ISRA"
     );
 
     private final StockRepo            stockRepo;
@@ -50,31 +58,43 @@ public class LotTransferConsumer {
             String     unite            = (String) payload.getOrDefault("unite", "kg");
             String     codeTransfert    = (String) payload.get("codeTransfert");
             String     roleDestinataire = (String) payload.get("roleDestinataire");
+            // siteCode explicite : fourni par le destinataire lors de l'acceptation
+            String     siteCodeExplicite = (String) payload.get("siteCode");
 
-            // Résolution site source — premier stock positif pour ce lot (site EAGER)
+            // Résolution du site source : règle FIFO — on prend le stock le plus ancien (premier entré)
             List<Stock> sources = stockRepo.findPositiveByIdLot(idLot);
             if (sources.isEmpty()) {
                 log.warn("LotTransferConsumer : aucun stock positif pour lot {} — transfert {} ignoré",
                          idLot, codeTransfert);
                 return;
             }
+            // Premier élément = plus ancien stock (ORDER BY createdAt ASC dans findPositiveByIdLot)
             String srcSite = sources.get(0).getSite().getCodeSite();
 
-            // Résolution site destination — org type lié au rôle destinataire
-            String orgType = ROLE_TO_ORG_TYPE.get(roleDestinataire);
-            if (orgType == null) {
-                log.warn("LotTransferConsumer : rôle destinataire inconnu '{}' pour transfert {}",
-                         roleDestinataire, codeTransfert);
-                return;
-            }
-            String destSite = siteRepo.findCodeSiteByOrgType(orgType).orElse(null);
-            if (destSite == null) {
-                log.warn("LotTransferConsumer : aucun site actif pour org type '{}' (transfert {})",
-                         orgType, codeTransfert);
-                return;
+            // Résolution du site destination :
+            //   1er choix : siteCode explicitement fourni par le destinataire lors de l'acceptation
+            //   2e choix  : résolution automatique par type d'organisation (fallback)
+            String destSite;
+            if (siteCodeExplicite != null && !siteCodeExplicite.isBlank()) {
+                // Cas standard : l'UPSemCL / multiplicateur a sélectionné son site d'entrée
+                destSite = siteCodeExplicite;
+            } else {
+                // Fallback : on cherche le premier site actif correspondant au type d'org du rôle destinataire
+                String orgType = ROLE_TO_ORG_TYPE.get(roleDestinataire);
+                if (orgType == null) {
+                    log.warn("LotTransferConsumer : rôle destinataire inconnu '{}' pour transfert {}",
+                             roleDestinataire, codeTransfert);
+                    return;
+                }
+                destSite = siteRepo.findCodeSiteByOrgType(orgType).orElse(null);
+                if (destSite == null) {
+                    log.warn("LotTransferConsumer : aucun site actif pour org type '{}' (transfert {})",
+                             orgType, codeTransfert);
+                    return;
+                }
             }
 
-            log.info("LotTransferConsumer : lot={} {} {} → {} qte={}{}",
+            log.info("LotTransferConsumer : lot={} {} FIFO {} → {} qte={}{}",
                      idLot, codeTransfert, srcSite, destSite, quantite, unite);
             stockTransferService.appliquer(idLot, srcSite, destSite, quantite, unite, codeTransfert);
 

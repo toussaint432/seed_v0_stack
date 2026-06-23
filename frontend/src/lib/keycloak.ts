@@ -28,10 +28,11 @@ export async function initKeycloak(): Promise<boolean> {
     return keycloak.authenticated ?? false
   }
   WIN.__keycloakInitialized = true
+
   const authenticated = await keycloak.init({
-    onLoad:           'check-sso',
-    pkceMethod:       'S256',
-    checkLoginIframe: false,
+    pkceMethod:               'S256',
+    checkLoginIframe:         false,
+    silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
   })
   return authenticated
 }

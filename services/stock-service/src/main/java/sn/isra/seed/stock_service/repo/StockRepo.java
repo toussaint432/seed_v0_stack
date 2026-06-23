@@ -2,6 +2,7 @@ package sn.isra.seed.stock_service.repo;
 
 import sn.isra.seed.stock_service.api.dto.CatalogueItem;
 import sn.isra.seed.stock_service.api.dto.CatalogueProximiteItem;
+import sn.isra.seed.stock_service.api.dto.StockAgregeView;
 import sn.isra.seed.stock_service.entity.Stock;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -16,8 +17,17 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
   List<Stock> findBySite_CodeSite(String codeSite);
   Optional<Stock> findByIdLotAndSite_CodeSite(Long idLot, String codeSite);
 
-  /** Tous les stocks positifs d'un lot (pour trouver le site source lors d'un transfert). */
-  @Query("SELECT s FROM Stock s WHERE s.idLot = :idLot AND s.quantiteDisponible > 0 ORDER BY s.updatedAt DESC")
+  /**
+   * Stocks positifs d'un lot, triés selon la règle FIFO (Premier Entré, Premier Sorti).
+   *
+   * La règle FIFO garantit que lors d'un débit de stock (sortie ou transfert),
+   * on consomme en priorité les semences les plus anciennes (date d'enregistrement
+   * la plus ancienne), ce qui préserve la fraîcheur et la qualité des lots récents.
+   *
+   * @param idLot identifiant du lot semencier concerné
+   * @return liste des entrées de stock disponibles, ordonnées par date de création ASC
+   */
+  @Query("SELECT s FROM Stock s WHERE s.idLot = :idLot AND s.quantiteDisponible > 0 ORDER BY s.createdAt ASC")
   List<Stock> findPositiveByIdLot(@Param("idLot") Long idLot);
 
   /**
@@ -57,12 +67,13 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
    */
   @Modifying
   @Query(value = """
-      INSERT INTO stock (id_lot, id_site, quantite_disponible, unite, updated_at)
+      INSERT INTO stock (id_lot, id_site, quantite_disponible, unite, updated_at, created_at)
       VALUES (
           :idLot,
           (SELECT id FROM site WHERE code_site = :codeSite),
           :delta,
           :unite,
+          NOW(),
           NOW()
       )
       ON CONFLICT (id_lot, id_site)
@@ -81,6 +92,60 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
    */
   @Query("SELECT s FROM Stock s WHERE s.site.idOrganisation = :orgId ORDER BY s.updatedAt DESC")
   List<Stock> findByOrganisation(@Param("orgId") Long orgId);
+
+  /** Vue agrégée par (variété, génération, site) — tous les rôles sauf multiplicateur. */
+  @Query(value = """
+      SELECT
+          id_variete       AS idVariete,
+          id_generation    AS idGeneration,
+          id_site          AS idSite,
+          code_site        AS codeSite,
+          nom_site         AS nomSite,
+          code_generation  AS codeGeneration,
+          nom_variete      AS nomVariete,
+          code_variete     AS codeVariete,
+          nom_espece       AS nomEspece,
+          code_espece      AS codeEspece,
+          unite,
+          quantite_totale  AS quantiteTotale,
+          nb_lots          AS nbLots,
+          TO_CHAR(derniere_maj AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS derniereMaj,
+          TO_CHAR(premiere_entree AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS createdAt,
+          lots_detail::text AS lotsDetail
+      FROM v_stock_agrege
+      ORDER BY code_generation, nom_variete, code_site
+      """, nativeQuery = true)
+  List<StockAgregeView> findAllAgrege();
+
+  /** Vue agrégée filtrée par organisation (multiplicateur). */
+  @Query(value = """
+      SELECT
+          va.id_variete       AS idVariete,
+          va.id_generation    AS idGeneration,
+          va.id_site          AS idSite,
+          va.code_site        AS codeSite,
+          va.nom_site         AS nomSite,
+          va.code_generation  AS codeGeneration,
+          va.nom_variete      AS nomVariete,
+          va.code_variete     AS codeVariete,
+          va.nom_espece       AS nomEspece,
+          va.code_espece      AS codeEspece,
+          va.unite,
+          va.quantite_totale  AS quantiteTotale,
+          va.nb_lots          AS nbLots,
+          TO_CHAR(va.derniere_maj AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS derniereMaj,
+          TO_CHAR(va.premiere_entree AT TIME ZONE 'UTC',
+                  'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS createdAt,
+          va.lots_detail::text AS lotsDetail
+      FROM v_stock_agrege va
+      JOIN site si ON va.id_site = si.id
+      WHERE si.id_organisation = :orgId
+      ORDER BY va.code_generation, va.nom_variete, va.code_site
+      """, nativeQuery = true)
+  List<StockAgregeView> findAgregeByOrganisation(@Param("orgId") Long orgId);
 
   /**
    * Catalogue public : stocks R1/R2 disponibles chez les multiplicateurs.
@@ -118,7 +183,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
       JOIN organisation o     ON si.id_organisation = o.id
       LEFT JOIN variete_zone vz
           ON v.id = vz.id_variete
-          AND (:idZone IS NULL OR vz.id_zone = CAST(:idZone AS BIGINT))
+          AND vz.id_zone = CAST(:idZone AS BIGINT)
       WHERE g.code_generation IN ('R1','R2')
         AND s.quantite_disponible > 0
         AND ls.statut_lot = 'DISPONIBLE'

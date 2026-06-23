@@ -61,6 +61,7 @@ function fmtDatetime(value?: string | null): string {
 export function Transfers({ roleKey }: Props) {
   const [transfers, setTransfers] = useState<any[]>([])
   const [lots, setLots] = useState<any[]>([])
+  const [sites, setSites] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [loading, setLoading] = useState(true)
@@ -68,6 +69,10 @@ export function Transfers({ roleKey }: Props) {
   const [currentPage, setCurrentPage] = useState(1)
   const [showForm, setShowForm] = useState(false)
   const [showDetail, setShowDetail] = useState<any>(null)
+  // Modal acceptation avec sélection de site destination (enregistrement FIFO en stock)
+  const [acceptModal, setAcceptModal] = useState<any>(null)
+  const [acceptSiteCode, setAcceptSiteCode] = useState('')
+  const [acceptSaving, setAcceptSaving] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const canCreate = ['seed-admin', 'seed-selector', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
@@ -105,14 +110,16 @@ export function Transfers({ roleKey }: Props) {
   async function fetchAll() {
     setLoading(true)
     const lotsUrl = roleKey === 'seed-multiplicator' ? endpoints.lotsMesLots : endpoints.lots
-    const [tRes, lRes, rRes] = await Promise.allSettled([
+    const [tRes, lRes, rRes, sRes] = await Promise.allSettled([
       api.get(endpoints.transfertsLot),
       api.get(lotsUrl),
       api.get(endpoints.transfertsRecus),
+      api.get(endpoints.sites),
     ])
     setTransfers(tRes.status === 'fulfilled' ? tRes.value.data : [])
     setLots(lRes.status === 'fulfilled' ? lRes.value.data : [])
     setRecus(rRes.status === 'fulfilled' ? rRes.value.data : [])
+    setSites(sRes.status === 'fulfilled' ? sRes.value.data : [])
     setLoading(false)
   }
 
@@ -136,14 +143,20 @@ export function Transfers({ roleKey }: Props) {
     acc[t.statut] = (acc[t.statut] || 0) + 1; return acc
   }, {})
 
-  async function accepter(id: number) {
+  async function confirmerAcceptation() {
+    if (!acceptModal) return
+    setAcceptSaving(true)
     try {
-      await api.put(endpoints.transfertAccepter(id), {})
-      setToast({ msg: 'Transfert accepté', type: 'success' })
+      await api.put(endpoints.transfertAccepter(acceptModal.id), {
+        siteCode: acceptSiteCode || undefined,
+      })
+      setToast({ msg: `Transfert ${acceptModal.codeTransfert} accepté${acceptSiteCode ? ' — stock crédité (FIFO)' : ''}`, type: 'success' })
+      setAcceptModal(null)
+      setAcceptSiteCode('')
       fetchAll()
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
-    }
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de l\'acceptation', type: 'error' })
+    } finally { setAcceptSaving(false) }
   }
 
   async function refuser(e: React.FormEvent) {
@@ -317,7 +330,8 @@ export function Transfers({ roleKey }: Props) {
                   </div>
                   {t.observations && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{t.observations}</div>}
                 </div>
-                <button className="btn btn-primary" style={{ height: 30, fontSize: 12 }} onClick={() => accepter(t.id)}>
+                <button className="btn btn-primary" style={{ height: 30, fontSize: 12 }}
+                  onClick={() => { setAcceptModal(t); setAcceptSiteCode('') }}>
                   <CheckCircle2 size={12} /> Accepter
                 </button>
                 <button className="btn btn-ghost" style={{ height: 30, fontSize: 12, color: '#ef4444', borderColor: '#fca5a5' }}
@@ -525,6 +539,49 @@ export function Transfers({ roleKey }: Props) {
               <div style={{ gridColumn: '1 / -1' }}><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Observations</div><div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{showDetail.observations}</div></div>
             )}
           </div>
+        </Modal>
+      )}
+
+      {/* Modal Acceptation — sélection site de stockage (FIFO) */}
+      {acceptModal && (
+        <Modal
+          title="Accepter le transfert"
+          subtitle={`${acceptModal.codeTransfert} · Lot #${acceptModal.idLot} · ${acceptModal.generationTransferee} · ${Number(acceptModal.quantite || 0).toLocaleString('fr-FR')} kg`}
+          onClose={() => { setAcceptModal(null); setAcceptSiteCode('') }}
+          size="sm"
+        >
+          <form onSubmit={e => { e.preventDefault(); confirmerAcceptation() }}>
+            <Field
+              label="Site de stockage de réception"
+              hint="Sélectionnez le site où les semences seront stockées. Le stock sera crédité automatiquement selon la règle FIFO."
+            >
+              <FormSelect
+                value={acceptSiteCode}
+                onChange={e => setAcceptSiteCode(e.target.value)}
+              >
+                <option value="">— Aucun site (enregistrement manuel plus tard) —</option>
+                {sites.map((s: any) => (
+                  <option key={s.id} value={s.codeSite}>
+                    {s.codeSite} — {s.nomSite}
+                  </option>
+                ))}
+              </FormSelect>
+            </Field>
+            {acceptSiteCode && (
+              <div style={{
+                padding: '10px 14px', borderRadius: 8,
+                background: '#f0fdf4', border: '1px solid #bbf7d0',
+                fontSize: 12.5, color: '#166534', marginBottom: 12,
+              }}>
+                ✓ <strong>{Number(acceptModal.quantite || 0).toLocaleString('fr-FR')} kg</strong> seront crédités au site <strong>{acceptSiteCode}</strong> selon la règle FIFO.
+              </div>
+            )}
+            <FormActions
+              onCancel={() => { setAcceptModal(null); setAcceptSiteCode('') }}
+              loading={acceptSaving}
+              submitLabel="Confirmer l'acceptation"
+            />
+          </form>
         </Modal>
       )}
 

@@ -8,6 +8,7 @@ import { api }             from '../../lib/api'
 import { endpoints }       from '../../lib/endpoints'
 import { SelectorAnalytics } from './SelectorAnalytics'
 import { PendingDeliveries } from '../components/PendingDeliveries'
+import { MapSemences }     from '../components/MapSemences'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
 
@@ -42,25 +43,27 @@ const GEN_CFG: Record<string, { bg: string; color: string }> = {
   G1: { bg: '#f0fdf4', color: '#15803d' },
   G2: { bg: '#fef9ed', color: '#92660a' },
   G3: { bg: '#faf5ff', color: '#6d28d9' },
+  G4: { bg: '#fff7ed', color: '#c2410c' },
   R1: { bg: '#f0fdfa', color: '#0f766e' },
   R2: { bg: '#dcfce7', color: '#16a34a' },
 }
 const GEN_LABELS: Record<string, string> = {
   G0: 'Noyau génétique', G1: 'Pré-base',  G2: 'Base',
-  G3: 'Certifiée C1',    R1: 'R1', R2: 'Commerciale R2',
+  G3: 'Certifiée C1',    G4: 'Certifiée C2', R1: 'R1', R2: 'Commerciale R2',
 }
 const GEN_COLOR: Record<string, string> = {
   G0: '#1d4ed8', G1: '#15803d', G2: '#92660a',
-  G3: '#6d28d9', R1: '#0f766e', R2: '#16a34a',
+  G3: '#6d28d9', G4: '#c2410c', R1: '#0f766e', R2: '#16a34a',
 }
 const GEN_LABEL: Record<string, string> = {
   G0: 'Génétique', G1: 'Pré-base', G2: 'Base',
-  G3: 'Certif. C1', R1: 'R1', R2: 'Commerciale',
+  G3: 'Certif. C1', G4: 'Certif. C2', R1: 'R1', R2: 'Commerciale',
 }
 const ROLE_GENS: Record<string, string[]> = {
-  'seed-admin':         ['G0','G1','G2','G3','R1','R2'],
+  'seed-admin':         ['G0','G1','G2','G3','G4','R1','R2'],
+  'seed-selector':      ['G0','G1'],
   'seed-upsemcl':       ['G1','G2','G3'],
-  'seed-multiplicator': ['G3','R1','R2'],
+  'seed-multiplicator': ['G3','G4','R1','R2'],
   'seed-quotataire':    ['R2'],
 }
 
@@ -401,7 +404,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     }, {})
 
     const stockTotal    = stocks.reduce((s: number, x: any) => s + (parseFloat(x.quantiteDisponible) || 0), 0)
-    const ordersPending = orders.filter((o: any) => ['PENDING', 'EN_ATTENTE'].includes(o.statut)).length
+    const ordersPending = orders.filter((o: any) => o.statut === 'SOUMISE').length
     const recentLots    = [...lots].sort((a: any, b: any) => (b.id || 0) - (a.id || 0)).slice(0, 8)
 
     const vm: Record<number, string> = {}
@@ -458,7 +461,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   ]
 
   /* ── Stock computation ── */
-  const allowedStockGens = ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','R1','R2']
+  const allowedStockGens = ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2']
   const varietyMap: Record<number, any> = Object.fromEntries(rawVarieties.map((v: any) => [v.id, v]))
   const lotMap: Record<number, any>     = Object.fromEntries(rawLots.map((l: any) => [l.id, l]))
 
@@ -544,8 +547,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     const esp     = variety.espece ?? {}
     const code    = esp.codeEspece ?? '?'
     if (code === '?') return
-    const activeStatuts = ['EN_ATTENTE','PENDING','CONFIRMEE','CONFIRMED','ALLOUEE','ALLOCATED']
-    if (!activeStatuts.includes((o.statut ?? '').toUpperCase())) return
+    // Commandes actives = soumises ou en cours (pas livrées/annulées/rejetées)
+    if (!['SOUMISE','ACCEPTEE','EN_PREPARATION'].includes(o.statut ?? '')) return
     if (!especeCovMap[code]) especeCovMap[code] = { nom: esp.nomEspece ?? code, stockKg: 0, demandKg: 0 }
     especeCovMap[code].demandKg += parseFloat(o.quantite ?? o.quantiteDemandee ?? 0) || 0
   })
@@ -562,7 +565,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const forecastByGen: Record<string, { lots: number; ha: number; expectedKg: number }> = {}
   rawLots.forEach((l: any) => {
     const statut = (l.statut ?? '').toUpperCase()
-    if (!['EN_PRODUCTION','EN_COURS_PRODUCTION','PLANTE','EN_CULTURE'].includes(statut)) return
+    if (statut !== 'EN_PRODUCTION') return
     const gen = l.generation?.codeGeneration ?? '?'
     if (!allowedStockGens.includes(gen)) return
     const ha       = parseFloat(l.superficieHa ?? l.superficie_ha ?? 0) || 0
@@ -583,7 +586,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   /* ── Lots à certifier (alertes) ── */
   const lotsACertifierCount = rawLots.filter((l: any) =>
     allowedStockGens.includes(l.generation?.codeGeneration ?? '') &&
-    ['EN_COURS_CERT','A_CERTIFIER','SOUMIS_CERT','SOUMIS_CERTIFICATION'].includes((l.statut ?? '').toUpperCase())
+    (l.statut === 'EN_COURS_CERT')
   ).length
 
   const hasAnyAlerts = criticalCov > 0 || warningCov > 0 || lotsACertifierCount > 0 || stats.ordersPending > 0
@@ -824,7 +827,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
             {/* ── Flow générationnel ── */}
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              {['G0','G1','G2','G3','R1','R2'].map((g, idx, arr) => {
+              {['G0','G1','G2','G3','G4','R1','R2'].map((g, idx, arr) => {
                 const cfg    = GEN_CFG[g]
                 const count  = loading ? 0 : (stats.genCounts[g] || 0)
                 const active = count > 0
@@ -883,7 +886,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             {/* ── Donut distribution ── */}
             {!loading && (
               <DonutChart data={
-                ['G0','G1','G2','G3','R1','R2']
+                ['G0','G1','G2','G3','G4','R1','R2']
                   .filter(g => (stats.genCounts[g] || 0) > 0)
                   .map(g => ({ label: GEN_LABEL[g] ?? g, value: stats.genCounts[g], color: GEN_COLOR[g], gen: g }))
               } />
@@ -1638,6 +1641,42 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       {roleKey === 'seed-selector' && (
         <SelectorAnalytics userSpecialisation={userSpecialisation} />
       )}
+
+      {/* ══════════════════════════════════════════════════════
+          CARTE AGRO-ÉCOLOGIQUE — visible par tous les rôles
+          Données filtrées selon le périmètre du rôle connecté
+      ══════════════════════════════════════════════════════ */}
+      <div style={{
+        background: '#fff', borderRadius: 16,
+        border: '1px solid var(--border)',
+        overflow: 'hidden',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        marginBottom: 20,
+      }}>
+        {/* En-tête section */}
+        <div style={{
+          padding: '14px 24px', borderBottom: '1px solid var(--border)',
+          background: 'linear-gradient(135deg, #f0fdf4 0%, #fff 80%)',
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
+          <span style={{
+            fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
+            letterSpacing: '0.12em', color: D.green, background: D.greenSoft,
+            padding: '3px 10px', borderRadius: 999,
+          }}>Géographie</span>
+          <span style={{ fontFamily: D.display, fontSize: 15, fontWeight: 600, color: D.ink }}>
+            Répartition géographique des semences
+          </span>
+          <span style={{ fontFamily: D.body, fontSize: 12, color: D.muted }}>
+            — zones agro-écologiques &amp; sites ISRA
+          </span>
+        </div>
+
+        {/* Composant carte */}
+        <div style={{ padding: '16px 20px 20px' }}>
+          <MapSemences roleKey={roleKey} />
+        </div>
+      </div>
 
       <style>{`
         @keyframes spin      { to { transform: rotate(360deg); } }

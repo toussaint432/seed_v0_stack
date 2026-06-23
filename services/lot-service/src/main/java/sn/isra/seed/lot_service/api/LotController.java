@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -97,6 +98,7 @@ public class LotController {
     // ── Créer un lot racine (G0) ──────────────────────────────
     @PostMapping
     public LotSemencier create(@RequestBody LotSemencier lot,
+                                @RequestParam(required = false) String siteCode,
                                 @AuthenticationPrincipal Jwt jwt) throws Exception {
         if (jwt != null) {
             String username = jwt.getClaimAsString("preferred_username");
@@ -127,20 +129,68 @@ public class LotController {
         if (lot.getUnite() == null || lot.getUnite().isBlank()) lot.setUnite("kg");
         if (lot.getStatutLot() == null) lot.setStatutLot(StatutLot.DISPONIBLE);
 
-        LotSemencier saved = lotRepo.save(lot);
+        LotSemencier saved;
+        try {
+            saved = lotRepo.save(lot);
+            lotRepo.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Le code lot '" + lot.getCodeLot() + "' existe déjà — modifiez le code (ex : ajoutez -02, -03…).");
+        }
         // save() peut remplacer generation par un proxy bytecode → on réinjecte l'entité pleine
         if (resolvedGen != null) saved.setGeneration(resolvedGen);
         producer.lotCreated(om.writeValueAsString(saved));
+        publishStockSync(saved, siteCode);
         return saved;
     }
 
     // ── Créer un lot enfant (G1 depuis G0, G2 depuis G1…) ────
+    private static final Map<String, String> NEXT_GEN = Map.of(
+        "G0", "G1", "G1", "G2", "G2", "G3",
+        "G3", "G4", "G4", "R1", "R1", "R2"
+    );
+
     @Transactional
     @PostMapping("/{id}/child")
     public LotSemencier createChild(@PathVariable Long id,
                                      @RequestBody CreateChildLotRequest req,
                                      @AuthenticationPrincipal Jwt jwt) throws Exception {
         LotSemencier parent = lotRepo.findById(id).orElseThrow();
+
+        // Validation stricte de la chaîne générationnelle G0→G1→G2→G3→G4→R1→R2
+        String parentGenCode = parent.getGeneration() != null
+                ? parent.getGeneration().getCodeGeneration() : null;
+        String expected = parentGenCode != null ? NEXT_GEN.get(parentGenCode) : null;
+        if (expected == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "La génération " + parentGenCode + " est terminale — aucun lot enfant possible.");
+        }
+        if (!expected.equals(req.generationCode())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Transition invalide : " + parentGenCode + " → " + req.generationCode()
+                + ". Seule la transition " + parentGenCode + " → " + expected + " est autorisée.");
+        }
+
+        // Sécurité : le sélectionneur ne peut créer un enfant que depuis ses propres lots
+        if (jwt != null && extractRealmRoles(jwt).contains("seed-selector")) {
+            String caller = jwt.getClaimAsString("preferred_username");
+            boolean isOwner = caller != null && caller.equals(parent.getUsernameCreateur());
+            if (!isOwner) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Accès refusé : vous ne pouvez créer un lot enfant que depuis vos propres lots G0.");
+            }
+        }
+
+        // Garde quantité : validée avant toute écriture pour éviter un rollback tardif
+        if (req.quantiteSemenceSrcKg() != null
+                && req.quantiteSemenceSrcKg().compareTo(BigDecimal.ZERO) > 0
+                && parent.getQuantiteNette() != null
+                && req.quantiteSemenceSrcKg().compareTo(parent.getQuantiteNette()) > 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                "Quantité demandée (" + req.quantiteSemenceSrcKg() + " kg) supérieure au disponible "
+                + "(" + parent.getQuantiteNette() + " kg) sur le lot " + parent.getCodeLot() + ".");
+        }
+
         Generation gen = generationRepo.findByCodeGeneration(req.generationCode()).orElseThrow();
 
         LotSemencier child = new LotSemencier();
@@ -183,7 +233,6 @@ public class LotController {
             child.setResponsableRole(req.responsableRole() != null
                     ? req.responsableRole()
                     : detectSeedRole(extractRealmRoles(jwt)));
-            // Priorité : valeur explicite de la requête, sinon org du JWT connecté
             if (req.idOrgProducteur() != null) {
                 child.setIdOrgProducteur(req.idOrgProducteur());
             } else {
@@ -195,16 +244,41 @@ public class LotController {
             }
         }
 
-        LotSemencier saved = lotRepo.save(child);
+        // Persistance — détection du doublon sur code_lot (UNIQUE)
+        LotSemencier saved;
+        try {
+            saved = lotRepo.save(child);
+            lotRepo.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Le code lot '" + req.codeLot() + "' existe déjà — ajoutez un suffixe unique (ex : -02, -03…).");
+        }
 
-        // Débiter la quantité nette du lot parent si quantiteSemenceSrcKg fournie
+        // Débit de la quantité source sur le lot parent
         if (req.quantiteSemenceSrcKg() != null
                 && req.quantiteSemenceSrcKg().compareTo(BigDecimal.ZERO) > 0) {
             lotRepo.debitQuantiteNette(parent.getId(), req.quantiteSemenceSrcKg());
         }
 
         producer.lotCreated(om.writeValueAsString(saved));
+        publishStockSync(saved, req.siteCode());
         return saved;
+    }
+
+    private void publishStockSync(LotSemencier lot, String siteCode) {
+        if (siteCode == null || siteCode.isBlank()) return;
+        if (lot.getQuantiteNette() == null || lot.getQuantiteNette().compareTo(BigDecimal.ZERO) <= 0) return;
+        try {
+            String payload = om.writeValueAsString(Map.of(
+                "idLot",    lot.getId(),
+                "codeSite", siteCode,
+                "quantite", lot.getQuantiteNette(),
+                "unite",    lot.getUnite() != null ? lot.getUnite() : "kg"
+            ));
+            producer.lotStockSync(payload);
+        } catch (Exception e) {
+            // Non bloquant : l'événement sera perdu mais le lot est créé
+        }
     }
 
     // ── Changer le statut d'un lot (réservé admin) ───────────

@@ -47,16 +47,20 @@ const GEN_LABEL: Record<string, string> = {
 }
 
 const STATUT_BADGE: Record<string, string> = {
-  EN_ATTENTE:'badge-gold', PENDING:'badge-gold',
-  CONFIRMEE:'badge-blue',  CONFIRMED:'badge-blue',
-  ALLOUEE:'badge-green',   ALLOCATED:'badge-green',
-  ANNULEE:'badge-red',     CANCELLED:'badge-red',
+  SOUMISE:        'badge-blue',
+  ACCEPTEE:       'badge-green',
+  EN_PREPARATION: 'badge-gold',
+  LIVREE:         'badge-green',
+  ANNULEE:        'badge-red',
+  REJETEE:        'badge-red',
 }
 const STATUT_LABEL: Record<string, string> = {
-  EN_ATTENTE:'En attente', PENDING:'En attente',
-  CONFIRMEE:'Confirmée',   CONFIRMED:'Confirmée',
-  ALLOUEE:'Allouée',       ALLOCATED:'Allouée',
-  ANNULEE:'Annulée',       CANCELLED:'Annulée',
+  SOUMISE:        'Soumise',
+  ACCEPTEE:       'Acceptée',
+  EN_PREPARATION: 'En préparation',
+  LIVREE:         'Livrée',
+  ANNULEE:        'Annulée',
+  REJETEE:        'Rejetée',
 }
 const MONTHS_FR = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
 const REFRESH_MS = 30_000
@@ -400,7 +404,7 @@ export function GlobalAnalytics({ roleKey }: Props) {
       generation:   genCode,
       quantite:     parseFloat(o.quantite ?? o.quantiteDemandee ?? 0),
       unite:        o.unite ?? 'kg',
-      statut:       o.statut ?? 'EN_ATTENTE',
+      statut:       o.statut ?? 'SOUMISE',
       date:         (o.createdAt ?? o.dateCommande ?? '').slice(0, 10),
       nomVariete:   variety.nomVariete ?? o.codeVariete ?? o.nomVariete ?? '—',
     }
@@ -434,9 +438,9 @@ export function GlobalAnalytics({ roleKey }: Props) {
       return false
     })
     .reduce((s: number, st: any) => s + (parseFloat(st.quantiteDisponible) || 0), 0)
-  const kpiPending = roleFiltered.filter(o => ['EN_ATTENTE','PENDING'].includes(o.statut)).length
-  const kpiAlloc   = roleFiltered.filter(o => ['ALLOUEE','ALLOCATED'].includes(o.statut)).length
-  const kpiCancel  = roleFiltered.filter(o => ['ANNULEE','CANCELLED'].includes(o.statut)).length
+  const kpiPending = roleFiltered.filter(o => o.statut === 'SOUMISE').length
+  const kpiAlloc   = roleFiltered.filter(o => o.statut === 'EN_PREPARATION').length
+  const kpiCancel  = roleFiltered.filter(o => ['ANNULEE','REJETEE'].includes(o.statut)).length
 
   /* ── BarChart : quantité demandée par variété ── */
   const demandMap: Record<string, { qty: number; gen: string }> = {}

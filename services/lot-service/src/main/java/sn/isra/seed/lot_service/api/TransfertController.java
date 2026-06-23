@@ -5,6 +5,7 @@ import sn.isra.seed.lot_service.entity.OutboxEvent;
 import sn.isra.seed.lot_service.entity.TransfertLot;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.entity.enums.StatutTransfert;
+import sn.isra.seed.lot_service.kafka.LotEventProducer;
 import sn.isra.seed.lot_service.repo.LotRepo;
 import sn.isra.seed.lot_service.repo.OutboxEventRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
@@ -16,9 +17,6 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-
-import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -32,88 +30,101 @@ public class TransfertController {
     private final TransfertLotRepo transfertRepo;
     private final LotRepo          lotRepo;
     private final OutboxEventRepo  outboxRepo;
+    private final LotEventProducer producer;
     private final ObjectMapper     om;
 
     /* ── GET /api/transferts — tous les transferts du connecté ── */
-    // Pour UPSemCL : visibilité org-level (tous les transferts du rôle seed-upsemcl,
-    // qu'ils soient reçus de Sélectionneur ou émis vers Multiplicateur).
     @GetMapping
     public List<TransfertLot> mesTransferts(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
-        List<String> roles = extractRealmRoles(jwt);
-        if (roles.contains("seed-upsemcl"))
-            return transfertRepo.findByRoleParticipant("seed-upsemcl");
         return transfertRepo.findByParticipant(username);
     }
 
-    /* ── GET /api/transferts/recus — EN_ATTENTE pour le connecté ou l'org ── */
+    /* ── GET /api/transferts/recus — EN_ATTENTE pour le connecté ── */
     @GetMapping("/recus")
     public List<TransfertLot> transfertsRecus(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
-        List<String> roles = extractRealmRoles(jwt);
-        if (roles.contains("seed-upsemcl"))
-            return transfertRepo.findPendingForRole("seed-upsemcl");
         return transfertRepo.findPendingForDestinataire(username);
     }
 
-    /* ── PUT /api/transferts/{id}/accepter ─────────────────────── */
+    /**
+     * PUT /api/transferts/{id}/accepter
+     *
+     * Body JSON (optionnel) : { "siteCode": "CNRA-BAMBEY" }
+     *   siteCode : code du site de stockage du destinataire.
+     *   Quand fourni, le stock est crédité immédiatement via lot.stock.sync.
+     *   Sans siteCode, le LotTransferConsumer résout le site par org-type (fallback).
+     *
+     * Correction bug : la quantiteNette du lot source est déjà déduite lors
+     * de l'initiation du transfert (LotController.transfer). Elle NE doit PAS
+     * être déduite une seconde fois ici.
+     */
     @Transactional
     @PutMapping("/{id}/accepter")
     public ResponseEntity<?> accepter(
             @PathVariable Long id,
+            @RequestBody(required = false) Map<String, Object> body,
             @AuthenticationPrincipal Jwt jwt) {
 
         String username = jwt.getClaimAsString("preferred_username");
-        List<String> roles = extractRealmRoles(jwt);
         TransfertLot t = transfertRepo.findById(id).orElse(null);
         if (t == null) return ResponseEntity.notFound().build();
-
-        // Autorisation : destinataire nommé OU tout agent du même rôle organisationnel
-        boolean isDestinataire  = t.getUsernameDestinataire().equals(username);
-        boolean sameOrgRole     = t.getRoleDestinataire() != null && roles.contains(t.getRoleDestinataire());
-        if (!isDestinataire && !sameOrgRole)
+        if (!t.getUsernameDestinataire().equals(username))
             return ResponseEntity.status(403).<Object>body(Map.of("message", "Non autorisé"));
-
         if (StatutTransfert.EN_ATTENTE != t.getStatut())
             return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
 
+        String siteCode = (body != null) ? (String) body.get("siteCode") : null;
+
         t.setStatut(StatutTransfert.ACCEPTE);
         t.setDateAcceptation(LocalDate.now());
-        t.setAcceptedAt(java.time.Instant.now());
 
-        // La quantite_nette a été réservée (déduite) dès l'initiation du transfert.
-        // À l'acceptation : on s'assure que le statut est cohérent avec la quantité restante.
+        // Mise à jour statut lot — quantiteNette déjà déduite lors de l'initiation
         lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
-            boolean lotEncore = lot.getQuantiteNette() != null
-                    && lot.getQuantiteNette().compareTo(BigDecimal.ZERO) > 0;
-            // Si le lot a encore du stock → il est toujours DISPONIBLE
-            if (lotEncore) lot.setStatutLot(StatutLot.DISPONIBLE);
-            // Sinon il reste TRANSFERE (défini à l'initiation)
+            lot.setStatutLot(StatutLot.TRANSFERE);
             lotRepo.save(lot);
         });
 
         TransfertLot saved = transfertRepo.save(t);
 
-        // Outbox — même transaction, durabilité garantie vers Kafka après commit
+        // Publication immédiate lot.stock.sync si siteCode fourni (FIFO : crédit au site destinataire)
+        if (siteCode != null && !siteCode.isBlank() && saved.getQuantite() != null) {
+            try {
+                String syncPayload = om.writeValueAsString(Map.of(
+                    "idLot",    saved.getIdLot(),
+                    "codeSite", siteCode,
+                    "quantite", saved.getQuantite(),
+                    "unite",    "kg"
+                ));
+                producer.lotStockSync(syncPayload);
+            } catch (Exception e) {
+                log.warn("Stock sync non publié pour acceptation transfert {} : {}",
+                         saved.getCodeTransfert(), e.getMessage());
+            }
+        }
+
+        // Outbox Transactional Outbox → lot.transfer.accepte (débit site source + crédit fallback)
         try {
-            String payload = om.writeValueAsString(Map.of(
-                "idTransfertLot",   saved.getId(),
-                "codeTransfert",    saved.getCodeTransfert(),
-                "idLot",            saved.getIdLot(),
-                "quantite",         saved.getQuantite(),
-                "unite",            "kg",
-                "roleEmetteur",     saved.getRoleEmetteur(),
-                "roleDestinataire", saved.getRoleDestinataire()
-            ));
+            Map<String, Object> payloadMap = new java.util.LinkedHashMap<>();
+            payloadMap.put("idTransfertLot",   saved.getId());
+            payloadMap.put("codeTransfert",    saved.getCodeTransfert());
+            payloadMap.put("idLot",            saved.getIdLot());
+            payloadMap.put("quantite",         saved.getQuantite());
+            payloadMap.put("unite",            "kg");
+            payloadMap.put("roleEmetteur",     saved.getRoleEmetteur());
+            payloadMap.put("roleDestinataire", saved.getRoleDestinataire());
+            if (siteCode != null && !siteCode.isBlank()) {
+                payloadMap.put("siteCode", siteCode);
+            }
             OutboxEvent event = new OutboxEvent();
             event.setAggregateType("TransfertLot");
             event.setAggregateId(saved.getId().toString());
             event.setType("LOT_TRANSFER_ACCEPTE");
-            event.setPayload(payload);
+            event.setPayload(om.writeValueAsString(payloadMap));
             outboxRepo.save(event);
         } catch (Exception e) {
-            log.error("Impossible de sérialiser l'événement outbox pour le transfert lot {}",
-                      saved.getCodeTransfert(), e);
+            log.error("Outbox non enregistré pour transfert lot {} : {}",
+                      saved.getCodeTransfert(), e.getMessage());
         }
 
         return ResponseEntity.<Object>ok(saved);
@@ -127,39 +138,15 @@ public class TransfertController {
             @AuthenticationPrincipal Jwt jwt) {
 
         String username = jwt.getClaimAsString("preferred_username");
-        List<String> roles = extractRealmRoles(jwt);
         return transfertRepo.findById(id).map(t -> {
-            boolean isDestinataire = t.getUsernameDestinataire().equals(username);
-            boolean sameOrgRole    = t.getRoleDestinataire() != null && roles.contains(t.getRoleDestinataire());
-            if (!isDestinataire && !sameOrgRole)
+            if (!t.getUsernameDestinataire().equals(username))
                 return ResponseEntity.status(403).<Object>body(Map.of("message", "Non autorisé"));
             if (StatutTransfert.EN_ATTENTE != t.getStatut())
                 return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
 
             t.setStatut(StatutTransfert.REJETE);
             t.setMotifRefus(body.getOrDefault("motif", "Refusé par le destinataire"));
-            t.setRefusedAt(java.time.Instant.now());
-            TransfertLot saved = transfertRepo.save(t);
-            // Restituer la quantité réservée au lot source
-            lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
-                if (t.getQuantite() != null) {
-                    BigDecimal avant = lot.getQuantiteNette() != null
-                            ? lot.getQuantiteNette() : BigDecimal.ZERO;
-                    lot.setQuantiteNette(avant.add(t.getQuantite()));
-                }
-                lot.setStatutLot(StatutLot.DISPONIBLE);
-                lotRepo.save(lot);
-            });
-            return ResponseEntity.<Object>ok(saved);
+            return ResponseEntity.<Object>ok(transfertRepo.save(t));
         }).orElse(ResponseEntity.notFound().build());
-    }
-
-    @SuppressWarnings("unchecked")
-    private List<String> extractRealmRoles(Jwt jwt) {
-        java.util.Map<String, Object> realmAccess = jwt.getClaim("realm_access");
-        if (realmAccess == null) return List.of();
-        Object roles = realmAccess.get("roles");
-        if (roles instanceof List<?>) return (List<String>) roles;
-        return List.of();
     }
 }

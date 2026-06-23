@@ -35,7 +35,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     heroEyebrow: 'Plateforme nationale',
     heroTitle1: 'La filière semencière',
     heroTitle2: 'nationale, numérisée.',
-    heroDesc: "SEED centralise la traçabilité de chaque lot du G0 génétique jusqu'au R2 commercial — certification intégrée, gestion des stocks et pilotage en temps réel.",
+    heroDesc: "Sen Jiw centralise la traçabilité de chaque lot du G0 génétique jusqu'au R2 commercial — certification intégrée, gestion des stocks et pilotage en temps réel.",
     heroCTA: 'Accéder à la plateforme',
     heroDemo: 'Voir la démo',
     trustLabel: 'Soutenu par',
@@ -49,7 +49,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     f6t: 'Messagerie intégrée', f6d: 'Communication directe entre acteurs de la chaîne semencière sans quitter la plateforme.',
     statsLabel: 'La filière en chiffres',
     s1n: '5', s1l: 'Rôles acteurs',
-    s2n: '7', s2l: 'Générations tracées',
+    s2n: '6', s2l: 'Générations tracées',
     s3n: '100%', s3l: 'Données certifiées',
     s4n: '4', s4l: 'Microservices',
     pipeTitle: 'De la génétique au champ',
@@ -64,7 +64,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     howtoTitle: 'Comment ça marche ?',
     howtoDesc: "En quatre étapes simples, de la demande d'accès à la traçabilité complète de votre production semencière.",
     ht1Title: 'Demandez vos accès',
-    ht1Desc: "Contactez l'administrateur ISRA pour obtenir un compte adapté à votre rôle dans la filière semencière nationale.",
+    ht1Desc: "Contactez l'équipe Sen Jiw — opérée par l'ISRA — pour obtenir un compte adapté à votre rôle dans la filière semencière nationale.",
     ht2Title: 'Connexion sécurisée',
     ht2Desc: 'Authentifiez-vous via OAuth 2.0 / PKCE. Chaque identifiant est unique, chiffré et associé à un rôle précis.',
     ht3Title: 'Votre espace personnalisé',
@@ -72,19 +72,19 @@ const I18N: Record<Lang, Record<string, string>> = {
     ht4Title: 'Tracez et certifiez',
     ht4Desc: 'Gérez vos lots G0→R2, soumettez aux organismes certificateurs et générez vos rapports de campagne.',
     ctaTitle: 'Prêt à rejoindre la plateforme ?',
-    ctaDesc: "Contactez l'équipe ISRA pour obtenir vos accès et commencer à tracer votre production.",
+    ctaDesc: "Contactez l'équipe Sen Jiw pour obtenir vos accès et commencer à tracer votre production semencière.",
     ctaBtn: 'Demander un accès',
     faqTitle: 'Questions fréquentes',
-    q1: 'Qui peut utiliser SEED ?', a1: 'Tout acteur accrédité de la filière semencière nationale : sélectionneurs ISRA/CNRA, structures de multiplication (UPSemCL), multiplicateurs agréés et quotataires/OP.',
+    q1: 'Qui peut utiliser Sen Jiw ?', a1: 'Tout acteur accrédité de la filière semencière nationale : sélectionneurs ISRA/CNRA, structures de multiplication (UPSemCL), multiplicateurs agréés et quotataires/OP.',
     q2: 'Les données sont-elles sécurisées ?', a2: "Oui. L'authentification est gérée par Keycloak avec PKCE OAuth2. Chaque utilisateur n'accède qu'aux données correspondant à son rôle.",
-    q3: 'Comment obtenir un compte ?', a3: "Les comptes sont créés par l'administrateur ISRA. Contactez la Direction Technique ISRA pour soumettre une demande d'accès.",
+    q3: 'Comment obtenir un compte ?', a3: "Les comptes sont créés par l'équipe Sen Jiw, en lien avec la Direction Technique ISRA. Contactez-nous pour soumettre une demande d'accès.",
     q4: 'La plateforme fonctionne-t-elle hors-ligne ?', a4: "La version actuelle est en ligne. Une version mobile allégée avec synchronisation est prévue dans une prochaine itération.",
     footerTagline: "Système d'information national de la filière semencière du Sénégal.",
     footerLinks1: 'Plateforme', footerLinks2: 'Légal', footerLinks3: 'Support',
     fl1: 'Tableau de bord', fl2: 'Lots & générations', fl3: 'Stocks & commandes',
     fl4: 'Politique de confidentialité', fl5: "Conditions d'utilisation",
     fl6: 'Documentation', fl7: 'Contact technique',
-    copyright: '© 2026 ISRA / CNRA — République du Sénégal. Tous droits réservés.',
+    copyright: '© 2026 Sen Jiw — République du Sénégal. Tous droits réservés.',
     loginOverlayText: 'Ouverture de la session sécurisée…',
   },
   en: {
@@ -97,7 +97,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     heroEyebrow: 'National platform',
     heroTitle1: 'The national seed',
     heroTitle2: 'industry, digitalized.',
-    heroDesc: 'SEED centralises traceability of every lot from genetic G0 to commercial R2 — integrated certification, stock management and real-time monitoring.',
+    heroDesc: 'Sen Jiw centralises traceability of every lot from genetic G0 to commercial R2 — integrated certification, stock management and real-time monitoring.',
     heroCTA: 'Access the platform',
     heroDemo: 'Watch demo',
     trustLabel: 'Supported by',
@@ -126,7 +126,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     howtoTitle: 'How does it work?',
     howtoDesc: 'In four simple steps, from access request to full traceability of your seed production.',
     ht1Title: 'Request access',
-    ht1Desc: 'Contact the ISRA administrator to get an account adapted to your role in the national seed industry.',
+    ht1Desc: 'Contact the Sen Jiw team — operated by ISRA — to get an account adapted to your role in the national seed industry.',
     ht2Title: 'Secure sign-in',
     ht2Desc: 'Authenticate via OAuth 2.0 / PKCE. Every credential is unique, encrypted and tied to a specific role.',
     ht3Title: 'Your personalised space',
@@ -134,19 +134,19 @@ const I18N: Record<Lang, Record<string, string>> = {
     ht4Title: 'Trace and certify',
     ht4Desc: 'Manage your G0→R2 lots, submit to certifying bodies and generate your campaign reports.',
     ctaTitle: 'Ready to join the platform?',
-    ctaDesc: 'Contact the ISRA team to get your credentials and start tracing your production.',
+    ctaDesc: 'Contact the Sen Jiw team to get your credentials and start tracing your seed production.',
     ctaBtn: 'Request access',
     faqTitle: 'Frequently asked questions',
-    q1: 'Who can use SEED?', a1: 'Any accredited actor of the national seed industry: ISRA/CNRA breeders, multiplication structures (UPSemCL), approved multipliers and quotataires/POs.',
+    q1: 'Who can use Sen Jiw?', a1: 'Any accredited actor of the national seed industry: ISRA/CNRA breeders, multiplication structures (UPSemCL), approved multipliers and quotataires/POs.',
     q2: 'Is data secure?', a2: 'Yes. Authentication is managed by Keycloak with PKCE OAuth2. Each user only accesses data corresponding to their role.',
-    q3: 'How to get an account?', a3: 'Accounts are created by the ISRA administrator. Contact the ISRA Technical Department to submit an access request.',
+    q3: 'How to get an account?', a3: 'Accounts are created by the Sen Jiw team, in coordination with the ISRA Technical Department. Contact us to submit an access request.',
     q4: 'Does the platform work offline?', a4: 'The current version is online. A lightweight mobile version with synchronisation is planned for a future iteration.',
     footerTagline: 'National information system for the Senegalese seed industry.',
     footerLinks1: 'Platform', footerLinks2: 'Legal', footerLinks3: 'Support',
     fl1: 'Dashboard', fl2: 'Lots & generations', fl3: 'Stocks & orders',
     fl4: 'Privacy policy', fl5: 'Terms of use',
     fl6: 'Documentation', fl7: 'Technical contact',
-    copyright: '© 2026 ISRA / CNRA — Republic of Senegal. All rights reserved.',
+    copyright: '© 2026 Sen Jiw — Republic of Senegal. All rights reserved.',
     loginOverlayText: 'Opening secure session…',
   },
 }
@@ -155,11 +155,11 @@ const I18N: Record<Lang, Record<string, string>> = {
 const GENS = [
   { code: 'G0', color: '#7c3aed', bg: 'rgba(124,58,237,0.12)', label: 'Génétique' },
   { code: 'G1', color: '#0369a1', bg: 'rgba(3,105,161,0.12)',   label: 'Pré-base' },
-  { code: 'G2', color: '#0f766e', bg: 'rgba(15,118,110,0.12)',  label: 'Pré-base II' },
-  { code: 'G3', color: '#15803d', bg: 'rgba(21,128,61,0.12)',   label: 'Base' },
-  { code: 'G4', color: '#166534', bg: 'rgba(22,101,52,0.12)',   label: 'Certifiée C1' },
-  { code: 'R1', color: '#b45309', bg: 'rgba(180,83,9,0.12)',    label: 'Certifiée C2' },
-  { code: 'R2', color: '#c44536', bg: 'rgba(196,69,54,0.12)',   label: 'Commerciale' },
+  { code: 'G2', color: '#0f766e', bg: 'rgba(15,118,110,0.12)',  label: 'Base' },
+  { code: 'G3', color: '#15803d', bg: 'rgba(21,128,61,0.12)',   label: 'Certif. C1' },
+  { code: 'G4', color: '#b45309', bg: 'rgba(180,83,9,0.12)',    label: 'Certif. C2' },
+  { code: 'R1', color: '#c2410c', bg: 'rgba(194,65,12,0.12)',   label: 'Commerciale R1' },
+  { code: 'R2', color: '#c44536', bg: 'rgba(196,69,54,0.12)',   label: 'Commerciale R2' },
 ]
 
 /* ── CountUp hook ──────────────────────────────────────────────────────── */
@@ -304,13 +304,13 @@ export function LandingPage() {
               boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
               animation: 'lp-logo-float 2.5s ease-in-out infinite',
             }}>
-              <img src="/logo-isra.png" alt="ISRA" style={{ height: 52, width: 'auto', objectFit: 'contain' }} />
+              <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 52, width: 'auto', objectFit: 'contain' }} />
             </div>
             <div style={{ fontFamily: T.display, fontWeight: 700, fontSize: 26, color: '#fff', letterSpacing: '-0.025em', marginBottom: 6 }}>
-              SEED Platform
+              Sen Jiw
             </div>
             <div style={{ fontFamily: T.mono, fontSize: 11, color: 'rgba(255,255,255,0.45)', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              ISRA · CNRA
+              Filière semencière nationale
             </div>
           </div>
 
@@ -355,15 +355,12 @@ export function LandingPage() {
 
           {/* Logo */}
           <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', color: T.ink }}>
-            <img src="/logo-isra.png" alt="ISRA" style={{ height: 36, width: 'auto', objectFit: 'contain' }} />
-            <div style={{ lineHeight: 1 }}>
-              <strong style={{ fontFamily: T.display, fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em', display: 'block' }}>
-                SEED
-              </strong>
-              <small style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted, letterSpacing: '0.08em', marginTop: 4, display: 'block' }}>
-                ISRA · CNRA
-              </small>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: '#fff', border: `1.5px solid ${T.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+              <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 30, width: 'auto', objectFit: 'contain' }} />
             </div>
+            <strong style={{ fontFamily: T.display, fontWeight: 700, fontSize: 20, letterSpacing: '-0.02em' }}>
+              Sen Jiw
+            </strong>
           </a>
 
           {/* Nav principale */}
@@ -793,13 +790,24 @@ export function LandingPage() {
             {/* Brand */}
             <div>
               <a href="#" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', marginBottom: 18 }}>
-                <img src="/logo-isra.png" alt="ISRA" style={{ height: 32, filter: 'brightness(0) invert(1)', opacity: 0.9 }} />
-                <div>
-                  <strong style={{ fontFamily: T.display, fontWeight: 700, fontSize: 18, color: '#fff', letterSpacing: '-0.02em', display: 'block' }}>SEED</strong>
-                  <small style={{ fontFamily: T.mono, fontSize: 9.5, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.08em' }}>ISRA · CNRA</small>
+                <div style={{ width: 38, height: 38, borderRadius: 9, background: 'rgba(255,255,255,0.96)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+                  <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 28, width: 'auto', objectFit: 'contain' }} />
                 </div>
+                <strong style={{ fontFamily: T.display, fontWeight: 700, fontSize: 18, color: '#fff', letterSpacing: '-0.02em' }}>Sen Jiw</strong>
               </a>
               <p style={{ fontSize: 14, lineHeight: 1.7, maxWidth: 300 }}>{t.footerTagline}</p>
+              {/* Partenaires */}
+              <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
+                <span style={{ fontFamily: T.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', display: 'block', marginBottom: 12 }}>Partenaires</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ height: 34, padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                    <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 22, width: 'auto', objectFit: 'contain' }} />
+                  </div>
+                  <div style={{ height: 34, padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                    <img src="/logo-isra.png" alt="ISRA" style={{ height: 22, filter: 'brightness(0) invert(1)', opacity: 0.75 }} />
+                  </div>
+                </div>
+              </div>
             </div>
             {/* Links */}
             {[
