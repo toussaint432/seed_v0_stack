@@ -10,6 +10,7 @@ import sn.isra.seed.catalog_service.repo.DepartementRepo;
 import sn.isra.seed.catalog_service.repo.RegionRepo;
 import sn.isra.seed.catalog_service.repo.VarieteZoneRepo;
 import sn.isra.seed.catalog_service.repo.ZoneAgroRepo;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -94,7 +95,7 @@ public class ZoneController {
     @Transactional
     public ResponseEntity<List<VarieteZone>> updateVarieteZones(
             @PathVariable Long id,
-            @RequestBody List<ZoneAssignRequest> zones) {
+            @Valid @RequestBody List<ZoneAssignRequest> zones) {
 
         varieteZoneRepo.deleteByVarieteId(id);
         varieteZoneRepo.flush();

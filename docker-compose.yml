@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: seed
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-seed}
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:15432:5432"
     volumes:
       - seed_pgdata:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -98,9 +98,10 @@ services:
       KAFKA_NUM_PARTITIONS: 3
       KAFKA_MIN_INSYNC_REPLICAS: 1
       # ── Rétention des messages (7 jours / 1 GB) ───────────────────────
-      KAFKA_LOG_RETENTION_HOURS: 168
-      KAFKA_LOG_RETENTION_BYTES: 1073741824
-      KAFKA_LOG_SEGMENT_BYTES: 536870912
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_RETENTION_BYTES: 104857600
+      # Segments petits en dev pour limiter l'utilisation mémoire (mmap)
+      KAFKA_LOG_SEGMENT_BYTES: 10485760
       KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS: 300000
       # ── Taille et compression ──────────────────────────────────────────
       KAFKA_MESSAGE_MAX_BYTES: 1048576
@@ -117,16 +118,21 @@ services:
       KAFKA_JMX_PORT: 9999
       KAFKA_JMX_HOSTNAME: kafka
       # ── JVM — G1GC, limité pour dev sur M1 ────────────────────────────
-      KAFKA_HEAP_OPTS: "-Xms192m -Xmx384m"
+      # Heap réduit + mem_limit augmenté pour laisser de la place au natif/mmap
+      KAFKA_HEAP_OPTS: "-Xms64m -Xmx256m"
       KAFKA_JVM_PERFORMANCE_OPTS: >-
         -XX:+UseG1GC
         -XX:MaxGCPauseMillis=20
         -XX:InitiatingHeapOccupancyPercent=35
         -XX:+ExplicitGCInvokesConcurrent
         -XX:MaxInlineLevel=15
-      # Stabilisation en environnement mémoire contraint (4 GB RAM)
       KAFKA_REPLICA_FETCH_MAX_BYTES: 1048576
+      # Session ZK réduite pour accélérer la récupération après crash
+      KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 8000
+      KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 8000
+    # 256m heap + ~150m métaspace/natif/mmap = ~406m < 512m ✓
     mem_limit: 512m
+    stop_grace_period: 30s
 
   kafka-jmx-exporter:
     image: sscaling/jmx-prometheus-exporter
@@ -197,6 +203,8 @@ services:
       SPRING_FLYWAY_CONNECT_RETRIES: "10"
       # Kafka : ne pas crasher si un topic n'existe pas encore au démarrage
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
+      # CORS : autorise 127.0.0.1 ET localhost (équivalents TCP mais origines HTTP différentes)
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s
@@ -226,6 +234,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s
@@ -255,6 +264,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s
@@ -284,6 +294,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s

@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import {
   MapPin, Package, Star, Wheat, Leaf, Sprout,
   Navigation, MessageCircle, ShoppingCart, X, Trash2, CheckCircle2,
-  Search, ChevronRight, LucideIcon,
+  Search, ChevronRight, RefreshCw, LucideIcon,
 } from 'lucide-react'
 import { MapCatalogue } from '../components/MapCatalogue'
 
@@ -91,6 +91,8 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
   const [proximiteLoading, setProximiteLoading] = useState(false)
   const [proximiteError,   setProximiteError]   = useState<string | null>(null)
   const [contactingOrg,    setContactingOrg]    = useState<number | null>(null)
+  /* Coordonnées GPS de l'utilisateur (obtenues automatiquement ou manuellement) */
+  const [userCoords,       setUserCoords]       = useState<[number, number] | null>(null)
 
   const [cart,            setCart]            = useState<CartItem[]>([])
   const [qtyInputs,       setQtyInputs]       = useState<Record<number, string>>({})
@@ -101,6 +103,11 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
 
   /* ── Vue liste / carte ── */
   const [viewMode, setViewMode] = useState<'list' | 'map'>('list')
+
+  /* ── Horodatage du dernier refresh (pour l'indicateur "actualisé il y a Xs") ── */
+  const [lastRefresh,  setLastRefresh]  = useState<Date>(new Date())
+  const [refreshing,   setRefreshing]   = useState(false)
+  const [refreshLabel, setRefreshLabel] = useState<string | null>(null)
 
   /* ── Cart actions ── */
   function addToCart(v: VarieteGroup) {
@@ -183,22 +190,56 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     finally { setContactingOrg(null) }
   }
 
-  function findProximite() {
-    if (!navigator.geolocation) { setProximiteError('Géolocalisation non supportée'); return }
+  function findProximite(coords?: [number, number]) {
+    if (!navigator.geolocation && !coords) { setProximiteError('Géolocalisation non supportée'); return }
     setProximiteLoading(true); setProximiteError(null)
+
+    const doSearch = (lat: number, lng: number) => {
+      setUserCoords([lat, lng])
+      const params = new URLSearchParams({ lat: String(lat), lng: String(lng), rayonKm: '200' })
+      if (selectedVariete) params.set('idVariete', String(selectedVariete.varieteId))
+      fetch(`${STOCK}/stocks/catalogue/proximite?${params}`, { headers })
+        .then(r => r.json())
+        .then(data => { setProximiteItems(Array.isArray(data) ? data : []); setGeoMode(true); setProximiteLoading(false) })
+        .catch(() => { setProximiteError('Erreur de recherche'); setProximiteLoading(false) })
+    }
+
+    if (coords) {
+      doSearch(coords[0], coords[1])
+    } else {
+      navigator.geolocation.getCurrentPosition(
+        pos => doSearch(pos.coords.latitude, pos.coords.longitude),
+        () => { setProximiteError('Localisation refusée ou indisponible'); setProximiteLoading(false) }
+      )
+    }
+  }
+
+  /* ── Auto-géolocalisation silencieuse à la connexion ── */
+  useEffect(() => {
+    if (!navigator.geolocation || !token) return
     navigator.geolocation.getCurrentPosition(
       pos => {
-        const { latitude: lat, longitude: lng } = pos.coords
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        const coords: [number, number] = [lat, lng]
+        setUserCoords(coords)
+        /* Charge tous les fournisseurs proches (toutes espèces) */
         const params = new URLSearchParams({ lat: String(lat), lng: String(lng), rayonKm: '200' })
-        if (selectedVariete) params.set('idVariete', String(selectedVariete.varieteId))
         fetch(`${STOCK}/stocks/catalogue/proximite?${params}`, { headers })
           .then(r => r.json())
-          .then(data => { setProximiteItems(Array.isArray(data) ? data : []); setGeoMode(true); setProximiteLoading(false) })
-          .catch(() => { setProximiteError('Erreur de recherche'); setProximiteLoading(false) })
+          .then(data => {
+            if (Array.isArray(data) && data.length > 0) {
+              setProximiteItems(data)
+              setGeoMode(true)
+              setViewMode('map') /* Passe directement à la carte */
+            }
+          })
+          .catch(() => { /* Géoloc silencieuse : aucun message d'erreur */ })
       },
-      () => { setProximiteError('Localisation refusée ou indisponible'); setProximiteLoading(false) }
+      () => { /* Refus de géolocalisation → expérience normale */ },
+      { timeout: 8000, maximumAge: 300000 } /* 5 min de cache GPS */
     )
-  }
+  }, []) /* Une seule fois au montage */
 
   useEffect(() => {
     fetch(`${CATALOG}/species`, { headers }).then(r => r.json()).then(setEspeces).catch(() => {})
@@ -222,16 +263,47 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    if (!selectedEspece) return
-    setLoading(true)
-    const params = new URLSearchParams({ espece: selectedEspece.codeEspece })
-    if (selectedZone) params.set('idZone', String(selectedZone.id))
+  /* Fonction de chargement du catalogue (utilisée au changement d'espèce et au refresh) */
+  const chargerCatalogue = useCallback((espece: Espece, zone: ZoneAgro | null, silent = false) => {
+    if (!silent) setLoading(true)
+    else setRefreshing(true)
+    const params = new URLSearchParams({ espece: espece.codeEspece })
+    if (zone) params.set('idZone', String(zone.id))
     fetch(`${STOCK}/stocks/catalogue?${params}`, { headers })
       .then(r => r.json())
-      .then(data => { setCatalogue(Array.isArray(data) ? data : []); setLoading(false) })
-      .catch(() => setLoading(false))
+      .then(data => {
+        setCatalogue(Array.isArray(data) ? data : [])
+        setLastRefresh(new Date())
+        if (!silent) setLoading(false)
+        else setRefreshing(false)
+      })
+      .catch(() => { setLoading(false); setRefreshing(false) })
+  }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!selectedEspece) return
+    chargerCatalogue(selectedEspece, selectedZone)
   }, [selectedEspece, selectedZone])
+
+  /* Auto-refresh toutes les 60s quand une espèce est sélectionnée */
+  useEffect(() => {
+    if (!selectedEspece) return
+    const interval = setInterval(() => {
+      chargerCatalogue(selectedEspece, selectedZone, true /* silent */)
+    }, 60000)
+    return () => clearInterval(interval)
+  }, [selectedEspece, selectedZone])
+
+  /* Met à jour le label "actualisé il y a Xs" toutes les 15s */
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const secondes = Math.round((Date.now() - lastRefresh.getTime()) / 1000)
+      if (secondes < 10) setRefreshLabel(null)
+      else if (secondes < 60) setRefreshLabel(`actualisé il y a ${secondes}s`)
+      else setRefreshLabel(`actualisé il y a ${Math.round(secondes / 60)}min`)
+    }, 15000)
+    return () => clearInterval(timer)
+  }, [lastRefresh])
 
   const varieteGroups: VarieteGroup[] = useMemo(() => {
     const map = new Map<number, VarieteGroup>()
@@ -274,6 +346,19 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     () => groupByOrg(geoMode ? proximiteItems : (selectedVariete?.lots ?? [])),
     [geoMode, proximiteItems, selectedVariete]
   )
+
+  /* Données carte : items de proximité (toutes espèces) ou catalogue filtré par espèce.
+     La recherche textuelle s'applique dans les deux cas pour filtrer sur la carte. */
+  const catalogueForMap = useMemo<CatalogueItem[]>(() => {
+    const base = (geoMode && proximiteItems.length > 0) ? proximiteItems : catalogue
+    if (!search.trim()) return base
+    const s = search.toLowerCase()
+    return base.filter(item =>
+      item.nomVariete.toLowerCase().includes(s) ||
+      item.codeVariete.toLowerCase().includes(s) ||
+      item.nomEspece.toLowerCase().includes(s)
+    )
+  }, [geoMode, proximiteItems, catalogue, search])
 
   const totalCartKg = cart.reduce((s, i) => s + i.quantite, 0)
 
@@ -558,19 +643,27 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
             <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25 }}>
               {selectedEspece ? selectedEspece.nomCommun : 'Catalogue des semences'}
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
               {selectedEspece && !loading
                 ? `${varieteGroups.length} variété${varieteGroups.length > 1 ? 's' : ''} disponible${varieteGroups.length > 1 ? 's' : ''}${selectedZone ? ` · ${selectedZone.nom}` : ''}`
                 : 'Stocks R1 / R2 certifiés chez les multiplicateurs agréés'
               }
+              {/* Indicateur de fraîcheur des données */}
+              {refreshLabel && !refreshing && selectedEspece && (
+                <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic' }}> · {refreshLabel}</span>
+              )}
+              {refreshing && (
+                <RefreshCw size={10} style={{ color: '#16a34a', animation: 'spin 1s linear infinite', flexShrink: 0 }} />
+              )}
             </div>
           </div>
 
-          {selectedEspece && (
-            <div style={{ position: 'relative', width: 220, flexShrink: 0 }}>
+          {/* Champ de recherche : visible dès qu'une espèce est sélectionnée ou en mode proximité */}
+          {(selectedEspece || geoMode) && (
+            <div style={{ position: 'relative', width: 240, flexShrink: 0 }}>
               <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
               <input type="text" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                placeholder="Rechercher une variété…"
+                placeholder={geoMode ? 'Filtrer par variété ou espèce…' : 'Rechercher une variété…'}
                 style={{ width: '100%', height: 34, paddingLeft: 30, paddingRight: 8, borderRadius: 8, border: '1px solid var(--border)', fontSize: 13, fontFamily: 'inherit', background: 'var(--surface-2)', color: 'var(--text-primary)', outline: 'none' }} />
             </div>
           )}
@@ -613,14 +706,37 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
           </div>
         )}
 
+        {/* Bandeau mode proximité : visible en vue liste quand la géoloc est active */}
+        {geoMode && viewMode === 'list' && proximiteItems.length > 0 && (
+          <div style={{
+            padding: '8px 20px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe',
+            display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
+          }}>
+            <Navigation size={13} style={{ color: '#2563eb', flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: '#1e40af', flex: 1 }}>
+              <strong>{new Set(proximiteItems.map(i => i.organisationId)).size} multiplicateurs</strong> disponibles dans un rayon de 200 km ·
+              <button onClick={() => setViewMode('map')} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 700, fontSize: 12, fontFamily: 'inherit', textDecoration: 'underline', padding: 0 }}>
+                Voir sur la carte →
+              </button>
+            </span>
+            <button onClick={() => { setGeoMode(false); setProximiteItems([]) }}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', padding: 4, display: 'flex', flexShrink: 0 }}>
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         {/* Vue carte interactive */}
         {viewMode === 'map' && (
           <MapCatalogue
-            catalogue={catalogue}
+            catalogue={catalogueForMap}
             zones={zones}
             selectedEspece={selectedEspece}
             selectedZone={selectedZone}
             cart={cart}
+            userCoords={userCoords}
+            geoMode={geoMode}
+            proximiteCount={proximiteItems.length}
             onAddToCart={addToCartFromMap}
             onContacter={async (orgId) => { await handleContacter(orgId) }}
             onSelectZone={setSelectedZone}

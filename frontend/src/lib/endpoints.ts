@@ -75,6 +75,8 @@ export const endpoints = {
   ordersMesCommandes:  `${ORDER}/orders/mes-commandes`,
   ordersATraiter:      `${ORDER}/orders/a-traiter`,
   orderStatut:         (id: number) => `${ORDER}/orders/${id}/statut`,
+  /** Valider ET livrer une commande G3 en une seule action (UPSemCL → Multiplicateur) */
+  ordersValiderEtLivrer: (id: number) => `${ORDER}/orders/${id}/valider-et-livrer`,
   organisations:    `${ORDER}/organisations`,
   organisationById: (id: number) => `${ORDER}/organisations/${id}`,
 
@@ -83,6 +85,8 @@ export const endpoints = {
   membreMe:               `${ORDER}/membres/me`,
   membreByUsername:  (username: string) => `${ORDER}/membres/username/${username}`,
   membresByOrg:     (orgId: number) => `${ORDER}/membres/organisation/${orgId}`,
+  /** Membres filtrés par rôle Keycloak — ex. membresByRole('seed-multiplicator') */
+  membresByRole:    (role: string) => `${ORDER}/membres?role=${encodeURIComponent(role)}`,
 
   // ── Order Service — Multiplicateur ──
   stockMonStock:           `${STOCK}/stocks/mon-stock`,

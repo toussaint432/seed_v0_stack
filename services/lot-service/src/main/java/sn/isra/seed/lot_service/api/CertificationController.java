@@ -1,5 +1,6 @@
 package sn.isra.seed.lot_service.api;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
@@ -30,13 +31,13 @@ public class CertificationController {
     }
 
     @PostMapping
-    public Certification create(@RequestBody Certification cert) {
+    public Certification create(@Valid @RequestBody Certification cert) {
         return repo.save(cert);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<Certification> update(@PathVariable Long id,
-                                                 @RequestBody Certification body) {
+                                                 @Valid @RequestBody Certification body) {
         return repo.findById(id).map(existing -> {
             body.setId(id);
             body.setCreatedAt(existing.getCreatedAt());

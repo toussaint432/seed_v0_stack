@@ -2,6 +2,7 @@ package sn.isra.seed.lot_service.api;
 
 import sn.isra.seed.lot_service.entity.Programme;
 import sn.isra.seed.lot_service.repo.ProgrammeRepo;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,12 +31,12 @@ public class ProgrammeController {
     }
 
     @PostMapping
-    public Programme create(@RequestBody Programme programme) {
+    public Programme create(@Valid @RequestBody Programme programme) {
         return programmeRepo.save(programme);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Programme> update(@PathVariable Long id, @RequestBody Programme body) {
+    public ResponseEntity<Programme> update(@PathVariable Long id, @Valid @RequestBody Programme body) {
         return programmeRepo.findById(id).map(p -> {
             p.setCodeProgramme(body.getCodeProgramme());
             p.setIdLot(body.getIdLot());

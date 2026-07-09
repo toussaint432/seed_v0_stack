@@ -1,18 +1,24 @@
 package sn.isra.seed.stock_service.config;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
-import jakarta.servlet.http.HttpServletRequest;
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Gestionnaire global d'erreurs — retourne du JSON cohérent pour toutes les
@@ -22,6 +28,48 @@ import java.util.Map;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    // Paramètre @RequestParam obligatoire absent dans l'URL
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParam(
+            MissingServletRequestParameterException ex, HttpServletRequest req) {
+        return erreur(HttpStatus.BAD_REQUEST, "PARAMETRE_MANQUANT",
+                "Paramètre obligatoire manquant : " + ex.getParameterName(), req);
+    }
+
+    // Validation @Valid sur @RequestBody — retourne la liste de tous les champs invalides
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleValidation(
+            MethodArgumentNotValidException ex, HttpServletRequest req) {
+        List<String> erreurs = ex.getBindingResult().getFieldErrors().stream()
+                .map(f -> f.getField() + " : " + f.getDefaultMessage())
+                .collect(Collectors.toList());
+        Map<String, Object> corps = new LinkedHashMap<>();
+        corps.put("statut",     HttpStatus.BAD_REQUEST.value());
+        corps.put("code",       "VALIDATION_ECHOUEE");
+        corps.put("message",    "La requête contient des champs invalides.");
+        corps.put("erreurs",    erreurs);
+        corps.put("chemin",     req.getRequestURI());
+        corps.put("horodatage", Instant.now().toString());
+        return ResponseEntity.badRequest().body(corps);
+    }
+
+    // Validation @Validated sur @RequestParam / @PathVariable
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleConstraintViolation(
+            ConstraintViolationException ex, HttpServletRequest req) {
+        List<String> erreurs = ex.getConstraintViolations().stream()
+                .map(cv -> cv.getPropertyPath() + " : " + cv.getMessage())
+                .collect(Collectors.toList());
+        Map<String, Object> corps = new LinkedHashMap<>();
+        corps.put("statut",     HttpStatus.BAD_REQUEST.value());
+        corps.put("code",       "CONTRAINTE_VIOLEE");
+        corps.put("message",    "Un ou plusieurs paramètres ne respectent pas les contraintes.");
+        corps.put("erreurs",    erreurs);
+        corps.put("chemin",     req.getRequestURI());
+        corps.put("horodatage", Instant.now().toString());
+        return ResponseEntity.badRequest().body(corps);
+    }
 
     // Doublons ou violations de contraintes d'unicité
     @ExceptionHandler(DataIntegrityViolationException.class)

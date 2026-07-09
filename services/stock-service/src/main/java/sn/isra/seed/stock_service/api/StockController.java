@@ -13,6 +13,7 @@ import sn.isra.seed.stock_service.repo.MouvementRepo;
 import sn.isra.seed.stock_service.repo.SiteRepo;
 import sn.isra.seed.stock_service.repo.StockRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -137,7 +138,7 @@ public class StockController {
   }
 
   @PostMapping("/stocks")
-  public Stock upsert(@RequestBody UpsertStockRequest req) throws Exception {
+  public Stock upsert(@Valid @RequestBody UpsertStockRequest req) throws Exception {
     Site site = siteRepo.findByCodeSite(req.siteCode()).orElseThrow();
     Stock stock = stockRepo.findByIdLotAndSite_CodeSite(req.idLot(), req.siteCode())
         .orElseGet(() -> {
@@ -165,7 +166,7 @@ public class StockController {
 
   @PutMapping("/stocks/{id}")
   public ResponseEntity<Stock> updateStock(@PathVariable Long id,
-                                           @RequestBody UpsertStockRequest req) throws Exception {
+                                           @Valid @RequestBody UpsertStockRequest req) throws Exception {
     Stock stock = stockRepo.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Stock non trouvé"));
     if (req.quantite() != null) stock.setQuantiteDisponible(req.quantite());
@@ -187,7 +188,7 @@ public class StockController {
 
   @Transactional
   @PostMapping("/movements")
-  public MouvementStock move(@RequestBody MovementRequest req) throws Exception {
+  public MouvementStock move(@Valid @RequestBody MovementRequest req) throws Exception {
     BigDecimal q = req.quantite();
     if (q == null || q.signum() <= 0)
       throw new IllegalArgumentException("quantite doit être > 0");

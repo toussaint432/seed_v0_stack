@@ -5,6 +5,7 @@ import sn.isra.seed.catalog_service.entity.Variete;
 import sn.isra.seed.catalog_service.entity.enums.StatutVariete;
 import sn.isra.seed.catalog_service.repo.EspeceRepo;
 import sn.isra.seed.catalog_service.repo.VarieteRepo;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,7 +34,7 @@ public class CatalogController {
 
   @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
   @PostMapping("/species")
-  public Espece createSpecies(@RequestBody Espece e) {
+  public Espece createSpecies(@Valid @RequestBody Espece e) {
     return especeRepo.save(e);
   }
 
@@ -70,7 +71,7 @@ public class CatalogController {
 
   @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
   @PostMapping("/varieties")
-  public ResponseEntity<Variete> createVariety(@RequestBody Variete v) {
+  public ResponseEntity<Variete> createVariety(@Valid @RequestBody Variete v) {
     if (v.getEspece() == null || v.getEspece().getId() == null)
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le champ 'espece.id' est obligatoire");
     Espece espece = especeRepo.findById(v.getEspece().getId())
@@ -83,7 +84,7 @@ public class CatalogController {
   @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
   @PutMapping("/varieties/{id}")
   public ResponseEntity<Variete> updateVariete(@PathVariable Long id,
-                                                @RequestBody Variete body) {
+                                                @Valid @RequestBody Variete body) {
     return varieteRepo.findById(id).map(v -> {
       if (body.getNomVariete() != null) v.setNomVariete(body.getNomVariete());
       if (body.getEspece() != null && body.getEspece().getId() != null)

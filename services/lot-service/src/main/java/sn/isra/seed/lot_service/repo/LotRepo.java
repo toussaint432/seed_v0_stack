@@ -37,12 +37,14 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
 
     /**
      * Catalogue G3 visible par les multiplicateurs.
-     * Retourne les lots G3 DISPONIBLES, triés par date de production DESC.
+     * Retourne uniquement les lots G3 DISPONIBLES avec quantité > 0.
+     * Les lots épuisés (quantiteNette = 0) sont exclus — inutiles pour commander.
      */
     @Query("""
         SELECT l FROM LotSemencier l
         WHERE l.generation.codeGeneration = 'G3'
           AND l.statutLot = :statut
+          AND l.quantiteNette > 0
         ORDER BY l.dateProduction DESC, l.createdAt DESC
         """)
     List<LotSemencier> findCatalogueG3(@Param("statut") StatutLot statut);
@@ -51,6 +53,12 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
      * Lots du multiplicateur : ceux qu'il a produits (idOrgProducteur = orgId)
      * ET ceux qu'il a reçus via un transfert accepté (TransfertLot.statut = ACCEPTE).
      * Couvre G3 reçu + G4, R1, R2 produits par l'org.
+     *
+     * Note : ORDER BY sur colonne directe du lot uniquement.
+     * ORDER BY l.generation.ordreGeneration causait une erreur PostgreSQL :
+     * "for SELECT DISTINCT, ORDER BY expressions must appear in select list"
+     * car la colonne joinée (ordre_generation) n'est pas dans le SELECT DISTINCT.
+     * Le tri par génération est délégué au frontend.
      */
     @Query("""
         SELECT DISTINCT l FROM LotSemencier l
@@ -63,7 +71,7 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
                     AND t.statut = sn.isra.seed.lot_service.entity.enums.StatutTransfert.ACCEPTE
               )
           )
-        ORDER BY l.generation.ordreGeneration ASC, l.createdAt DESC
+        ORDER BY l.createdAt DESC
         """)
     List<LotSemencier> findMesLots(@Param("orgId") Long orgId, @Param("username") String username);
 

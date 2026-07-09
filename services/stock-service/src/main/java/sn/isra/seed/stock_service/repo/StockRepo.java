@@ -171,8 +171,9 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
           si.region              AS region,
           o.id                   AS organisationId,
           o.nom_organisation     AS nomOrganisation,
-          o.latitude             AS latitude,
-          o.longitude            AS longitude,
+          /* Coordonnées : site en priorité, fallback organisation */
+          COALESCE(si.latitude,  o.latitude)  AS latitude,
+          COALESCE(si.longitude, o.longitude) AS longitude,
           vz.niveau_adaptation   AS niveauAdaptation
       FROM stock s
       JOIN lot_semencier ls   ON s.id_lot = ls.id
@@ -228,15 +229,16 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
               si.region              AS region,
               o.id                   AS organisationId,
               o.nom_organisation     AS nomOrganisation,
-              o.latitude             AS latitude,
-              o.longitude            AS longitude,
+              /* Coordonnées : site en priorité, fallback organisation */
+              COALESCE(si.latitude,  o.latitude)  AS latitude,
+              COALESCE(si.longitude, o.longitude) AS longitude,
               NULL::text             AS niveauAdaptation,
               6371.0 * acos(LEAST(1.0,
                   cos(radians(CAST(:lat AS double precision)))
-                  * cos(radians(o.latitude::double precision))
-                  * cos(radians(o.longitude::double precision) - radians(CAST(:lng AS double precision)))
+                  * cos(radians(COALESCE(si.latitude,  o.latitude)::double precision))
+                  * cos(radians(COALESCE(si.longitude, o.longitude)::double precision) - radians(CAST(:lng AS double precision)))
                   + sin(radians(CAST(:lat AS double precision)))
-                  * sin(radians(o.latitude::double precision))
+                  * sin(radians(COALESCE(si.latitude,  o.latitude)::double precision))
               ))                     AS distanceKm
           FROM stock s
           JOIN lot_semencier ls       ON s.id_lot = ls.id
@@ -249,7 +251,8 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
             AND s.quantite_disponible > 0
             AND ls.statut_lot = 'DISPONIBLE'
             AND o.active = true
-            AND o.latitude IS NOT NULL AND o.longitude IS NOT NULL
+            /* Au moins une source de coordonnées disponible */
+            AND (si.latitude IS NOT NULL OR o.latitude IS NOT NULL)
             AND (:idVariete IS NULL OR v.id = CAST(:idVariete AS BIGINT))
       )
       SELECT * FROM dist

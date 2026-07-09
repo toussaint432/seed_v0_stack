@@ -11,8 +11,10 @@ import sn.isra.seed.lot_service.kafka.LotEventProducer;
 import sn.isra.seed.lot_service.repo.GenerationRepo;
 import sn.isra.seed.lot_service.repo.HistoriqueStatutLotRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
+import sn.isra.seed.lot_service.repo.MembreOrgLotRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -39,6 +41,7 @@ public class LotController {
     private final GenerationRepo generationRepo;
     private final TransfertLotRepo transfertRepo;
     private final HistoriqueStatutLotRepo historiqueRepo;
+    private final MembreOrgLotRepo membreOrgRepo;
     private final LotEventProducer producer;
     private final ObjectMapper om; // injecté par Spring (JavaTimeModule inclus)
 
@@ -69,15 +72,11 @@ public class LotController {
 
         // Isolation multiplicateur : lots produits + lots reçus via transfert accepté
         if (roles.contains("seed-multiplicator")) {
-            Object orgClaim = jwt != null ? jwt.getClaim("org_id") : null;
             String username = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
-            if (orgClaim != null && username != null) {
-                try {
-                    Long orgId = Long.parseLong(orgClaim.toString());
-                    return lotRepo.findMesLots(orgId, username);
-                } catch (NumberFormatException ignored) {}
-            }
-            return List.of();
+            if (username == null) return List.of();
+            Long orgId = resolveOrgId(jwt);
+            if (orgId == null) return List.of();
+            return lotRepo.findMesLots(orgId, username);
         }
 
         if (generation != null && !generation.isBlank())
@@ -97,7 +96,7 @@ public class LotController {
 
     // ── Créer un lot racine (G0) ──────────────────────────────
     @PostMapping
-    public LotSemencier create(@RequestBody LotSemencier lot,
+    public LotSemencier create(@Valid @RequestBody LotSemencier lot,
                                 @RequestParam(required = false) String siteCode,
                                 @AuthenticationPrincipal Jwt jwt) throws Exception {
         if (jwt != null) {
@@ -110,14 +109,10 @@ public class LotController {
             }
             if (lot.getResponsableRole() == null)
                 lot.setResponsableRole(detectSeedRole(extractRealmRoles(jwt)));
-            // Auto-résolution de l'organisation productrice depuis le claim JWT
-            if (lot.getIdOrgProducteur() == null) {
-                Object orgClaim = jwt.getClaim("org_id");
-                if (orgClaim != null) {
-                    try { lot.setIdOrgProducteur(Long.parseLong(orgClaim.toString())); }
-                    catch (NumberFormatException ignored) {}
-                }
-            }
+            /* Auto-résolution de l'organisation productrice :
+               JWT org_id → fallback membre_organisation par username */
+            if (lot.getIdOrgProducteur() == null)
+                lot.setIdOrgProducteur(resolveOrgId(jwt));
         }
         // Charger la génération complète (pas un proxy) — sera réinjectée après save
         Generation resolvedGen = null;
@@ -153,7 +148,7 @@ public class LotController {
     @Transactional
     @PostMapping("/{id}/child")
     public LotSemencier createChild(@PathVariable Long id,
-                                     @RequestBody CreateChildLotRequest req,
+                                     @Valid @RequestBody CreateChildLotRequest req,
                                      @AuthenticationPrincipal Jwt jwt) throws Exception {
         LotSemencier parent = lotRepo.findById(id).orElseThrow();
 
@@ -233,15 +228,12 @@ public class LotController {
             child.setResponsableRole(req.responsableRole() != null
                     ? req.responsableRole()
                     : detectSeedRole(extractRealmRoles(jwt)));
-            if (req.idOrgProducteur() != null) {
-                child.setIdOrgProducteur(req.idOrgProducteur());
-            } else {
-                Object orgClaim = jwt.getClaim("org_id");
-                if (orgClaim != null) {
-                    try { child.setIdOrgProducteur(Long.parseLong(orgClaim.toString())); }
-                    catch (NumberFormatException ignored) {}
-                }
-            }
+            /* Résolution de l'organisation : requête explicite > JWT > membre_organisation */
+            child.setIdOrgProducteur(
+                req.idOrgProducteur() != null
+                    ? req.idOrgProducteur()
+                    : resolveOrgId(jwt)
+            );
         }
 
         // Persistance — détection du doublon sur code_lot (UNIQUE)
@@ -437,17 +429,34 @@ public class LotController {
     @GetMapping("/mes-lots")
     public ResponseEntity<List<LotSemencier>> mesLots(@AuthenticationPrincipal Jwt jwt) {
         if (jwt == null) return ResponseEntity.status(401).build();
-        Object orgClaim = jwt.getClaim("org_id");
         String username = jwt.getClaimAsString("preferred_username");
-        if (orgClaim == null || username == null)
-            return ResponseEntity.ok(List.of());
-        Long orgId;
-        try { orgId = Long.parseLong(orgClaim.toString()); }
-        catch (NumberFormatException e) { return ResponseEntity.badRequest().build(); }
+        if (username == null) return ResponseEntity.ok(List.of());
+        // Résolution org : JWT org_id → fallback membre_organisation (pas de claim org_id en production)
+        Long orgId = resolveOrgId(jwt);
+        if (orgId == null) return ResponseEntity.ok(List.of());
         return ResponseEntity.ok(lotRepo.findMesLots(orgId, username));
     }
 
     // ── Helpers JWT ───────────────────────────────────────────
+
+    /**
+     * Résout l'id_organisation du créateur du lot.
+     * Priorité : claim JWT org_id → lookup membre_organisation par preferred_username.
+     * Garantit que id_org_producteur n'est jamais NULL pour les lots créés via l'UI.
+     */
+    private Long resolveOrgId(Jwt jwt) {
+        if (jwt == null) return null;
+        // 1. Claim JWT org_id (injecté si Keycloak est configuré avec un mapper custom)
+        Object orgClaim = jwt.getClaim("org_id");
+        if (orgClaim != null) {
+            try { return Long.parseLong(orgClaim.toString()); }
+            catch (NumberFormatException ignored) {}
+        }
+        // 2. Fallback : chercher l'organisation via la table membre_organisation
+        String username = jwt.getClaimAsString("preferred_username");
+        return membreOrgRepo.findOrgIdByUsername(username).orElse(null);
+    }
+
     @SuppressWarnings("unchecked")
     private List<String> extractRealmRoles(Jwt jwt) {
         Map<String, Object> realmAccess = jwt.getClaim("realm_access");

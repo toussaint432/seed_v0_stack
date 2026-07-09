@@ -41,6 +41,11 @@ public class SecurityConfig {
           "/swagger-ui.html",
           "/swagger-ui/index.html"
         ).permitAll()
+        /* Catalogue public — accessible sans authentification */
+        .requestMatchers(org.springframework.http.HttpMethod.GET,
+          "/api/stocks/catalogue",
+          "/api/stocks/catalogue/proximite"
+        ).permitAll()
         .anyRequest().authenticated()
       )
       .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> jwt.jwtAuthenticationConverter(keycloakJwtConverter())))

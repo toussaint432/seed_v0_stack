@@ -3,8 +3,8 @@
    Objectif : visualiser les stocks disponibles par site/ZAE,
               localiser les fournisseurs proches, commander depuis la carte.
    ═══════════════════════════════════════════════════════════════ */
-import { useState, useMemo, useCallback, useRef } from 'react'
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, Circle, Marker, useMap } from 'react-leaflet'
+import { useState, useMemo, useCallback, useEffect } from 'react'
+import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, Circle, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -51,12 +51,15 @@ interface Props {
   selectedEspece: Espece | null
   selectedZone:   ZoneAgro | null
   cart:           CartItem[]
+  /* Coordonnées GPS obtenues par auto-géoloc dans CataloguePublic */
+  userCoords?:    [number, number] | null
+  /* Indique si on est en mode "proximité toutes espèces" */
+  geoMode?:       boolean
+  proximiteCount?: number
   onAddToCart:    (item: CatalogueItem, qty: number) => void
   onContacter:    (orgId: number) => Promise<void>
   onSelectZone:   (z: ZoneAgro | null) => void
 }
-
-const GEN_ID: Record<string, number> = { G0:1, G1:2, G2:3, G3:4, G4:5, R1:6, R2:7 }
 
 const NIVEAU_CFG: Record<string, { label: string; color: string; bg: string }> = {
   OPTIMAL:    { label: 'Zone optimale',   color: '#16a34a', bg: '#f0fdf4' },
@@ -82,7 +85,7 @@ function FlyTo({ pos }: { pos: [number, number] | null }) {
 /* ────────────────────────────────────────────
    Composant principal
 ──────────────────────────────────────────── */
-export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, cart, onAddToCart, onContacter, onSelectZone }: Props) {
+export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, cart, userCoords, geoMode, proximiteCount, onAddToCart, onContacter, onSelectZone }: Props) {
 
   /* ── État ── */
   const [selectedSite,   setSelectedSite]   = useState<SiteGroup | null>(null)
@@ -96,7 +99,14 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
   const [addedIds,       setAddedIds]        = useState<Set<number>>(new Set())
   const [contactingOrg,  setContactingOrg]   = useState<number | null>(null)
 
-  const flyRef = useRef<[number, number] | null>(null)
+  /* Synchronise la position utilisateur transmise par le parent (auto-géoloc) */
+  useEffect(() => {
+    if (userCoords) {
+      setUserPos(userCoords)
+      setFlyTarget(userCoords)
+      setShowDistRings(true)
+    }
+  }, [userCoords])
 
   /* ── Grouper par site (depuis les données catalogue chargées) ── */
   const sites = useMemo<SiteGroup[]>(() => {
@@ -187,12 +197,6 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
     return 7 + 14 * Math.sqrt(stock / maxStock)
   }
 
-  /* ── Couverture de stock par espèce ── */
-  const especesDispoCount = useMemo(() => {
-    const set = new Set(catalogue.map(c => c.codeEspece))
-    return set.size
-  }, [catalogue])
-
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
 
@@ -256,8 +260,8 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
           </div>
         )}
 
-        {/* Message aucune espèce */}
-        {!selectedEspece && (
+        {/* Bandeau informatif : inviter à sélectionner une espèce uniquement si aucune donnée n'est affichée */}
+        {!selectedEspece && catalogue.length === 0 && (
           <div style={{
             position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 800,
             background: 'rgba(255,255,255,0.94)', border: '1px solid var(--border)',
@@ -267,6 +271,20 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
           }}>
             <Filter size={13} color="#16a34a" />
             Sélectionnez une espèce dans la barre de gauche pour voir les stocks disponibles
+          </div>
+        )}
+
+        {/* Bandeau mode proximité : récapitulatif en bas de carte */}
+        {geoMode && catalogue.length > 0 && !selectedEspece && (
+          <div style={{
+            position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 800,
+            background: 'rgba(255,255,255,0.96)', border: '1px solid #bfdbfe',
+            borderRadius: 10, padding: '8px 16px', fontSize: 12, color: '#1e40af',
+            display: 'flex', alignItems: 'center', gap: 8, backdropFilter: 'blur(6px)',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
+          }}>
+            <Navigation size={13} color="#2563eb" />
+            <strong>{proximiteCount ?? catalogue.length}</strong> lots disponibles dans un rayon de 200 km · triés par distance
           </div>
         )}
 
@@ -330,19 +348,24 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
             </Marker>
           )}
 
-          {/* ── Couche 4 : Sites fournisseurs ── */}
+          {/* ── Couche 4 : Sites fournisseurs avec Popup direct ── */}
           {sites.map(site => {
             const isSelected = selectedSite?.siteId === site.siteId
             const color      = isSelected ? '#1d4ed8' : '#16a34a'
             const radius     = siteRadius(site.stockTotal)
+            /* Meilleure variété du site pour le popup rapide */
+            const topLot = site.lots.slice().sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)[0]
+            const inCart  = topLot ? cart.find(c => c.varieteId === topLot.varieteId) : null
+            const isAdded = topLot ? addedIds.has(topLot.varieteId) : false
+
             return (
               <CircleMarker
                 key={site.siteId}
                 center={[site.lat, site.lng]}
                 radius={radius}
                 pathOptions={{
-                  fillColor: color, fillOpacity: isSelected ? 0.92 : 0.78,
-                  color: isSelected ? '#fff' : '#fff', weight: 2,
+                  fillColor: color, fillOpacity: isSelected ? 0.95 : 0.82,
+                  color: '#fff', weight: 2,
                 }}
                 eventHandlers={{
                   click: () => {
@@ -351,6 +374,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                   },
                 }}
               >
+                {/* Tooltip au survol */}
                 <Tooltip direction="top" offset={[0, -radius]}>
                   <div style={{ lineHeight: 1.5 }}>
                     <div style={{ fontWeight: 700, fontSize: 12 }}>{site.nomSite}</div>
@@ -363,6 +387,81 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                     )}
                   </div>
                 </Tooltip>
+
+                {/* Popup clic : ajout panier direct sans quitter la carte */}
+                <Popup maxWidth={240} className="seed-popup">
+                  <div style={{ fontFamily: 'inherit', minWidth: 200 }}>
+                    {/* En-tête site */}
+                    <div style={{ marginBottom: 8 }}>
+                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0d1f11', lineHeight: 1.3 }}>{site.nomSite}</div>
+                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {site.orgNom}
+                        {site.distanceKm != null && (
+                          <span style={{ background: '#eff6ff', color: '#1d4ed8', padding: '1px 5px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
+                            {Math.round(site.distanceKm)} km
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Stock total */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8, padding: '5px 8px', background: '#f0fdf4', borderRadius: 6 }}>
+                      <Package size={11} color="#16a34a" />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>
+                        {site.stockTotal.toLocaleString('fr-FR')} kg disponibles
+                      </span>
+                      <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 'auto' }}>
+                        {new Set(site.lots.map(l => l.varieteId)).size} variété{new Set(site.lots.map(l => l.varieteId)).size > 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    {/* Variété principale : saisie quantité + ajout */}
+                    {topLot && (
+                      <div style={{ marginBottom: 8, padding: '8px', background: '#f8fafc', borderRadius: 7, border: '1px solid #e2e8f0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: 12, color: '#0d1f11' }}>{topLot.nomVariete}</div>
+                            <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace' }}>{topLot.codeVariete}</div>
+                          </div>
+                          <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: 4, fontWeight: 700, fontSize: 11 }}>
+                            {topLot.generation}
+                          </span>
+                        </div>
+                        {inCart && (
+                          <div style={{ fontSize: 11, color: '#15803d', fontWeight: 600, marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <CheckCircle2 size={11} /> {inCart.quantite.toLocaleString('fr-FR')} kg dans le panier
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 5 }}>
+                          <input
+                            type="number" min="1"
+                            placeholder="Qté (kg)"
+                            value={qtyInputs[topLot.varieteId] ?? ''}
+                            onChange={e => setQtyInputs(prev => ({ ...prev, [topLot.varieteId]: e.target.value }))}
+                            style={{ flex: 1, height: 30, borderRadius: 6, border: '1px solid #d1d5db', padding: '0 7px', fontSize: 12 }}
+                          />
+                          <button
+                            onClick={() => handleAdd(topLot)}
+                            style={{ height: 30, padding: '0 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: isAdded ? '#15803d' : '#16a34a', color: '#fff', fontWeight: 600, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
+                          >
+                            {isAdded ? <><CheckCircle2 size={11} /> Ajouté!</> : <><ShoppingCart size={11} /> Ajouter</>}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Lien vers les autres variétés du site */}
+                    {new Set(site.lots.map(l => l.varieteId)).size > 1 && (
+                      <button
+                        onClick={() => { setSelectedSite(site); setFlyTarget([site.lat, site.lng]) }}
+                        style={{ width: '100%', height: 28, borderRadius: 6, border: '1px solid #d1d5db', background: 'transparent', fontSize: 11, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
+                      >
+                        <MapPin size={11} color="#16a34a" />
+                        Voir toutes les variétés ({new Set(site.lots.map(l => l.varieteId)).size}) →
+                      </button>
+                    )}
+                  </div>
+                </Popup>
               </CircleMarker>
             )
           })}
@@ -445,16 +544,29 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
           ) : (
             <>
               <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 3 }}>
-                {selectedEspece ? selectedEspece.nomCommun : 'Fournisseurs disponibles'}
+                {selectedEspece
+                  ? selectedEspece.nomCommun
+                  : geoMode
+                    ? 'Multiplicateurs près de vous'
+                    : 'Fournisseurs disponibles'
+                }
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                 {sites.length > 0
                   ? `${sites.length} site${sites.length > 1 ? 's' : ''} · cliquez sur un marqueur`
                   : selectedEspece
                     ? 'Aucun stock disponible pour cette espèce'
-                    : 'Sélectionnez une espèce pour voir les sites'
+                    : geoMode
+                      ? 'Aucun multiplicateur dans ce rayon'
+                      : 'Sélectionnez une espèce pour voir les sites'
                 }
               </div>
+              {geoMode && sites.length > 0 && !selectedEspece && (
+                <div style={{ fontSize: 10.5, color: '#2563eb', marginTop: 3, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Navigation size={10} />
+                  Rayon 200 km · triés par distance
+                </div>
+              )}
             </>
           )}
         </div>
@@ -541,8 +653,30 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
 
       <style>{`
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes markerPulse {
+          0%   { box-shadow: 0 0 0 0 rgba(22,163,74,0.5); }
+          70%  { box-shadow: 0 0 0 10px rgba(22,163,74,0); }
+          100% { box-shadow: 0 0 0 0 rgba(22,163,74,0); }
+        }
         .map-tooltip { background: white; border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.12); }
         .map-tooltip::before { display: none; }
+        /* Popup Leaflet custom : design épuré */
+        .seed-popup .leaflet-popup-content-wrapper {
+          border-radius: 12px !important;
+          box-shadow: 0 8px 32px rgba(0,0,0,0.14) !important;
+          border: 1px solid #e5e7eb !important;
+          padding: 0 !important;
+        }
+        .seed-popup .leaflet-popup-content {
+          margin: 14px 14px !important;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+        }
+        .seed-popup .leaflet-popup-tip-container { display: none !important; }
+        .seed-popup .leaflet-popup-close-button {
+          top: 8px !important; right: 8px !important;
+          color: #9ca3af !important; font-size: 18px !important;
+        }
+        .seed-popup .leaflet-popup-close-button:hover { color: #374151 !important; }
       `}</style>
     </div>
   )

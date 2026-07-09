@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2 } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -125,6 +125,8 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [lineageLotCode, setLineageLotCode] = useState('')
   const [searchCat, setSearchCat]     = useState('')
   const [searchMes, setSearchMes]     = useState('')
+  // Transferts G3 EN_ATTENTE reçus par l'UPSemCL — en attente d'acceptation
+  const [transfertsRecus, setTransfertsRecus] = useState<any[]>([])
 
   // ── Gestion lots multiplicateur ────────────────────────────
   const [showNewLot, setShowNewLot]     = useState(false)
@@ -152,12 +154,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   async function fetchAll() {
     setLoadingCat(true); setLoadingMes(true)
     api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
-    const [catRes, mesRes, stockRes, varRes, orgRes] = await Promise.allSettled([
+    const [catRes, mesRes, stockRes, varRes, orgRes, trRecus] = await Promise.allSettled([
       api.get(endpoints.lotsCatalogueG3),
       api.get(endpoints.lotsMesLots),
       api.get(endpoints.stockMonStock),
       api.get(endpoints.varieties),
       api.get(endpoints.organisations),
+      // Transferts G3 EN_ATTENTE destinés au multiplicateur connecté
+      api.get(endpoints.transfertsRecus),
     ])
     setCatalogueG3(catRes.status === 'fulfilled' ? catRes.value.data : [])
     setLoadingCat(false)
@@ -165,11 +169,34 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     setMonStock(stockRes.status === 'fulfilled' ? stockRes.value.data : [])
     setLoadingMes(false)
     setVarieties(varRes.status === 'fulfilled' ? varRes.value.data : [])
+    setTransfertsRecus(trRecus.status === 'fulfilled' ? trRecus.value.data : [])
     if (orgRes.status === 'fulfilled') {
       const upsemcl = orgRes.value.data.find((o: any) =>
         o.typeOrganisation?.toUpperCase() === 'UPSEMCL' && o.active !== false
       )
       setUpsemclOrgId(upsemcl?.id ?? null)
+    }
+  }
+
+  // Accepter un transfert G3 entrant — le lot apparaît ensuite dans Mes Lots
+  async function accepterTransfert(id: number, code: string) {
+    try {
+      await api.put(endpoints.transfertAccepter(id))
+      setToast({ msg: `Transfert ${code} accepté — le lot G3 est maintenant dans vos lots`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de l\'acceptation', type: 'error' })
+    }
+  }
+
+  // Refuser un transfert entrant
+  async function refuserTransfert(id: number, code: string) {
+    try {
+      await api.put(endpoints.transfertRefuser(id), { motif: 'Refusé par le multiplicateur' })
+      setToast({ msg: `Transfert ${code} refusé`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors du refus', type: 'error' })
     }
   }
 
@@ -360,10 +387,30 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         </div>
       </div>
 
-      {/* Onglets */}
+      {/* Onglets — badge orange si transferts en attente */}
       <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border)', marginBottom: 0, background: 'var(--surface-2)', borderRadius: '10px 10px 0 0', padding: '0 16px' }}>
         {tabBtn('catalogue', <Store size={14} />, 'Catalogue G3', catFiltered.length)}
-        {tabBtn('meslots',   <Layers size={14} />, 'Mes Lots', mesLots.length)}
+        <button
+          onClick={() => setOnglet('meslots')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 7, padding: '9px 18px',
+            borderRadius: '8px 8px 0 0', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            background: onglet === 'meslots' ? 'var(--surface)' : 'transparent',
+            color:      onglet === 'meslots' ? 'var(--green-700)' : 'var(--text-muted)',
+            borderBottom: onglet === 'meslots' ? '2px solid var(--green-600)' : '2px solid transparent',
+            transition: 'all .15s', position: 'relative',
+          }}
+        >
+          <Layers size={14} />
+          Mes Lots
+          <span style={{ background: onglet === 'meslots' ? 'var(--green-100)' : 'var(--surface-2)', color: onglet === 'meslots' ? 'var(--green-700)' : 'var(--text-muted)', borderRadius: 20, padding: '1px 7px', fontSize: 11, fontWeight: 700 }}>{mesLots.length}</span>
+          {/* Badge notification rouge si transferts en attente */}
+          {transfertsRecus.length > 0 && (
+            <span style={{ position: 'absolute', top: 6, right: 6, background: '#ef4444', color: '#fff', borderRadius: '50%', width: 16, height: 16, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {transfertsRecus.length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* ── Onglet Catalogue G3 ───────────────────────────────── */}
@@ -477,6 +524,50 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
             </div>
           </div>
+
+          {/* ── Transferts G3 en attente d'acceptation ──────────── */}
+          {transfertsRecus.length > 0 && (
+            <div style={{ margin: '0 0 0 0', borderBottom: '1px solid var(--border)', background: '#fef3c7', padding: '12px 22px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Bell size={14} color="#d97706" />
+                <span style={{ fontWeight: 700, fontSize: 13, color: '#92400e' }}>
+                  {transfertsRecus.length} transfert{transfertsRecus.length > 1 ? 's' : ''} G3 en attente — acceptez pour réceptionner les lots
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {transfertsRecus.map((t: any) => (
+                  <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', flexWrap: 'wrap' }}>
+                    <span className="badge badge-gold" style={{ fontSize: 11 }}>{t.generationTransferee}</span>
+                    <span style={{ fontWeight: 700, fontSize: 12, fontFamily: 'monospace' }}>{t.codeTransfert}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Lot #{t.idLot}</span>
+                    <span style={{ fontSize: 12 }}>
+                      <strong>{t.quantite != null ? Number(t.quantite).toLocaleString('fr-FR') : '—'} kg</strong>
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>de <strong>{t.usernameEmetteur}</strong></span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>demandé le {t.dateDemande || '—'}</span>
+                    <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                      {/* Accepter → le lot G3 rejoint Mes Lots */}
+                      <button
+                        className="btn btn-primary"
+                        style={{ height: 28, padding: '0 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => accepterTransfert(t.id, t.codeTransfert)}
+                      >
+                        <Check size={12} /> Accepter
+                      </button>
+                      {/* Refuser */}
+                      <button
+                        className="btn btn-secondary"
+                        style={{ height: 28, padding: '0 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
+                        onClick={() => refuserTransfert(t.id, t.codeTransfert)}
+                      >
+                        <XCircle size={12} /> Refuser
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Résumé stock */}
           {monStock.length > 0 && (
@@ -882,6 +973,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '' })
   const [transferForm, setTransferForm] = useState({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
   const [membres, setMembres] = useState<any[]>([])
+  // Indicateur de chargement des destinataires (rafraîchi à chaque ouverture du modal)
+  const [membresLoading, setMembresLoading] = useState(false)
 
   async function fetchLots() {
     setLoading(true)
@@ -1226,7 +1319,18 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                             className="btn btn-ghost"
                             style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: 'var(--green-700)' }}
                             title="Transférer un Lot"
-                            onClick={() => { setParentLot(l); setTransferForm({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' }); setShowTransfer(true) }}
+                            onClick={() => {
+                              setParentLot(l)
+                              setTransferForm({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
+                              // Rafraîchir la liste des destinataires à chaque ouverture du modal
+                              const targetRole = roleKey === 'seed-selector' ? 'seed-upsemcl' : 'seed-multiplicator'
+                              setMembresLoading(true)
+                              api.get(endpoints.membresByRole(targetRole))
+                                .then(r => setMembres(r.data))
+                                .catch(() => setMembres([]))
+                                .finally(() => setMembresLoading(false))
+                              setShowTransfer(true)
+                            }}
                           >
                             <ArrowRightLeft size={13} />
                           </button>
@@ -1542,7 +1646,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               <strong>Flux autorisé :</strong> {roleKey === 'seed-selector' ? 'Sélectionneur → UPSemCL (G1 uniquement)' : 'UPSemCL → Multiplicateur (G2/G3)'}
             </div>
             <form onSubmit={submitTransfer}>
-              <Field label="Destinataire" required hint={destRole ? `Rôle cible : ${destRole}` : 'Rôle non autorisé'}>
+              <Field label="Destinataire" required hint={membresLoading ? 'Chargement en cours…' : `${eligibles.length} destinataire(s) disponible(s)`}>
                 <FormSelect
                   value={transferForm.usernameDestinataire}
                   onChange={e => {
@@ -1550,16 +1654,19 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                     setTransferForm(f => ({ ...f, usernameDestinataire: e.target.value, roleDestinataire: m?.keycloakRole || destRole }))
                   }}
                   required
+                  disabled={membresLoading}
                 >
-                  <option value="">— Sélectionner un destinataire —</option>
-                  {eligibles.length === 0
-                    ? <option disabled value="">Aucun membre UPSemCL enregistré</option>
-                    : eligibles.map((m: any) => (
-                      <option key={m.id} value={m.keycloakUsername}>
-                        {m.nomComplet || m.keycloakUsername} — {m.organisation?.nomOrganisation || ''}
-                      </option>
-                    ))
-                  }
+                  <option value="">
+                    {membresLoading ? '⏳ Chargement des destinataires…' : '— Sélectionner un destinataire —'}
+                  </option>
+                  {!membresLoading && eligibles.length === 0 && (
+                    <option disabled value="">Aucun multiplicateur enregistré dans la plateforme</option>
+                  )}
+                  {!membresLoading && eligibles.map((m: any) => (
+                    <option key={m.id} value={m.keycloakUsername}>
+                      {m.nomComplet || m.keycloakUsername} — {m.organisation?.nomOrganisation || ''}
+                    </option>
+                  ))}
                 </FormSelect>
               </Field>
               <Field label="Quantité (kg)" hint="Optionnel">

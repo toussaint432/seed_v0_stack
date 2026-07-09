@@ -2,6 +2,7 @@ package sn.isra.seed.lot_service.api;
 
 import sn.isra.seed.lot_service.entity.Campagne;
 import sn.isra.seed.lot_service.repo.CampagneRepo;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,12 +31,12 @@ public class CampagneController {
     }
 
     @PostMapping
-    public Campagne create(@RequestBody Campagne campagne) {
+    public Campagne create(@Valid @RequestBody Campagne campagne) {
         return campagneRepo.save(campagne);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Campagne> update(@PathVariable Long id, @RequestBody Campagne body) {
+    public ResponseEntity<Campagne> update(@PathVariable Long id, @Valid @RequestBody Campagne body) {
         return campagneRepo.findById(id).map(c -> {
             c.setCodeCampagne(body.getCodeCampagne());
             c.setLibelle(body.getLibelle());

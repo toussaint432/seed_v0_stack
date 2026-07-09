@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react'
 import {
   ShoppingCart, RefreshCw, Plus, Settings2, Clock, XCircle, PackageCheck,
   Search, X, ChevronLeft, ChevronRight, CheckCircle2, Ban, Eye, Building2,
-  TrendingUp, TrendingDown, BarChart2, Truck, Receipt,
+  TrendingUp, TrendingDown, BarChart2, Truck, Receipt, Zap,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -41,6 +41,11 @@ const GENERATIONS_CMD = [
   { id: '5', label: 'G4 — R3' },       { id: '6', label: 'R1' },
   { id: '7', label: 'R2 — Certifiée' },
 ]
+
+/** Correspondance idGeneration (1–7) → libellé affiché dans les tableaux et modales */
+const GEN_LABELS: Record<number, string> = {
+  1: 'G0 — Pré-base', 2: 'G1 — Base', 3: 'G2', 4: 'G3', 5: 'G4', 6: 'R1', 7: 'R2 — Certifiée',
+}
 
 /** Formate un Instant ISO en "dd/MM/yyyy à HH:mm:ss" pour la piste d'audit. */
 function fmtDatetime(value?: string | null): string {
@@ -177,7 +182,7 @@ function StatusBadge({ statut }: { statut: string }) {
     : <span className="badge badge-gray">{statut || '—'}</span>
 }
 
-// KPI card cliquable — agit comme filtre sur le tableau
+// Carte KPI cliquable — accent en bordure haute (design épuré, sans barre latérale)
 interface KpiProps {
   icon: React.ReactNode; value: number | string; label: string
   accent: string; active?: boolean; onClick?: () => void; loading?: boolean
@@ -187,30 +192,36 @@ function KpiCard({ icon, value, label, accent, active, onClick, loading }: KpiPr
     <div
       onClick={onClick}
       style={{
-        background: active ? `${accent}0e` : 'var(--surface)',
-        border: `${active ? 2 : 1}px solid ${active ? accent : 'var(--border)'}`,
-        borderRadius: 14, padding: '18px 20px',
-        display: 'flex', alignItems: 'center', gap: 14,
+        background: active ? `${accent}09` : 'var(--surface)',
+        border: `1px solid ${active ? accent + '40' : 'var(--border)'}`,
+        borderTop: `2.5px solid ${active ? accent : accent + '55'}`,
+        borderRadius: 12,
+        padding: '15px 18px 17px',
+        display: 'flex', alignItems: 'flex-start', gap: 14,
         cursor: onClick ? 'pointer' : 'default',
-        transition: 'border-color .15s, box-shadow .15s, background .15s',
-        boxShadow: active ? `0 0 0 4px ${accent}1a` : '0 1px 4px rgba(0,0,0,.04)',
-        position: 'relative', overflow: 'hidden',
+        transition: 'all .18s cubic-bezier(0.4,0,0.2,1)',
+        boxShadow: active ? `0 2px 10px ${accent}18` : 'var(--shadow-xs)',
       }}
     >
-      {/* Barre accent gauche */}
-      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: accent, borderRadius: '14px 0 0 14px' }} />
-      <div style={{ marginLeft: 4, width: 44, height: 44, borderRadius: 12, background: `${accent}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: accent, flexShrink: 0 }}>
+      <div style={{
+        width: 40, height: 40, borderRadius: 10,
+        background: `${accent}12`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: accent, flexShrink: 0, marginTop: 2,
+      }}>
         {icon}
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-          {loading ? <span style={{ fontSize: 16, color: 'var(--text-muted)' }}>…</span> : value}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em', marginBottom: 6 }}>
+          {loading ? <span style={{ fontSize: 14, color: 'var(--text-muted)' }}>…</span> : value}
         </div>
-        <div style={{ fontSize: 12.5, color: active ? accent : 'var(--text-muted)', fontWeight: active ? 600 : 400, marginTop: 4 }}>
+        <div style={{ fontSize: 11.5, color: active ? accent : 'var(--text-muted)', fontWeight: active ? 600 : 500 }}>
           {label}
         </div>
       </div>
-      {active && <div style={{ width: 8, height: 8, borderRadius: '50%', background: accent, flexShrink: 0, boxShadow: `0 0 0 3px ${accent}33` }} />}
+      {active && (
+        <div style={{ width: 6, height: 6, borderRadius: '50%', background: accent, flexShrink: 0, marginTop: 4, boxShadow: `0 0 0 3px ${accent}25` }} />
+      )}
     </div>
   )
 }
@@ -434,9 +445,11 @@ interface OrderTableProps {
   orders: any[]; loading: boolean; emptyMsg: string
   orgs?: any[]; varieties?: any[]
   onUpdateStatus?: (id: number, statut: string) => Promise<void>
+  /** Intercepte les commandes G3 SOUMISE → ouvre TraiterCommandeG3Modal */
+  onValiderG3?: (cmd: any) => void
   extraColumns?: { head: string; cell: (o: any) => React.ReactNode }[]
 }
-function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUpdateStatus, extraColumns = [] }: OrderTableProps) {
+function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUpdateStatus, onValiderG3, extraColumns = [] }: OrderTableProps) {
   const [page, setPage]     = useState(1)
   const [detail, setDetail] = useState<any>(null)
   const [actioning, setActioning] = useState(false)
@@ -549,7 +562,7 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
                           {v && <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 5 }}>({v.codeVariete})</span>}
                         </td>
                         <td style={{ padding: '6px 10px', color: 'var(--text-muted)' }}>
-                          {l.idGeneration === 7 ? 'R2 — Certifiée' : l.idGeneration === 6 ? 'R1' : `Gén. #${l.idGeneration}`}
+                          {GEN_LABELS[l.idGeneration] ?? `Gén. #${l.idGeneration}`}
                         </td>
                         <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{l.quantiteDemandee} {l.unite}</td>
                       </tr>
@@ -562,17 +575,35 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
           {onUpdateStatus && nextActions.length > 0 && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Action :</span>
-              {nextActions.map(a => (
-                <button
-                  key={a.statut}
-                  className={`btn ${a.danger ? 'btn-ghost' : 'btn-primary'}`}
-                  style={a.danger ? { color: 'var(--red-600)', border: '1px solid #fecaca', height: 32, fontSize: 12 } : { height: 32, fontSize: 12 }}
-                  onClick={() => handleAction(a.statut)}
-                  disabled={actioning}
-                >
-                  {a.danger ? <Ban size={12} /> : <CheckCircle2 size={12} />} {a.label}
-                </button>
-              ))}
+              {nextActions.map(a => {
+                /* Interception : commande G3 SOUMISE → "Préparer & Livrer" à la place de "Accepter" */
+                const isG3Flow = a.statut === 'ACCEPTEE' && onValiderG3 != null &&
+                  Array.isArray(detail?.lignes) &&
+                  detail.lignes.some((l: any) => l.idGeneration === 4)
+                if (isG3Flow) {
+                  return (
+                    <button
+                      key="valider-g3"
+                      className="btn btn-primary"
+                      style={{ height: 32, fontSize: 12, background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 6 }}
+                      onClick={() => { setDetail(null); onValiderG3!(detail) }}
+                    >
+                      <Zap size={12} /> Préparer &amp; Livrer
+                    </button>
+                  )
+                }
+                return (
+                  <button
+                    key={a.statut}
+                    className={`btn ${a.danger ? 'btn-ghost' : 'btn-primary'}`}
+                    style={a.danger ? { color: 'var(--red-600)', border: '1px solid #fecaca', height: 32, fontSize: 12 } : { height: 32, fontSize: 12 }}
+                    onClick={() => handleAction(a.statut)}
+                    disabled={actioning}
+                  >
+                    {a.danger ? <Ban size={12} /> : <CheckCircle2 size={12} />} {a.label}
+                  </button>
+                )
+              })}
             </div>
           )}
         </Modal>
@@ -768,19 +799,65 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
   const [refusModal,  setRefusModal]  = useState<{ id: number; code: string } | null>(null)
   const [motif,       setMotif]       = useState('')
   const [saving,      setSaving]      = useState(false)
+  const [varieties,   setVarieties]   = useState<any[]>([])
+  const [orgs,        setOrgs]        = useState<any[]>([])
+  const [showForm,    setShowForm]    = useState(false)
+  const [formSaving,  setFormSaving]  = useState(false)
+  const [form, setForm] = useState({
+    observations: '',
+    lignes: [{ idVariete: '', quantite: '', unite: 'kg' }],
+  })
 
   async function fetchAll() {
     setLoadingR(true); setLoadingD(true)
-    const [rRes, dRes] = await Promise.allSettled([
+    const [rRes, dRes, varRes, orgRes] = await Promise.allSettled([
       api.get(endpoints.ordersATraiter),
       api.get(endpoints.ordersMesDemandesG3),
+      api.get(endpoints.varieties),
+      api.get(endpoints.organisations),
     ])
     setRecues(rRes.status === 'fulfilled' ? rRes.value.data : [])
     setLoadingR(false)
     setDemandes(dRes.status === 'fulfilled' ? dRes.value.data : [])
     setLoadingD(false)
+    if (varRes.status === 'fulfilled') setVarieties(varRes.value.data)
+    if (orgRes.status === 'fulfilled')
+      setOrgs(orgRes.value.data.filter((o: any) => o.typeOrganisation?.toUpperCase().includes('UPSEMCL') && o.active !== false))
   }
   useEffect(() => { fetchAll() }, [])
+
+  function addLigneM()    { setForm(f => ({ ...f, lignes: [...f.lignes, { idVariete: '', quantite: '', unite: 'kg' }] })) }
+  function removeLigneM(i: number) { setForm(f => ({ ...f, lignes: f.lignes.filter((_, j) => j !== i) })) }
+  function updateLigneM(i: number, k: string, v: string) { setForm(f => ({ ...f, lignes: f.lignes.map((l, j) => j === i ? { ...l, [k]: v } : l) })) }
+
+  async function submitOrderM(e: React.FormEvent) {
+    e.preventDefault(); setFormSaving(true)
+    try {
+      const code = 'CMD-G3-' + Date.now().toString(36).toUpperCase()
+      /* Le fournisseur est l'UPSemCL — on prend le premier s'il y en a plusieurs */
+      const idFournisseur = orgs.length > 0 ? orgs[0].id : null
+      await api.post(endpoints.orders, {
+        codeCommande: code,
+        client: 'Demande multiplicateur',
+        idOrganisationFournisseur: idFournisseur,
+        observations: form.observations || null,
+        /* Génération toujours G3 (idGeneration = 4) pour les multiplicateurs */
+        lignes: form.lignes.map(l => ({
+          idVariete:   Number(l.idVariete),
+          idGeneration: 4,
+          quantite:    Number(l.quantite),
+          unite:       l.unite,
+        })),
+      })
+      setToast({ msg: `Demande ${code} soumise à l'UPSemCL`, type: 'success' })
+      setShowForm(false)
+      setForm({ observations: '', lignes: [{ idVariete: '', quantite: '', unite: 'kg' }] })
+      setOnglet('demandes')
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la soumission', type: 'error' })
+    } finally { setFormSaving(false) }
+  }
 
   async function confirmer(id: number) {
     setSaving(true)
@@ -855,7 +932,14 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             {kpiFilter && <span style={{ marginLeft: 8, fontSize: 11, background: '#f59e0b20', color: '#92400e', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>Filtre actif</span>}
             <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{displayed.length}{displayed.length !== activeOrders.length && `/${activeOrders.length}`}</span>
           </span>
-          <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {onglet === 'demandes' && (
+              <button className="btn btn-primary" style={{ fontSize: 12, height: 32, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowForm(true)}>
+                <Plus size={13} /> Nouvelle demande G3
+              </button>
+            )}
+            <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+          </div>
         </div>
 
         {/* Graphe (contextualisé à l'onglet actif) */}
@@ -877,6 +961,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             orders={displayed}
             loading={loadingR}
             emptyMsg="Aucune commande reçue"
+            varieties={varieties}
             extraColumns={[{
               head: 'Actions',
               cell: (o: any) => o.statut === 'SOUMISE' ? (
@@ -898,7 +983,8 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
           <OrderTable
             orders={displayed}
             loading={loadingD}
-            emptyMsg="Aucune demande G3 — utilisez la page Lots pour en créer"
+            emptyMsg="Aucune demande G3 — cliquez sur « Nouvelle demande G3 » pour en soumettre une"
+            varieties={varieties}
             extraColumns={[{
               head: 'Observations',
               cell: (o: any) => <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.observations || '—'}</span>,
@@ -906,6 +992,78 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
           />
         )}
       </div>
+
+      {showForm && (
+        <Modal title="Nouvelle demande de semences G3" subtitle="Commander des lots G3 auprès de l'UPSemCL (CNRA)" onClose={() => setShowForm(false)} size="lg">
+          <form onSubmit={submitOrderM}>
+            {/* Fournisseur auto-sélectionné : UPSemCL */}
+            <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12.5, color: '#15803d', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <PackageCheck size={14} />
+              <span>Fournisseur : <strong>UPSemCL / CNRA</strong> — les lots G3 seront disponibles dans « Mes Lots » une fois la commande livrée.</span>
+            </div>
+
+            {/* Lignes de variétés */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <label style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                  Variétés demandées <span style={{ color: 'var(--red-500)' }}>*</span>
+                </label>
+                <button type="button" className="btn btn-secondary" style={{ height: 28, fontSize: 11 }} onClick={addLigneM}>
+                  <Plus size={11} /> Ajouter une variété
+                </button>
+              </div>
+              {form.lignes.map((ligne, i) => (
+                <div key={i} style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 16px', marginBottom: 10 }}>
+                  <div style={{ fontWeight: 600, fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 10 }}>
+                    Variété {i + 1}
+                    <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 99, padding: '1px 8px', fontSize: 10.5, fontWeight: 700, marginLeft: 8 }}>G3</span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr auto', gap: 10, alignItems: 'end' }}>
+                    <Field label="Variété" required>
+                      <FormSelect value={ligne.idVariete} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateLigneM(i, 'idVariete', e.target.value)} required>
+                        <option value="">— Choisir une variété —</option>
+                        {Object.entries(
+                          varieties.filter((v: any) => v.statutVariete === 'DIFFUSEE').reduce((acc: Record<string, any[]>, v: any) => {
+                            const k = v.espece?.codeEspece || 'Autre'; (acc[k] = acc[k] || []).push(v); return acc
+                          }, {})
+                        ).sort(([a], [b]) => a.localeCompare(b)).map(([esp, vs]) => (
+                          <optgroup key={esp} label={esp}>
+                            {(vs as any[]).map((v: any) => <option key={v.id} value={v.id}>{v.nomVariete} ({v.codeVariete})</option>)}
+                          </optgroup>
+                        ))}
+                      </FormSelect>
+                    </Field>
+                    <Field label="Quantité" required>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <FormInput type="number" value={ligne.quantite} onChange={(e: React.ChangeEvent<HTMLInputElement>) => updateLigneM(i, 'quantite', e.target.value)} placeholder="500" min="1" required style={{ flex: 1 }} />
+                        <FormSelect value={ligne.unite} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateLigneM(i, 'unite', e.target.value)} style={{ width: 70 }}>
+                          <option value="kg">kg</option><option value="t">t</option>
+                        </FormSelect>
+                      </div>
+                    </Field>
+                    {form.lignes.length > 1 && (
+                      <button type="button" onClick={() => removeLigneM(i)} style={{ height: 36, width: 36, background: 'var(--red-50)', border: '1px solid #fecaca', borderRadius: 6, cursor: 'pointer', color: 'var(--red-600)', display: 'flex', alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-end' }}>
+                        <X size={14} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <Field label="Observations">
+              <textarea
+                value={form.observations}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm(f => ({ ...f, observations: e.target.value }))}
+                placeholder="Précisions sur la demande, délai souhaité…"
+                rows={3}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+              />
+            </Field>
+            <FormActions onCancel={() => setShowForm(false)} loading={formSaving} submitLabel="Soumettre la demande G3" />
+          </form>
+        </Modal>
+      )}
 
       {refusModal && (
         <Modal title="Annuler la commande" subtitle={`Commande ${refusModal.code}`} onClose={() => setRefusModal(null)} size="sm">
@@ -922,30 +1080,245 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : PRÉPARER & LIVRER UNE COMMANDE G3
+   Permet à l'agent UPSemCL de sélectionner le lot G3 à transférer
+   et de valider la livraison directe en une seule action atomique.
+   ══════════════════════════════════════════════════════════════════════════════ */
+function TraiterCommandeG3Modal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any
+  varieties: any[]
+  onClose: () => void
+  onSuccess: () => void
+  setToast: (t: any) => void
+}) {
+  const [lotsG3,     setLotsG3]     = useState<any[]>([])
+  const [loading,    setLoading]     = useState(true)
+  const [saving,     setSaving]      = useState(false)
+  /* Map idLigne → { idLot sélectionné, quantite à transférer } */
+  const [selections, setSelections]  = useState<Record<number, { idLot: number | null; quantite: string }>>({})
+
+  /* Lignes de la commande ayant la génération G3 (idGeneration = 4) */
+  const lignesG3: any[] = (commande.lignes ?? []).filter((l: any) => l.idGeneration === 4)
+
+  useEffect(() => {
+    /* Initialiser les sélections avec la quantité demandée par défaut */
+    const init: Record<number, { idLot: number | null; quantite: string }> = {}
+    for (const l of lignesG3) init[l.id] = { idLot: null, quantite: String(l.quantiteDemandee ?? '') }
+    setSelections(init)
+
+    /* Charger tous les lots G3 disponibles depuis le catalogue */
+    api.get(endpoints.lotsCatalogueG3)
+      .then(r => setLotsG3(r.data))
+      .catch(() => setLotsG3([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  /** Retourne le nom de la variété pour affichage */
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+
+  /** Filtre les lots disponibles pour une variété donnée */
+  function lotsForLigne(idVariete: number) {
+    return lotsG3.filter((lot: any) => lot.idVariete === idVariete)
+  }
+
+  function setLot(idLigne: number, idLot: number) {
+    setSelections(s => ({ ...s, [idLigne]: { ...s[idLigne], idLot } }))
+  }
+  function setQte(idLigne: number, quantite: string) {
+    setSelections(s => ({ ...s, [idLigne]: { ...s[idLigne], quantite } }))
+  }
+
+  /* Le bouton Confirmer n'est actif que si chaque ligne G3 a un lot + une quantité valide */
+  const isValid = lignesG3.every((l: any) => {
+    const sel = selections[l.id]
+    return sel && sel.idLot !== null && sel.quantite && Number(sel.quantite) > 0
+  })
+
+  async function submit() {
+    if (!isValid) return
+    setSaving(true)
+    try {
+      const allocations = lignesG3.map((l: any) => ({
+        idLigne:  l.id,
+        idLot:    selections[l.id].idLot,
+        quantite: Number(selections[l.id].quantite),
+      }))
+      await api.post(endpoints.ordersValiderEtLivrer(commande.id), { allocations })
+      setToast({ msg: `Commande ${commande.codeCommande} livrée — lot(s) G3 transféré(s)`, type: 'success' })
+      onSuccess()
+      onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la livraison', type: 'error' })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Modal
+      title="Préparer &amp; Livrer la commande"
+      subtitle={`${commande.codeCommande} — Acheteur : ${commande.usernameAcheteur ?? '—'}`}
+      onClose={onClose}
+      size="lg"
+    >
+      {/* Bannière d'information */}
+      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#1e40af', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Zap size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>Sélectionnez le lot G3 à transférer et confirmez la quantité. La livraison sera enregistrée immédiatement : le multiplicateur recevra les semences dans <strong>Mes Lots</strong> et pourra créer des lots G4 → R1 → R2 pour la traçabilité.</span>
+      </div>
+
+      {/* Une section par ligne G3 de la commande */}
+      {lignesG3.map((ligne: any) => {
+        const lots = lotsForLigne(ligne.idVariete)
+        const sel  = selections[ligne.id] ?? { idLot: null, quantite: '' }
+        const lotSelectionne = lots.find((l: any) => l.id === sel.idLot)
+
+        return (
+          <div key={ligne.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 14, background: 'var(--surface-2)' }}>
+            {/* En-tête de la ligne */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{varNom(ligne.idVariete)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                  Génération G3 · Quantité demandée : <strong style={{ color: 'var(--text-primary)' }}>{ligne.quantiteDemandee} {ligne.unite}</strong>
+                </div>
+              </div>
+              <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 99, padding: '3px 11px', fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>G3</span>
+            </div>
+
+            {/* Sélection du lot G3 disponible */}
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
+                Lot G3 à affecter
+              </div>
+              {loading ? (
+                <div className="skeleton" style={{ height: 44, borderRadius: 8 }} />
+              ) : lots.length === 0 ? (
+                <div style={{ padding: '11px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <XCircle size={14} /> Aucun lot G3 disponible pour cette variété.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {lots.map((lot: any) => (
+                    <label
+                      key={lot.id}
+                      style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', border: `2px solid ${sel.idLot === lot.id ? '#16a34a' : 'var(--border)'}`, borderRadius: 9, cursor: 'pointer', background: sel.idLot === lot.id ? '#f0fdf4' : 'var(--surface)', transition: 'border-color .12s, background .12s' }}
+                    >
+                      <input
+                        type="radio"
+                        name={`lot-ligne-${ligne.id}`}
+                        checked={sel.idLot === lot.id}
+                        onChange={() => setLot(ligne.id, lot.id)}
+                        style={{ accentColor: '#16a34a', width: 15, height: 15, cursor: 'pointer' }}
+                      />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, fontFamily: 'monospace', color: 'var(--text-primary)' }}>{lot.codeLot}</span>
+                        <span style={{ fontSize: 11.5, color: 'var(--text-muted)', marginLeft: 10 }}>
+                          {lot.campagne ?? '—'}
+                        </span>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#15803d' }}>{lot.quantiteNette} kg</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>disponible</div>
+                      </div>
+                      <span style={{ fontSize: 10.5, background: lot.statutLot === 'CERTIFIE' ? '#dcfce7' : '#eff6ff', color: lot.statutLot === 'CERTIFIE' ? '#15803d' : '#1d4ed8', borderRadius: 99, padding: '2px 9px', fontWeight: 600, flexShrink: 0 }}>
+                        {lot.statutLot}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Quantité à transférer */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 7 }}>
+                Quantité à transférer ({ligne.unite})
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="number"
+                  value={sel.quantite}
+                  min={1}
+                  max={lotSelectionne ? Math.min(Number(lotSelectionne.quantiteNette), ligne.quantiteDemandee) : ligne.quantiteDemandee}
+                  onChange={e => setQte(ligne.id, e.target.value)}
+                  disabled={sel.idLot === null}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 150, outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)', color: sel.idLot === null ? 'var(--text-muted)' : 'var(--text-primary)' }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  sur <strong>{ligne.quantiteDemandee}</strong> {ligne.unite} demandé{ligne.quantiteDemandee > 1 ? 's' : ''}
+                  {lotSelectionne && (
+                    <span style={{ color: '#15803d', marginLeft: 8 }}>· lot : {lotSelectionne.quantiteNette} kg dispo</span>
+                  )}
+                </span>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      {/* Boutons de validation */}
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+        <button
+          className="btn btn-primary"
+          style={{
+            background: isValid && !saving ? 'linear-gradient(135deg, #16a34a, #059669)' : undefined,
+            border: 'none', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7,
+            opacity: !isValid ? 0.6 : 1,
+          }}
+          onClick={submit}
+          disabled={!isValid || saving}
+        >
+          {saving
+            ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Livraison en cours…</>
+            : <><Zap size={13} /> Confirmer le transfert et livrer</>
+          }
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    VUE UPSEMCL / SÉLECTIONNEUR
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
-  const [orders,    setOrders]    = useState<any[]>([])
-  const [orgs,      setOrgs]      = useState<any[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [kpiFilter, setKpiFilter] = useState<KpiKey | null>(null)
-  const [search,    setSearch]    = useState('')
+  const [orders,           setOrders]           = useState<any[]>([])
+  const [orgs,             setOrgs]             = useState<any[]>([])
+  const [varieties,        setVarieties]        = useState<any[]>([])
+  const [loading,          setLoading]          = useState(true)
+  const [kpiFilter,        setKpiFilter]        = useState<KpiKey | null>(null)
+  const [search,           setSearch]           = useState('')
+  /* Commande G3 sélectionnée pour ouverture du modal Préparer & Livrer */
+  const [commandeATraiter, setCommandeATraiter] = useState<any | null>(null)
   const isUpsemcl = roleKey === 'seed-upsemcl'
 
   async function fetchAll() {
     setLoading(true)
-    const [oRes, orgRes] = await Promise.allSettled([
+    const [oRes, orgRes, varRes] = await Promise.allSettled([
       api.get(endpoints.ordersATraiter),
       api.get(endpoints.organisations),
+      api.get(endpoints.varieties),
     ])
     setOrders(oRes.status === 'fulfilled' ? oRes.value.data : [])
     setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
+    if (varRes.status === 'fulfilled') setVarieties(varRes.value.data)
     setLoading(false)
   }
   async function handleUpdateStatus(id: number, statut: string) {
     await api.put(endpoints.orderStatut(id), { statut })
     setToast({ msg: `Commande → ${STATUS_CFG[statut]?.label ?? statut}`, type: 'success' })
     fetchAll()
+  }
+  /** Intercepte le bouton "Accepter" sur une commande G3 → ouvre le modal de livraison directe */
+  function handleValiderG3(commande: any) {
+    setCommandeATraiter(commande)
   }
   useEffect(() => { fetchAll() }, [])
 
@@ -1020,7 +1393,9 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
           loading={loading}
           emptyMsg={kpiFilter ? 'Aucune commande pour ce filtre' : 'Aucune commande reçue'}
           orgs={orgs}
+          varieties={varieties}
           onUpdateStatus={handleUpdateStatus}
+          onValiderG3={isUpsemcl ? handleValiderG3 : undefined}
         />
       </div>
 
@@ -1029,6 +1404,17 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Truck size={13} /> <strong>{livrees}</strong> commande{livrees > 1 ? 's' : ''} livrée{livrees > 1 ? 's' : ''} ce cycle
         </div>
+      )}
+
+      {/* Modal Préparer & Livrer : affiché quand un agent UPSemCL valide une commande G3 */}
+      {commandeATraiter && (
+        <TraiterCommandeG3Modal
+          commande={commandeATraiter}
+          varieties={varieties}
+          onClose={() => setCommandeATraiter(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
+        />
       )}
     </div>
   )
@@ -1046,15 +1432,18 @@ function VueAdmin({ setToast }: { setToast: any }) {
   const [showAlloc, setShowAlloc] = useState(false)
   const [allocForm, setAllocForm] = useState({ idLigne: '', idLot: '', quantite: '' })
   const [saving,    setSaving]    = useState(false)
+  const [varieties, setVarieties] = useState<any[]>([])
 
   async function fetchOrders() {
     setLoading(true)
-    const [oRes, orgRes] = await Promise.allSettled([
+    const [oRes, orgRes, varRes] = await Promise.allSettled([
       api.get(endpoints.orders),
       api.get(endpoints.organisations),
+      api.get(endpoints.varieties),
     ])
     setOrders(oRes.status === 'fulfilled' ? oRes.value.data : [])
     setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
+    if (varRes.status === 'fulfilled') setVarieties(varRes.value.data)
     setLoading(false)
   }
   async function handleUpdateStatus(id: number, statut: string) {
@@ -1135,6 +1524,7 @@ function VueAdmin({ setToast }: { setToast: any }) {
           loading={loading}
           emptyMsg={kpiFilter ? 'Aucune commande pour ce filtre' : 'Aucune commande'}
           orgs={orgs}
+          varieties={varieties}
           onUpdateStatus={handleUpdateStatus}
         />
       </div>

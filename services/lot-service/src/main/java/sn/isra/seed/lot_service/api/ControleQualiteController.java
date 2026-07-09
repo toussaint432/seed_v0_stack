@@ -1,5 +1,6 @@
 package sn.isra.seed.lot_service.api;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,13 +29,13 @@ public class ControleQualiteController {
     }
 
     @PostMapping
-    public ControleQualite create(@RequestBody ControleQualite ctrl) {
+    public ControleQualite create(@Valid @RequestBody ControleQualite ctrl) {
         return repo.save(ctrl);
     }
 
     @PutMapping("/{id}")
     public ResponseEntity<ControleQualite> update(@PathVariable Long id,
-                                                   @RequestBody ControleQualite body) {
+                                                   @Valid @RequestBody ControleQualite body) {
         return repo.findById(id).map(existing -> {
             body.setId(id);
             body.setCreatedAt(existing.getCreatedAt());

@@ -3,6 +3,7 @@ package sn.isra.seed.order_service.api;
 import sn.isra.seed.order_service.api.dto.AllocateRequest;
 import sn.isra.seed.order_service.api.dto.CreateOrderRequest;
 import sn.isra.seed.order_service.api.dto.StatutRequest;
+import sn.isra.seed.order_service.api.dto.ValiderCommandeRequest;
 import sn.isra.seed.order_service.entity.AllocationCommande;
 import sn.isra.seed.order_service.entity.Commande;
 import sn.isra.seed.order_service.entity.LigneCommande;
@@ -16,6 +17,7 @@ import sn.isra.seed.order_service.repo.MembreOrganisationRepo;
 import sn.isra.seed.order_service.repo.StockOrderRepo;
 import sn.isra.seed.order_service.repo.TransfertLotOrderRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -123,7 +125,7 @@ public class OrderController {
 
   @Transactional
   @PostMapping
-  public Commande create(@RequestBody CreateOrderRequest req,
+  public Commande create(@Valid @RequestBody CreateOrderRequest req,
                          @AuthenticationPrincipal Jwt jwt) throws Exception {
     String username   = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
     Long orgAcheteur  = null;
@@ -179,7 +181,7 @@ public class OrderController {
   @Transactional
   @PutMapping("/{id}/statut")
   public ResponseEntity<Commande> updateStatut(@PathVariable Long id,
-                                               @RequestBody StatutRequest req,
+                                               @Valid @RequestBody StatutRequest req,
                                                @AuthenticationPrincipal Jwt jwt) {
     if (req.statut() == null || req.statut().isBlank())
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le champ 'statut' est obligatoire");
@@ -245,7 +247,7 @@ public class OrderController {
   }
 
   @PostMapping("/allocate")
-  public AllocationCommande allocate(@RequestBody AllocateRequest req) {
+  public AllocationCommande allocate(@Valid @RequestBody AllocateRequest req) {
     LigneCommande ligne = ligneRepo.findById(req.idLigne()).orElseThrow();
     AllocationCommande a = new AllocationCommande();
     a.setLigne(ligne);
@@ -253,5 +255,106 @@ public class OrderController {
     a.setQuantiteAllouee(req.quantite());
     a.setCreatedAt(Instant.now());
     return allocationRepo.save(a);
+  }
+
+  /**
+   * POST /api/orders/{id}/valider-et-livrer
+   *
+   * Action unifiée UPSemCL : valide ET livre une commande G3 en une seule requête.
+   * L'agent sélectionne le lot G3 source et la quantité dans l'interface ;
+   * ce endpoint crée l'allocation, débite le lot + le stock UPSemCL,
+   * crédite le stock du multiplicateur, crée le transfert_lot (statut ACCEPTE)
+   * et passe la commande à LIVREE — tout en une transaction atomique.
+   *
+   * Pré-condition : la commande doit être SOUMISE (pas encore acceptée).
+   */
+  @Transactional
+  @PostMapping("/{id}/valider-et-livrer")
+  public ResponseEntity<Commande> validerEtLivrer(
+      @PathVariable Long id,
+      @Valid @RequestBody ValiderCommandeRequest req,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    // 1. Récupérer et vérifier la commande
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+            "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.SOUMISE) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Seule une commande SOUMISE peut être validée directement (statut actuel : "
+          + commande.getStatut() + ")");
+    }
+
+    // Champs requis pour le transfert et le crédit de stock
+    if (commande.getUsernameAcheteur() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Acheteur non identifié sur cette commande — impossible de créer le transfert");
+    }
+    if (commande.getIdOrganisationAcheteur() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+          "Organisation acheteur non renseignée — impossible de créditer le stock");
+    }
+
+    String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+
+    // 2. Pour chaque allocation : enregistrement + mouvements de stock + transfert
+    for (ValiderCommandeRequest.AllocationItem item : req.allocations()) {
+
+      LigneCommande ligne = ligneRepo.findById(item.idLigne())
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+              "Ligne de commande #" + item.idLigne() + " introuvable"));
+
+      // 2a. Créer l'enregistrement d'allocation (traçabilité)
+      AllocationCommande alloc = new AllocationCommande();
+      alloc.setLigne(ligne);
+      alloc.setIdLot(item.idLot());
+      alloc.setQuantiteAllouee(item.quantite());
+      alloc.setCreatedAt(Instant.now());
+      allocationRepo.save(alloc);
+
+      // 2b. Débiter le stock UPSemCL (table stock) — no-op si pas encore d'entrée stock
+      stockOrderRepo.debitUpsemcl(item.idLot(), item.quantite());
+
+      // 2c. Créditer le stock du multiplicateur (table stock, INSERT ON CONFLICT UPDATE)
+      stockOrderRepo.creditOrg(
+          item.idLot(),
+          commande.getIdOrganisationAcheteur(),
+          item.quantite(),
+          ligne.getUnite() != null ? ligne.getUnite() : "kg"
+      );
+
+      // 2d. Débiter la quantité nette du lot source dans lot_semencier
+      int updated = lotQuantiteRepo.debitLotById(item.idLot(), item.quantite());
+      if (updated == 0) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+            "Quantité insuffisante sur le lot #" + item.idLot()
+            + " — vérifiez le stock disponible avant de valider");
+      }
+
+      // 2e. Créer le transfert_lot automatique (statut ACCEPTE) — visible immédiatement
+      //     dans les lots du multiplicateur via findMesLots
+      String codeTransfert = "AUTO-TL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+      transfertLotOrderRepo.createAutoTransfert(
+          codeTransfert,
+          item.idLot(),
+          emetteur,
+          commande.getUsernameAcheteur(),
+          item.quantite()
+      );
+
+      log.info("Transfert automatique créé : lot={} → {} ({}  {})",
+          item.idLot(), commande.getUsernameAcheteur(), item.quantite(),
+          ligne.getUnite() != null ? ligne.getUnite() : "kg");
+    }
+
+    // 3. Passer la commande en LIVREE
+    commande.setStatut(StatutCommande.LIVREE);
+    Commande saved = commandeRepo.save(commande);
+
+    log.info("Commande {} livrée directement par {} — {} allocation(s)",
+        commande.getCodeCommande(), emetteur, req.allocations().size());
+
+    return ResponseEntity.ok(saved);
   }
 }

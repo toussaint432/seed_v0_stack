@@ -72,6 +72,8 @@ function StatutBadge({ statut }: { statut?: string }) {
 }
 
 interface BarDatum { label: string; value: number; color: string }
+/* Donnée multi-génération pour le graphe groupé (N barres côte à côte par variété) */
+interface MultiGenBarDatum { label: string; gens: Record<string, number> }
 
 function StockBarChart({ data }: { data: BarDatum[] }) {
   if (data.length === 0) {
@@ -123,6 +125,110 @@ function StockBarChart({ data }: { data: BarDatum[] }) {
           </g>
         )
       })}
+      <text x={10} y={H / 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle"
+        transform={`rotate(-90,10,${H / 2})`}>Stock (kg)
+      </text>
+    </svg>
+  )
+}
+
+/* Graphe à barres groupées — N générations côte à côte par variété.
+   Dynamique : s'adapte à n'importe quel ensemble de générations (G0/G1, G1/G2/G3, etc.). */
+function MultiGenBarChart({ data, gens }: { data: MultiGenBarDatum[]; gens: string[] }) {
+  if (data.length === 0 || gens.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: 40 }}>
+        Aucune donnée à visualiser
+      </div>
+    )
+  }
+  const W = 640, H = 230, PL = 64, PR = 16, PT = 14, PB = 52
+  const maxV   = Math.max(...data.flatMap(d => gens.map(g => d.gens[g] ?? 0)), 1)
+  const chartW = W - PL - PR
+  const chartH = H - PT - PB
+  const n      = data.length
+  const groupW = Math.floor(chartW / n)
+  /* Largeur de chaque barre : 80 % du groupe réparti entre N générations, 2 px d'écart */
+  const barW   = Math.max(4, Math.floor((groupW * 0.82) / gens.length) - 2)
+  const totalBarSpan = barW * gens.length + 2 * (gens.length - 1)
+  const fmt = (v: number) =>
+    v >= 1_000_000 ? (v / 1_000_000).toFixed(1) + 'M'
+    : v >= 1_000   ? (v / 1_000).toFixed(0) + 'k'
+    : String(v)
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
+      {/* Lignes de grille horizontales */}
+      {[0, 0.25, 0.5, 0.75, 1.0].map((t, i) => {
+        const val = Math.round(t * maxV)
+        const y   = PT + chartH - t * chartH
+        return (
+          <g key={i}>
+            <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="var(--border)" strokeWidth={0.8} strokeDasharray="4 3" />
+            <text x={PL - 6} y={y + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">{fmt(val)}</text>
+          </g>
+        )
+      })}
+
+      {/* Groupe de barres par variété */}
+      {data.map((d, i) => {
+        const groupX  = PL + i * groupW
+        const centerX = groupX + groupW / 2
+        const startX  = centerX - totalBarSpan / 2
+
+        /* Hauteur minimum de la barre la plus haute pour placer le total au-dessus */
+        let minY = PT + chartH
+        gens.forEach(g => {
+          const qty = d.gens[g] ?? 0
+          if (qty > 0) {
+            const bh = Math.max(2, (qty / maxV) * chartH)
+            minY = Math.min(minY, PT + chartH - bh)
+          }
+        })
+
+        const total = gens.reduce((s, g) => s + (d.gens[g] ?? 0), 0)
+
+        return (
+          <g key={i}>
+            {/* Une barre par génération dans le groupe */}
+            {gens.map((gen, j) => {
+              const qty = d.gens[gen] ?? 0
+              if (qty <= 0) return null
+              const bh  = Math.max(2, (qty / maxV) * chartH)
+              const bx  = startX + j * (barW + 2)
+              const by  = PT + chartH - bh
+              return (
+                <g key={gen}>
+                  <rect x={bx} y={by} width={barW} height={bh} rx={2}
+                    fill={GEN_COLOR[gen] ?? '#6b7280'} opacity={0.88} />
+                  {bh > 20 && (
+                    <text x={bx + barW / 2} y={by + 12} fontSize={7}
+                      fill="white" textAnchor="middle" fontWeight={700}>
+                      {fmt(qty)}
+                    </text>
+                  )}
+                </g>
+              )
+            })}
+
+            {/* Total du groupe affiché au-dessus des barres */}
+            {total > 0 && (
+              <text x={centerX} y={minY - 4} fontSize={8}
+                fill="var(--text-muted)" textAnchor="middle" fontWeight={600}>
+                {fmt(total)}
+              </text>
+            )}
+
+            {/* Label variété tronqué sous le groupe */}
+            <text x={centerX} y={H - PB + 15} fontSize={9}
+              fill="var(--text-muted)" textAnchor="middle">
+              {d.label.length > 9 ? d.label.slice(0, 8) + '…' : d.label}
+            </text>
+          </g>
+        )
+      })}
+
+      {/* Axe Y — libellé vertical */}
       <text x={10} y={H / 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle"
         transform={`rotate(-90,10,${H / 2})`}>Stock (kg)
       </text>
@@ -227,6 +333,9 @@ export function Stocks({ roleKey }: Props) {
   const [showHistory,  setShowHistory]  = useState(false)
   const [historyLotId, setHistoryLotId] = useState<number | null>(null)
 
+  /* Filtre du graphe : 'all' = total toutes générations du rôle, sinon code génération seul */
+  const [chartGen, setChartGen] = useState<string>('all')
+
   const [showStockForm, setShowStockForm] = useState(false)
   const [showMvtForm,   setShowMvtForm]   = useState(false)
   const [editStock,     setEditStock]     = useState<any | null>(null)
@@ -313,9 +422,49 @@ export function Stocks({ roleKey }: Props) {
   const siteList   = [...new Set(agregeStocks.map((s: any) => s.codeSite).filter(Boolean))]
   const maxQty     = Math.max(...stocks.map((s: any) => parseFloat(s.quantiteTotale) || 0), 1)
 
+  /* Générations accessibles selon le rôle — pilote les boutons et le graphe groupé.
+     Admin/Quotataire/Multiplicateur : déduites dynamiquement des données réelles. */
+  const GEN_ORDER = ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
+  const roleGens: string[] = (() => {
+    if (isSelector) return SELECTOR_GENS
+    if (isUPSemCL)  return UPSEMCL_GENS
+    const present = new Set(agregeStocks.map((s: any) => s.codeGeneration).filter(Boolean))
+    return GEN_ORDER.filter(g => present.has(g))
+  })()
+
+  /* Données multi-générations pour le graphe groupé (mode 'all').
+     Agrège agregeStocks par variété × génération pour le périmètre du rôle. */
+  const chartGroupedData: MultiGenBarDatum[] = (() => {
+    if (roleGens.length < 2) return []   // graphe groupé inutile si une seule génération
+    const agg: Record<string, Record<string, number>> = {}
+    agregeStocks
+      .filter(st => roleGens.includes(st.codeGeneration))
+      .forEach(st => {
+        const key = st.nomVariete ?? st.codeVariete ?? `Var#${st.idVariete}`
+        if (!agg[key]) agg[key] = {}
+        agg[key][st.codeGeneration] = (agg[key][st.codeGeneration] ?? 0) + (parseFloat(st.quantiteTotale) || 0)
+      })
+    return Object.entries(agg)
+      .map(([label, gens]) => ({
+        label,
+        gens: Object.fromEntries(Object.entries(gens).map(([g, v]) => [g, Math.round(v)])),
+      }))
+      .sort((a, b) => {
+        const totA = roleGens.reduce((s, g) => s + (a.gens[g] ?? 0), 0)
+        const totB = roleGens.reduce((s, g) => s + (b.gens[g] ?? 0), 0)
+        return totB - totA
+      })
+      .slice(0, 12)
+  })()
+
+  /* barData : utilisé en mode filtre d'une génération spécifique (chartGen !== 'all').
+     Filtre agregeStocks sur la génération choisie, toutes roles confondus. */
   const barData: BarDatum[] = (() => {
+    const source = chartGen !== 'all'
+      ? agregeStocks.filter(st => st.codeGeneration === chartGen)
+      : stocks
     const agg: Record<string, { qty: number; gen: string }> = {}
-    stocks.forEach(st => {
+    source.forEach(st => {
       const key = st.nomVariete ?? st.codeVariete ?? `Var#${st.idVariete}`
       const gen = st.codeGeneration ?? '?'
       if (!agg[key]) agg[key] = { qty: 0, gen }
@@ -598,31 +747,116 @@ export function Stocks({ roleKey }: Props) {
         </div>
       </div>
 
-      {/* Chart section */}
+      {/* ── Graphe stock — dynamique selon le rôle ── */}
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setShowChart(c => !c)}>
           <span className="card-title">
             <span className="card-title-icon"><TrendingUp size={15} /></span>
             Visualisation stock par variété
-            {isUPSemCL   && <span style={{ marginLeft: 6, fontSize: 10, color: '#0ea5e9', background: '#0ea5e915', borderRadius: 3, padding: '1px 5px' }}>G1/G2/G3</span>}
-            {isSelector  && <span style={{ marginLeft: 6, fontSize: 10, color: '#6366f1', background: '#6366f115', borderRadius: 3, padding: '1px 5px' }}>G0/G1</span>}
+            {/* Badge indiquant le filtre actif — couleur de la génération ou du rôle */}
+            {roleGens.length > 0 && (
+              <span style={{
+                marginLeft: 6, fontSize: 10, borderRadius: 3, padding: '1px 6px',
+                color:      GEN_COLOR[chartGen === 'all' ? roleGens[0] : chartGen] ?? '#6366f1',
+                background: (GEN_COLOR[chartGen === 'all' ? roleGens[0] : chartGen] ?? '#6366f1') + '18',
+              }}>
+                {chartGen === 'all' ? roleGens.join(' + ') : `${chartGen} uniquement`}
+              </span>
+            )}
             <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)' }}>{showChart ? '▲' : '▼'}</span>
           </span>
-          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{barData.length} variété(s) · stock illimité</span>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            {chartGen === 'all'
+              ? `${chartGroupedData.length || barData.length} variété(s)`
+              : `${barData.length} variété(s) · ${chartGen} seulement`
+            }
+          </span>
         </div>
+
         {showChart && (
           <div style={{ padding: '12px 20px 16px' }}>
-            <StockBarChart data={barData} />
+
+            {/* ── Barre de filtres — visible uniquement si le rôle couvre ≥ 2 générations ── */}
+            {roleGens.length >= 2 && (
+              <div style={{ display: 'flex', gap: 6, marginBottom: 14, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap' }}>
+
+                {/* Totaux par génération — contexte décisionnel */}
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 6 }}>
+                  {roleGens.map((g, idx) => {
+                    const total = agregeStocks
+                      .filter(st => st.codeGeneration === g)
+                      .reduce((s: number, st: any) => s + (parseFloat(st.quantiteTotale) || 0), 0)
+                    return (
+                      <span key={g}>
+                        {idx > 0 && <span style={{ margin: '0 4px' }}>·</span>}
+                        <span style={{ fontWeight: 700, color: GEN_COLOR[g] ?? '#6b7280' }}>
+                          {g} : {Math.round(total).toLocaleString('fr-FR')} kg
+                        </span>
+                      </span>
+                    )
+                  })}
+                </span>
+
+                {/* Bouton "Total toutes générations" */}
+                <button
+                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); setChartGen('all') }}
+                  style={{
+                    padding: '4px 14px', borderRadius: 20, border: '1.5px solid',
+                    borderColor:  chartGen === 'all' ? (GEN_COLOR[roleGens[0]] ?? '#6366f1') : 'var(--border)',
+                    background:   chartGen === 'all' ? ((GEN_COLOR[roleGens[0]] ?? '#6366f1') + '14') : 'var(--surface)',
+                    color:        chartGen === 'all' ? (GEN_COLOR[roleGens[0]] ?? '#6366f1') : 'var(--text-muted)',
+                    fontSize: 12, fontWeight: chartGen === 'all' ? 700 : 400,
+                    cursor: 'pointer', transition: 'all 0.15s ease',
+                  }}
+                >
+                  Total {roleGens.join(' + ')}
+                </button>
+
+                {/* Un bouton par génération du rôle */}
+                {roleGens.map(gen => (
+                  <button
+                    key={gen}
+                    onClick={(e: React.MouseEvent) => { e.stopPropagation(); setChartGen(gen) }}
+                    style={{
+                      padding: '4px 14px', borderRadius: 20, border: '1.5px solid',
+                      borderColor:  chartGen === gen ? (GEN_COLOR[gen] ?? '#6b7280') : 'var(--border)',
+                      background:   chartGen === gen ? ((GEN_COLOR[gen] ?? '#6b7280') + '14') : 'var(--surface)',
+                      color:        chartGen === gen ? (GEN_COLOR[gen] ?? '#6b7280') : 'var(--text-muted)',
+                      fontSize: 12, fontWeight: chartGen === gen ? 700 : 400,
+                      cursor: 'pointer', transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {gen} seulement
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Graphe groupé (mode total) ou simple (mode génération unique) */}
+            {chartGen === 'all' && chartGroupedData.length > 0
+              ? <MultiGenBarChart data={chartGroupedData} gens={roleGens} />
+              : <StockBarChart data={barData} />
+            }
+
+            {/* Légende — fixe en mode groupé, déduite des données en mode simple */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 10, justifyContent: 'center' }}>
-              {Object.entries(GEN_COLOR).map(([gen, color]) => {
-                if (!barData.some(d => d.color === color)) return null
-                return (
-                  <div key={gen} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
-                    {gen}
-                  </div>
-                )
-              })}
+              {chartGen === 'all' && chartGroupedData.length > 0
+                ? roleGens.map(gen => (
+                    <div key={gen} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+                      <div style={{ width: 10, height: 10, borderRadius: 2, background: GEN_COLOR[gen] ?? '#6b7280' }} />
+                      {gen}
+                    </div>
+                  ))
+                : Object.entries(GEN_COLOR).map(([gen, color]) => {
+                    if (!barData.some(d => d.color === color)) return null
+                    return (
+                      <div key={gen} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+                        <div style={{ width: 10, height: 10, borderRadius: 2, background: color }} />
+                        {gen}
+                      </div>
+                    )
+                  })
+              }
             </div>
           </div>
         )}

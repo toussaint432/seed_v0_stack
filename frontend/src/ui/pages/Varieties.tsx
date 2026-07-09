@@ -376,7 +376,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           </div>
           <div className="stats-grid">
             {/* Espèce */}
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--green-500)', position: 'relative' }}>
+            <div className="stat-card" style={{ borderTop: '2.5px solid var(--green-500)' }}>
               <div className="stat-icon green"><Leaf size={18} /></div>
               <div className="stat-body">
                 <div className="stat-value" style={{ fontSize: 20, fontWeight: 800 }}>{selectedVariety.espece?.codeEspece ?? '—'}</div>
@@ -384,7 +384,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </div>
             </div>
             {/* Statut */}
-            <div className="stat-card" style={{ borderLeft: `3px solid ${selectedVariety.statutVariete === 'DIFFUSEE' ? 'var(--green-500)' : selectedVariety.statutVariete === 'EN_TEST' ? 'var(--gold)' : 'var(--text-muted)'}` }}>
+            <div className="stat-card" style={{ borderTop: `2.5px solid ${selectedVariety.statutVariete === 'DIFFUSEE' ? 'var(--green-500)' : selectedVariety.statutVariete === 'EN_TEST' ? 'var(--gold)' : 'var(--border-strong)'}` }}>
               <div className="stat-icon" style={{
                 background: selectedVariety.statutVariete === 'DIFFUSEE' ? 'var(--green-100)' :
                             selectedVariety.statutVariete === 'EN_TEST'  ? 'var(--gold-light)' : 'var(--surface-3)',
@@ -399,7 +399,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </div>
             </div>
             {/* Cycle */}
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--gold)' }}>
+            <div className="stat-card" style={{ borderTop: '2.5px solid var(--gold)' }}>
               <div className="stat-icon gold"><Clock size={18} /></div>
               <div className="stat-body">
                 <div className="stat-value" style={{ fontSize: 20, fontWeight: 800 }}>
@@ -413,7 +413,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </div>
             </div>
             {/* Rendement */}
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--green-500)' }}>
+            <div className="stat-card" style={{ borderTop: '2.5px solid var(--green-500)' }}>
               <div className="stat-icon green"><TrendingUp size={18} /></div>
               <div className="stat-body">
                 <div className="stat-value" style={{ fontSize: 20, fontWeight: 800 }}>
@@ -428,7 +428,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             </div>
             {/* Sélectionneur */}
             {selectedVariety.selectionneurPrincipal && (
-              <div className="stat-card" style={{ borderLeft: '3px solid #8b5cf6' }}>
+              <div className="stat-card" style={{ borderTop: '2.5px solid #8b5cf6' }}>
                 <div className="stat-icon" style={{ background: 'var(--violet-50)', color: 'var(--violet-600)' }}>
                   <User size={18} />
                 </div>
@@ -468,21 +468,21 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             </button>
           </div>
           <div className="stats-grid">
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--gold)' }}>
+            <div className="stat-card" style={{ borderTop: '2.5px solid var(--gold)' }}>
               <div className="stat-icon gold"><Sprout size={18} /></div>
               <div className="stat-body">
                 <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiActive}</div>
                 <div className="stat-label">Variétés actives</div>
               </div>
             </div>
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--green-500)' }}>
+            <div className="stat-card" style={{ borderTop: '2.5px solid var(--green-500)' }}>
               <div className="stat-icon green"><CheckCircle2 size={18} /></div>
               <div className="stat-body">
                 <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiDiffusee}</div>
                 <div className="stat-label">Diffusées</div>
               </div>
             </div>
-            <div className="stat-card" style={{ borderLeft: '3px solid var(--gold)' }}>
+            <div className="stat-card" style={{ borderTop: '2.5px solid var(--gold)' }}>
               <div className="stat-icon gold"><FlaskConical size={18} /></div>
               <div className="stat-body">
                 <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiEnTest}</div>
@@ -490,7 +490,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </div>
             </div>
             {kpiArchived > 0 && (
-              <div className="stat-card" style={{ opacity: 0.7, borderLeft: '3px solid var(--text-muted)' }}>
+              <div className="stat-card" style={{ opacity: 0.7, borderTop: '2.5px solid var(--border-strong)' }}>
                 <div className="stat-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-muted)' }}><Archive size={18} /></div>
                 <div className="stat-body">
                   <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{kpiArchived}</div>
@@ -503,71 +503,59 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
 
       ) : (
 
-        /* Niveau 1 : vue globale */
+        /* Niveau 1 : vue globale — KPI cards accent en bordure haute */
         <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiArchived > 0 ? 5 : 4}, 1fr)`, gap: 14, marginBottom: 22 }}>
 
           {/* Espèces */}
-          <div style={{
-            background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative',
-            border: '1px solid #bbf7d0', boxShadow: '0 2px 10px rgba(22,163,74,0.07)',
-          }}>
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#16a34a,#16a34a44)' }} />
-            <div style={{ padding: '18px 18px 18px 22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#f0fdf4', border: '1.5px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #16a34a', boxShadow: 'var(--shadow-xs)', transition: 'box-shadow var(--transition)' }}>
+            <div style={{ padding: '16px 18px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
                   <Leaf size={16} />
                 </div>
-                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ESPÈCES</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Espèces</span>
               </div>
-              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#15803d', lineHeight: 1 }}>
+              <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#0d1f11', lineHeight: 1 }}>
                 {loading ? '…' : species.length}
               </div>
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8 }}>espèces cultivées</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>espèces cultivées</div>
             </div>
           </div>
 
           {/* Variétés actives */}
-          <div style={{
-            background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative',
-            border: '1px solid #fde68a', boxShadow: '0 2px 10px rgba(180,83,9,0.07)',
-          }}>
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#b45309,#b4530944)' }} />
-            <div style={{ padding: '18px 18px 18px 22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fffbeb', border: '1.5px solid #fde68a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #b45309', boxShadow: 'var(--shadow-xs)', transition: 'box-shadow var(--transition)' }}>
+            <div style={{ padding: '16px 18px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309' }}>
                   <Sprout size={16} />
                 </div>
-                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#92660a', textTransform: 'uppercase', letterSpacing: '0.1em' }}>VARIÉTÉS</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#92660a', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Variétés</span>
               </div>
-              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#b45309', lineHeight: 1 }}>
+              <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#0d1f11', lineHeight: 1 }}>
                 {loading ? '…' : kpiActive}
               </div>
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8 }}>variétés actives</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>variétés actives</div>
             </div>
           </div>
 
           {/* Diffusées + barre de progression */}
-          <div style={{
-            background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative',
-            border: '1px solid #bfdbfe', boxShadow: '0 2px 10px rgba(3,105,161,0.07)',
-          }}>
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#0369a1,#0369a144)' }} />
-            <div style={{ padding: '18px 18px 18px 22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#eff6ff', border: '1.5px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369a1' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #0369a1', boxShadow: 'var(--shadow-xs)', transition: 'box-shadow var(--transition)' }}>
+            <div style={{ padding: '16px 18px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369a1' }}>
                   <CheckCircle2 size={16} />
                 </div>
-                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>DIFFUSÉES</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Diffusées</span>
               </div>
-              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#0369a1', lineHeight: 1 }}>
+              <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#0d1f11', lineHeight: 1 }}>
                 {loading ? '…' : kpiDiffusee}
               </div>
               {!loading && kpiActive > 0 && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ height: 4, background: '#dbeafe', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.round((kpiDiffusee / kpiActive) * 100)}%`, background: 'linear-gradient(90deg,#0369a1,#60a5fa)', borderRadius: 99, transition: 'width 0.8s ease' }} />
+                  <div style={{ height: 3, background: 'var(--surface-3)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.round((kpiDiffusee / kpiActive) * 100)}%`, background: '#0369a1', borderRadius: 99, transition: 'width 0.8s ease' }} />
                   </div>
-                  <div style={{ fontSize: 10, color: '#6b7280', marginTop: 4 }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
                     {Math.round((kpiDiffusee / kpiActive) * 100)}% des variétés actives
                   </div>
                 </div>
@@ -576,43 +564,35 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           </div>
 
           {/* En test */}
-          <div style={{
-            background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative',
-            border: '1px solid #ddd6fe', boxShadow: '0 2px 10px rgba(124,58,237,0.07)',
-          }}>
-            <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#7c3aed,#7c3aed44)' }} />
-            <div style={{ padding: '18px 18px 18px 22px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: '#faf5ff', border: '1.5px solid #ddd6fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed' }}>
+          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #7c3aed', boxShadow: 'var(--shadow-xs)', transition: 'box-shadow var(--transition)' }}>
+            <div style={{ padding: '16px 18px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#faf5ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed' }}>
                   <FlaskConical size={16} />
                 </div>
-                <span style={{ fontSize: 9.5, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.1em' }}>EN TEST</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.1em' }}>En test</span>
               </div>
-              <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#7c3aed', lineHeight: 1 }}>
+              <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#0d1f11', lineHeight: 1 }}>
                 {loading ? '…' : kpiEnTest}
               </div>
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 8 }}>en cours d'évaluation</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>en cours d'évaluation</div>
             </div>
           </div>
 
           {/* Archivées (conditionnel) */}
           {kpiArchived > 0 && (
-            <div style={{
-              background: '#fff', borderRadius: 14, overflow: 'hidden', position: 'relative', opacity: 0.75,
-              border: '1px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-            }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: 'linear-gradient(180deg,#6b7280,#6b728044)' }} />
-              <div style={{ padding: '18px 18px 18px 22px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                  <div style={{ width: 38, height: 38, borderRadius: 10, background: 'var(--surface-3)', border: '1.5px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #9ca3af', boxShadow: 'var(--shadow-xs)', opacity: 0.75, transition: 'box-shadow var(--transition)' }}>
+              <div style={{ padding: '16px 18px 18px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
                     <Archive size={16} />
                   </div>
-                  <span style={{ fontSize: 9.5, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>ARCHIVÉES</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Archivées</span>
                 </div>
-                <div style={{ fontSize: 40, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.035em', color: '#6b7280', lineHeight: 1 }}>
+                <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#6b7280', lineHeight: 1 }}>
                   {kpiArchived}
                 </div>
-                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 8 }}>hors catalogue actif</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>hors catalogue actif</div>
               </div>
             </div>
           )}

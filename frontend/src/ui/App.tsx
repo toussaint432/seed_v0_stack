@@ -180,7 +180,17 @@ export function App() {
   const searchRef = useRef<HTMLDivElement>(null)
   const inputRef  = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { initKeycloak().then(() => setReady(true)) }, [])
+  useEffect(() => {
+    initKeycloak()
+      .then(authenticated => {
+        setReady(true)
+        // Si l'init réussit mais que l'utilisateur n'est pas connecté → rediriger vers login
+        if (!authenticated) keycloak.login()
+      })
+      .catch(() => {
+        // initKeycloak() gère déjà la redirection en cas d'erreur, rien à faire ici
+      })
+  }, [])
 
   // ── Thème ──
   useEffect(() => {
