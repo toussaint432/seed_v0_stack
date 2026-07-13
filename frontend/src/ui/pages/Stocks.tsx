@@ -72,170 +72,272 @@ function StatutBadge({ statut }: { statut?: string }) {
 }
 
 interface BarDatum { label: string; value: number; color: string }
-/* Donnée multi-génération pour le graphe groupé (N barres côte à côte par variété) */
 interface MultiGenBarDatum { label: string; gens: Record<string, number> }
 
+interface ChartTip {
+  xPct: number; yPct: number
+  label: string
+  entries: { gen: string; value: number; color: string }[]
+  total: number
+}
+
+const fmtK = (v: number) =>
+  v >= 1_000_000 ? (v / 1_000_000).toFixed(1) + 'M'
+  : v >= 1_000   ? (v / 1_000).toFixed(0) + 'k'
+  : String(v)
+
+function ChartTooltip({ tip }: { tip: ChartTip }) {
+  return (
+    <div style={{
+      position: 'absolute',
+      left: `${Math.min(Math.max(tip.xPct, 16), 84)}%`,
+      top:  `${tip.yPct}%`,
+      transform: 'translate(-50%, calc(-100% - 12px))',
+      background: 'var(--surface)',
+      border: '1px solid var(--border)',
+      borderRadius: 8, padding: '9px 13px',
+      fontSize: 12, pointerEvents: 'none', zIndex: 60,
+      boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+      minWidth: 160, whiteSpace: 'nowrap',
+    }}>
+      <div style={{ fontWeight: 700, marginBottom: 7, color: 'var(--text-primary)' }}>
+        {tip.label}
+      </div>
+      {tip.entries.map((e, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6,
+          marginBottom: i < tip.entries.length - 1 ? 4 : 0 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 2, background: e.color, flexShrink: 0 }} />
+          <span style={{ flex: 1, color: 'var(--text-muted)' }}>{e.gen}</span>
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)', paddingLeft: 12 }}>
+            {e.value.toLocaleString('fr-FR')} kg
+          </span>
+        </div>
+      ))}
+      {tip.entries.length > 1 && (
+        <div style={{
+          borderTop: '1px solid var(--border)', marginTop: 6, paddingTop: 5,
+          display: 'flex', justifyContent: 'space-between',
+          fontWeight: 700, color: 'var(--text-primary)', fontSize: 11,
+        }}>
+          <span>Total</span>
+          <span>{tip.total.toLocaleString('fr-FR')} kg</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function StockBarChart({ data }: { data: BarDatum[] }) {
-  if (data.length === 0) {
-    return (
-      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: 40 }}>
-        Aucune donnée à visualiser
-      </div>
-    )
-  }
-  const W = 620, H = 220, PL = 64, PR = 16, PT = 14, PB = 52
-  const maxV = Math.max(...data.map(d => d.value), 1)
-  const chartW = W - PL - PR
-  const chartH = H - PT - PB
-  const n = data.length
-  const barW = Math.max(6, Math.floor(chartW / n) - 6)
-  const fmt = (v: number) =>
-    v >= 1_000_000 ? (v / 1_000_000).toFixed(1) + 'M'
-    : v >= 1_000   ? (v / 1_000).toFixed(0) + 'k'
-    : String(v)
+  const [tip, setTip] = useState<ChartTip | null>(null)
 
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
-      {[0, 0.25, 0.5, 0.75, 1.0].map((t, i) => {
-        const val = Math.round(t * maxV)
-        const y   = PT + chartH - t * chartH
-        return (
-          <g key={i}>
-            <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="var(--border)" strokeWidth={0.8} strokeDasharray="4 3" />
-            <text x={PL - 6} y={y + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">{fmt(val)}</text>
-          </g>
-        )
-      })}
-      {data.map((d, i) => {
-        const step = chartW / n
-        const x    = PL + i * step + (step - barW) / 2
-        const bh   = Math.max(2, (d.value / maxV) * chartH)
-        const y    = PT + chartH - bh
-        return (
-          <g key={i}>
-            <rect x={x} y={y} width={barW} height={bh} rx={3} fill={d.color} opacity={0.85} />
-            {bh > 22 && (
-              <text x={x + barW / 2} y={y + 13} fontSize={8} fill="white" textAnchor="middle" fontWeight={700}>
-                {fmt(d.value)}
-              </text>
-            )}
-            <text x={x + barW / 2} y={H - PB + 15} fontSize={9} fill="var(--text-muted)" textAnchor="middle">
-              {d.label.length > 9 ? d.label.slice(0, 8) + '…' : d.label}
-            </text>
-          </g>
-        )
-      })}
-      <text x={10} y={H / 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle"
-        transform={`rotate(-90,10,${H / 2})`}>Stock (kg)
-      </text>
-    </svg>
+  if (data.length === 0) return (
+    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '36px 20px' }}>
+      Aucune donnée à visualiser pour cette sélection
+    </div>
   )
-}
 
-/* Graphe à barres groupées — N générations côte à côte par variété.
-   Dynamique : s'adapte à n'importe quel ensemble de générations (G0/G1, G1/G2/G3, etc.). */
-function MultiGenBarChart({ data, gens }: { data: MultiGenBarDatum[]; gens: string[] }) {
-  if (data.length === 0 || gens.length === 0) {
-    return (
-      <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 12, padding: 40 }}>
-        Aucune donnée à visualiser
-      </div>
-    )
-  }
-  const W = 640, H = 230, PL = 64, PR = 16, PT = 14, PB = 52
-  const maxV   = Math.max(...data.flatMap(d => gens.map(g => d.gens[g] ?? 0)), 1)
-  const chartW = W - PL - PR
-  const chartH = H - PT - PB
+  const W = 680, H = 260, PL = 68, PR = 20, PT = 30, PB = 56
+  const maxV   = Math.max(...data.map(d => d.value), 1)
+  const chartW = W - PL - PR, chartH = H - PT - PB
   const n      = data.length
-  const groupW = Math.floor(chartW / n)
-  /* Largeur de chaque barre : 80 % du groupe réparti entre N générations, 2 px d'écart */
-  const barW   = Math.max(4, Math.floor((groupW * 0.82) / gens.length) - 2)
-  const totalBarSpan = barW * gens.length + 2 * (gens.length - 1)
-  const fmt = (v: number) =>
-    v >= 1_000_000 ? (v / 1_000_000).toFixed(1) + 'M'
-    : v >= 1_000   ? (v / 1_000).toFixed(0) + 'k'
-    : String(v)
+  const step   = chartW / n
+  const barW   = Math.min(46, Math.max(12, step * 0.58))
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', overflow: 'visible' }}>
-      {/* Lignes de grille horizontales */}
-      {[0, 0.25, 0.5, 0.75, 1.0].map((t, i) => {
-        const val = Math.round(t * maxV)
-        const y   = PT + chartH - t * chartH
-        return (
-          <g key={i}>
-            <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="var(--border)" strokeWidth={0.8} strokeDasharray="4 3" />
-            <text x={PL - 6} y={y + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">{fmt(val)}</text>
-          </g>
-        )
-      })}
+    <div style={{ position: 'relative', overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}
+        onMouseLeave={() => setTip(null)}>
+        <defs>
+          {data.map((d, i) => (
+            <linearGradient key={i} id={`scbar-${i}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={d.color} stopOpacity={0.88} />
+              <stop offset="100%" stopColor={d.color} stopOpacity={0.44} />
+            </linearGradient>
+          ))}
+        </defs>
 
-      {/* Groupe de barres par variété */}
-      {data.map((d, i) => {
-        const groupX  = PL + i * groupW
-        const centerX = groupX + groupW / 2
-        const startX  = centerX - totalBarSpan / 2
-
-        /* Hauteur minimum de la barre la plus haute pour placer le total au-dessus */
-        let minY = PT + chartH
-        gens.forEach(g => {
-          const qty = d.gens[g] ?? 0
-          if (qty > 0) {
-            const bh = Math.max(2, (qty / maxV) * chartH)
-            minY = Math.min(minY, PT + chartH - bh)
-          }
-        })
-
-        const total = gens.reduce((s, g) => s + (d.gens[g] ?? 0), 0)
-
-        return (
-          <g key={i}>
-            {/* Une barre par génération dans le groupe */}
-            {gens.map((gen, j) => {
-              const qty = d.gens[gen] ?? 0
-              if (qty <= 0) return null
-              const bh  = Math.max(2, (qty / maxV) * chartH)
-              const bx  = startX + j * (barW + 2)
-              const by  = PT + chartH - bh
-              return (
-                <g key={gen}>
-                  <rect x={bx} y={by} width={barW} height={bh} rx={2}
-                    fill={GEN_COLOR[gen] ?? '#6b7280'} opacity={0.88} />
-                  {bh > 20 && (
-                    <text x={bx + barW / 2} y={by + 12} fontSize={7}
-                      fill="white" textAnchor="middle" fontWeight={700}>
-                      {fmt(qty)}
-                    </text>
-                  )}
-                </g>
-              )
-            })}
-
-            {/* Total du groupe affiché au-dessus des barres */}
-            {total > 0 && (
-              <text x={centerX} y={minY - 4} fontSize={8}
-                fill="var(--text-muted)" textAnchor="middle" fontWeight={600}>
-                {fmt(total)}
+        {[0, 0.25, 0.5, 0.75, 1].map((t, i) => {
+          const y = PT + chartH - t * chartH
+          return (
+            <g key={i}>
+              <line x1={PL} y1={y} x2={W - PR} y2={y}
+                stroke="var(--border)"
+                strokeWidth={i === 0 ? 1.2 : 0.5}
+                strokeDasharray={i === 0 ? '' : '4 4'} />
+              <text x={PL - 8} y={y + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">
+                {fmtK(Math.round(t * maxV))}
               </text>
-            )}
+            </g>
+          )
+        })}
 
-            {/* Label variété tronqué sous le groupe */}
-            <text x={centerX} y={H - PB + 15} fontSize={9}
-              fill="var(--text-muted)" textAnchor="middle">
-              {d.label.length > 9 ? d.label.slice(0, 8) + '…' : d.label}
-            </text>
-          </g>
-        )
-      })}
+        <text x={11} y={PT + chartH / 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle"
+          transform={`rotate(-90, 11, ${PT + chartH / 2})`}>kg</text>
 
-      {/* Axe Y — libellé vertical */}
-      <text x={10} y={H / 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle"
-        transform={`rotate(-90,10,${H / 2})`}>Stock (kg)
-      </text>
-    </svg>
+        {data.map((d, i) => {
+          const cx     = PL + i * step + step / 2
+          const bh     = Math.max(3, (d.value / maxV) * chartH)
+          const bx     = cx - barW / 2
+          const by     = PT + chartH - bh
+          const isHov  = tip?.label === d.label
+          const dimmed = !!tip && !isHov
+          return (
+            <g key={i}
+              onMouseEnter={() => setTip({
+                xPct: cx / W * 100, yPct: by / H * 100,
+                label: d.label,
+                entries: [{ gen: 'Quantité', value: d.value, color: d.color }],
+                total: d.value,
+              })}
+              style={{ cursor: 'pointer' }}>
+              <rect x={cx - step / 2 + 1} y={PT} width={step - 2} height={chartH + PB - 8}
+                fill="transparent" />
+              <rect x={bx} y={by} width={barW} height={bh} rx={4}
+                fill={`url(#scbar-${i})`}
+                opacity={dimmed ? 0.26 : 1}
+                style={{ transition: 'opacity 0.12s ease' }} />
+              {isHov && (
+                <rect x={bx - 1} y={by - 1} width={barW + 2} height={bh + 1} rx={5}
+                  fill="none" stroke={d.color} strokeWidth={1.5} />
+              )}
+              <text x={cx} y={by - 5} fontSize={9} fill={d.color}
+                textAnchor="middle" fontWeight={700}
+                opacity={dimmed ? 0.26 : 1}>
+                {fmtK(d.value)}
+              </text>
+              <text x={cx} y={H - PB + 16} fontSize={9} fill="var(--text-muted)"
+                textAnchor="middle" opacity={dimmed ? 0.38 : 1}>
+                {d.label.length > 10 ? d.label.slice(0, 9) + '…' : d.label}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+      {tip && <ChartTooltip tip={tip} />}
+    </div>
   )
 }
 
+function MultiGenBarChart({ data, gens }: { data: MultiGenBarDatum[]; gens: string[] }) {
+  const [tip, setTip] = useState<ChartTip | null>(null)
+
+  if (data.length === 0 || gens.length === 0) return (
+    <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, padding: '36px 20px' }}>
+      Aucune donnée à visualiser pour cette sélection
+    </div>
+  )
+
+  const W = 700, H = 270, PL = 68, PR = 20, PT = 30, PB = 56
+  const maxV   = Math.max(...data.flatMap(d => gens.map(g => d.gens[g] ?? 0)), 1)
+  const chartW = W - PL - PR, chartH = H - PT - PB
+  const n      = data.length
+  const groupW = chartW / n
+  const barW   = Math.min(28, Math.max(6, (groupW * 0.78) / gens.length - 2))
+  const gap    = 2
+  const totalBarSpan = barW * gens.length + gap * (gens.length - 1)
+
+  return (
+    <div style={{ position: 'relative', overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block' }}
+        onMouseLeave={() => setTip(null)}>
+        <defs>
+          {gens.map(g => (
+            <linearGradient key={g} id={`mgbar-${g}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={GEN_COLOR[g] ?? '#6b7280'} stopOpacity={0.9} />
+              <stop offset="100%" stopColor={GEN_COLOR[g] ?? '#6b7280'} stopOpacity={0.44} />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {[0, 0.25, 0.5, 0.75, 1].map((t, i) => {
+          const y = PT + chartH - t * chartH
+          return (
+            <g key={i}>
+              <line x1={PL} y1={y} x2={W - PR} y2={y}
+                stroke="var(--border)"
+                strokeWidth={i === 0 ? 1.2 : 0.5}
+                strokeDasharray={i === 0 ? '' : '4 4'} />
+              <text x={PL - 8} y={y + 4} fontSize={9} fill="var(--text-muted)" textAnchor="end">
+                {fmtK(Math.round(t * maxV))}
+              </text>
+            </g>
+          )
+        })}
+
+        <text x={11} y={PT + chartH / 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle"
+          transform={`rotate(-90, 11, ${PT + chartH / 2})`}>kg</text>
+
+        {data.map((d, i) => {
+          const groupCX = PL + i * groupW + groupW / 2
+          const startX  = groupCX - totalBarSpan / 2
+          const total   = gens.reduce((s, g) => s + (d.gens[g] ?? 0), 0)
+          const isHov   = tip?.label === d.label
+          const dimmed  = !!tip && !isHov
+
+          let minBarY = PT + chartH
+          gens.forEach(g => {
+            const qty = d.gens[g] ?? 0
+            if (qty > 0) {
+              const bh = Math.max(3, (qty / maxV) * chartH)
+              minBarY  = Math.min(minBarY, PT + chartH - bh)
+            }
+          })
+
+          return (
+            <g key={i}
+              onMouseEnter={() => setTip({
+                xPct: groupCX / W * 100,
+                yPct: minBarY / H * 100,
+                label: d.label,
+                entries: gens
+                  .filter(g => (d.gens[g] ?? 0) > 0)
+                  .map(g => ({ gen: g, value: d.gens[g] ?? 0, color: GEN_COLOR[g] ?? '#6b7280' })),
+                total,
+              })}
+              style={{ cursor: 'pointer' }}>
+              <rect x={groupCX - groupW / 2 + 1} y={PT} width={groupW - 2} height={chartH + PB - 8}
+                fill="transparent" />
+              {gens.map((g, j) => {
+                const qty = d.gens[g] ?? 0
+                if (qty <= 0) return null
+                const bh = Math.max(3, (qty / maxV) * chartH)
+                const bx = startX + j * (barW + gap)
+                const by = PT + chartH - bh
+                return (
+                  <g key={g}>
+                    <rect x={bx} y={by} width={barW} height={bh} rx={3}
+                      fill={`url(#mgbar-${g})`}
+                      opacity={dimmed ? 0.26 : 1}
+                      style={{ transition: 'opacity 0.12s ease' }} />
+                    {bh > 22 && (
+                      <text x={bx + barW / 2} y={by + 12} fontSize={7.5}
+                        fill="white" textAnchor="middle" fontWeight={700}>
+                        {fmtK(qty)}
+                      </text>
+                    )}
+                  </g>
+                )
+              })}
+              {total > 0 && (
+                <text x={groupCX} y={minBarY - 5} fontSize={8.5} fontWeight={700}
+                  fill="var(--text-muted)" textAnchor="middle"
+                  opacity={dimmed ? 0.3 : 1}>
+                  {fmtK(total)}
+                </text>
+              )}
+              <text x={groupCX} y={H - PB + 16} fontSize={8.5}
+                fill="var(--text-muted)" textAnchor="middle"
+                opacity={dimmed ? 0.38 : 1}>
+                {d.label.length > 10 ? d.label.slice(0, 9) + '…' : d.label}
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+      {tip && <ChartTooltip tip={tip} />}
+    </div>
+  )
+}
 function LotDropdown({ lots, value, onChange, placeholder = 'Sélectionner un lot…', varMap }: {
   lots: any[]; value: string; onChange: (v: string) => void
   placeholder?: string; varMap: Record<number, any>

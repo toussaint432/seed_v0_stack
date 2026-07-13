@@ -77,18 +77,19 @@ const GREETINGS: Record<string, { title: string; sub: string }> = {
 
 const REFRESH_MS = 30_000
 
-/* ── Design tokens (alignés avec design-b-innovation-sahel.html) ── */
+/* ── Design tokens ── */
 const D = {
-  paper:      '#fafaf7',
-  paper2:     '#f3f1ea',
-  line:       '#e2dfd3',
-  ink:        '#131814',
-  muted:      '#6e6f6a',
+  paper:      '#fafafa',
+  paper2:     '#f8fafc',
+  line:       '#e5e7eb',
+  ink:        '#111827',
+  muted:      '#6b7280',
   green:      '#00693e',
   greenDeep:  '#003d24',
   greenSoft:  '#e8f1ec',
-  gold:       '#e8b04b',
-  goldDeep:   '#c08a2a',
+  blue:       '#1d4ed8',
+  blueLight:  '#eff6ff',
+  blueBorder: '#bfdbfe',
   terra:      '#c44536',
   display:    "'Bricolage Grotesque', system-ui, sans-serif",
   body:       "'Manrope', system-ui, sans-serif",
@@ -686,16 +687,16 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       {showStats && (
         <div style={{
           marginBottom: 20, borderRadius: 14, overflow: 'hidden',
-          border: `1px solid ${hasAnyAlerts ? (criticalCov > 0 ? '#fecaca' : '#fde68a') : 'var(--border)'}`,
+          border: `1px solid ${hasAnyAlerts ? (criticalCov > 0 ? '#fecaca' : D.blueBorder) : 'var(--border)'}`,
           boxShadow: criticalCov > 0 ? '0 2px 12px rgba(220,38,38,0.08)' : '0 1px 4px rgba(0,0,0,0.04)',
         }}>
           {/* En-tête */}
           <div style={{
             padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12,
             background: D.paper2,
-            borderBottom: `1px solid ${hasAnyAlerts ? (criticalCov > 0 ? '#fecaca' : '#fde68a') : D.line}`,
+            borderBottom: `1px solid ${hasAnyAlerts ? (criticalCov > 0 ? '#fecaca' : D.blueBorder) : D.line}`,
           }}>
-            <span style={{ fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', color: criticalCov > 0 ? D.terra : hasAnyAlerts ? D.goldDeep : D.green, background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? '#fffbeb' : D.greenSoft, padding: '3px 10px', borderRadius: 999 }}>
+            <span style={{ fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', color: criticalCov > 0 ? D.terra : hasAnyAlerts ? D.blue : D.green, background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? D.blueLight : D.greenSoft, padding: '3px 10px', borderRadius: 999 }}>
               {criticalCov > 0 ? 'Alerte' : hasAnyAlerts ? 'Surveillance' : 'Nominal'}
             </span>
             <span style={{ fontFamily: D.display, fontSize: 15, fontWeight: 600, color: D.ink }}>Centre de pilotage</span>
@@ -703,9 +704,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             {!loading && (
               <span style={{
                 marginLeft: 'auto', fontFamily: D.mono, fontSize: 10, fontWeight: 500, borderRadius: 999, padding: '3px 12px',
-                background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? '#fffbeb' : D.greenSoft,
-                color:      criticalCov > 0 ? D.terra : hasAnyAlerts ? D.goldDeep : D.green,
-                border:     `1px solid ${criticalCov > 0 ? '#fecaca' : hasAnyAlerts ? '#fde68a' : '#bbf7d0'}`,
+                background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? D.blueLight : D.greenSoft,
+                color:      criticalCov > 0 ? D.terra : hasAnyAlerts ? D.blue : D.green,
+                border:     `1px solid ${criticalCov > 0 ? '#fecaca' : hasAnyAlerts ? D.blueBorder : '#bbf7d0'}`,
               }}>
                 {criticalCov > 0 ? 'Action requise' : hasAnyAlerts ? 'À surveiller' : 'Situation nominale'}
               </span>

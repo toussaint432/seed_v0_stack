@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, Filter, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -18,6 +18,7 @@ function suggestChildCode(parentCode: string, parentGen: string, childGen: strin
 }
 
 const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', G4: 'badge-gold', R1: 'badge-blue', R2: 'badge-green' }
+const GEN_HEX: Record<string, string> = { G0: '#6366f1', G1: '#0ea5e9', G2: '#22c55e', G3: '#f59e0b', G4: '#c2410c', R1: '#ec4899', R2: '#14b8a6' }
 const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef9ed', G3: '#f9fafb', G4: '#fff7ed', R1: '#eff6ff', R2: '#f0fdf4' }
 const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', G4: '#fed7aa', R1: '#bfdbfe', R2: '#bbf7d0' }
 const ALL_GENS = ['G0','G1','G2','G3','G4','R1','R2']
@@ -106,6 +107,131 @@ function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: stri
 }
 
 /* ══════════════════════════════════════════════════════════════
+   GRAPHIQUE HORIZONTAL — Production par variété × génération
+   ══════════════════════════════════════════════════════════════ */
+interface HorizDatum { label: string; gens: Record<string, number> }
+
+function MesLotsHorizChart({ data, gens }: { data: HorizDatum[]; gens: string[] }) {
+  const [tip, setTip] = useState<{ label: string; gens: Record<string,number>; x: number; y: number } | null>(null)
+
+  if (data.length === 0) return null
+
+  const maxTotal = Math.max(...data.map(d => gens.reduce((s, g) => s + (d.gens[g] ?? 0), 0)), 1)
+  const fmtK = (v: number) => v >= 1_000_000 ? (v/1_000_000).toFixed(1)+'M' : v >= 1_000 ? (v/1_000).toFixed(0)+'k' : String(v)
+  const ROW_H = 36, LABEL_W = 120, BAR_W = 420, PAD = 16, H = data.length * ROW_H + PAD * 2
+  const W = LABEL_W + BAR_W + 80
+
+  return (
+    <div style={{ padding: '14px 20px 10px', borderBottom: '1px solid var(--border)', position: 'relative' }}
+      onMouseLeave={() => setTip(null)}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>
+        Production par variété
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', maxHeight: 200, overflow: 'visible' }}>
+        <defs>
+          {gens.map(g => (
+            <linearGradient key={g} id={`hz-${g}`} x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor={GEN_HEX[g] ?? '#6b7280'} stopOpacity={0.85} />
+              <stop offset="100%" stopColor={GEN_HEX[g] ?? '#6b7280'} stopOpacity={0.45} />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {data.map((d, i) => {
+          const y0     = PAD + i * ROW_H
+          const total  = gens.reduce((s, g) => s + (d.gens[g] ?? 0), 0)
+          const isHov  = tip?.label === d.label
+          let curX = LABEL_W + 8
+
+          return (
+            <g key={i}
+              onMouseEnter={e => {
+                const svg  = (e.currentTarget as SVGElement).closest('svg')!
+                const rect = svg.getBoundingClientRect()
+                const pct  = (e.clientX - rect.left) / rect.width
+                const svgX = pct * W
+                setTip({ label: d.label, gens: d.gens, x: svgX, y: y0 })
+              }}
+              style={{ cursor: 'pointer' }}>
+              {/* Hover strip */}
+              <rect x={0} y={y0} width={W} height={ROW_H - 2} rx={4} fill={isHov ? 'var(--surface-2)' : 'transparent'} />
+              {/* Variety label */}
+              <text x={LABEL_W - 6} y={y0 + ROW_H / 2 + 4} fontSize={10.5} fill="var(--text-primary)"
+                textAnchor="end" fontWeight={isHov ? 700 : 500}>
+                {d.label.length > 12 ? d.label.slice(0, 11) + '…' : d.label}
+              </text>
+              {/* Stacked horizontal bars */}
+              {gens.map(g => {
+                const qty = d.gens[g] ?? 0
+                if (qty <= 0) return null
+                const bw = (qty / maxTotal) * BAR_W
+                const bx = curX
+                curX += bw
+                const barY = y0 + 10
+                const barH = ROW_H - 22
+                return (
+                  <g key={g}>
+                    <rect x={bx} y={barY} width={bw} height={barH} rx={3}
+                      fill={`url(#hz-${g})`}
+                      opacity={tip && !isHov ? 0.3 : 1}
+                      style={{ transition: 'opacity 0.12s' }} />
+                  </g>
+                )
+              })}
+              {/* Total label at right */}
+              <text x={LABEL_W + 8 + (total / maxTotal) * BAR_W + 6} y={y0 + ROW_H / 2 + 4}
+                fontSize={9.5} fill="var(--text-muted)" fontWeight={600}
+                opacity={tip && !isHov ? 0.3 : 1}>
+                {fmtK(total)} kg
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+
+      {/* Légende */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 6 }}>
+        {gens.map(g => (
+          <div key={g} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)' }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: GEN_HEX[g] ?? '#6b7280' }} />
+            {g}
+          </div>
+        ))}
+      </div>
+
+      {/* Tooltip */}
+      {tip && (
+        <div style={{
+          position: 'absolute',
+          left: `${Math.min(Math.max(tip.x / (LABEL_W + BAR_W + 80) * 100, 10), 80)}%`,
+          top: `${tip.y / (data.length * ROW_H + PAD * 2) * 100}%`,
+          transform: 'translate(-50%, calc(-100% - 8px))',
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          borderRadius: 8, padding: '8px 12px', fontSize: 12,
+          pointerEvents: 'none', zIndex: 60,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.16)', whiteSpace: 'nowrap', minWidth: 150,
+        }}>
+          <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>{tip.label}</div>
+          {gens.filter(g => (tip.gens[g] ?? 0) > 0).map(g => (
+            <div key={g} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: GEN_HEX[g] ?? '#6b7280', flexShrink: 0 }} />
+              <span style={{ flex: 1, color: 'var(--text-muted)' }}>{g}</span>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)', paddingLeft: 8 }}>
+                {(tip.gens[g] ?? 0).toLocaleString('fr-FR')} kg
+              </span>
+            </div>
+          ))}
+          <div style={{ borderTop: '1px solid var(--border)', marginTop: 5, paddingTop: 4, fontWeight: 700, fontSize: 11, display: 'flex', justifyContent: 'space-between', color: 'var(--text-primary)' }}>
+            <span>Total</span>
+            <span>{gens.reduce((s, g) => s + (tip.gens[g] ?? 0), 0).toLocaleString('fr-FR')} kg</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
    VUE MULTIPLICATEUR — Catalogue G3 + Mes Lots isolés
    ══════════════════════════════════════════════════════════════ */
 function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type: 'success'|'error' }) => void }) {
@@ -125,6 +251,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [lineageLotCode, setLineageLotCode] = useState('')
   const [searchCat, setSearchCat]     = useState('')
   const [searchMes, setSearchMes]     = useState('')
+  const [filterGenMes, setFilterGenMes] = useState('')
   // Transferts G3 EN_ATTENTE reçus par l'UPSemCL — en attente d'acceptation
   const [transfertsRecus, setTransfertsRecus] = useState<any[]>([])
 
@@ -283,7 +410,19 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const mesLotsR1R2  = mesLotsR1 + mesLotsR2
   const stockTotal   = monStock.reduce((s: number, st: any) => s + Number(st.quantiteDisponible || 0), 0)
 
+  const ML_GENS = ['G3', 'G4', 'R1', 'R2']
+
+  // Map: lot id → liste de stocks disponibles
+  const stockByLotId: Record<number, { qty: number; site: string }[]> = {}
+  monStock.forEach((st: any) => {
+    const lid = st.idLot ?? st.lot?.id
+    if (!lid) return
+    if (!stockByLotId[lid]) stockByLotId[lid] = []
+    stockByLotId[lid].push({ qty: Number(st.quantiteDisponible || 0), site: st.site?.nomSite || st.site?.codeSite || '' })
+  })
+
   const mesLotsFiltered = mesLots.filter(l => {
+    if (filterGenMes && l.generation?.codeGeneration !== filterGenMes) return false
     if (!searchMes) return true
     const v = varietyMap[l.idVariete]
     const term = searchMes.toLowerCase()
@@ -291,6 +430,26 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         || v?.nomVariete?.toLowerCase().includes(term)
         || l.generation?.codeGeneration?.toLowerCase().includes(term)
   })
+
+  // Données graphique : production par variété × génération
+  const lotsChartData = (() => {
+    const agg: Record<string, Record<string, number>> = {}
+    mesLots.forEach(l => {
+      const vname = varietyMap[l.idVariete]?.nomVariete ?? ('Var#' + l.idVariete)
+      const gen   = l.generation?.codeGeneration ?? '?'
+      const qty   = Number(l.quantiteNette || 0)
+      if (!agg[vname]) agg[vname] = {}
+      agg[vname][gen] = (agg[vname][gen] ?? 0) + qty
+    })
+    return Object.entries(agg)
+      .map(([label, gens]) => ({ label, gens }))
+      .sort((a, b) => {
+        const tA = ML_GENS.reduce((s, g) => s + (a.gens[g] ?? 0), 0)
+        const tB = ML_GENS.reduce((s, g) => s + (b.gens[g] ?? 0), 0)
+        return tB - tA
+      })
+  })()
+  const lotsChartGens = ML_GENS.filter(g => lotsChartData.some(d => (d.gens[g] ?? 0) > 0))
 
   const NIVEAU_SEMENCE_MULT = [
     '3 Semences de base G3',
@@ -512,16 +671,49 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       {/* ── Onglet Mes Lots ───────────────────────────────────── */}
       {onglet === 'meslots' && (
         <div className="card" style={{ borderRadius: '0 0 var(--radius) var(--radius)', borderTop: 'none' }}>
-          <div className="card-header">
-            <span className="card-title"><span className="card-title-icon"><Layers size={15} /></span>Mes Lots — G3/G4 reçus · R1 · R2 produits <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{mesLots.length}</span></span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', height: 32 }}>
-                <Package size={12} color="var(--text-muted)" />
-                <input value={searchMes} onChange={e => setSearchMes(e.target.value)} placeholder="Code lot, variété, génération…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'Outfit, sans-serif', width: 180 }} />
-                {searchMes && <button onClick={() => setSearchMes('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>}
+          <div className="card-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span className="card-title"><span className="card-title-icon"><Layers size={15} /></span>Mes Lots — G3/G4 reçus · R1/R2 produits <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{mesLots.length}</span></span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', height: 32 }}>
+                  <Search size={12} color="var(--text-muted)" />
+                  <input value={searchMes} onChange={e => setSearchMes(e.target.value)} placeholder="Code lot, variété, génération…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'Outfit, sans-serif', width: 180 }} />
+                  {searchMes && <button onClick={() => setSearchMes('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>}
+                </div>
+                <button className="btn btn-primary" style={{ height: 32, fontSize: 12 }} onClick={() => { setNewLotForm(MULT_NEW_FORM_INIT); setShowNewLot(true) }}><Plus size={13} /> Nouveau lot</button>
+                <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
               </div>
-              <button className="btn btn-primary" style={{ height: 32, fontSize: 12 }} onClick={() => { setNewLotForm(MULT_NEW_FORM_INIT); setShowNewLot(true) }}><Plus size={13} /> Nouveau lot</button>
-              <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+            </div>
+            {/* Filter chips + chart toggle */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 2, flexShrink: 0 }}>Génération :</span>
+              {ML_GENS.map(gen => {
+                const count = mesLots.filter(l => l.generation?.codeGeneration === gen).length
+                if (count === 0) return null
+                const active = filterGenMes === gen
+                const hex = GEN_HEX[gen] ?? '#6b7280'
+                return (
+                  <button key={gen} onClick={() => setFilterGenMes(active ? '' : gen)} style={{
+                    padding: '3px 11px', borderRadius: 20, border: '1.5px solid',
+                    borderColor: active ? hex : 'var(--border)',
+                    background: active ? hex + '1a' : 'var(--surface)',
+                    color: active ? hex : 'var(--text-muted)',
+                    fontSize: 12, fontWeight: active ? 700 : 400, cursor: 'pointer',
+                    transition: 'all 0.12s', display: 'flex', alignItems: 'center', gap: 4,
+                  }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: hex, display: 'inline-block' }} />
+                    {gen} <span style={{ opacity: 0.65 }}>({count})</span>
+                  </button>
+                )
+              })}
+              {filterGenMes && (
+                <button onClick={() => setFilterGenMes('')} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', textDecoration: 'underline' }}>
+                  Tout afficher
+                </button>
+              )}
+              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
+                {mesLotsFiltered.length} lot{mesLotsFiltered.length > 1 ? 's' : ''} affiché{mesLotsFiltered.length > 1 ? 's' : ''}
+              </span>
             </div>
           </div>
 
@@ -569,16 +761,55 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
             </div>
           )}
 
-          {/* Résumé stock */}
-          {monStock.length > 0 && (
-            <div style={{ padding: '10px 22px', borderBottom: '1px solid var(--border)', background: 'var(--green-50)', display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: 12 }}>
-              <span style={{ fontWeight: 700, color: 'var(--green-700)' }}>Stock de mon organisation :</span>
-              {monStock.map((st: any) => (
-                <span key={st.id} style={{ color: 'var(--text-secondary)' }}>
-                  <strong>{Number(st.quantiteDisponible).toLocaleString('fr-FR')} {st.unite}</strong>
-                  {st.site?.nomSite ? ` @ ${st.site.nomSite}` : ''}
-                </span>
-              ))}
+          {/* Stats par génération + graphe production */}
+          {mesLots.length > 0 && (
+            <div style={{ borderBottom: '1px solid var(--border)' }}>
+              {/* KPI row: one card per generation */}
+              <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', overflowX: 'auto' }}>
+                {ML_GENS.map(gen => {
+                  const lotsGen  = mesLots.filter(l => l.generation?.codeGeneration === gen)
+                  if (lotsGen.length === 0) return null
+                  const prodKg   = lotsGen.reduce((s, l) => s + Number(l.quantiteNette || 0), 0)
+                  const lotIds   = new Set(lotsGen.map(l => l.id))
+                  const stockKg  = monStock.filter((st: any) => lotIds.has(st.idLot ?? st.lot?.id)).reduce((s: number, st: any) => s + Number(st.quantiteDisponible || 0), 0)
+                  const hex      = GEN_HEX[gen] ?? '#6b7280'
+                  const fmtQty   = (v: number) => v >= 1000 ? (v/1000).toFixed(0)+'k' : String(v)
+                  return (
+                    <div key={gen} onClick={() => setFilterGenMes(filterGenMes === gen ? '' : gen)}
+                      style={{
+                        flex: '1 1 120px', padding: '12px 16px', cursor: 'pointer',
+                        background: filterGenMes === gen ? hex + '0e' : 'transparent',
+                        borderRight: '1px solid var(--border)',
+                        transition: 'background 0.12s',
+                      }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', background: hex, flexShrink: 0 }} />
+                        <span style={{ fontWeight: 700, fontSize: 13, color: hex }}>{gen}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>{lotsGen.length} lot{lotsGen.length>1?'s':''}</span>
+                      </div>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                        {fmtQty(prodKg)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>kg prod.</span>
+                      </div>
+                      {stockKg > 0 && (
+                        <div style={{ marginTop: 4, fontSize: 11, color: 'var(--green-700)', fontWeight: 600 }}>
+                          {fmtQty(stockKg)} kg stock
+                        </div>
+                      )}
+                      {/* mini progress bar: stock / production */}
+                      {prodKg > 0 && (
+                        <div style={{ marginTop: 6, height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${Math.min(100, stockKg/prodKg*100)}%`, background: hex, borderRadius: 2, transition: 'width 0.4s' }} />
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* Graphe horizontal : production par variété, couleur par génération */}
+              {lotsChartData.length > 0 && lotsChartGens.length > 0 && (
+                <MesLotsHorizChart data={lotsChartData} gens={lotsChartGens} />
+              )}
             </div>
           )}
 
@@ -591,6 +822,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                   <th>Génération</th>
                   <th>Lot parent</th>
                   <th>Quantité</th>
+                  <th>Stock dispo</th>
                   <th>Germination</th>
                   <th>Pureté</th>
                   <th>Statut</th>
@@ -599,10 +831,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               </thead>
               <tbody>
                 {loadingMes
-                  ? [0,1,2,3].map(i => <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
+                  ? [0,1,2,3].map(i => <tr key={i}><td colSpan={10}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
                   : mesLots.length === 0
                     ? (
-                      <tr><td colSpan={9}>
+                      <tr><td colSpan={10}>
                         <div className="empty-state">
                           <div className="empty-icon"><Layers size={20} /></div>
                           <div className="empty-title">Aucun lot enregistré pour votre organisation</div>
@@ -636,6 +868,22 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                             <td>
                               <span style={{ fontWeight: 700 }}>{l.quantiteNette != null ? Number(l.quantiteNette).toLocaleString('fr-FR') : '—'}</span>
                               {' '}<span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.unite}</span>
+                            </td>
+                            <td>
+                              {(() => {
+                                const stList = stockByLotId[l.id] ?? []
+                                const stTotal = stList.reduce((s, x) => s + x.qty, 0)
+                                if (stTotal <= 0) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+                                return (
+                                  <div>
+                                    <span style={{ fontWeight: 700, color: 'var(--green-700)', fontSize: 13 }}>{stTotal.toLocaleString('fr-FR')}</span>
+                                    {' '}<span style={{ fontSize: 11, color: 'var(--text-muted)' }}>kg</span>
+                                    {stList.length > 0 && stList[0].site && (
+                                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{stList[0].site}</div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </td>
                             <td>{l.tauxGermination != null ? <span style={{ fontWeight: 600, color: Number(l.tauxGermination) >= 95 ? 'var(--green-700)' : 'var(--amber-600)' }}>{l.tauxGermination}%</span> : '—'}</td>
                             <td>{l.puretePhysique != null ? <span style={{ fontWeight: 600, color: Number(l.puretePhysique) >= 98 ? 'var(--green-700)' : 'var(--amber-600)' }}>{l.puretePhysique}%</span> : '—'}</td>
@@ -975,6 +1223,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [membres, setMembres] = useState<any[]>([])
   // Indicateur de chargement des destinataires (rafraîchi à chaque ouverture du modal)
   const [membresLoading, setMembresLoading] = useState(false)
+  const [search,         setSearch]          = useState('')
+  const [genFilter,      setGenFilter]       = useState('')
 
   async function fetchLots() {
     setLoading(true)
@@ -1007,8 +1257,30 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     const g = l.generation?.codeGeneration || 'N/A'; acc[g] = (acc[g] || 0) + 1; return acc
   }, {})
 
+  interface GenStat { count: number; totalKg: number }
+  const genStats: Record<string, GenStat> = displayLots.reduce((acc: Record<string, GenStat>, l) => {
+    const g = l.generation?.codeGeneration || 'N/A'
+    if (!acc[g]) acc[g] = { count: 0, totalKg: 0 }
+    acc[g].count++; acc[g].totalKg += Number(l.quantiteNette || 0)
+    return acc
+  }, {})
+  const totalKg = displayLots.reduce((s, l) => s + Number(l.quantiteNette || 0), 0)
+  const fmtKg = (v: number) => v >= 1_000_000 ? (v/1_000_000).toFixed(1)+'M kg' : v >= 1_000 ? (v/1_000).toFixed(0)+'k kg' : v+' kg'
+  const activeGens = allowedGens.filter(g => genStats[g])
+
   const varietyMap: Record<number, { codeVariete: string; nomVariete: string }> =
     Object.fromEntries(varieties.map(v => [v.id, v]))
+
+  const displayLotsFiltered = displayLots.filter(l => {
+    const matchGen = !genFilter || l.generation?.codeGeneration === genFilter
+    const s = search.toLowerCase()
+    const v = varietyMap[l.idVariete]
+    const matchSearch = !s
+      || l.codeLot?.toLowerCase().includes(s)
+      || v?.nomVariete?.toLowerCase().includes(s)
+      || (v as any)?.codeVariete?.toLowerCase().includes(s)
+    return matchGen && matchSearch
+  })
 
   async function submitNewLot(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
@@ -1199,26 +1471,80 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       {lineageChain && <LineageModal chain={lineageChain} codeLot={lineageLotCode} onClose={() => setLineageChain(null)} />}
 
-      {roleKey === 'seed-admin' && (
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '12px 20px', marginBottom: 18, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 12 }}>
-          <span style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', marginRight: 4 }}>Chaîne :</span>
-          {ALL_GENS.map((g, i, arr) => (
-            <React.Fragment key={g}>
-              <span className={"badge " + (GEN_COLORS[g] || 'badge-gray')} style={{ cursor: 'pointer' }} onClick={() => setGeneration(generation === g ? '' : g)}>
-                {g} {genCounts[g] ? "(" + genCounts[g] + ")" : ''}
-              </span>
-              {i < arr.length - 1 && <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>›</span>}
-            </React.Fragment>
-          ))}
-          {generation && <button className="btn btn-ghost" style={{ height: 22, fontSize: 11, marginLeft: 6 }} onClick={() => setGeneration('')}><X size={10} /> Tout</button>}
+      {/* ── KPI dynamiques cliquables ──────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(activeGens.length + 1, 5)}, 1fr)`, gap: 12, marginBottom: 16 }}>
+        {/* Total */}
+        <div
+          onClick={() => setGenFilter('')}
+          style={{
+            background: !genFilter ? 'var(--green-50,#f0fdf4)' : 'var(--surface)',
+            border: `1px solid ${!genFilter ? '#86efac' : 'var(--border)'}`,
+            borderRadius: 12, padding: '14px 16px 16px', cursor: 'pointer',
+            transition: 'all .18s', boxShadow: 'var(--shadow-xs)',
+            display: 'flex', alignItems: 'flex-start', gap: 12,
+          }}
+        >
+          <div style={{
+            width: 38, height: 38, borderRadius: 9, flexShrink: 0,
+            background: 'var(--surface-3)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: !genFilter ? 'var(--green-700,#15803d)' : 'var(--text-secondary)',
+            transition: 'color .18s',
+          }}>
+            <Package size={17} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
+              {loading ? <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>…</span> : displayLots.length}
+            </div>
+            <div style={{ fontSize: 11, color: !genFilter ? 'var(--green-700,#15803d)' : 'var(--text-muted)', fontWeight: !genFilter ? 700 : 500 }}>
+              Total lots
+            </div>
+            {totalKg > 0 && (
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 3 }}>{fmtKg(totalKg)}</div>
+            )}
+          </div>
+          {!genFilter && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a34a', flexShrink: 0, marginTop: 2, boxShadow: '0 0 0 3px #16a34a25' }} />}
         </div>
-      )}
 
-      <div className="stats-grid">
-        <div className="stat-card"><div className="stat-icon green"><Package size={18} /></div><div className="stat-body"><div className="stat-value">{displayLots.length}</div><div className="stat-label">Total lots</div></div></div>
-        {Object.entries(genCounts).slice(0, 3).map(([gen, count]) => (
-          <div className="stat-card" key={gen}><div className="stat-icon blue"><span style={{ fontSize: 14, fontWeight: 700 }}>{gen}</span></div><div className="stat-body"><div className="stat-value">{count as number}</div><div className="stat-label">Generation {gen}</div></div></div>
-        ))}
+        {/* Par génération */}
+        {activeGens.map(gen => {
+          const stat = genStats[gen]!
+          const hex  = GEN_HEX[gen] ?? '#6b7280'
+          const isActive = genFilter === gen
+          return (
+            <div
+              key={gen}
+              onClick={() => setGenFilter(genFilter === gen ? '' : gen)}
+              style={{
+                background: isActive ? hex + '09' : 'var(--surface)',
+                border: `1px solid ${isActive ? hex + '35' : 'var(--border)'}`,
+                borderRadius: 12, padding: '14px 16px 16px', cursor: 'pointer',
+                transition: 'all .18s', boxShadow: isActive ? `0 2px 10px ${hex}14` : 'var(--shadow-xs)',
+                display: 'flex', flexDirection: 'column', gap: 0,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                <span className={`badge ${GEN_COLORS[gen] || 'badge-gray'}`} style={{ fontSize: 11 }}>{gen}</span>
+                {isActive && <div style={{ width: 6, height: 6, borderRadius: '50%', background: hex, boxShadow: `0 0 0 3px ${hex}25` }} />}
+              </div>
+              <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
+                {stat.count}
+              </div>
+              <div style={{ fontSize: 11, color: isActive ? hex : 'var(--text-muted)', fontWeight: isActive ? 700 : 500 }}>
+                lot{stat.count > 1 ? 's' : ''}
+              </div>
+              {stat.totalKg > 0 && (
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>{fmtKg(stat.totalKg)}</div>
+              )}
+              {totalKg > 0 && (
+                <div style={{ marginTop: 10, height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${Math.min(100, stat.totalKg / totalKg * 100)}%`, background: hex, borderRadius: 2, transition: 'width 0.5s ease' }} />
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
 
       <div className="card">
@@ -1229,25 +1555,62 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             <button className="btn btn-secondary btn-icon" onClick={fetchLots}><RefreshCw size={13} /></button>
           </div>
         </div>
-        <div className="filters-bar">
-          <div className="filter-group">
-            <label className="filter-label">Génération</label>
-            <select className="input" value={generation} onChange={e => setGeneration(e.target.value)} style={{ width: 140 }}>
-              <option value="">Toutes</option>
-              {allowedGens.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
+        <div className="filters-bar" style={{ flexWrap: 'wrap', gap: 8 }}>
+          {/* Recherche texte */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34, flex: '1 1 220px', maxWidth: 320 }}>
+            <Search size={13} color="var(--text-muted)" />
+            <input
+              placeholder="Code lot, variété…"
+              value={search}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+              style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1, color: 'var(--text-primary)' }}
+            />
+            {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0 }}><X size={13} /></button>}
           </div>
-          <button className="btn btn-primary" onClick={fetchLots}><Filter size={12} /> Filtrer</button>
-          {generation && <button className="btn btn-ghost" onClick={() => setGeneration('')}><X size={12} /> Effacer</button>}
+          {/* Chips génération */}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            {allowedGens.filter(g => genCounts[g] || roleKey === 'seed-admin').map(g => {
+              const isActive = generation === g
+              const hex = GEN_HEX[g] ?? '#6b7280'
+              return (
+                <button
+                  key={g}
+                  onClick={() => { setGeneration(generation === g ? '' : g); setGenFilter('') }}
+                  style={{
+                    height: 28, padding: '0 10px', borderRadius: 20, fontSize: 11.5,
+                    fontWeight: isActive ? 700 : 500,
+                    background: isActive ? hex : 'var(--surface-2)',
+                    color: isActive ? '#fff' : 'var(--text-muted)',
+                    border: `1px solid ${isActive ? hex : 'var(--border)'}`,
+                    cursor: 'pointer', transition: 'all .12s',
+                    display: 'flex', alignItems: 'center', gap: 5,
+                  }}
+                >
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: isActive ? 'rgba(255,255,255,0.7)' : hex, flexShrink: 0 }} />
+                  {g}{genCounts[g] ? <span style={{ opacity: 0.65 }}> ({genCounts[g]})</span> : ''}
+                </button>
+              )
+            })}
+          </div>
+          {/* Effacer filtres */}
+          {(search || genFilter || generation) && (
+            <button className="btn btn-ghost" style={{ fontSize: 12, height: 28 }} onClick={() => { setSearch(''); setGenFilter(''); setGeneration('') }}>
+              <X size={11} /> Effacer
+            </button>
+          )}
+          {/* Compteur */}
+          <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            {displayLotsFiltered.length}{displayLotsFiltered.length !== displayLots.length ? `/${displayLots.length}` : ''} lot{displayLotsFiltered.length !== 1 ? 's' : ''}
+          </span>
         </div>
         <div className="table-wrapper">
           <table>
             <thead><tr><th>Code Lot</th><th>Variété</th><th>Génération</th><th>Lot Parent</th><th>Quantité</th><th>Campagne</th><th>Enregistré le</th><th>Producteur</th><th>Statut</th><th>Actions</th></tr></thead>
             <tbody>
               {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={10}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
-               displayLots.length === 0 ? (
-                <tr><td colSpan={10}><div className="empty-state"><div className="empty-icon"><Package size={20} /></div><div className="empty-title">Aucun lot</div>{canCreate && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}</div></td></tr>
-               ) : displayLots.map(l => {
+               displayLotsFiltered.length === 0 ? (
+                <tr><td colSpan={10}><div className="empty-state"><div className="empty-icon"><Package size={20} /></div><div className="empty-title">{search || genFilter ? 'Aucun lot pour ce filtre' : 'Aucun lot'}</div>{canCreate && !search && !genFilter && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}</div></td></tr>
+               ) : displayLotsFiltered.map(l => {
                 const gen = l.generation?.codeGeneration || 'N/A'
                 const createdAtStr = l.createdAt
                   ? new Date(l.createdAt).toLocaleString('fr-FR', {

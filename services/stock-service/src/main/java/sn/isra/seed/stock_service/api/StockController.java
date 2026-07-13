@@ -9,6 +9,7 @@ import sn.isra.seed.stock_service.entity.Site;
 import sn.isra.seed.stock_service.entity.Stock;
 import sn.isra.seed.stock_service.entity.enums.TypeMouvement;
 import sn.isra.seed.stock_service.kafka.StockEventProducer;
+import sn.isra.seed.stock_service.repo.MembreOrgStockRepo;
 import sn.isra.seed.stock_service.repo.MouvementRepo;
 import sn.isra.seed.stock_service.repo.SiteRepo;
 import sn.isra.seed.stock_service.repo.StockRepo;
@@ -39,18 +40,16 @@ public class StockController {
   private final MouvementRepo mouvementRepo;
   private final StockEventProducer producer;
   private final ObjectMapper om;
+  private final MembreOrgStockRepo membreOrgRepo;
 
   @GetMapping("/stocks")
   public List<Stock> list(@RequestParam(required = false) String site,
                           @AuthenticationPrincipal Jwt jwt) {
     // Isolation multiplicateur : ne retourner que son stock
     if (jwt != null && isMultiplicateur(jwt)) {
-      Object orgClaim = jwt.getClaim("org_id");
-      if (orgClaim != null) {
-        try { return stockRepo.findByOrganisation(Long.parseLong(orgClaim.toString())); }
-        catch (NumberFormatException ignored) {}
-      }
-      return List.of();
+      Long orgId = resolveOrgId(jwt);
+      if (orgId == null) return List.of();
+      return stockRepo.findByOrganisation(orgId);
     }
     if (site == null || site.isBlank()) return stockRepo.findAll();
     return stockRepo.findBySite_CodeSite(site);
@@ -61,13 +60,9 @@ public class StockController {
     List<StockAgregeView> views;
 
     if (jwt != null && isMultiplicateur(jwt)) {
-      Object orgClaim = jwt.getClaim("org_id");
-      if (orgClaim == null) return ResponseEntity.ok(List.of());
-      try {
-        views = stockRepo.findAgregeByOrganisation(Long.parseLong(orgClaim.toString()));
-      } catch (NumberFormatException e) {
-        return ResponseEntity.ok(List.of());
-      }
+      Long orgId = resolveOrgId(jwt);
+      if (orgId == null) return ResponseEntity.ok(List.of());
+      views = stockRepo.findAgregeByOrganisation(orgId);
     } else {
       views = stockRepo.findAllAgrege();
     }
@@ -102,6 +97,23 @@ public class StockController {
     );
   }
 
+  /**
+   * Résout l'id_organisation depuis le JWT.
+   * Priorité : claim org_id (si présent) → fallback lookup dans membre_organisation par username.
+   * Le JWT Keycloak de cette plateforme ne contient pas de claim org_id custom,
+   * donc on passe systématiquement par le fallback DB.
+   */
+  private Long resolveOrgId(Jwt jwt) {
+    if (jwt == null) return null;
+    Object orgClaim = jwt.getClaim("org_id");
+    if (orgClaim != null) {
+      try { return Long.parseLong(orgClaim.toString()); }
+      catch (NumberFormatException ignored) {}
+    }
+    String username = jwt.getClaimAsString("preferred_username");
+    return membreOrgRepo.findOrgIdByUsername(username).orElse(null);
+  }
+
   private boolean hasRole(Jwt jwt, String role) {
     try {
       java.util.Map<String, Object> ra = jwt.getClaim("realm_access");
@@ -129,11 +141,8 @@ public class StockController {
   @GetMapping("/stocks/mon-stock")
   public ResponseEntity<List<Stock>> monStock(@AuthenticationPrincipal Jwt jwt) {
     if (jwt == null) return ResponseEntity.status(401).build();
-    Object orgClaim = jwt.getClaim("org_id");
-    if (orgClaim == null) return ResponseEntity.ok(List.of());
-    Long orgId;
-    try { orgId = Long.parseLong(orgClaim.toString()); }
-    catch (NumberFormatException e) { return ResponseEntity.badRequest().build(); }
+    Long orgId = resolveOrgId(jwt);
+    if (orgId == null) return ResponseEntity.ok(List.of());
     return ResponseEntity.ok(stockRepo.findByOrganisation(orgId));
   }
 

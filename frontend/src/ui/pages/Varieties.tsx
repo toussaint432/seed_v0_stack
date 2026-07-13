@@ -54,6 +54,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [desarchiveTarget, setDesarchiveTarget] = useState<any>(null)
   const [desarchiving,     setDesarchiving]     = useState(false)
 
+  const [filterStatut, setFilterStatut] = useState<string>('')
+
   const [allZones,      setAllZones]      = useState<any[]>([])
   const [zonesTarget,   setZonesTarget]   = useState<any>(null)
   const [zonesRows,     setZonesRows]     = useState<{ idZone: string; niveauAdaptation: string }[]>([])
@@ -111,6 +113,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const filtered = varieties.filter(v => {
     const isArchived   = v.statutVariete === 'ARCHIVEE'
     if (isArchived && !showArchived) return false
+    if (filterStatut && v.statutVariete !== filterStatut) return false
     const matchSpecies = selectedSpeciesId === null || v.espece?.id === selectedSpeciesId
     const q            = search.toLowerCase()
     const matchSearch  = !search
@@ -148,6 +151,13 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
 
   function varietyCountForSpecies(s: any) {
     return varieties.filter(v => v.espece?.id === s.id && v.statutVariete !== 'ARCHIVEE').length
+  }
+
+  function speciesStats(s: any) {
+    const all    = varieties.filter(v => v.espece?.id === s.id && v.statutVariete !== 'ARCHIVEE')
+    const diff   = all.filter(v => v.statutVariete === 'DIFFUSEE').length
+    const enTest = all.filter(v => v.statutVariete === 'EN_TEST').length
+    return { total: all.length, diff, enTest }
   }
 
   async function submitArchive(e: React.FormEvent) {
@@ -345,18 +355,19 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       {selectedVariety ? (
 
         /* Niveau 3 : variété sélectionnée */
-        <div style={{ marginBottom: 22 }}>
+        <div style={{ marginBottom: 20 }}>
+          {/* Breadcrumb neutre */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: 'var(--green-50)', border: '1px solid var(--green-200)',
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
             borderRadius: 10, padding: '8px 14px', marginBottom: 12,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--green-700)' }}>
-              <Sprout size={14} />
-              <strong>{selectedVariety.codeVariete}</strong>
-              <span style={{ color: 'var(--green-600)' }}>{selectedVariety.nomVariete}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <Sprout size={14} color="var(--green-600)" />
+              <code style={{ fontFamily: 'DM Mono, monospace', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>{selectedVariety.codeVariete}</code>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.nomVariete}</span>
               {selectedSpecies && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', borderLeft: '1px solid var(--green-200)', paddingLeft: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', borderLeft: '1px solid var(--border)', paddingLeft: 8 }}>
                   {selectedSpecies.nomCommun}
                 </span>
               )}
@@ -374,70 +385,80 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </button>
             </div>
           </div>
-          <div className="stats-grid">
+
+          {/* Fiche variété — cards neutres */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
             {/* Espèce */}
-            <div className="stat-card" style={{ borderTop: '2.5px solid var(--green-500)' }}>
-              <div className="stat-icon green"><Leaf size={18} /></div>
-              <div className="stat-body">
-                <div className="stat-value" style={{ fontSize: 20, fontWeight: 800 }}>{selectedVariety.espece?.codeEspece ?? '—'}</div>
-                <div className="stat-label">{selectedVariety.espece?.nomCommun ?? 'Espèce'}</div>
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <Leaf size={18} />
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'Fraunces, serif', color: 'var(--text-primary)', lineHeight: 1.1 }}>{selectedVariety.espece?.codeEspece ?? '—'}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedVariety.espece?.nomCommun ?? 'Espèce'}</div>
               </div>
             </div>
+
             {/* Statut */}
-            <div className="stat-card" style={{ borderTop: `2.5px solid ${selectedVariety.statutVariete === 'DIFFUSEE' ? 'var(--green-500)' : selectedVariety.statutVariete === 'EN_TEST' ? 'var(--gold)' : 'var(--border-strong)'}` }}>
-              <div className="stat-icon" style={{
-                background: selectedVariety.statutVariete === 'DIFFUSEE' ? 'var(--green-100)' :
-                            selectedVariety.statutVariete === 'EN_TEST'  ? 'var(--gold-light)' : 'var(--surface-3)',
-                color:      selectedVariety.statutVariete === 'DIFFUSEE' ? 'var(--green-700)'  :
-                            selectedVariety.statutVariete === 'EN_TEST'  ? 'var(--gold-dark)'  : 'var(--text-muted)',
-              }}><CheckCircle2 size={18} /></div>
-              <div className="stat-body">
-                <div className="stat-value" style={{ fontSize: 17, fontWeight: 700 }}>
-                  {STATUT_CONFIG[selectedVariety.statutVariete]?.label ?? selectedVariety.statutVariete}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <CheckCircle2 size={18} />
+              </div>
+              <div>
+                <div style={{ marginBottom: 4 }}>
+                  <span className={`badge ${STATUT_CONFIG[selectedVariety.statutVariete]?.cls ?? 'badge-gray'}`} style={{ fontSize: 12 }}>
+                    {STATUT_CONFIG[selectedVariety.statutVariete]?.label ?? selectedVariety.statutVariete}
+                  </span>
                 </div>
-                <div className="stat-label">Statut actuel</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Statut actuel</div>
               </div>
             </div>
+
             {/* Cycle */}
-            <div className="stat-card" style={{ borderTop: '2.5px solid var(--gold)' }}>
-              <div className="stat-icon gold"><Clock size={18} /></div>
-              <div className="stat-body">
-                <div className="stat-value" style={{ fontSize: 20, fontWeight: 800 }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <Clock size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Fraunces, serif', color: 'var(--text-primary)', lineHeight: 1.1 }}>
                   {selectedVariety.cycleMin != null && selectedVariety.cycleMax != null
-                    ? (selectedVariety.cycleMin === selectedVariety.cycleMax
-                        ? `${selectedVariety.cycleMin} j`
-                        : `${selectedVariety.cycleMin}–${selectedVariety.cycleMax} j`)
+                    ? (selectedVariety.cycleMin === selectedVariety.cycleMax ? `${selectedVariety.cycleMin} j` : `${selectedVariety.cycleMin}–${selectedVariety.cycleMax} j`)
                     : '—'}
                 </div>
-                <div className="stat-label">Cycle végétatif</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Cycle végétatif</div>
               </div>
             </div>
+
             {/* Rendement */}
-            <div className="stat-card" style={{ borderTop: '2.5px solid var(--green-500)' }}>
-              <div className="stat-icon green"><TrendingUp size={18} /></div>
-              <div className="stat-body">
-                <div className="stat-value" style={{ fontSize: 20, fontWeight: 800 }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <TrendingUp size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'Fraunces, serif', color: 'var(--text-primary)', lineHeight: 1.1 }}>
                   {selectedVariety.rendementMin != null && selectedVariety.rendementMax != null
-                    ? (selectedVariety.rendementMin === selectedVariety.rendementMax
-                        ? `${selectedVariety.rendementMin} t/ha`
-                        : `${selectedVariety.rendementMin}–${selectedVariety.rendementMax} t/ha`)
+                    ? (selectedVariety.rendementMin === selectedVariety.rendementMax ? `${selectedVariety.rendementMin} t/ha` : `${selectedVariety.rendementMin}–${selectedVariety.rendementMax} t/ha`)
                     : '—'}
                 </div>
-                <div className="stat-label">Rendement potentiel</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Rendement potentiel</div>
               </div>
             </div>
-            {/* Sélectionneur */}
+
+            {/* Sélectionneur — pleine largeur si présent */}
             {selectedVariety.selectionneurPrincipal && (
-              <div className="stat-card" style={{ borderTop: '2.5px solid #8b5cf6' }}>
-                <div className="stat-icon" style={{ background: 'var(--violet-50)', color: 'var(--violet-600)' }}>
-                  <User size={18} />
+              <div style={{ gridColumn: '1 / -1', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                  <User size={15} />
                 </div>
-                <div className="stat-body">
-                  <div className="stat-value" style={{ fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {selectedVariety.selectionneurPrincipal}
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.selectionneurPrincipal}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Sélectionneur principal</div>
+                </div>
+                {selectedVariety.anneeCreation && (
+                  <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-3)', padding: '3px 10px', borderRadius: 6 }}>
+                    Obtention {selectedVariety.anneeCreation}
                   </div>
-                  <div className="stat-label">Sélectionneur principal</div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -446,18 +467,19 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       ) : selectedSpecies ? (
 
         /* Niveau 2 : espèce sélectionnée */
-        <div style={{ marginBottom: 22 }}>
+        <div style={{ marginBottom: 20 }}>
+          {/* Breadcrumb neutre */}
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: '#fffbeb', border: '1px solid #fde68a',
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
             borderRadius: 10, padding: '8px 14px', marginBottom: 12,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--gold-dark)' }}>
-              <Leaf size={14} />
-              <strong>{selectedSpecies.codeEspece}</strong>
-              <span style={{ color: '#92400e' }}>{selectedSpecies.nomCommun}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              {React.createElement(ESPECE_ICONS[selectedSpecies.codeEspece] ?? ESPECE_ICONS.default, { size: 14, color: 'var(--green-600)' })}
+              <code style={{ fontFamily: 'DM Mono, monospace', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>{selectedSpecies.codeEspece}</code>
+              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedSpecies.nomCommun}</span>
               {selectedSpecies.nomScientifique && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', borderLeft: '1px solid #fde68a', paddingLeft: 8 }}>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', borderLeft: '1px solid var(--border)', paddingLeft: 8 }}>
                   {selectedSpecies.nomScientifique}
                 </span>
               )}
@@ -467,132 +489,162 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               <X size={12} /> Vue globale
             </button>
           </div>
-          <div className="stats-grid">
-            <div className="stat-card" style={{ borderTop: '2.5px solid var(--gold)' }}>
-              <div className="stat-icon gold"><Sprout size={18} /></div>
-              <div className="stat-body">
-                <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiActive}</div>
-                <div className="stat-label">Variétés actives</div>
+
+          {/* KPI cards neutres — même design que niveau 1 */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiArchived > 0 ? 4 : 3}, 1fr)`, gap: 12, marginBottom: 12 }}>
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <Sprout size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiActive}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>variétés actives</div>
               </div>
             </div>
-            <div className="stat-card" style={{ borderTop: '2.5px solid var(--green-500)' }}>
-              <div className="stat-icon green"><CheckCircle2 size={18} /></div>
-              <div className="stat-body">
-                <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiDiffusee}</div>
-                <div className="stat-label">Diffusées</div>
+
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <CheckCircle2 size={18} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiDiffusee}</div>
+                  {!loading && kpiActive > 0 && (
+                    <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, background: '#f0fdf4', padding: '1px 6px', borderRadius: 5 }}>{Math.round((kpiDiffusee / kpiActive) * 100)}%</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>diffusées</div>
               </div>
             </div>
-            <div className="stat-card" style={{ borderTop: '2.5px solid var(--gold)' }}>
-              <div className="stat-icon gold"><FlaskConical size={18} /></div>
-              <div className="stat-body">
-                <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{loading ? '…' : kpiEnTest}</div>
-                <div className="stat-label">En test</div>
+
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <FlaskConical size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiEnTest}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>en évaluation</div>
               </div>
             </div>
+
             {kpiArchived > 0 && (
-              <div className="stat-card" style={{ opacity: 0.7, borderTop: '2.5px solid var(--border-strong)' }}>
-                <div className="stat-icon" style={{ background: 'var(--surface-3)', color: 'var(--text-muted)' }}><Archive size={18} /></div>
-                <div className="stat-body">
-                  <div className="stat-value" style={{ fontSize: 30, fontWeight: 800 }}>{kpiArchived}</div>
-                  <div className="stat-label">Archivées</div>
+              <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, opacity: 0.7 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', flexShrink: 0 }}>
+                  <Archive size={18} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-muted)', lineHeight: 1.1 }}>{kpiArchived}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>archivées</div>
                 </div>
               </div>
             )}
           </div>
+
+          {/* Barre de distribution */}
+          {!loading && kpiActive > 0 && (
+            <div style={{ background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '10px 16px', boxShadow: 'var(--shadow-xs)', display: 'flex', alignItems: 'center', gap: 16 }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Répartition</span>
+              <div style={{ flex: 1, height: 7, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', display: 'flex' }}>
+                {kpiDiffusee > 0 && <div style={{ width: `${(kpiDiffusee / kpiActive) * 100}%`, background: '#16a34a', transition: 'width 0.8s ease' }} />}
+                {kpiEnTest > 0 && <div style={{ width: `${(kpiEnTest / kpiActive) * 100}%`, background: '#7c3aed', transition: 'width 0.8s ease' }} />}
+              </div>
+              <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
+                {kpiDiffusee > 0 && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: '#16a34a', display: 'inline-block' }} />
+                    {kpiDiffusee} diffusées
+                  </span>
+                )}
+                {kpiEnTest > 0 && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: '#7c3aed', display: 'inline-block' }} />
+                    {kpiEnTest} en test
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
       ) : (
 
-        /* Niveau 1 : vue globale — KPI cards accent en bordure haute */
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiArchived > 0 ? 5 : 4}, 1fr)`, gap: 14, marginBottom: 22 }}>
+        /* Niveau 1 : vue globale */
+        <div style={{ marginBottom: 20 }}>
+          {/* KPI cards — design neutre unifié */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
 
-          {/* Espèces */}
-          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #16a34a', boxShadow: 'var(--shadow-xs)', transition: 'box-shadow var(--transition)' }}>
-            <div style={{ padding: '16px 18px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
-                  <Leaf size={16} />
+            {/* Espèces */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <Leaf size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : species.length}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>espèces cultivées</div>
+              </div>
+            </div>
+
+            {/* Variétés actives */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <Sprout size={18} />
+              </div>
+              <div>
+                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiActive}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>variétés actives</div>
+              </div>
+            </div>
+
+            {/* Diffusées */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <CheckCircle2 size={18} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiDiffusee}</div>
+                  {!loading && kpiActive > 0 && (
+                    <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, background: '#f0fdf4', padding: '1px 6px', borderRadius: 5 }}>{Math.round((kpiDiffusee / kpiActive) * 100)}%</span>
+                  )}
                 </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Espèces</span>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>diffusées</div>
               </div>
-              <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#0d1f11', lineHeight: 1 }}>
-                {loading ? '…' : species.length}
+            </div>
+
+            {/* En test */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                <FlaskConical size={18} />
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>espèces cultivées</div>
+              <div>
+                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiEnTest}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>en évaluation</div>
+              </div>
             </div>
           </div>
 
-          {/* Variétés actives */}
-          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #b45309', boxShadow: 'var(--shadow-xs)', transition: 'box-shadow var(--transition)' }}>
-            <div style={{ padding: '16px 18px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#fffbeb', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#b45309' }}>
-                  <Sprout size={16} />
-                </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#92660a', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Variétés</span>
+          {/* Barre de distribution portfolio */}
+          {!loading && kpiActive > 0 && (
+            <div style={{ background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '10px 16px', boxShadow: 'var(--shadow-xs)', display: 'flex', alignItems: 'center', gap: 16 }}>
+              <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Catalogue</span>
+              <div style={{ flex: 1, height: 7, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', display: 'flex' }}>
+                {kpiDiffusee > 0 && <div style={{ width: `${(kpiDiffusee / kpiActive) * 100}%`, background: '#16a34a', transition: 'width 0.8s ease' }} />}
+                {kpiEnTest > 0 && <div style={{ width: `${(kpiEnTest / kpiActive) * 100}%`, background: '#7c3aed', transition: 'width 0.8s ease' }} />}
               </div>
-              <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#0d1f11', lineHeight: 1 }}>
-                {loading ? '…' : kpiActive}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>variétés actives</div>
-            </div>
-          </div>
-
-          {/* Diffusées + barre de progression */}
-          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #0369a1', boxShadow: 'var(--shadow-xs)', transition: 'box-shadow var(--transition)' }}>
-            <div style={{ padding: '16px 18px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0369a1' }}>
-                  <CheckCircle2 size={16} />
-                </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#0369a1', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Diffusées</span>
-              </div>
-              <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#0d1f11', lineHeight: 1 }}>
-                {loading ? '…' : kpiDiffusee}
-              </div>
-              {!loading && kpiActive > 0 && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ height: 3, background: 'var(--surface-3)', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.round((kpiDiffusee / kpiActive) * 100)}%`, background: '#0369a1', borderRadius: 99, transition: 'width 0.8s ease' }} />
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
-                    {Math.round((kpiDiffusee / kpiActive) * 100)}% des variétés actives
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* En test */}
-          <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #7c3aed', boxShadow: 'var(--shadow-xs)', transition: 'box-shadow var(--transition)' }}>
-            <div style={{ padding: '16px 18px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: '#faf5ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7c3aed' }}>
-                  <FlaskConical size={16} />
-                </div>
-                <span style={{ fontSize: 9, fontWeight: 700, color: '#7c3aed', textTransform: 'uppercase', letterSpacing: '0.1em' }}>En test</span>
-              </div>
-              <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#0d1f11', lineHeight: 1 }}>
-                {loading ? '…' : kpiEnTest}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>en cours d'évaluation</div>
-            </div>
-          </div>
-
-          {/* Archivées (conditionnel) */}
-          {kpiArchived > 0 && (
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', borderTop: '2.5px solid #9ca3af', boxShadow: 'var(--shadow-xs)', opacity: 0.75, transition: 'box-shadow var(--transition)' }}>
-              <div style={{ padding: '16px 18px 18px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6b7280' }}>
-                    <Archive size={16} />
-                  </div>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Archivées</span>
-                </div>
-                <div style={{ fontSize: 38, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: '#6b7280', lineHeight: 1 }}>
-                  {kpiArchived}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8 }}>hors catalogue actif</div>
+              <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: 2, background: '#16a34a', display: 'inline-block' }} />
+                  {kpiDiffusee} diffusées
+                </span>
+                {kpiEnTest > 0 && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 2, background: '#7c3aed', display: 'inline-block' }} />
+                    {kpiEnTest} en test
+                  </span>
+                )}
+                {kpiArchived > 0 && (
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{kpiArchived} archivée{kpiArchived > 1 ? 's' : ''}</span>
+                )}
               </div>
             </div>
           )}
@@ -665,7 +717,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 )
               : species.map(s => {
                   const Icon     = ESPECE_ICONS[s.codeEspece] ?? ESPECE_ICONS.default
-                  const count    = varietyCountForSpecies(s)
+                  const st       = speciesStats(s)
                   const isActive = selectedSpeciesId === s.id
                   const isMySpec = roleKey === 'seed-selector' && userSpecialisation?.toUpperCase() === s.codeEspece?.toUpperCase()
                   return (
@@ -693,9 +745,12 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           {s.nomCommun}
                           {isMySpec && <span style={{ fontSize: 9.5, color: '#3b82f6', fontWeight: 700, background: '#dbeafe', padding: '1px 5px', borderRadius: 4 }}>Votre spéc.</span>}
                         </div>
-                        {s.nomScientifique && (
-                          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {s.nomScientifique}
+                        {st.total > 0 && (
+                          <div style={{ marginTop: 3 }}>
+                            <div style={{ height: 3, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', display: 'flex', width: '100%' }}>
+                              {st.diff > 0 && <div style={{ width: `${(st.diff / st.total) * 100}%`, background: '#16a34a' }} />}
+                              {st.enTest > 0 && <div style={{ width: `${(st.enTest / st.total) * 100}%`, background: '#7c3aed' }} />}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -705,7 +760,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                         background: isActive ? 'var(--green-100)' : 'var(--surface-3)',
                         padding: '2px 8px', borderRadius: 99, flexShrink: 0,
                       }}>
-                        {count}
+                        {st.total}
                       </span>
                       {isActive && <ChevronRight size={12} color="var(--green-600)" style={{ flexShrink: 0 }} />}
                     </button>
@@ -733,30 +788,56 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           </div>
 
           {/* Barre de recherche + chip espèce active */}
-          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-            {selectedSpecies && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-50)', border: '1px solid var(--green-200)', borderRadius: 99, padding: '3px 10px 3px 7px', fontSize: 12, color: 'var(--green-700)', flexShrink: 0 }}>
-                {React.createElement(ESPECE_ICONS[selectedSpecies.codeEspece] ?? ESPECE_ICONS.default, { size: 11 })}
-                <span style={{ fontWeight: 700 }}>{selectedSpecies.codeEspece}</span>
-                <span style={{ fontWeight: 400 }}>{selectedSpecies.nomCommun}</span>
-                <button onClick={() => { setSelectedSpeciesId(null); setSelectedVarietyId(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', marginLeft: 2, color: 'var(--green-700)' }}>
-                  <X size={12} />
-                </button>
-              </div>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'white', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34, flex: 1, minWidth: 200 }}>
-              <Search size={13} color="var(--text-placeholder)" />
-              <input
-                placeholder={selectedSpecies ? `Rechercher dans ${selectedSpecies.nomCommun}…` : 'Code, nom, espèce…'}
-                value={search}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                style={{ border: 'none', background: 'none', outline: 'none', flex: 1, fontSize: 13, fontFamily: 'Outfit, sans-serif' }}
-              />
-              {search && (
-                <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--text-muted)' }}>
-                  <X size={13} />
-                </button>
+          <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {selectedSpecies && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-50)', border: '1px solid var(--green-200)', borderRadius: 99, padding: '3px 10px 3px 7px', fontSize: 12, color: 'var(--green-700)', flexShrink: 0 }}>
+                  {React.createElement(ESPECE_ICONS[selectedSpecies.codeEspece] ?? ESPECE_ICONS.default, { size: 11 })}
+                  <span style={{ fontWeight: 700 }}>{selectedSpecies.codeEspece}</span>
+                  <span style={{ fontWeight: 400 }}>{selectedSpecies.nomCommun}</span>
+                  <button onClick={() => { setSelectedSpeciesId(null); setSelectedVarietyId(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', marginLeft: 2, color: 'var(--green-700)' }}>
+                    <X size={12} />
+                  </button>
+                </div>
               )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34, flex: 1, minWidth: 200 }}>
+                <Search size={13} color="var(--text-placeholder)" />
+                <input
+                  placeholder={selectedSpecies ? `Rechercher dans ${selectedSpecies.nomCommun}…` : 'Code, nom, espèce…'}
+                  value={search}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                  style={{ border: 'none', background: 'none', outline: 'none', flex: 1, fontSize: 13, fontFamily: 'Outfit, sans-serif' }}
+                />
+                {search && (
+                  <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--text-muted)' }}>
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+            {/* Filtre rapide par statut */}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[
+                { value: '',         label: 'Toutes',  dot: undefined },
+                { value: 'DIFFUSEE', label: 'Diffusées', dot: '#16a34a' },
+                { value: 'EN_TEST',  label: 'En test',   dot: '#7c3aed' },
+              ].map(chip => (
+                <button
+                  key={chip.value}
+                  onClick={() => setFilterStatut(f => f === chip.value ? '' : chip.value)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5,
+                    padding: '3px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 600,
+                    border: '1px solid', cursor: 'pointer', transition: 'all 0.12s',
+                    background: filterStatut === chip.value ? 'var(--text-primary)' : 'var(--surface)',
+                    borderColor: filterStatut === chip.value ? 'var(--text-primary)' : 'var(--border)',
+                    color: filterStatut === chip.value ? 'var(--surface)' : 'var(--text-secondary)',
+                  }}
+                >
+                  {chip.dot && <span style={{ width: 6, height: 6, borderRadius: '50%', background: filterStatut === chip.value ? 'var(--surface)' : chip.dot, display: 'inline-block' }} />}
+                  {chip.label}
+                </button>
+              ))}
             </div>
           </div>
 

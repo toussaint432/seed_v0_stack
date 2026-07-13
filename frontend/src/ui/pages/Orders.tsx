@@ -14,7 +14,7 @@ interface Props { roleKey: string }
 const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> = {
   SOUMISE:        { label: 'Soumise',        bg: '#eff6ff', color: '#1d4ed8' },
   ACCEPTEE:       { label: 'Acceptée',       bg: '#f0fdf4', color: '#15803d' },
-  EN_PREPARATION: { label: 'En préparation', bg: '#fef9ed', color: '#92660a' },
+  EN_PREPARATION: { label: 'En préparation', bg: '#f5f3ff', color: '#6d28d9' },
   LIVREE:         { label: 'Livrée',         bg: '#ecfdf5', color: '#065f46' },
   ANNULEE:        { label: 'Annulée',        bg: '#fef2f2', color: '#dc2626' },
   REJETEE:        { label: 'Rejetée',        bg: '#fef2f2', color: '#dc2626' },
@@ -192,22 +192,22 @@ function KpiCard({ icon, value, label, accent, active, onClick, loading }: KpiPr
     <div
       onClick={onClick}
       style={{
-        background: active ? `${accent}09` : 'var(--surface)',
-        border: `1px solid ${active ? accent + '40' : 'var(--border)'}`,
-        borderTop: `2.5px solid ${active ? accent : accent + '55'}`,
+        background: active ? `${accent}08` : 'var(--surface)',
+        border: `1px solid ${active ? accent + '30' : 'var(--border)'}`,
         borderRadius: 12,
         padding: '15px 18px 17px',
         display: 'flex', alignItems: 'flex-start', gap: 14,
         cursor: onClick ? 'pointer' : 'default',
         transition: 'all .18s cubic-bezier(0.4,0,0.2,1)',
-        boxShadow: active ? `0 2px 10px ${accent}18` : 'var(--shadow-xs)',
+        boxShadow: active ? `0 2px 10px ${accent}14` : 'var(--shadow-xs)',
       }}
     >
       <div style={{
         width: 40, height: 40, borderRadius: 10,
-        background: `${accent}12`,
+        background: 'var(--surface-3)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: accent, flexShrink: 0, marginTop: 2,
+        color: active ? accent : 'var(--text-secondary)', flexShrink: 0, marginTop: 2,
+        transition: 'color .18s',
       }}>
         {icon}
       </div>
@@ -912,7 +912,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
       </div>
 
       {pendingCount > 0 && (
-        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '11px 18px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#92400e', fontWeight: 500 }}>
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '11px 18px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#1e40af', fontWeight: 500 }}>
           <Clock size={15} />
           <strong>{pendingCount} commande{pendingCount > 1 ? 's' : ''}</strong> en attente de votre décision.
         </div>
@@ -929,7 +929,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
           <span className="card-title">
             <span className="card-title-icon">{onglet === 'recues' ? <Building2 size={15} /> : <ShoppingCart size={15} />}</span>
             {onglet === 'recues' ? 'Commandes de mon organisation' : "Mes demandes G3 auprès de l'UPSemCL"}
-            {kpiFilter && <span style={{ marginLeft: 8, fontSize: 11, background: '#f59e0b20', color: '#92400e', padding: '2px 8px', borderRadius: 99, fontWeight: 600 }}>Filtre actif</span>}
+            {kpiFilter && <span style={{ marginLeft: 8, fontSize: 11, background: 'var(--surface-3)', color: 'var(--text-secondary)', padding: '2px 8px', borderRadius: 99, fontWeight: 600, border: '1px solid var(--border)' }}>Filtre actif</span>}
             <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{displayed.length}{displayed.length !== activeOrders.length && `/${activeOrders.length}`}</span>
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -1346,10 +1346,10 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
       </div>
 
       {aTraiter > 0 && (
-        <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '11px 18px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#92400e', fontWeight: 500 }}>
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '11px 18px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#1e40af', fontWeight: 500 }}>
           <Clock size={15} />
           <strong>{aTraiter} commande{aTraiter > 1 ? 's' : ''}</strong> en attente de votre décision.
-          <button className="btn btn-ghost" style={{ marginLeft: 'auto', fontSize: 12, color: '#92400e', border: '1px solid #fde68a' }} onClick={() => toggleKpi('pending')}>
+          <button className="btn btn-ghost" style={{ marginLeft: 'auto', fontSize: 12, color: '#1d4ed8', border: '1px solid #bfdbfe' }} onClick={() => toggleKpi('pending')}>
             Voir
           </button>
         </div>
@@ -1364,7 +1364,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
             <span className="card-title-icon"><Building2 size={15} /></span>
             {isUpsemcl ? 'Commandes des multiplicateurs' : 'Commandes reçues'}
             {kpiFilter && (
-              <button className="btn btn-ghost" style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', height: 22, color: '#f59e0b', border: '1px solid #fde68a' }} onClick={() => setKpiFilter(null)}>
+              <button className="btn btn-ghost" style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', height: 22, color: 'var(--text-secondary)', border: '1px solid var(--border)' }} onClick={() => setKpiFilter(null)}>
                 <X size={10} /> {STATUS_CFG[kpiFilter === 'pending' ? 'SOUMISE' : kpiFilter === 'accepted' ? 'ACCEPTEE' : kpiFilter === 'rejected' ? 'REJETEE' : 'LIVREE']?.label ?? kpiFilter}
               </button>
             )}
@@ -1493,7 +1493,7 @@ function VueAdmin({ setToast }: { setToast: any }) {
             <span className="card-title-icon"><ShoppingCart size={15} /></span>
             Toutes les commandes
             {kpiFilter && (
-              <button className="btn btn-ghost" style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', height: 22, color: '#f59e0b', border: '1px solid #fde68a' }} onClick={() => setKpiFilter(null)}>
+              <button className="btn btn-ghost" style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', height: 22, color: 'var(--text-secondary)', border: '1px solid var(--border)' }} onClick={() => setKpiFilter(null)}>
                 <X size={10} /> Filtre actif
               </button>
             )}
