@@ -587,6 +587,18 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     stockByLotId[lid].push({ qty: Number(st.quantiteDisponible || 0), site: st.site?.nomSite || st.site?.codeSite || '' })
   })
 
+  // Org ID du multiplicateur lui-même, dérivé de ses propres lots G4/R1/R2
+  // (ces générations sont TOUJOURS produites par le multiplicateur, jamais reçues de l'extérieur)
+  // Permet de détecter les lots reçus sans dépendre de l'endpoint organisations.
+  const multOwnOrgId: number | null =
+    mesLots.find(l =>
+      ['G4','R1','R2'].includes(l.generation?.codeGeneration ?? '') && l.idOrgProducteur != null
+    )?.idOrgProducteur ?? null
+
+  // Retourne true si le lot a été produit par une org externe (reçu par transfert)
+  const isExternalLot = (lot: any): boolean =>
+    multOwnOrgId != null && lot.idOrgProducteur != null && lot.idOrgProducteur !== multOwnOrgId
+
   const mesLotsFiltered = mesLots.filter(l => {
     if (filterGenMes    && l.generation?.codeGeneration !== filterGenMes) return false
     if (filterStatutMes && l.statutLot !== filterStatutMes) return false
@@ -610,7 +622,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     mesLots.forEach(l => {
       const vname = varietyMap[l.idVariete]?.nomVariete ?? ('Var#' + l.idVariete)
       const gen   = l.generation?.codeGeneration ?? '?'
-      const isUpsemcl = upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId
+      const isUpsemcl = isExternalLot(l)
       const qty   = isUpsemcl
         ? (stockByLotId[l.id] ?? []).reduce((a, x) => a + x.qty, 0)
         : Number(l.quantiteNette || 0)
@@ -1023,11 +1035,11 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                   const stockKg  = monStock.filter((st: any) => lotIds.has(st.idLot ?? st.lot?.id)).reduce((s: number, st: any) => s + Number(st.quantiteDisponible || 0), 0)
                   // For G3/G4 received from UPSemCL use stock as primary qty; for produced lots use quantiteNette
                   const prodKg   = lotsGen.reduce((s, l) => {
-                    const isUpsemcl = upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId
+                    const isUpsemcl = isExternalLot(l)
                     if (isUpsemcl) return s + (stockByLotId[l.id] ?? []).reduce((a, x) => a + x.qty, 0)
                     return s + Number(l.quantiteNette || 0)
                   }, 0)
-                  const allUpsemcl = lotsGen.every(l => upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId)
+                  const allUpsemcl = lotsGen.every(l => isExternalLot(l))
                   const hex      = GEN_HEX[gen] ?? '#6b7280'
                   const fmtQty   = (v: number) => v >= 1000 ? (v/1000).toFixed(0)+'k' : String(v)
                   return (
@@ -1149,7 +1161,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                               {(() => {
                                 const stList = stockByLotId[l.id] ?? []
                                 const stTotal = stList.reduce((s, x) => s + x.qty, 0)
-                                const isUpsemclLot = upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId
+                                const isUpsemclLot = isExternalLot(l)
                                 if (isUpsemclLot && stTotal > 0) {
                                   return (
                                     <div>
@@ -1178,7 +1190,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                               {(() => {
                                 const stList = stockByLotId[l.id] ?? []
                                 const stTotal = stList.reduce((s, x) => s + x.qty, 0)
-                                const isUpsemclLot = upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId
+                                const isUpsemclLot = isExternalLot(l)
                                 if (stTotal <= 0) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
                                 if (isUpsemclLot) {
                                   // qty already shown in Quantité column — show site(s) only
@@ -1335,7 +1347,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               {(() => {
                 const stList = stockByLotId[parentLot.id] ?? []
                 const stTotal = stList.reduce((s, x) => s + x.qty, 0)
-                const isUpsemcl = upsemclOrgId != null && parentLot.idOrgProducteur === upsemclOrgId
+                const isUpsemcl = isExternalLot(parentLot)
                 return (
                   <div>
                     <strong>Disponible :</strong>{' '}
