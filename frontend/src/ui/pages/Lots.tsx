@@ -411,8 +411,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [lineageChain, setLineageChain]   = useState<any[] | null>(null)
   const [lineageLotCode, setLineageLotCode] = useState('')
   const [searchCat, setSearchCat]     = useState('')
-  const [searchMes, setSearchMes]     = useState('')
-  const [filterGenMes, setFilterGenMes] = useState('')
+  const [searchMes, setSearchMes]       = useState('')
+  const [filterGenMes, setFilterGenMes]     = useState('')
+  const [filterStatutMes, setFilterStatutMes] = useState('')
+  const [filterCampagneMes, setFilterCampagneMes] = useState('')
   // Transferts G3 EN_ATTENTE reçus par l'UPSemCL — en attente d'acceptation
   const [transfertsRecus, setTransfertsRecus] = useState<any[]>([])
 
@@ -586,7 +588,9 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   })
 
   const mesLotsFiltered = mesLots.filter(l => {
-    if (filterGenMes && l.generation?.codeGeneration !== filterGenMes) return false
+    if (filterGenMes    && l.generation?.codeGeneration !== filterGenMes) return false
+    if (filterStatutMes && l.statutLot !== filterStatutMes) return false
+    if (filterCampagneMes && (l.campagne ?? '—') !== filterCampagneMes) return false
     if (!searchMes) return true
     const v = varietyMap[l.idVariete]
     const term = searchMes.toLowerCase()
@@ -595,13 +599,21 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         || l.generation?.codeGeneration?.toLowerCase().includes(term)
   })
 
-  // Données graphique : production par variété × génération
+  const mesLotsStatuts  = [...new Set(mesLots.map(l => l.statutLot).filter(Boolean))].sort() as string[]
+  const mesLotsCampagnes = [...new Set(mesLots.map(l => l.campagne ?? '—').filter(Boolean))].sort().reverse() as string[]
+  const hasActiveFilter = !!(filterGenMes || filterStatutMes || filterCampagneMes || searchMes)
+  function resetAllFilters() { setFilterGenMes(''); setFilterStatutMes(''); setFilterCampagneMes(''); setSearchMes('') }
+
+  // Données graphique : production/réception par variété × génération
   const lotsChartData = (() => {
     const agg: Record<string, Record<string, number>> = {}
     mesLots.forEach(l => {
       const vname = varietyMap[l.idVariete]?.nomVariete ?? ('Var#' + l.idVariete)
       const gen   = l.generation?.codeGeneration ?? '?'
-      const qty   = Number(l.quantiteNette || 0)
+      const isUpsemcl = upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId
+      const qty   = isUpsemcl
+        ? (stockByLotId[l.id] ?? []).reduce((a, x) => a + x.qty, 0)
+        : Number(l.quantiteNette || 0)
       if (!agg[vname]) agg[vname] = {}
       agg[vname][gen] = (agg[vname][gen] ?? 0) + qty
     })
@@ -859,36 +871,99 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                 <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
               </div>
             </div>
-            {/* Filter chips + chart toggle */}
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', marginRight: 2, flexShrink: 0 }}>Génération :</span>
-              {ML_GENS.map(gen => {
-                const count = mesLots.filter(l => l.generation?.codeGeneration === gen).length
-                if (count === 0) return null
-                const active = filterGenMes === gen
-                const hex = GEN_HEX[gen] ?? '#6b7280'
-                return (
-                  <button key={gen} onClick={() => setFilterGenMes(active ? '' : gen)} style={{
-                    padding: '3px 11px', borderRadius: 20, border: '1.5px solid',
-                    borderColor: active ? hex : 'var(--border)',
-                    background: active ? hex + '1a' : 'var(--surface)',
-                    color: active ? hex : 'var(--text-muted)',
-                    fontSize: 12, fontWeight: active ? 700 : 400, cursor: 'pointer',
-                    transition: 'all 0.12s', display: 'flex', alignItems: 'center', gap: 4,
+            {/* ── Barre de filtres dynamique ── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+              {/* Ligne 1 : Génération + Statut */}
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '.04em' }}>Gén.</span>
+                {ML_GENS.map(gen => {
+                  const count = mesLots.filter(l => l.generation?.codeGeneration === gen).length
+                  if (count === 0) return null
+                  const active = filterGenMes === gen
+                  const hex = GEN_HEX[gen] ?? '#6b7280'
+                  return (
+                    <button key={gen} onClick={() => setFilterGenMes(active ? '' : gen)} style={{
+                      padding: '3px 10px', borderRadius: 20, border: '1.5px solid',
+                      borderColor: active ? hex : 'var(--border)',
+                      background: active ? hex + '22' : 'var(--surface)',
+                      color: active ? hex : 'var(--text-muted)',
+                      fontSize: 11.5, fontWeight: active ? 700 : 400, cursor: 'pointer',
+                      transition: 'all 0.12s', display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: active ? hex : 'var(--text-muted)', display: 'inline-block', flexShrink: 0 }} />
+                      {gen} <span style={{ opacity: 0.6, fontSize: 10.5 }}>({count})</span>
+                    </button>
+                  )
+                })}
+
+                <div style={{ width: 1, height: 16, background: 'var(--border)', margin: '0 4px', flexShrink: 0 }} />
+
+                {/* Statut chips */}
+                {(() => {
+                  const STATUT_HEX: Record<string, string> = {
+                    DISPONIBLE: '#16a34a', CERTIFIE: '#0ea5e9', EN_PRODUCTION: '#f59e0b',
+                    EN_COURS_CERT: '#6366f1', TRANSFERE: '#0284c7', DECLASS: '#d97706',
+                    EPUISE: '#9ca3af', RETIRE: '#ef4444', PERDU: '#dc2626',
+                  }
+                  return mesLotsStatuts.map(s => {
+                    const count = mesLots.filter(l => l.statutLot === s).length
+                    const active = filterStatutMes === s
+                    const hex = STATUT_HEX[s] ?? '#6b7280'
+                    return (
+                      <button key={s} onClick={() => setFilterStatutMes(active ? '' : s)} style={{
+                        padding: '3px 10px', borderRadius: 20, border: '1.5px solid',
+                        borderColor: active ? hex : 'var(--border)',
+                        background: active ? hex + '18' : 'var(--surface)',
+                        color: active ? hex : 'var(--text-muted)',
+                        fontSize: 11.5, fontWeight: active ? 700 : 400, cursor: 'pointer',
+                        transition: 'all 0.12s', display: 'flex', alignItems: 'center', gap: 4,
+                      }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: active ? hex : 'var(--text-muted)', flexShrink: 0, display: 'inline-block' }} />
+                        {s} <span style={{ opacity: 0.6, fontSize: 10.5 }}>({count})</span>
+                      </button>
+                    )
+                  })
+                })()}
+              </div>
+
+              {/* Ligne 2 : Campagne select + résultat + reset */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', flexShrink: 0, textTransform: 'uppercase', letterSpacing: '.04em' }}>Campagne</span>
+                <select
+                  value={filterCampagneMes}
+                  onChange={e => setFilterCampagneMes(e.target.value)}
+                  style={{
+                    height: 28, padding: '0 8px', fontSize: 12, borderRadius: 6,
+                    border: filterCampagneMes ? '1.5px solid var(--green-600)' : '1px solid var(--border)',
+                    background: filterCampagneMes ? 'var(--green-50,#f0fdf4)' : 'var(--surface)',
+                    color: filterCampagneMes ? 'var(--green-700)' : 'var(--text-muted)',
+                    cursor: 'pointer', outline: 'none', fontFamily: 'Outfit, sans-serif', fontWeight: filterCampagneMes ? 700 : 400,
+                  }}
+                >
+                  <option value="">Toutes les campagnes</option>
+                  {mesLotsCampagnes.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+
+                <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
+                  <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{mesLotsFiltered.length}</span>
+                  /{mesLots.length} lot{mesLots.length > 1 ? 's' : ''}
+                  {hasActiveFilter && <span style={{ color: 'var(--green-700)', marginLeft: 4 }}>filtrés</span>}
+                </span>
+
+                {hasActiveFilter && (
+                  <button onClick={resetAllFilters} style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '3px 10px', borderRadius: 20, border: '1px solid #fca5a5',
+                    background: '#fef2f2', color: '#dc2626',
+                    fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
                   }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: hex, display: 'inline-block' }} />
-                    {gen} <span style={{ opacity: 0.65 }}>({count})</span>
+                    <X size={10} /> Réinitialiser
                   </button>
-                )
-              })}
-              {filterGenMes && (
-                <button onClick={() => setFilterGenMes('')} style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', textDecoration: 'underline' }}>
-                  Tout afficher
-                </button>
-              )}
-              <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>
-                {mesLotsFiltered.length} lot{mesLotsFiltered.length > 1 ? 's' : ''} affiché{mesLotsFiltered.length > 1 ? 's' : ''}
-              </span>
+                )}
+              </div>
             </div>
           </div>
 
@@ -944,9 +1019,15 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                 {ML_GENS.map(gen => {
                   const lotsGen  = mesLots.filter(l => l.generation?.codeGeneration === gen)
                   if (lotsGen.length === 0) return null
-                  const prodKg   = lotsGen.reduce((s, l) => s + Number(l.quantiteNette || 0), 0)
                   const lotIds   = new Set(lotsGen.map(l => l.id))
                   const stockKg  = monStock.filter((st: any) => lotIds.has(st.idLot ?? st.lot?.id)).reduce((s: number, st: any) => s + Number(st.quantiteDisponible || 0), 0)
+                  // For G3/G4 received from UPSemCL use stock as primary qty; for produced lots use quantiteNette
+                  const prodKg   = lotsGen.reduce((s, l) => {
+                    const isUpsemcl = upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId
+                    if (isUpsemcl) return s + (stockByLotId[l.id] ?? []).reduce((a, x) => a + x.qty, 0)
+                    return s + Number(l.quantiteNette || 0)
+                  }, 0)
+                  const allUpsemcl = lotsGen.every(l => upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId)
                   const hex      = GEN_HEX[gen] ?? '#6b7280'
                   const fmtQty   = (v: number) => v >= 1000 ? (v/1000).toFixed(0)+'k' : String(v)
                   return (
@@ -963,17 +1044,17 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>{lotsGen.length} lot{lotsGen.length>1?'s':''}</span>
                       </div>
                       <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                        {fmtQty(prodKg)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>kg prod.</span>
+                        {fmtQty(prodKg)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{allUpsemcl ? 'kg reçus' : 'kg prod.'}</span>
                       </div>
-                      {stockKg > 0 && (
+                      {stockKg > 0 && !allUpsemcl && (
                         <div style={{ marginTop: 4, fontSize: 11, color: 'var(--green-700)', fontWeight: 600 }}>
                           {fmtQty(stockKg)} kg stock
                         </div>
                       )}
-                      {/* mini progress bar: stock / production */}
+                      {/* mini progress bar */}
                       {prodKg > 0 && (
                         <div style={{ marginTop: 6, height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${Math.min(100, stockKg/prodKg*100)}%`, background: hex, borderRadius: 2, transition: 'width 0.4s' }} />
+                          <div style={{ height: '100%', width: allUpsemcl ? '100%' : `${Math.min(100, stockKg/prodKg*100)}%`, background: hex, borderRadius: 2, transition: 'width 0.4s' }} />
                         </div>
                       )}
                     </div>
@@ -996,8 +1077,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                   <th>Variété</th>
                   <th>Génération</th>
                   <th>Lot parent</th>
-                  <th>Quantité</th>
-                  <th>Stock dispo</th>
+                  <th>Campagne</th>
+                  <th>Enregistré le</th>
+                  <th>Quantité reçue / produite</th>
+                  <th>Localisation stock</th>
                   <th>Germination</th>
                   <th>Pureté</th>
                   <th>Statut</th>
@@ -1006,10 +1089,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               </thead>
               <tbody>
                 {loadingMes
-                  ? [0,1,2,3].map(i => <tr key={i}><td colSpan={10}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
+                  ? [0,1,2,3].map(i => <tr key={i}><td colSpan={12}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
                   : mesLots.length === 0
                     ? (
-                      <tr><td colSpan={10}>
+                      <tr><td colSpan={12}>
                         <div className="empty-state">
                           <div className="empty-icon"><Layers size={20} /></div>
                           <div className="empty-title">Aucun lot enregistré pour votre organisation</div>
@@ -1047,15 +1130,66 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                             </td>
                             <td><span className={`badge ${GEN_COLORS[gen] || 'badge-gray'}`}>{gen}</span></td>
                             <td>{l.lotParent?.codeLot ? <span className="td-mono" style={{ fontSize: 11 }}>{l.lotParent.codeLot}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                            <td>
-                              <span style={{ fontWeight: 700 }}>{l.quantiteNette != null ? Number(l.quantiteNette).toLocaleString('fr-FR') : '—'}</span>
-                              {' '}<span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.unite}</span>
+                            <td style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                              {l.campagne || '—'}
+                            </td>
+                            <td style={{ whiteSpace: 'nowrap' }}>
+                              {l.createdAt ? (
+                                <div>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>
+                                    {new Date(l.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                    {new Date(l.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                  </div>
+                                </div>
+                              ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                             </td>
                             <td>
                               {(() => {
                                 const stList = stockByLotId[l.id] ?? []
                                 const stTotal = stList.reduce((s, x) => s + x.qty, 0)
+                                const isUpsemclLot = upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId
+                                if (isUpsemclLot && stTotal > 0) {
+                                  return (
+                                    <div>
+                                      <span style={{ fontWeight: 700, color: 'var(--green-700)', fontSize: 13 }}>{stTotal.toLocaleString('fr-FR')}</span>
+                                      {' '}<span style={{ fontSize: 11, color: 'var(--text-muted)' }}>kg reçus</span>
+                                      {l.quantiteNette != null && (
+                                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                                          lot source : {Number(l.quantiteNette).toLocaleString('fr-FR')} kg restants
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                }
+                                return (
+                                  <div>
+                                    <span style={{ fontWeight: 700 }}>{l.quantiteNette != null ? Number(l.quantiteNette).toLocaleString('fr-FR') : '—'}</span>
+                                    {' '}<span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.unite}</span>
+                                    {isUpsemclLot && l.quantiteNette != null && (
+                                      <div style={{ fontSize: 10, color: '#d97706', marginTop: 1 }}>lot UPSemCL — vérifier réception</div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
+                            </td>
+                            <td>
+                              {(() => {
+                                const stList = stockByLotId[l.id] ?? []
+                                const stTotal = stList.reduce((s, x) => s + x.qty, 0)
+                                const isUpsemclLot = upsemclOrgId != null && l.idOrgProducteur === upsemclOrgId
                                 if (stTotal <= 0) return <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+                                if (isUpsemclLot) {
+                                  // qty already shown in Quantité column — show site(s) only
+                                  return (
+                                    <div>
+                                      {stList.map((st, idx) => st.site ? (
+                                        <div key={idx} style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: idx > 0 ? 2 : 0 }}>{st.site}</div>
+                                      ) : null)}
+                                    </div>
+                                  )
+                                }
                                 return (
                                   <div>
                                     <span style={{ fontWeight: 700, color: 'var(--green-700)', fontSize: 13 }}>{stTotal.toLocaleString('fr-FR')}</span>
@@ -1198,7 +1332,20 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               <div><strong>Parent :</strong> {parentLot.codeLot} <span style={{ color: 'var(--text-muted)' }}>({parentLot.generation?.codeGeneration})</span></div>
               <div><strong>Variété :</strong> {varietyMap[parentLot.idVariete]?.nomVariete ?? `#${parentLot.idVariete}`} — <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{varietyMap[parentLot.idVariete]?.codeVariete}</span></div>
               <div><strong>Espèce :</strong> {varietyMap[parentLot.idVariete]?.espece?.nomEspece ?? '—'}</div>
-              <div><strong>Disponible :</strong> {parentLot.quantiteNette != null ? Number(parentLot.quantiteNette).toLocaleString('fr-FR') : '—'} {parentLot.unite}</div>
+              {(() => {
+                const stList = stockByLotId[parentLot.id] ?? []
+                const stTotal = stList.reduce((s, x) => s + x.qty, 0)
+                const isUpsemcl = upsemclOrgId != null && parentLot.idOrgProducteur === upsemclOrgId
+                return (
+                  <div>
+                    <strong>Disponible :</strong>{' '}
+                    {isUpsemcl && stTotal > 0
+                      ? <>{stTotal.toLocaleString('fr-FR')} {parentLot.unite} <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>(reçus de l'UPSemCL)</span></>
+                      : <>{parentLot.quantiteNette != null ? Number(parentLot.quantiteNette).toLocaleString('fr-FR') : '—'} {parentLot.unite}</>
+                    }
+                  </div>
+                )
+              })()}
             </div>
           </div>
           <form onSubmit={submitChildLot}>
