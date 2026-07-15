@@ -2,6 +2,7 @@ package sn.isra.seed.order_service.api;
 
 import sn.isra.seed.order_service.api.dto.AllocateRequest;
 import sn.isra.seed.order_service.api.dto.CreateOrderRequest;
+import sn.isra.seed.order_service.api.dto.ProposeRequest;
 import sn.isra.seed.order_service.api.dto.StatutRequest;
 import sn.isra.seed.order_service.api.dto.ValiderCommandeRequest;
 import sn.isra.seed.order_service.entity.AllocationCommande;
@@ -246,6 +247,212 @@ public class OrderController {
     }
   }
 
+  /* ══════════════════════════════════════════════════════════════════════
+     WORKFLOW NÉGOCIATION UPSemCL ↔ MULTIPLICATEUR
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * PATCH /api/orders/{id}/proposer  (UPSemCL)
+   * L'agent UPSemCL propose un lot et une quantité pour chaque ligne.
+   * Pré-condition : commande SOUMISE ou déjà EN_NEGOCIATION (re-proposition autorisée).
+   */
+  @Transactional
+  @PatchMapping("/{id}/proposer")
+  public ResponseEntity<Commande> proposer(
+      @PathVariable Long id,
+      @Valid @RequestBody ProposeRequest req,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.SOUMISE && commande.getStatut() != StatutCommande.EN_NEGOCIATION) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Seule une commande SOUMISE ou EN_NEGOCIATION peut recevoir une proposition (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    for (ProposeRequest.PropositionItem item : req.propositions()) {
+      LigneCommande ligne = ligneRepo.findById(item.idLigne())
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ligne #" + item.idLigne() + " introuvable"));
+      if (!ligne.getCommande().getId().equals(id)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "La ligne #" + item.idLigne() + " n'appartient pas à cette commande");
+      }
+      ligne.setQuantiteProposee(item.quantiteProposee());
+      ligne.setIdLotPropose(item.idLot());
+      ligneRepo.save(ligne);
+    }
+
+    commande.setStatut(StatutCommande.EN_NEGOCIATION);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * PATCH /api/orders/{id}/accepter-proposition  (Multiplicateur)
+   * Le multiplicateur accepte la proposition de l'UPSemCL.
+   * Pré-condition : commande EN_NEGOCIATION.
+   */
+  @Transactional
+  @PatchMapping("/{id}/accepter-proposition")
+  public ResponseEntity<Commande> accepterProposition(@PathVariable Long id) {
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.EN_NEGOCIATION) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être EN_NEGOCIATION pour accepter la proposition (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    commande.setStatut(StatutCommande.ACCORDEE);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * PATCH /api/orders/{id}/refuser-proposition  (Multiplicateur)
+   * Le multiplicateur refuse la proposition — effacement des propositions, retour à SOUMISE.
+   * Pré-condition : commande EN_NEGOCIATION.
+   */
+  @Transactional
+  @PatchMapping("/{id}/refuser-proposition")
+  public ResponseEntity<Commande> refuserProposition(@PathVariable Long id) {
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.EN_NEGOCIATION) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être EN_NEGOCIATION pour refuser la proposition (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    for (LigneCommande ligne : commande.getLignes()) {
+      ligne.setQuantiteProposee(null);
+      ligne.setIdLotPropose(null);
+      ligneRepo.save(ligne);
+    }
+
+    commande.setStatut(StatutCommande.SOUMISE);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * POST /api/orders/{id}/faire-transfert  (UPSemCL)
+   * Déclenche la livraison physique : débite le lot UPSemCL, crée un transfert_lot EN_ATTENTE.
+   * Pré-condition : commande ACCORDEE.
+   */
+  @Transactional
+  @PostMapping("/{id}/faire-transfert")
+  public ResponseEntity<Commande> faireTransfert(
+      @PathVariable Long id,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.ACCORDEE) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être ACCORDEE pour déclencher le transfert (statut actuel : " + commande.getStatut() + ")");
+    }
+    if (commande.getUsernameAcheteur() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Acheteur non identifié — impossible de créer le transfert");
+    }
+
+    String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+    String codeTransfert = "TL-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+
+    for (LigneCommande ligne : commande.getLignes()) {
+      if (ligne.getIdLotPropose() == null || ligne.getQuantiteProposee() == null) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+            "La ligne #" + ligne.getId() + " n'a pas de proposition enregistrée — re-proposez avant de faire le transfert");
+      }
+
+      // Charger le lot avant débit pour l'historique et le calcul du nouveau statut
+      var lot = lotQuantiteRepo.findById(ligne.getIdLotPropose())
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+              "Lot #" + ligne.getIdLotPropose() + " introuvable"));
+      String ancienStatut = lot.getStatutLot();
+
+      // Débiter la quantité nette (+ statut → TRANSFERE si lot épuisé)
+      int updated = lotQuantiteRepo.debitLotById(ligne.getIdLotPropose(), ligne.getQuantiteProposee());
+      if (updated == 0) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+            "Quantité insuffisante sur le lot #" + ligne.getIdLotPropose());
+      }
+
+      // Enregistrer l'historique du transfert partiel
+      java.math.BigDecimal restant = lot.getQuantiteNette().subtract(ligne.getQuantiteProposee());
+      boolean epuise = restant.compareTo(java.math.BigDecimal.ZERO) <= 0;
+      String nouveauStatut = epuise ? "TRANSFERE" : ancienStatut;
+      String commentaire = "Transfert vers " + commande.getUsernameAcheteur()
+          + " : " + ligne.getQuantiteProposee().toPlainString() + " kg transférés"
+          + (epuise ? ", lot épuisé" : ", " + restant.toPlainString() + " kg restants");
+      lotQuantiteRepo.insertHistoriqueTransfert(
+          ligne.getIdLotPropose(), ancienStatut, nouveauStatut, emetteur, commentaire);
+
+      // Débiter le stock UPSemCL
+      stockOrderRepo.debitUpsemcl(ligne.getIdLotPropose(), ligne.getQuantiteProposee());
+
+      // Créer le transfert_lot EN_ATTENTE (validé par l'accusé de réception du multiplicateur)
+      transfertLotOrderRepo.createPendingTransfert(
+          codeTransfert,
+          ligne.getIdLotPropose(),
+          emetteur,
+          commande.getUsernameAcheteur(),
+          ligne.getQuantiteProposee()
+      );
+
+      log.info("Transfert EN_ATTENTE créé : lot={} → {} ({} {}) — restant: {} kg",
+          ligne.getIdLotPropose(), commande.getUsernameAcheteur(),
+          ligne.getQuantiteProposee(), ligne.getUnite() != null ? ligne.getUnite() : "kg",
+          epuise ? 0 : restant.toPlainString());
+    }
+
+    commande.setStatut(StatutCommande.EN_LIVRAISON);
+    commande.setCodeTransfertGenere(codeTransfert);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * PATCH /api/orders/{id}/accuser-reception  (Multiplicateur)
+   * Le multiplicateur confirme avoir reçu les semences.
+   * Crédite son stock, valide le transfert (→ ACCEPTE), passe la commande en LIVREE.
+   * Pré-condition : commande EN_LIVRAISON.
+   */
+  @Transactional
+  @PatchMapping("/{id}/accuser-reception")
+  public ResponseEntity<Commande> accuserReception(
+      @PathVariable Long id,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.EN_LIVRAISON) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être EN_LIVRAISON pour accuser réception (statut actuel : " + commande.getStatut() + ")");
+    }
+    if (commande.getIdOrganisationAcheteur() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Organisation acheteur non renseignée — impossible de créditer le stock");
+    }
+
+    for (LigneCommande ligne : commande.getLignes()) {
+      if (ligne.getIdLotPropose() == null || ligne.getQuantiteProposee() == null) continue;
+
+      // Créditer le stock de l'organisation multiplicatrice
+      stockOrderRepo.creditOrg(
+          ligne.getIdLotPropose(),
+          commande.getIdOrganisationAcheteur(),
+          ligne.getQuantiteProposee(),
+          ligne.getUnite() != null ? ligne.getUnite() : "kg"
+      );
+    }
+
+    // Valider le transfert_lot (EN_ATTENTE → ACCEPTE)
+    if (commande.getCodeTransfertGenere() != null) {
+      transfertLotOrderRepo.accepterTransfert(commande.getCodeTransfertGenere());
+    }
+
+    commande.setStatut(StatutCommande.LIVREE);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
   @PostMapping("/allocate")
   public AllocationCommande allocate(@Valid @RequestBody AllocateRequest req) {
     LigneCommande ligne = ligneRepo.findById(req.idLigne()).orElseThrow();
@@ -324,12 +531,24 @@ public class OrderController {
           ligne.getUnite() != null ? ligne.getUnite() : "kg"
       );
 
-      // 2d. Débiter la quantité nette du lot source dans lot_semencier
+      // 2d. Débiter la quantité nette du lot source (+ statut → TRANSFERE si épuisé)
+      var lotSource = lotQuantiteRepo.findById(item.idLot()).orElse(null);
+      String ancienStatutLot = lotSource != null ? lotSource.getStatutLot() : "DISPONIBLE";
       int updated = lotQuantiteRepo.debitLotById(item.idLot(), item.quantite());
       if (updated == 0) {
         throw new ResponseStatusException(HttpStatus.CONFLICT,
             "Quantité insuffisante sur le lot #" + item.idLot()
             + " — vérifiez le stock disponible avant de valider");
+      }
+      if (lotSource != null) {
+        java.math.BigDecimal restantLot = lotSource.getQuantiteNette().subtract(item.quantite());
+        boolean lotEpuise = restantLot.compareTo(java.math.BigDecimal.ZERO) <= 0;
+        String nouveauStatutLot = lotEpuise ? "TRANSFERE" : ancienStatutLot;
+        String commentaireLot = "Livraison directe vers " + commande.getUsernameAcheteur()
+            + " : " + item.quantite().toPlainString() + " kg livrés"
+            + (lotEpuise ? ", lot épuisé" : ", " + restantLot.toPlainString() + " kg restants");
+        lotQuantiteRepo.insertHistoriqueTransfert(
+            item.idLot(), ancienStatutLot, nouveauStatutLot, emetteur, commentaireLot);
       }
 
       // 2e. Créer le transfert_lot automatique (statut ACCEPTE) — visible immédiatement

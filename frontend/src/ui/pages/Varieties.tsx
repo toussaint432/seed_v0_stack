@@ -1,10 +1,10 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import {
   Leaf, Sprout, CheckCircle2, Plus, Search, X,
   RefreshCw, Edit2, FlaskConical, ChevronRight,
   Archive, Trash2, AlertTriangle, Eye, EyeOff, MessageSquare, MapPin,
   RotateCcw, Clock, User, TrendingUp, Wheat, LucideIcon,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, FileText, Upload, Download, History,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -61,6 +61,68 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [zonesRows,     setZonesRows]     = useState<{ idZone: string; niveauAdaptation: string }[]>([])
   const [savingZones,   setSavingZones]   = useState(false)
 
+  type PdfUploadCtx  = { type: 'fiche' | 'itineraire'; id: number; name: string }
+  type PdfViewerState = { url: string; title: string; downloadName: string; ctx?: PdfUploadCtx }
+
+  const [pdfViewerModal, setPdfViewerModal] = useState<PdfViewerState | null>(null)
+  const [pdfUploadModal, setPdfUploadModal] = useState<PdfUploadCtx | null>(null)
+  const [uploading,      setUploading]      = useState(false)
+  const [dragOver,       setDragOver]       = useState(false)
+  const [pdfBlobMeta,    setPdfBlobMeta]    = useState<{ url: string; isImage: boolean } | null>(null)
+  const [pdfBlobLoading, setPdfBlobLoading] = useState(false)
+  const [confirmDelete,  setConfirmDelete]  = useState(false)
+  const [deletingDoc,    setDeletingDoc]    = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [historiqueTarget,  setHistoriqueTarget]  = useState<any>(null)
+  const [historiqueData,    setHistoriqueData]    = useState<any[]>([])
+  const [loadingHistorique, setLoadingHistorique] = useState(false)
+
+  async function openHistorique(v: any) {
+    setHistoriqueTarget(v)
+    setHistoriqueData([])
+    setLoadingHistorique(true)
+    try {
+      const res = await api.get(endpoints.varietyHistorique(v.id))
+      setHistoriqueData(res.data)
+    } catch { setHistoriqueData([]) }
+    finally { setLoadingHistorique(false) }
+  }
+
+  const [especeHistoriqueTarget,  setEspeceHistoriqueTarget]  = useState<any>(null)
+  const [especeHistoriqueData,    setEspeceHistoriqueData]    = useState<any[]>([])
+  const [loadingEspeceHistorique, setLoadingEspeceHistorique] = useState(false)
+
+  async function openEspeceHistorique(s: any) {
+    setEspeceHistoriqueTarget(s)
+    setEspeceHistoriqueData([])
+    setLoadingEspeceHistorique(true)
+    try {
+      const res = await api.get(endpoints.especeHistorique(s.id))
+      setEspeceHistoriqueData(res.data)
+    } catch { setEspeceHistoriqueData([]) }
+    finally { setLoadingEspeceHistorique(false) }
+  }
+
+  useEffect(() => {
+    if (!pdfViewerModal) {
+      if (pdfBlobMeta) { URL.revokeObjectURL(pdfBlobMeta.url); setPdfBlobMeta(null) }
+      return
+    }
+    setConfirmDelete(false)
+    setPdfBlobLoading(true)
+    setPdfBlobMeta(null)
+    api.get(pdfViewerModal.url, { responseType: 'blob' })
+      .then(res => {
+        const blob    = new Blob([res.data], { type: res.data.type || 'application/octet-stream' })
+        const isImage = (res.data.type as string)?.startsWith('image/') ?? false
+        setPdfBlobMeta({ url: URL.createObjectURL(blob), isImage })
+      })
+      .catch(() => setToast({ msg: 'Impossible de charger le document', type: 'error' }))
+      .finally(() => setPdfBlobLoading(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pdfViewerModal?.url])
+
   const [especeForm, setEspeceForm] = useState({
     codeEspece: '', nomCommun: '', nomScientifique: '',
   })
@@ -71,11 +133,13 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     pedigree: '', typeGrain: '', rendementMin: '', rendementMax: '',
   })
 
-  const isAdminOrSelector = ['seed-admin', 'seed-selector'].includes(roleKey)
+  const isAdmin           = roleKey === 'seed-admin'
+  const isSelector        = roleKey === 'seed-selector'
+  const isAdminOrSelector = isAdmin || isSelector
 
   function canEdit(codeEspece?: string): boolean {
-    if (roleKey === 'seed-admin') return true
-    if (roleKey === 'seed-selector') {
+    if (isAdmin) return true
+    if (isSelector) {
       if (!userSpecialisation) return true
       if (!codeEspece) return false
       return codeEspece.toUpperCase() === userSpecialisation.toUpperCase()
@@ -83,16 +147,16 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     return false
   }
 
-  const canCreate  = isAdminOrSelector
-  const canArchive = isAdminOrSelector
-
   async function fetchData(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
     Promise.allSettled([
       api.get(endpoints.species),
       api.get(endpoints.varieties),
     ]).then(([s, v]) => {
-      setSpecies(s.status === 'fulfilled' ? s.value.data : [])
+      const rawSpecies: any[] = s.status === 'fulfilled' ? s.value.data : []
+      setSpecies([...rawSpecies].sort((a, b) =>
+        (a.nomCommun ?? '').localeCompare(b.nomCommun ?? '', 'fr', { sensitivity: 'base' })
+      ))
       setVarieties(v.status === 'fulfilled' ? v.value.data : [])
     }).finally(() => { setLoading(false); setRefreshing(false) })
   }
@@ -101,6 +165,10 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
 
   const selectedSpecies  = species.find(s => s.id === selectedSpeciesId) ?? null
   const selectedVariety  = varieties.find(v => v.id === selectedVarietyId) ?? null
+
+  const canCreateEspece  = isAdmin
+  const canCreateVariete = isAdmin || canEdit(selectedSpecies?.codeEspece)
+  const canArchive       = isAdminOrSelector
 
   const kpiBase = selectedSpecies
     ? varieties.filter(v => v.espece?.id === selectedSpecies.id)
@@ -224,8 +292,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     try {
       if (editVariete) {
         await api.put(endpoints.varietyById(editVariete.id), {
+          codeVariete:            editVariete.codeVariete,          // immuable, requis par @Valid
           nomVariete:             varieteForm.nomVariete,
-          espece:                 { id: Number(varieteForm.idEspece) },
+          espece:                 { id: Number(editVariete.espece?.id) }, // immuable
           origine:                varieteForm.origine               || null,
           selectionneurPrincipal: varieteForm.selectionneurPrincipal || null,
           anneeCreation:          varieteForm.anneeCreation  ? Number(varieteForm.anneeCreation)  : null,
@@ -326,6 +395,46 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur lors de la sauvegarde', type: 'error' })
     } finally { setSavingZones(false) }
+  }
+
+  async function deleteDocument() {
+    if (!pdfViewerModal?.ctx) return
+    const { type, id } = pdfViewerModal.ctx
+    setDeletingDoc(true)
+    try {
+      const url = type === 'fiche' ? endpoints.varietyFicheUrl(id) : endpoints.especeItineraireUrl(id)
+      await api.delete(url)
+      setToast({ msg: 'Document supprimé avec succès', type: 'success' })
+      setPdfViewerModal(null)
+      setConfirmDelete(false)
+      fetchData(true)
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la suppression', type: 'error' })
+    } finally { setDeletingDoc(false) }
+  }
+
+  async function uploadPdf(file: File) {
+    if (!pdfUploadModal) return
+    const validExts = ['.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif']
+    const validTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']
+    const nameLC = file.name.toLowerCase()
+    if (!validTypes.includes(file.type) && !validExts.some(e => nameLC.endsWith(e))) {
+      setToast({ msg: 'Formats acceptés : PDF, JPG, PNG, WEBP, GIF', type: 'error' }); return
+    }
+    setUploading(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    try {
+      const url = pdfUploadModal.type === 'fiche'
+        ? endpoints.varietyFicheUpload(pdfUploadModal.id)
+        : endpoints.especeItineraireUpload(pdfUploadModal.id)
+      await api.post(url, fd, { headers: { 'Content-Type': 'multipart/form-data' } })
+      setToast({ msg: `PDF "${file.name}" uploadé avec succès`, type: 'success' })
+      setPdfUploadModal(null)
+      fetchData(true)
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de l\'upload PDF', type: 'error' })
+    } finally { setUploading(false) }
   }
 
   /* ── Render ── */
@@ -663,7 +772,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               <span className="badge badge-green" style={{ marginLeft: 6, fontSize: 11 }}>{species.length}</span>
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
-              {canCreate && (
+              {canCreateEspece && (
                 <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px' }} onClick={() => setShowEspeceForm(true)}>
                   <Plus size={11} /> Nouvelle
                 </button>
@@ -708,7 +817,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   <div className="empty-state" style={{ padding: '24px 0' }}>
                     <div className="empty-icon"><Leaf size={18} /></div>
                     <div className="empty-title" style={{ fontSize: 13 }}>Aucune espèce</div>
-                    {canCreate && (
+                    {canCreateEspece && (
                       <button className="btn btn-primary" style={{ marginTop: 10, fontSize: 11 }} onClick={() => setShowEspeceForm(true)}>
                         + Créer
                       </button>
@@ -720,12 +829,17 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   const st       = speciesStats(s)
                   const isActive = selectedSpeciesId === s.id
                   const isMySpec = roleKey === 'seed-selector' && userSpecialisation?.toUpperCase() === s.codeEspece?.toUpperCase()
+                  const hasItineraire = !!s.itineraireTechPath
                   return (
-                    <button
+                    <div
                       key={s.id}
                       className="species-filter-item"
                       data-active={isActive}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => { setSelectedSpeciesId(isActive ? null : s.id); setSelectedVarietyId(null) }}
+                      onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { setSelectedSpeciesId(isActive ? null : s.id); setSelectedVarietyId(null) } }}
+                      style={{ cursor: 'pointer' }}
                     >
                       <div style={{
                         width: 30, height: 30, borderRadius: 7, flexShrink: 0,
@@ -754,6 +868,60 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           </div>
                         )}
                       </div>
+                      {/* Bouton historique admin — traçabilité espèce */}
+                      {isAdmin && (
+                        <button
+                          onClick={(e: React.MouseEvent) => { e.stopPropagation(); openEspeceHistorique(s) }}
+                          title="Historique des actions admin sur cette espèce"
+                          style={{
+                            width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                            background: 'transparent', border: '1px solid transparent',
+                            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            color: 'var(--text-muted)', transition: 'all 0.15s',
+                          }}
+                          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            (e.currentTarget).style.background = 'var(--surface-3)'
+                            ;(e.currentTarget).style.borderColor = 'var(--border)'
+                          }}
+                          onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                            (e.currentTarget).style.background = 'transparent'
+                            ;(e.currentTarget).style.borderColor = 'transparent'
+                          }}
+                        >
+                          <History size={11} />
+                        </button>
+                      )}
+                      {/* Bouton itinéraire technique */}
+                      <button
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation()
+                          if (hasItineraire) {
+                            setPdfViewerModal({ url: endpoints.especeItineraireUrl(s.id), title: `Itinéraire technique — ${s.nomCommun}`, downloadName: `itineraire-${s.codeEspece}.pdf`, ctx: { type: 'itineraire', id: s.id, name: s.nomCommun } })
+                          } else if (isAdmin || (isSelector && isMySpec)) {
+                            setPdfUploadModal({ type: 'itineraire', id: s.id, name: s.nomCommun })
+                          }
+                        }}
+                        title={hasItineraire ? `Voir l'itinéraire technique de ${s.nomCommun}` : isAdmin ? `Uploader l'itinéraire technique` : isSelector && isMySpec ? `Uploader l'itinéraire de votre spécialisation` : 'Aucun itinéraire technique disponible'}
+                        style={{
+                          width: 26, height: 26, borderRadius: 6, flexShrink: 0,
+                          background: hasItineraire ? '#eff6ff' : 'transparent',
+                          border: hasItineraire ? '1px solid #bfdbfe' : '1px solid transparent',
+                          cursor: hasItineraire || isAdmin || (isSelector && isMySpec) ? 'pointer' : 'default',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: hasItineraire ? '#2563eb' : 'var(--text-muted)',
+                          transition: 'all 0.15s',
+                        }}
+                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
+                          if (hasItineraire) { (e.currentTarget as HTMLButtonElement).style.background = '#dbeafe' }
+                          else if (isAdmin || (isSelector && isMySpec)) { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-3)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)' }
+                        }}
+                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
+                          (e.currentTarget as HTMLButtonElement).style.background = hasItineraire ? '#eff6ff' : 'transparent'
+                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = hasItineraire ? '#bfdbfe' : 'transparent'
+                        }}
+                      >
+                        {hasItineraire ? <FileText size={11} /> : isAdmin || (isSelector && isMySpec) ? <Upload size={11} /> : <FileText size={11} style={{ opacity: 0.25 }} />}
+                      </button>
                       <span style={{
                         fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
                         color: isActive ? 'var(--green-700)' : 'var(--text-muted)',
@@ -763,7 +931,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                         {st.total}
                       </span>
                       {isActive && <ChevronRight size={12} color="var(--green-600)" style={{ flexShrink: 0 }} />}
-                    </button>
+                    </div>
                   )
                 })
             }
@@ -780,7 +948,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 {filtered.length}{varieties.length !== filtered.length && `/${varieties.length}`}
               </span>
             </span>
-            {canCreate && (
+            {canCreateVariete && (
               <button className="btn btn-primary" style={{ height: 30, fontSize: 12 }} onClick={openNewVariete}>
                 <Plus size={12} /> Nouvelle variété
               </button>
@@ -883,14 +1051,14 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       </th>
                     )
                   })}
-                  {isAdminOrSelector && <th style={{ width: 96, textAlign: 'right', paddingRight: 18 }}>Actions</th>}
+                  <th style={{ width: 120, textAlign: 'right', paddingRight: 18 }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {loading
                   ? [0, 1, 2, 3, 4].map(i => (
                       <tr key={i}>
-                        <td colSpan={isAdminOrSelector ? 7 : 6}>
+                        <td colSpan={7}>
                           <div className="skeleton" style={{ height: 14, borderRadius: 4 }} />
                         </td>
                       </tr>
@@ -898,7 +1066,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   : sorted.length === 0
                   ? (
                       <tr>
-                        <td colSpan={isAdminOrSelector ? 7 : 6}>
+                        <td colSpan={7}>
                           <div className="empty-state" style={{ padding: '48px 0' }}>
                             <div className="empty-icon"><Sprout size={20} /></div>
                             <div className="empty-title">
@@ -908,7 +1076,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                             </div>
                             <div className="empty-sub" style={{ marginTop: 4 }}>
                               {search && <button className="btn btn-ghost" style={{ fontSize: 12, marginTop: 6 }} onClick={() => setSearch('')}><X size={11} /> Effacer la recherche</button>}
-                              {!search && canCreate && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={openNewVariete}>+ Créer une variété</button>}
+                              {!search && canCreateVariete && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={openNewVariete}>+ Créer une variété</button>}
                             </div>
                           </div>
                         </td>
@@ -1015,60 +1183,94 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
 
                           {/* Actions */}
-                          {isAdminOrSelector && (
-                            <td onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ paddingRight: 12 }}>
-                              <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                                {!isArchived && (
-                                  <>
-                                    <button
-                                      className="btn btn-ghost"
-                                      style={{ width: 30, height: 30, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', ...dStyle }}
-                                      onClick={() => { if (allowed) openEdit(v) }}
-                                      title={allowed ? 'Modifier' : dTitle}
-                                    >
-                                      <Edit2 size={13} />
-                                    </button>
-                                    <button
-                                      className="btn btn-ghost"
-                                      style={{ width: 30, height: 30, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--primary)' : undefined, ...dStyle }}
-                                      onClick={() => { if (allowed) openZones(v) }}
-                                      title={allowed ? 'Zones agro-écologiques' : dTitle}
-                                    >
-                                      <MapPin size={13} />
-                                    </button>
-                                    <button
-                                      className="btn btn-ghost"
-                                      style={{ width: 30, height: 30, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--gold-dark)' : undefined, ...dStyle }}
-                                      onClick={() => { if (allowed) { setArchiveTarget(v); setArchiveComment('') } }}
-                                      title={allowed ? 'Archiver' : dTitle}
-                                    >
-                                      <Archive size={13} />
-                                    </button>
-                                  </>
-                                )}
-                                {isArchived && allowed && (
-                                  <>
-                                    <button
-                                      className="btn btn-ghost"
-                                      style={{ width: 30, height: 30, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green-700)' }}
-                                      onClick={() => setDesarchiveTarget(v)}
-                                      title="Désarchiver"
-                                    >
-                                      <RotateCcw size={13} />
-                                    </button>
-                                    <button
-                                      className="btn btn-ghost"
-                                      style={{ width: 30, height: 30, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red-600)' }}
-                                      onClick={() => { setDeleteTarget(v); setDeleteComment('') }}
-                                      title="Supprimer définitivement"
-                                    >
-                                      <Trash2 size={13} />
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                            </td>
-                          )}
+                          <td onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ paddingRight: 12 }}>
+                            <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end', alignItems: 'center' }}>
+                              {/* Fiche variétale — visible pour tous quand disponible */}
+                              {v.ficheVarietalePath ? (
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ height: 28, padding: '0 8px', borderRadius: 7, display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', fontWeight: 600 }}
+                                  onClick={() => setPdfViewerModal({ url: endpoints.varietyFicheUrl(v.id), title: `Fiche variétale — ${v.nomVariete}`, downloadName: `fiche-${v.codeVariete}`, ctx: { type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}` } })}
+                                  title="Lire la fiche variétale"
+                                >
+                                  <FileText size={11} /> Fiche
+                                </button>
+                              ) : isAdminOrSelector && !isArchived && allowed ? (
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}
+                                  onClick={() => setPdfUploadModal({ type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}` })}
+                                  title="Uploader la fiche variétale PDF"
+                                >
+                                  <Upload size={12} />
+                                </button>
+                              ) : null}
+                              {/* Historique des modifications */}
+                              {isAdminOrSelector && (
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}
+                                  onClick={() => openHistorique(v)}
+                                  title="Historique des modifications"
+                                >
+                                  <History size={13} />
+                                </button>
+                              )}
+                              {/* Gestion admin/sélectionneur */}
+                              {isAdminOrSelector && (
+                                <>
+                                  {!isArchived && (
+                                    <>
+                                      <button
+                                        className="btn btn-ghost"
+                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', ...dStyle }}
+                                        onClick={() => { if (allowed) openEdit(v) }}
+                                        title={allowed ? 'Modifier' : dTitle}
+                                      >
+                                        <Edit2 size={13} />
+                                      </button>
+                                      <button
+                                        className="btn btn-ghost"
+                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--primary)' : undefined, ...dStyle }}
+                                        onClick={() => { if (allowed) openZones(v) }}
+                                        title={allowed ? 'Zones agro-écologiques' : dTitle}
+                                      >
+                                        <MapPin size={13} />
+                                      </button>
+                                      <button
+                                        className="btn btn-ghost"
+                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--gold-dark)' : undefined, ...dStyle }}
+                                        onClick={() => { if (allowed) { setArchiveTarget(v); setArchiveComment('') } }}
+                                        title={allowed ? 'Archiver' : dTitle}
+                                      >
+                                        <Archive size={13} />
+                                      </button>
+                                    </>
+                                  )}
+                                  {isArchived && allowed && (
+                                    <>
+                                      <button
+                                        className="btn btn-ghost"
+                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green-700)' }}
+                                        onClick={() => setDesarchiveTarget(v)}
+                                        title="Désarchiver"
+                                      >
+                                        <RotateCcw size={13} />
+                                      </button>
+                                      <button
+                                        className="btn btn-ghost"
+                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red-600)' }}
+                                        onClick={() => { setDeleteTarget(v); setDeleteComment('') }}
+                                        title="Supprimer définitivement"
+                                      >
+                                        <Trash2 size={13} />
+                                      </button>
+                                    </>
+                                  )}
+                                </>
+                              )}
+                            </div>
+                          </td>
                         </tr>
                       )
                     })
@@ -1130,57 +1332,42 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           onClose={() => { setShowVarieteForm(false); setEditVariete(null) }}
         >
           <form onSubmit={submitVariete}>
-            {!editVariete && (
-              <>
-                <FormRow>
-                  <Field label="Code variété" required hint="ex : MIL-SOUNA3">
-                    <FormInput value={varieteForm.codeVariete} onChange={e => setVarieteForm(f => ({ ...f, codeVariete: e.target.value.toUpperCase() }))} placeholder="MIL-SOUNA3" required />
-                  </Field>
-                  <Field label="Nom variété" required>
-                    <FormInput value={varieteForm.nomVariete} onChange={e => setVarieteForm(f => ({ ...f, nomVariete: e.target.value }))} placeholder="Souna III" required />
-                  </Field>
-                </FormRow>
-                <Field label="Espèce" required>
-                  <FormSelect value={varieteForm.idEspece} onChange={e => setVarieteForm(f => ({ ...f, idEspece: e.target.value }))} required>
-                    <option value="">— Sélectionner une espèce —</option>
-                    {species.map(s => <option key={s.id} value={s.id}>{s.codeEspece} — {s.nomCommun}</option>)}
-                  </FormSelect>
+            {/* En-tête identité — code (immuable) + espèce (immuable) */}
+            {editVariete ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', marginBottom: 18 }}>
+                <code style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>{editVariete.codeVariete}</code>
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>·</span>
+                <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{editVariete.espece?.codeEspece} — {editVariete.espece?.nomCommun}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>Code et espèce immuables</span>
+              </div>
+            ) : (
+              <FormRow>
+                <Field label="Code variété" required hint="ex : MIL-SOUNA3">
+                  <FormInput value={varieteForm.codeVariete} onChange={e => setVarieteForm(f => ({ ...f, codeVariete: e.target.value.toUpperCase() }))} placeholder="MIL-SOUNA3" required />
                 </Field>
-                <FormRow>
-                  <Field label="Origine">
-                    <FormInput value={varieteForm.origine} onChange={e => setVarieteForm(f => ({ ...f, origine: e.target.value }))} placeholder="ISRA-CNRA Bambey" />
-                  </Field>
-                  <Field label="Sélectionneur principal">
-                    <FormInput value={varieteForm.selectionneurPrincipal} onChange={e => setVarieteForm(f => ({ ...f, selectionneurPrincipal: e.target.value }))} placeholder="Équipe sélection ISRA" />
-                  </Field>
-                </FormRow>
-                <FormRow>
-                  <Field label="Année d'obtention">
-                    <FormInput type="number" value={varieteForm.anneeCreation} onChange={e => setVarieteForm(f => ({ ...f, anneeCreation: e.target.value }))} placeholder="1985" min="1900" max="2030" />
-                  </Field>
-                  <Field label="Cycle min (j)">
-                    <FormInput type="number" value={varieteForm.cycleMin} onChange={e => setVarieteForm(f => ({ ...f, cycleMin: e.target.value }))} placeholder="85" min="1" max="365" />
-                  </Field>
-                  <Field label="Cycle max (j)">
-                    <FormInput type="number" value={varieteForm.cycleMax} onChange={e => setVarieteForm(f => ({ ...f, cycleMax: e.target.value }))} placeholder="95" min="1" max="365" />
-                  </Field>
-                </FormRow>
-                <Field label="Pedigree" hint="Généalogie génétique — ex : 55-437 × CE 181-22">
-                  <FormInput value={varieteForm.pedigree} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVarieteForm(f => ({ ...f, pedigree: e.target.value }))} placeholder="Sélection ISRA-CNRA Bambey" />
+                <Field label="Nom variété" required>
+                  <FormInput value={varieteForm.nomVariete} onChange={e => setVarieteForm(f => ({ ...f, nomVariete: e.target.value }))} placeholder="Souna III" required />
                 </Field>
-                <FormRow>
-                  <Field label="Type de grain" hint="ex : Virginia (Bold), Grain perlé (Blanc)">
-                    <FormInput value={varieteForm.typeGrain} onChange={e => setVarieteForm(f => ({ ...f, typeGrain: e.target.value }))} placeholder="Virginia (Bold)" />
-                  </Field>
-                  <Field label="Rendement min (t/ha)">
-                    <FormInput type="number" value={varieteForm.rendementMin} onChange={e => setVarieteForm(f => ({ ...f, rendementMin: e.target.value }))} placeholder="2.5" min="0" step="0.1" />
-                  </Field>
-                  <Field label="Rendement max (t/ha)">
-                    <FormInput type="number" value={varieteForm.rendementMax} onChange={e => setVarieteForm(f => ({ ...f, rendementMax: e.target.value }))} placeholder="3.5" min="0" step="0.1" />
-                  </Field>
-                </FormRow>
-              </>
+              </FormRow>
             )}
+
+            {/* Espèce — sélection uniquement à la création */}
+            {!editVariete && (
+              <Field label="Espèce" required>
+                <FormSelect value={varieteForm.idEspece} onChange={e => setVarieteForm(f => ({ ...f, idEspece: e.target.value }))} required>
+                  <option value="">— Sélectionner une espèce —</option>
+                  {species.map(s => <option key={s.id} value={s.id}>{s.codeEspece} — {s.nomCommun}</option>)}
+                </FormSelect>
+              </Field>
+            )}
+
+            {/* Nom variété — affiché séparément en mode édition */}
+            {editVariete && (
+              <Field label="Nom variété" required>
+                <FormInput value={varieteForm.nomVariete} onChange={e => setVarieteForm(f => ({ ...f, nomVariete: e.target.value }))} placeholder="Souna III" required />
+              </Field>
+            )}
+
             <Field label="Statut" required>
               <FormSelect value={varieteForm.statutVariete} onChange={e => setVarieteForm(f => ({ ...f, statutVariete: e.target.value }))}>
                 <option value="DIFFUSEE">Diffusée</option>
@@ -1188,7 +1375,49 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <option value="RETIREE">Retirée</option>
               </FormSelect>
             </Field>
-            <FormActions onCancel={() => { setShowVarieteForm(false); setEditVariete(null) }} loading={saving} submitLabel={editVariete ? 'Mettre à jour' : 'Créer la variété'} />
+
+            <FormRow>
+              <Field label="Origine">
+                <FormInput value={varieteForm.origine} onChange={e => setVarieteForm(f => ({ ...f, origine: e.target.value }))} placeholder="ISRA-CNRA Bambey" />
+              </Field>
+              <Field label="Sélectionneur principal">
+                <FormInput value={varieteForm.selectionneurPrincipal} onChange={e => setVarieteForm(f => ({ ...f, selectionneurPrincipal: e.target.value }))} placeholder="Équipe sélection ISRA" />
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Année d'obtention">
+                <FormInput type="number" value={varieteForm.anneeCreation} onChange={e => setVarieteForm(f => ({ ...f, anneeCreation: e.target.value }))} placeholder="1985" min="1900" max="2030" />
+              </Field>
+              <Field label="Cycle min (j)">
+                <FormInput type="number" value={varieteForm.cycleMin} onChange={e => setVarieteForm(f => ({ ...f, cycleMin: e.target.value }))} placeholder="85" min="1" max="365" />
+              </Field>
+              <Field label="Cycle max (j)">
+                <FormInput type="number" value={varieteForm.cycleMax} onChange={e => setVarieteForm(f => ({ ...f, cycleMax: e.target.value }))} placeholder="95" min="1" max="365" />
+              </Field>
+            </FormRow>
+            <Field label="Pedigree" hint="Généalogie génétique — ex : 55-437 × CE 181-22">
+              <FormInput value={varieteForm.pedigree} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVarieteForm(f => ({ ...f, pedigree: e.target.value }))} placeholder="Sélection ISRA-CNRA Bambey" />
+            </Field>
+            <FormRow>
+              <Field label="Type de grain" hint="ex : Virginia (Bold), Grain perlé (Blanc)">
+                <FormInput value={varieteForm.typeGrain} onChange={e => setVarieteForm(f => ({ ...f, typeGrain: e.target.value }))} placeholder="Virginia (Bold)" />
+              </Field>
+              <Field label="Rendement min (t/ha)">
+                <FormInput type="number" value={varieteForm.rendementMin} onChange={e => setVarieteForm(f => ({ ...f, rendementMin: e.target.value }))} placeholder="2.5" min="0" step="0.1" />
+              </Field>
+              <Field label="Rendement max (t/ha)">
+                <FormInput type="number" value={varieteForm.rendementMax} onChange={e => setVarieteForm(f => ({ ...f, rendementMax: e.target.value }))} placeholder="3.5" min="0" step="0.1" />
+              </Field>
+            </FormRow>
+
+            {editVariete && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', marginTop: 4 }}>
+                <History size={13} color="var(--text-muted)" />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Chaque modification sera tracée avec votre identifiant et la date.</span>
+              </div>
+            )}
+
+            <FormActions onCancel={() => { setShowVarieteForm(false); setEditVariete(null) }} loading={saving} submitLabel={editVariete ? 'Enregistrer les modifications' : 'Créer la variété'} />
           </form>
         </Modal>
       )}
@@ -1292,6 +1521,376 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             <FormActions onCancel={() => setZonesTarget(null)} loading={savingZones} submitLabel="Enregistrer les zones" />
           </form>
         </Modal>
+      )}
+
+      {/* ── Modal historique des modifications ── */}
+      {historiqueTarget && (
+        <Modal
+          title={`Historique — ${historiqueTarget.codeVariete}`}
+          subtitle={`${historiqueTarget.nomVariete} · modifications traçées`}
+          onClose={() => { setHistoriqueTarget(null); setHistoriqueData([]) }}
+        >
+          {loadingHistorique ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0', gap: 12 }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #bfdbfe', borderTopColor: '#2563eb', animation: 'spin 0.8s linear infinite' }} />
+            </div>
+          ) : historiqueData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+              <History size={32} style={{ opacity: 0.25, marginBottom: 10 }} />
+              <div style={{ fontSize: 13 }}>Aucune modification enregistrée pour cette variété.</div>
+              <div style={{ fontSize: 12, marginTop: 6, color: 'var(--text-muted)' }}>Les modifications futures seront tracées ici.</div>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                    {['Date', 'Champ modifié', 'Ancienne valeur', 'Nouvelle valeur', 'Par'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {historiqueData.map((h: any, i: number) => (
+                    <tr key={h.id ?? i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
+                      <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 12 }}>
+                        {new Date(h.dateModification).toLocaleString('fr-SN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{h.champ}</td>
+                      <td style={{ padding: '9px 12px', color: 'var(--text-muted)', maxWidth: 180 }}>
+                        {h.ancienneValeur
+                          ? <span style={{ background: '#fef2f2', color: '#dc2626', padding: '1px 6px', borderRadius: 4, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>{h.ancienneValeur}</span>
+                          : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>—</span>}
+                      </td>
+                      <td style={{ padding: '9px 12px', maxWidth: 180 }}>
+                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>{h.nouvelleValeur ?? '—'}</span>
+                      </td>
+                      <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 99 }}>
+                          <User size={10} />
+                          {h.modifiePar}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ padding: '10px 12px', fontSize: 11.5, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', textAlign: 'right' }}>
+                {historiqueData.length} entrée{historiqueData.length > 1 ? 's' : ''} · du plus récent au plus ancien
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* ── Modal historique admin espèce ── */}
+      {especeHistoriqueTarget && (
+        <Modal
+          title={`Audit — ${especeHistoriqueTarget.codeEspece}`}
+          subtitle={`${especeHistoriqueTarget.nomCommun} · actions administrateur tracées`}
+          onClose={() => { setEspeceHistoriqueTarget(null); setEspeceHistoriqueData([]) }}
+        >
+          {loadingEspeceHistorique ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', border: '2px solid #bfdbfe', borderTopColor: '#2563eb', animation: 'spin 0.8s linear infinite' }} />
+            </div>
+          ) : especeHistoriqueData.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+              <History size={32} style={{ opacity: 0.25, marginBottom: 10 }} />
+              <div style={{ fontSize: 13 }}>Aucune action enregistrée pour cette espèce.</div>
+              <div style={{ fontSize: 12, marginTop: 6 }}>Les créations et modifications futures seront tracées ici.</div>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                    {['Date', 'Action', 'Champ', 'Ancienne valeur', 'Nouvelle valeur', 'Par'].map(h => (
+                      <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {especeHistoriqueData.map((h: any, i: number) => (
+                    <tr key={h.id ?? i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
+                      <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', color: 'var(--text-muted)', fontSize: 12 }}>
+                        {new Date(h.dateModification).toLocaleString('fr-SN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </td>
+                      <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                        <span style={{
+                          fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                          background: h.action === 'CREATION' ? '#f0fdf4' : h.action === 'SUPPRESSION' ? '#fef2f2' : '#eff6ff',
+                          color:      h.action === 'CREATION' ? '#16a34a' : h.action === 'SUPPRESSION' ? '#dc2626' : '#2563eb',
+                        }}>{h.action}</span>
+                      </td>
+                      <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{h.champ ?? '—'}</td>
+                      <td style={{ padding: '9px 12px', color: 'var(--text-muted)', maxWidth: 160 }}>
+                        {h.ancienneValeur
+                          ? <span style={{ background: '#fef2f2', color: '#dc2626', padding: '1px 6px', borderRadius: 4, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>{h.ancienneValeur}</span>
+                          : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>—</span>}
+                      </td>
+                      <td style={{ padding: '9px 12px', maxWidth: 160 }}>
+                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>{h.nouvelleValeur ?? '—'}</span>
+                      </td>
+                      <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 99 }}>
+                          <User size={10} />
+                          {h.modifiePar}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div style={{ padding: '10px 12px', fontSize: 11.5, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', textAlign: 'right' }}>
+                {especeHistoriqueData.length} entrée{especeHistoriqueData.length > 1 ? 's' : ''} · du plus récent au plus ancien
+              </div>
+            </div>
+          )}
+        </Modal>
+      )}
+
+      {/* ── Modal visionneur PDF ── */}
+      {pdfViewerModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+          onClick={() => setPdfViewerModal(null)}
+        >
+          <div
+            style={{
+              background: 'var(--surface)', borderRadius: 16,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.25)',
+              width: '100%', maxWidth: 900,
+              maxHeight: '92vh',
+              display: 'flex', flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '16px 20px', borderBottom: '1px solid var(--border)',
+              background: 'var(--surface-2)',
+            }}>
+              <div style={{ width: 36, height: 36, borderRadius: 9, background: '#eff6ff', border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <FileText size={16} color="#2563eb" />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pdfViewerModal.title}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 1 }}>Document PDF — lecture en ligne</div>
+              </div>
+              <button
+                onClick={() => setPdfViewerModal(null)}
+                style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--surface-3)', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}
+                title="Fermer"
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            {/* Corps du document */}
+            <div style={{ flex: 1, minHeight: 0, position: 'relative', background: '#f1f5f9' }}>
+              {pdfBlobLoading && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: '#f1f5f9' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #bfdbfe', borderTopColor: '#2563eb', animation: 'spin 0.8s linear infinite' }} />
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Chargement du document…</span>
+                </div>
+              )}
+              {pdfBlobMeta && (
+                pdfBlobMeta.isImage
+                  ? <div style={{ width: '100%', minHeight: 520, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, boxSizing: 'border-box' }}>
+                      <img src={pdfBlobMeta.url} alt={pdfViewerModal.title} style={{ maxWidth: '100%', maxHeight: 560, objectFit: 'contain', borderRadius: 8, boxShadow: '0 4px 24px rgba(0,0,0,0.12)' }} />
+                    </div>
+                  : <iframe src={pdfBlobMeta.url} title={pdfViewerModal.title} style={{ width: '100%', height: '100%', minHeight: 520, border: 'none', display: 'block' }} />
+              )}
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Lecture seule dans votre navigateur.</span>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* Boutons gestion — admin/sélectionneur seulement */}
+                {isAdminOrSelector && pdfViewerModal.ctx && (
+                  confirmDelete ? (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 12px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca' }}>
+                      <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>Supprimer définitivement ?</span>
+                      <button
+                        onClick={deleteDocument}
+                        disabled={deletingDoc}
+                        style={{ padding: '4px 12px', borderRadius: 6, background: '#dc2626', border: 'none', color: '#fff', fontSize: 12, fontWeight: 600, cursor: deletingDoc ? 'default' : 'pointer', opacity: deletingDoc ? 0.7 : 1 }}
+                      >
+                        {deletingDoc ? '…' : 'Confirmer'}
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(false)}
+                        style={{ padding: '4px 10px', borderRadius: 6, background: 'var(--surface)', border: '1px solid var(--border)', fontSize: 12, cursor: 'pointer', color: 'var(--text-secondary)' }}
+                      >
+                        Annuler
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => { const ctx = pdfViewerModal.ctx!; setPdfViewerModal(null); setPdfUploadModal(ctx) }}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+                      >
+                        <Upload size={13} /> Remplacer
+                      </button>
+                      <button
+                        onClick={() => setConfirmDelete(true)}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#dc2626', fontSize: 13, fontWeight: 500, cursor: 'pointer' }}
+                      >
+                        <Trash2 size={13} /> Supprimer
+                      </button>
+                    </>
+                  )
+                )}
+                {/* Télécharger */}
+                {pdfBlobMeta && (
+                  <a
+                    href={pdfBlobMeta.url}
+                    download={pdfViewerModal.downloadName}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 16px', borderRadius: 8, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, textDecoration: 'none', cursor: 'pointer' }}
+                  >
+                    <Download size={14} /> Télécharger
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal upload PDF ── */}
+      {pdfUploadModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(4px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 24,
+          }}
+          onClick={() => { if (!uploading) setPdfUploadModal(null) }}
+        >
+          <div
+            style={{
+              background: 'var(--surface)', borderRadius: 16,
+              boxShadow: '0 24px 64px rgba(0,0,0,0.2)',
+              width: '100%', maxWidth: 480,
+              display: 'flex', flexDirection: 'column',
+              overflow: 'hidden',
+            }}
+            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+              <div style={{ width: 36, height: 36, borderRadius: 9, background: '#f0fdf4', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Upload size={16} color="#16a34a" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {pdfUploadModal.type === 'fiche' ? 'Fiche variétale' : 'Itinéraire technique'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>{pdfUploadModal.name}</div>
+              </div>
+              {!uploading && (
+                <button
+                  onClick={() => setPdfUploadModal(null)}
+                  style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--surface-3)', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+
+            {/* Body */}
+            <div style={{ padding: 24 }}>
+              {/* Info contextuelle */}
+              <div style={{ display: 'flex', gap: 10, padding: '10px 14px', borderRadius: 8, background: '#eff6ff', border: '1px solid #bfdbfe', marginBottom: 20 }}>
+                <FileText size={15} color="#2563eb" style={{ flexShrink: 0, marginTop: 1 }} />
+                <div style={{ fontSize: 13, color: '#1e40af', lineHeight: 1.55 }}>
+                  {pdfUploadModal.type === 'fiche'
+                    ? 'La fiche variétale décrit les caractéristiques agronomiques de cette variété spécifique.'
+                    : 'L\'itinéraire technique s\'applique à toutes les variétés de cette espèce.'}
+                  {' '}Le fichier PDF remplacera toute version précédente.
+                </div>
+              </div>
+
+              {/* Zone de dépôt */}
+              <div
+                style={{
+                  border: `2px dashed ${dragOver ? '#2563eb' : 'var(--border-strong)'}`,
+                  borderRadius: 12,
+                  background: dragOver ? '#eff6ff' : 'var(--surface-2)',
+                  padding: '32px 24px',
+                  textAlign: 'center',
+                  cursor: uploading ? 'default' : 'pointer',
+                  transition: 'all 0.18s',
+                }}
+                onClick={() => { if (!uploading) fileInputRef.current?.click() }}
+                onDragOver={(e: React.DragEvent) => { e.preventDefault(); if (!uploading) setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e: React.DragEvent) => {
+                  e.preventDefault(); setDragOver(false)
+                  if (uploading) return
+                  const file = e.dataTransfer.files?.[0]
+                  if (file) uploadPdf(file)
+                }}
+              >
+                {uploading ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', border: '3px solid #bfdbfe', borderTopColor: '#2563eb', animation: 'spin 0.8s linear infinite' }} />
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>Upload en cours…</div>
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ width: 48, height: 48, borderRadius: 12, background: dragOver ? '#dbeafe' : 'var(--surface-3)', border: `1px solid ${dragOver ? '#93c5fd' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px', transition: 'all 0.18s' }}>
+                      <Upload size={20} color={dragOver ? '#2563eb' : 'var(--text-secondary)'} />
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: dragOver ? '#1d4ed8' : 'var(--text-primary)', marginBottom: 6 }}>
+                      Glissez votre fichier ici
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                      ou <span style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'underline', cursor: 'pointer' }}>cliquez pour parcourir</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 10, padding: '5px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 6, display: 'inline-block' }}>
+                      PDF, JPG, PNG, WEBP · Taille max : 30 Mo
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.webp,.gif,application/pdf,image/*"
+                style={{ display: 'none' }}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  const file = e.target.files?.[0]
+                  if (file) { uploadPdf(file); e.target.value = '' }
+                }}
+              />
+            </div>
+
+            {/* Footer */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-ghost"
+                onClick={() => { if (!uploading) setPdfUploadModal(null) }}
+                disabled={uploading}
+                style={{ fontSize: 13 }}
+              >
+                Annuler
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

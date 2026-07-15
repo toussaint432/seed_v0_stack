@@ -137,6 +137,11 @@ public class LotSemencier {
     @Column(name = "quantite_semence_src_kg", precision = 14, scale = 2)
     private BigDecimal quantiteSemenceSrcKg;
 
+    /** Chemin relatif du certificat officiel (PDF ou image) attaché à ce lot */
+    @Size(max = 500)
+    @Column(name = "certificat_path", length = 500)
+    private String certificatPath;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) createdAt = Instant.now();

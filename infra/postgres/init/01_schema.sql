@@ -323,11 +323,13 @@ CREATE TABLE IF NOT EXISTS commande (
   client                      VARCHAR(200) NOT NULL,
   statut                      VARCHAR(30)  NOT NULL DEFAULT 'SOUMISE'
                               CHECK (statut IN ('SOUMISE','ACCEPTEE','EN_PREPARATION',
-                                                'LIVREE','ANNULEE','REJETEE')),
+                                                'LIVREE','ANNULEE','REJETEE',
+                                                'EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON')),
   username_acheteur           VARCHAR(150),
   id_organisation_acheteur    BIGINT       REFERENCES organisation(id),
   id_organisation_fournisseur BIGINT       REFERENCES organisation(id),
   observations                TEXT,
+  code_transfert_genere       VARCHAR(80),
   created_at                  TIMESTAMP    DEFAULT now()
 );
 
@@ -337,7 +339,9 @@ CREATE TABLE IF NOT EXISTS ligne_commande (
   id_variete        BIGINT        NOT NULL REFERENCES variete(id),
   id_generation     BIGINT        REFERENCES generation_semence(id),
   quantite_demandee NUMERIC(14,2) NOT NULL CHECK (quantite_demandee > 0),
-  unite             VARCHAR(10)   NOT NULL DEFAULT 'kg'
+  unite             VARCHAR(10)   NOT NULL DEFAULT 'kg',
+  quantite_proposee NUMERIC(14,2),
+  id_lot_propose    BIGINT        REFERENCES lot_semencier(id)
 );
 
 CREATE TABLE IF NOT EXISTS allocation_commande (

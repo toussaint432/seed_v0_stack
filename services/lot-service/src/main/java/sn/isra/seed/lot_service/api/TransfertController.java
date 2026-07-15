@@ -1,14 +1,18 @@
 package sn.isra.seed.lot_service.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import sn.isra.seed.lot_service.entity.HistoriqueStatutLot;
 import sn.isra.seed.lot_service.entity.OutboxEvent;
 import sn.isra.seed.lot_service.entity.TransfertLot;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.entity.enums.StatutTransfert;
 import sn.isra.seed.lot_service.kafka.LotEventProducer;
+import sn.isra.seed.lot_service.repo.HistoriqueStatutLotRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
 import sn.isra.seed.lot_service.repo.OutboxEventRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
+
+import java.math.BigDecimal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -27,11 +31,12 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TransfertController {
 
-    private final TransfertLotRepo transfertRepo;
-    private final LotRepo          lotRepo;
-    private final OutboxEventRepo  outboxRepo;
-    private final LotEventProducer producer;
-    private final ObjectMapper     om;
+    private final TransfertLotRepo      transfertRepo;
+    private final LotRepo               lotRepo;
+    private final HistoriqueStatutLotRepo historiqueRepo;
+    private final OutboxEventRepo        outboxRepo;
+    private final LotEventProducer       producer;
+    private final ObjectMapper           om;
 
     /* ── GET /api/transferts — tous les transferts du connecté ── */
     @GetMapping
@@ -79,10 +84,19 @@ public class TransfertController {
         t.setStatut(StatutTransfert.ACCEPTE);
         t.setDateAcceptation(LocalDate.now());
 
-        // Mise à jour statut lot — quantiteNette déjà déduite lors de l'initiation
+        // Mise à jour statut lot — quantiteNette déjà déduite lors de l'initiation du transfert.
+        // Ne passer à TRANSFERE que si le lot est réellement épuisé (transfert partiel possible).
         lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
-            lot.setStatutLot(StatutLot.TRANSFERE);
-            lotRepo.save(lot);
+            StatutLot ancienStatut = lot.getStatutLot();
+            if (lot.getQuantiteNette() == null || lot.getQuantiteNette().compareTo(BigDecimal.ZERO) <= 0) {
+                lot.setStatutLot(StatutLot.TRANSFERE);
+                lotRepo.save(lot);
+                historiqueRepo.save(HistoriqueStatutLot.of(
+                    lot.getId(), ancienStatut, StatutLot.TRANSFERE, username,
+                    "Lot épuisé — transfert " + t.getCodeTransfert() + " accepté ("
+                    + t.getQuantite() + " kg)"));
+            }
+            // Transfert partiel : quantiteNette > 0 → statut inchangé, lot reste visible dans le catalogue
         });
 
         TransfertLot saved = transfertRepo.save(t);

@@ -46,6 +46,10 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 22MB
 
 management:
   endpoints:
@@ -61,6 +65,9 @@ management:
 
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+uploads:
+  dir: ${UPLOADS_DIR:/app/uploads}
 
 logging:
   level:

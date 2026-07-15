@@ -51,6 +51,9 @@ public class Commande {
     @Column(columnDefinition = "TEXT")
     private String observations;
 
+    @Column(name = "code_transfert_genere", length = 80)
+    private String codeTransfertGenere;
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 

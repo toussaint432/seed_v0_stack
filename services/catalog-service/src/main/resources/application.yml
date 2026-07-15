@@ -37,6 +37,12 @@ spring:
     baseline-version: 0  # 0 = avant V1 → toutes les migrations V1-V7 s'exécutent sur DB fraîche
     out-of-order: false
     validate-on-migrate: true
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 30MB
+      max-request-size: 35MB
+      file-size-threshold: 2MB
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
   jackson:
@@ -60,6 +66,10 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+
+uploads:
+  # Répertoire de stockage des PDF (monté via volume Docker)
+  dir: ${UPLOADS_DIR:/app/uploads}
 
 cors:
   # Origins autorisées — séparées par virgule ; configurable via env CORS_ALLOWED_ORIGINS

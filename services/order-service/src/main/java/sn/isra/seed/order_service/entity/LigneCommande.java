@@ -27,4 +27,10 @@ public class LigneCommande {
   private BigDecimal quantiteDemandee;
 
   private String unite;
+
+  @Column(name="quantite_proposee")
+  private BigDecimal quantiteProposee;
+
+  @Column(name="id_lot_propose")
+  private Long idLotPropose;
 }

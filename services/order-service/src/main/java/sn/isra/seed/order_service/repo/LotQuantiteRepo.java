@@ -66,13 +66,30 @@ public interface LotQuantiteRepo extends JpaRepository<LotSemencierOrder, Long> 
      * La clause AND quantite_nette >= :qte protège contre le passage sous zéro :
      * si le retour vaut 0, c'est qu'il n'y avait plus assez → l'appelant lance une erreur.
      */
+    /**
+     * Débite le lot par ID et passe son statut à TRANSFERE si la quantité restante atteint zéro.
+     * Transfert partiel : si quantite_nette - qte > 0, le statut reste inchangé (DISPONIBLE).
+     */
     @Modifying
     @Query(value = """
         UPDATE lot_semencier
-           SET quantite_nette = quantite_nette - :qte
+           SET quantite_nette = quantite_nette - :qte,
+               statut_lot = CASE WHEN (quantite_nette - :qte) <= 0 THEN 'TRANSFERE' ELSE statut_lot END
          WHERE id = :idLot
            AND quantite_nette >= :qte
         """, nativeQuery = true)
     int debitLotById(@Param("idLot") Long idLot,
                      @Param("qte") BigDecimal qte);
+
+    /** Enregistre une entrée d'historique de statut pour un lot (utilisé par order-service). */
+    @Modifying
+    @Query(value = """
+        INSERT INTO historique_statut_lot (id_lot, ancien_statut, nouveau_statut, username, commentaire)
+        VALUES (:idLot, :ancienStatut, :nouveauStatut, :username, :commentaire)
+        """, nativeQuery = true)
+    void insertHistoriqueTransfert(@Param("idLot") Long idLot,
+                                   @Param("ancienStatut") String ancienStatut,
+                                   @Param("nouveauStatut") String nouveauStatut,
+                                   @Param("username") String username,
+                                   @Param("commentaire") String commentaire);
 }

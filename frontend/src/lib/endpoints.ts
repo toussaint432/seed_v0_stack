@@ -32,6 +32,10 @@ export const endpoints = {
   certificationById:      (id: number) => `${LOT}/certifications/${id}`,
   certificationUpload:    (id: number) => `${LOT}/certifications/${id}/upload`,
   certificationDocument:  (id: number) => `${LOT}/certifications/${id}/document`,
+  lotCertificatUpload: (id: number) => `${LOT}/lots/${id}/certificat`,
+  lotCertificatUrl:    (id: number) => `${LOT}/lots/${id}/certificat`,
+  lotCertificatDelete: (id: number) => `${LOT}/lots/${id}/certificat`,
+
   controls:         `${LOT}/controls`,
   controlById:      (id: number) => `${LOT}/controls/${id}`,
   programs:         `${LOT}/programs`,
@@ -45,6 +49,12 @@ export const endpoints = {
   departements:         `${CATALOG}/departements`,
   departementsParRegion:(regionId: number) => `${CATALOG}/departements?regionId=${regionId}`,
   varietyZones:         (id: number) => `${CATALOG}/varieties/${id}/zones`,
+  varietyFicheUpload:   (id: number) => `${CATALOG}/varieties/${id}/fiche-varietale`,
+  varietyFicheUrl:      (id: number) => `${CATALOG}/varieties/${id}/fiche-varietale`,
+  varietyHistorique:    (id: number) => `${CATALOG}/varieties/${id}/historique`,
+  especeItineraireUpload: (id: number) => `${CATALOG}/especes/${id}/itineraire-technique`,
+  especeItineraireUrl:    (id: number) => `${CATALOG}/especes/${id}/itineraire-technique`,
+  especeHistorique:       (id: number) => `${CATALOG}/species/${id}/historique`,
 
   // ── Lot Service — Multiplicateur (isolation par org) ──
   lotsCatalogueG3: `${LOT}/lots/catalogue-g3`,
@@ -76,7 +86,13 @@ export const endpoints = {
   ordersATraiter:      `${ORDER}/orders/a-traiter`,
   orderStatut:         (id: number) => `${ORDER}/orders/${id}/statut`,
   /** Valider ET livrer une commande G3 en une seule action (UPSemCL → Multiplicateur) */
-  ordersValiderEtLivrer: (id: number) => `${ORDER}/orders/${id}/valider-et-livrer`,
+  ordersValiderEtLivrer:   (id: number) => `${ORDER}/orders/${id}/valider-et-livrer`,
+  /** Workflow négociation UPSemCL ↔ Multiplicateur */
+  orderProposer:           (id: number) => `${ORDER}/orders/${id}/proposer`,
+  orderAccepterProposition:(id: number) => `${ORDER}/orders/${id}/accepter-proposition`,
+  orderRefuserProposition: (id: number) => `${ORDER}/orders/${id}/refuser-proposition`,
+  orderFaireTransfert:     (id: number) => `${ORDER}/orders/${id}/faire-transfert`,
+  orderAccuserReception:   (id: number) => `${ORDER}/orders/${id}/accuser-reception`,
   organisations:    `${ORDER}/organisations`,
   organisationById: (id: number) => `${ORDER}/organisations/${id}`,
 

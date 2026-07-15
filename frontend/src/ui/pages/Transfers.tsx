@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import {
   ArrowRightLeft, Plus, RefreshCw, Search, X, Eye,
-  Send, CheckCircle2, Truck, Clock, FileText, Download, Receipt
+  CheckCircle2, Truck, Clock, FileText, Download, Receipt,
+  XCircle, ClipboardCheck
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -10,7 +11,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
 import { keycloak } from '../../lib/keycloak'
 import { generateTransferDoc, generateNumero, TransferDocData, LotPdfData, PartiePdf } from '../../lib/pdf/generateTransferDoc'
-import { generateFacture, FactureData } from '../../lib/pdf/generateFacture'
+import { generateFacture, FactureData, FactureResult } from '../../lib/pdf/generateFacture'
 
 interface Props { roleKey: string }
 const PAGE_SIZE = 10
@@ -74,6 +75,7 @@ export function Transfers({ roleKey }: Props) {
   const [acceptSiteCode, setAcceptSiteCode] = useState('')
   const [acceptSaving, setAcceptSaving] = useState(false)
   const [saving, setSaving] = useState(false)
+  // blobUrl ouvert dans un onglet → pas besoin de state docViewer
 
   const canCreate = ['seed-admin', 'seed-selector', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
   const rule = TRANSFER_RULES[roleKey]
@@ -104,8 +106,8 @@ export function Transfers({ roleKey }: Props) {
   const [factureTva, setFactureTva] = useState('0')
   const [factureConditions, setFactureConditions] = useState('')
 
-  // Rôles éligibles à émettre des factures (émetteur du transfert)
-  const canFacture = ['seed-selector', 'seed-upsemcl', 'seed-admin'].includes(roleKey)
+  // Rôles éligibles à générer/voir les factures de cession
+  const canFacture = ['seed-selector', 'seed-upsemcl', 'seed-admin', 'seed-multiplicator'].includes(roleKey)
 
   async function fetchAll() {
     setLoading(true)
@@ -233,12 +235,13 @@ export function Transfers({ roleKey }: Props) {
       observations:     t.observations,
     }
 
-    generateFacture(data)
+    const result: FactureResult = generateFacture(data)
     setFactureModal(null)
     setFacturePrix('')
     setFactureTva('0')
     setFactureConditions('')
-    setToast({ msg: `Facture FACT-${t.codeTransfert}.pdf téléchargée`, type: 'success' })
+    window.open(result.blobUrl, '_blank')
+    setToast({ msg: `Facture ${result.filename} ouverte dans un nouvel onglet`, type: 'success' })
   }
 
   function downloadDoc(t: any, type: 'BORDEREAU' | 'ACCUSE_RECEPTION') {
@@ -294,7 +297,9 @@ export function Transfers({ roleKey }: Props) {
       quantiteRecue:      type === 'ACCUSE_RECEPTION' ? Number(t.quantite ?? 0) : undefined,
     }
 
-    generateTransferDoc(docData)
+    const result = generateTransferDoc(docData)
+    window.open(result.blobUrl, '_blank')
+    setToast({ msg: `Document ouvert dans un nouvel onglet`, type: 'success' })
   }
 
   return (
@@ -413,56 +418,109 @@ export function Transfers({ roleKey }: Props) {
 
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Code</th><th>Lot</th><th>Émetteur → Destinataire</th><th>Génération</th><th>Initié le</th><th>Statut</th><th>Actions</th></tr></thead>
+            <thead>
+              <tr>
+                <th style={{ width: 130 }}>Code</th>
+                <th style={{ maxWidth: 160 }}>Lot</th>
+                <th>Émetteur → Destinataire</th>
+                <th style={{ width: 90 }}>Génération</th>
+                <th style={{ width: 150 }}>Initié le</th>
+                <th style={{ width: 110 }}>Statut</th>
+                <th style={{ width: 180 }}>Actions</th>
+              </tr>
+            </thead>
             <tbody>
               {loading ? [0, 1, 2, 3].map(i => <tr key={i}><td colSpan={7}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
                 pageItems.length === 0 ? (
                   <tr><td colSpan={7}><div className="empty-state"><div className="empty-icon"><ArrowRightLeft size={20} /></div><div className="empty-title">{search || filterStatus ? 'Aucun résultat' : 'Aucun transfert'}</div>{canCreate && !search && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowForm(true)}>+ Nouveau transfert</button>}</div></td></tr>
-                ) : pageItems.map((t: any) => (
-                  <tr key={t.id}>
-                    <td><span className="td-mono" style={{ fontWeight: 700 }}>{t.codeTransfert}</span></td>
-                    <td><span className="td-mono">{getLotLabel(t.idLot) || `#${t.idLot}`}</span></td>
-                    <td style={{ fontSize: 12.5 }}>
-                      <span style={{ fontWeight: 500 }}>{t.usernameEmetteur || t.organisationSource || '—'}</span>
-                      <span style={{ color: 'var(--text-muted)', margin: '0 6px' }}>→</span>
-                      <span style={{ fontWeight: 500 }}>{t.usernameDestinataire || t.organisationDestination || '—'}</span>
-                    </td>
-                    <td><span className="badge badge-generation">{t.generationTransferee || '—'}</span></td>
-                    <td style={{ fontSize: 11, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{fmtDatetime(t.createdAt)}</td>
-                    <td><StatusBadge status={t.statut || t.statutTransfert} showIcon /></td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11 }} title="Voir détail" onClick={() => setShowDetail(t)}><Eye size={12} /></button>
-                        {t.statut === 'EN_ATTENTE' && t.usernameDestinataire && (
-                          <>
-                            <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#15803d' }} onClick={() => accepter(t.id)} title="Accepter"><CheckCircle2 size={12} /></button>
-                            <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#ef4444' }} onClick={() => { setRefusModal(t); setMotifRefus('') }} title="Refuser"><Send size={12} style={{ transform: 'rotate(180deg)' }} /></button>
-                          </>
-                        )}
-                        {t.statut !== 'ANNULE' && t.statut !== 'REJETE' && (
+                ) : pageItems.map((t: any) => {
+                  const statut = t.statut || t.statutTransfert
+                  const lotLabel = getLotLabel(t.idLot) || `#${t.idLot}`
+                  const isActif = statut !== 'ANNULE' && statut !== 'REJETE'
+                  return (
+                    <tr key={t.id}>
+                      {/* Code */}
+                      <td><span className="td-mono" style={{ fontWeight: 700, fontSize: 12 }}>{t.codeTransfert}</span></td>
+                      {/* Lot — tronqué si trop long */}
+                      <td>
+                        <span
+                          className="td-mono"
+                          title={lotLabel}
+                          style={{ display: 'block', maxWidth: 155, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 11.5 }}
+                        >{lotLabel}</span>
+                      </td>
+                      {/* Émetteur → Destinataire */}
+                      <td style={{ fontSize: 12.5 }}>
+                        <span style={{ fontWeight: 600 }}>{t.usernameEmetteur || t.organisationSource || '—'}</span>
+                        <span style={{ color: 'var(--text-muted)', margin: '0 5px', fontWeight: 400 }}>→</span>
+                        <span style={{ fontWeight: 600 }}>{t.usernameDestinataire || t.organisationDestination || '—'}</span>
+                      </td>
+                      {/* Génération */}
+                      <td><span className="badge badge-generation">{t.generationTransferee || '—'}</span></td>
+                      {/* Date */}
+                      <td style={{ fontSize: 11, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', color: 'var(--text-secondary)' }}>{fmtDatetime(t.createdAt)}</td>
+                      {/* Statut */}
+                      <td><StatusBadge status={statut} showIcon /></td>
+                      {/* Actions — organisées en deux groupes : workflow | documents */}
+                      <td>
+                        <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {/* Voir le détail — toujours visible */}
                           <button
                             className="btn btn-ghost"
-                            style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#0369a1' }}
-                            title="Télécharger le Bordereau de Livraison (PDF)"
-                            onClick={() => downloadDoc(t, 'BORDEREAU')}
-                          >
-                            <FileText size={12} />
-                          </button>
-                        )}
-                        {t.statut === 'ACCEPTE' && (
-                          <button
-                            className="btn btn-ghost"
-                            style={{ height: 26, padding: '0 8px', fontSize: 11, color: '#15803d' }}
-                            title="Télécharger l'Accusé de Réception (PDF)"
-                            onClick={() => downloadDoc(t, 'ACCUSE_RECEPTION')}
-                          >
-                            <Download size={12} />
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                            style={{ height: 26, padding: '0 7px', fontSize: 11, color: 'var(--text-secondary)' }}
+                            title="Voir le détail du transfert"
+                            onClick={() => setShowDetail(t)}
+                          ><Eye size={12} /></button>
+
+                          {/* ── Workflow : Accepter / Refuser (EN_ATTENTE seulement) ── */}
+                          {statut === 'EN_ATTENTE' && t.usernameDestinataire && (<>
+                            <button
+                              className="btn btn-ghost"
+                              style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0' }}
+                              title="Accepter ce transfert"
+                              onClick={() => { setAcceptModal(t); setAcceptSiteCode('') }}
+                            ><CheckCircle2 size={12} /></button>
+                            <button
+                              className="btn btn-ghost"
+                              style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#dc2626', background: '#fef2f2', border: '1px solid #fecaca' }}
+                              title="Refuser ce transfert"
+                              onClick={() => { setRefusModal(t); setMotifRefus('') }}
+                            ><XCircle size={12} /></button>
+                          </>)}
+
+                          {/* Séparateur visuel si actions workflow + documents */}
+                          {isActif && <span style={{ width: 1, height: 16, background: 'var(--border)', display: 'inline-block', margin: '0 1px' }} />}
+
+                          {/* ── Documents ── */}
+                          {isActif && (
+                            <button
+                              className="btn btn-ghost"
+                              style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#0369a1' }}
+                              title="Bordereau de Livraison"
+                              onClick={() => downloadDoc(t, 'BORDEREAU')}
+                            ><FileText size={12} /></button>
+                          )}
+                          {statut === 'ACCEPTE' && (
+                            <button
+                              className="btn btn-ghost"
+                              style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#0f766e' }}
+                              title="Accusé de Réception"
+                              onClick={() => downloadDoc(t, 'ACCUSE_RECEPTION')}
+                            ><ClipboardCheck size={12} /></button>
+                          )}
+                          {canFacture && isActif && (
+                            <button
+                              className="btn btn-ghost"
+                              style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#b45309' }}
+                              title="Générer / Voir la Facture"
+                              onClick={() => { setFactureModal(t); setFacturePrix(''); setFactureTva('0') }}
+                            ><Receipt size={12} /></button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
             </tbody>
           </table>
         </div>
@@ -742,10 +800,11 @@ export function Transfers({ roleKey }: Props) {
               />
             </Field>
 
-            <FormActions onCancel={() => setFactureModal(null)} loading={false} submitLabel="📄 Télécharger la Facture PDF" />
+            <FormActions onCancel={() => setFactureModal(null)} loading={false} submitLabel="Voir la Facture PDF" />
           </form>
         </Modal>
       )}
+
     </div>
   )
 }

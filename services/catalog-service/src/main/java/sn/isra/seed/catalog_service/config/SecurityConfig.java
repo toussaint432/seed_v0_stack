@@ -48,7 +48,9 @@ public class SecurityConfig {
             "/api/zones/par-departement/**",
             "/api/regions",
             "/api/departements",
-            "/api/varieties/*/zones"
+            "/api/varieties/*/zones",
+            "/api/varieties/*/fiche-varietale",
+            "/api/especes/*/itineraire-technique"
         ).permitAll()
         .anyRequest().authenticated()
       )

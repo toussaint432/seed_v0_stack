@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search } from 'lucide-react'
+import React, { useEffect, useRef, useState } from 'react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2 } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -102,6 +102,167 @@ function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: stri
           </div>
         ))}
       </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   MODAL CERTIFICAT — Visualisation / Upload / Remplacement / Suppression
+   Même UX que la fiche variétale : blob URL + drag-drop
+   ══════════════════════════════════════════════════════════════ */
+function CertificatLotModal({ lot, canManage, onClose, onUpdate }: {
+  lot: any
+  canManage: boolean
+  onClose: () => void
+  onUpdate: (updatedLot: any) => void
+}) {
+  const [blobUrl, setBlobUrl]   = useState<string | null>(null)
+  const [loading, setLoading]   = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+  const [certToast, setCertToast] = useState<{ msg: string; type: 'success'|'error' } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!lot.certificatPath) return
+    setLoading(true)
+    api.get(endpoints.lotCertificatUrl(lot.id), { responseType: 'blob' })
+      .then(r => setBlobUrl(URL.createObjectURL(r.data)))
+      .catch(() => setCertToast({ msg: 'Impossible de charger le certificat', type: 'error' }))
+      .finally(() => setLoading(false))
+    return () => { if (blobUrl) URL.revokeObjectURL(blobUrl) }
+  }, [lot.id, lot.certificatPath])
+
+  async function doUpload(file: File) {
+    setUploading(true)
+    const form = new FormData()
+    form.append('file', file)
+    try {
+      const r = await api.post(endpoints.lotCertificatUpload(lot.id), form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      onUpdate(r.data)
+      setCertToast({ msg: 'Certificat enregistré', type: 'success' })
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+      const r2 = await api.get(endpoints.lotCertificatUrl(lot.id), { responseType: 'blob' })
+      setBlobUrl(URL.createObjectURL(r2.data))
+    } catch (err: any) {
+      setCertToast({ msg: err?.response?.data?.message || 'Erreur lors de l\'upload', type: 'error' })
+    } finally { setUploading(false) }
+  }
+
+  async function doDelete() {
+    if (!confirm('Supprimer définitivement ce certificat ?')) return
+    setUploading(true)
+    try {
+      await api.delete(endpoints.lotCertificatDelete(lot.id))
+      if (blobUrl) URL.revokeObjectURL(blobUrl)
+      setBlobUrl(null)
+      onUpdate({ ...lot, certificatPath: null })
+      setCertToast({ msg: 'Certificat supprimé', type: 'success' })
+    } catch (err: any) {
+      setCertToast({ msg: err?.response?.data?.message || 'Erreur lors de la suppression', type: 'error' })
+    } finally { setUploading(false) }
+  }
+
+  function doDownload() {
+    if (!blobUrl) return
+    const a = document.createElement('a')
+    a.href = blobUrl
+    const ext = lot.certificatPath?.split('.').pop() || 'pdf'
+    a.download = `certificat-${lot.codeLot}.${ext}`
+    a.click()
+  }
+
+  const isPdf = lot.certificatPath?.toLowerCase().endsWith('.pdf')
+
+  return (
+    <Modal
+      title={`Certificat — ${lot.codeLot}`}
+      subtitle="Certification officielle du lot semencier"
+      onClose={onClose}
+      size="lg"
+    >
+      {certToast && <Toast message={certToast.msg} type={certToast.type} onClose={() => setCertToast(null)} />}
+
+      {/* Chargement */}
+      {loading && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+          <RefreshCw size={28} style={{ color: 'var(--green-600)', animation: 'spin 0.9s linear infinite' }} />
+        </div>
+      )}
+
+      {/* Visionneuse */}
+      {!loading && blobUrl && (
+        <div>
+          {isPdf
+            ? <iframe src={blobUrl} title="Certificat" style={{ width: '100%', height: 480, border: 'none', borderRadius: 8, background: '#f5f5f5' }} />
+            : <img src={blobUrl} alt="Certificat" style={{ width: '100%', maxHeight: 480, objectFit: 'contain', borderRadius: 8, background: '#f5f5f5' }} />
+          }
+          <div style={{ display: 'flex', gap: 8, marginTop: 14, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={doDownload} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Download size={13} /> Télécharger
+            </button>
+            {canManage && (
+              <>
+                <label className="btn btn-secondary" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Upload size={13} /> Remplacer
+                  <input
+                    type="file" hidden
+                    accept=".pdf,.jpg,.jpeg,.png,.webp,.gif"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) doUpload(f) }}
+                  />
+                </label>
+                <button
+                  className="btn btn-secondary"
+                  style={{ color: '#dc2626', borderColor: '#fca5a5', display: 'flex', alignItems: 'center', gap: 5 }}
+                  onClick={doDelete}
+                  disabled={uploading}
+                >
+                  <Trash2 size={13} /> Supprimer
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Zone d'upload (pas de certificat) */}
+      {!loading && !blobUrl && canManage && (
+        <div
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={e => { e.preventDefault(); setDragOver(false); const f = e.dataTransfer.files[0]; if (f) doUpload(f) }}
+          onClick={() => fileRef.current?.click()}
+          style={{
+            border: `2px dashed ${dragOver ? 'var(--green-500,#22c55e)' : 'var(--border)'}`,
+            borderRadius: 10, padding: '44px 24px', textAlign: 'center',
+            background: dragOver ? 'var(--green-50,#f0fdf4)' : 'var(--surface-2)',
+            transition: 'all 0.15s', cursor: uploading ? 'wait' : 'pointer',
+          }}
+        >
+          <input
+            ref={fileRef} type="file" hidden
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.gif"
+            onChange={e => { const f = e.target.files?.[0]; if (f) doUpload(f) }}
+          />
+          <BadgeCheck size={36} style={{ color: uploading ? 'var(--text-muted)' : 'var(--green-600,#16a34a)', marginBottom: 14 }} />
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
+            {uploading ? 'Envoi en cours…' : 'Déposer le certificat ici'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            PDF, JPG, PNG, WEBP — cliquez ou glissez-déposez
+          </div>
+        </div>
+      )}
+
+      {/* Pas de certificat + lecture seule */}
+      {!loading && !blobUrl && !canManage && (
+        <div style={{ textAlign: 'center', padding: '44px 24px', color: 'var(--text-muted)' }}>
+          <BadgeCheck size={36} style={{ marginBottom: 14, opacity: 0.3 }} />
+          <div style={{ fontSize: 14 }}>Aucun certificat disponible pour ce lot.</div>
+        </div>
+      )}
     </Modal>
   )
 }
@@ -254,6 +415,9 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [filterGenMes, setFilterGenMes] = useState('')
   // Transferts G3 EN_ATTENTE reçus par l'UPSemCL — en attente d'acceptation
   const [transfertsRecus, setTransfertsRecus] = useState<any[]>([])
+
+  // ── Certificat lot ────────────────────────────────────────
+  const [certLotMult, setCertLotMult] = useState<any | null>(null)
 
   // ── Gestion lots multiplicateur ────────────────────────────
   const [showNewLot, setShowNewLot]     = useState(false)
@@ -525,6 +689,17 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   return (
     <div>
       {lineageChain && <LineageModal chain={lineageChain} codeLot={lineageLotCode} onClose={() => setLineageChain(null)} />}
+      {certLotMult && (
+        <CertificatLotModal
+          lot={certLotMult}
+          canManage={true}
+          onClose={() => setCertLotMult(null)}
+          onUpdate={updated => {
+            setMesLots(prev => prev.map(l => l.id === updated.id ? { ...l, ...updated } : l))
+            setCertLotMult((prev: any) => prev ? { ...prev, ...updated } : prev)
+          }}
+        />
+      )}
 
       {/* KPIs */}
       <div className="stats-grid">
@@ -854,7 +1029,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                         }
                         return (
                           <tr key={l.id}>
-                            <td><span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span></td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
+                                {l.certificatPath && (
+                                  <BadgeCheck size={13} title="Lot certifié" style={{ color: '#d97706', flexShrink: 0 }} />
+                                )}
+                              </div>
+                            </td>
                             <td>
                               {v ? (
                                 <div>
@@ -909,6 +1091,12 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                     }}
                                   ><GitBranch size={13} /></button>
                                 )}
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: l.certificatPath ? '#d97706' : 'var(--text-muted)' }}
+                                  title={l.certificatPath ? 'Voir / gérer le certificat' : 'Joindre un certificat'}
+                                  onClick={() => setCertLotMult(l)}
+                                ><BadgeCheck size={13} /></button>
                               </div>
                             </td>
                           </tr>
@@ -1225,6 +1413,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [membresLoading, setMembresLoading] = useState(false)
   const [search,         setSearch]          = useState('')
   const [genFilter,      setGenFilter]       = useState('')
+  const [certLot,        setCertLot]         = useState<any | null>(null)
+  const canManageCert = ['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey)
 
   async function fetchLots() {
     setLoading(true)
@@ -1470,6 +1660,17 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     <div>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
       {lineageChain && <LineageModal chain={lineageChain} codeLot={lineageLotCode} onClose={() => setLineageChain(null)} />}
+      {certLot && (
+        <CertificatLotModal
+          lot={certLot}
+          canManage={canManageCert}
+          onClose={() => setCertLot(null)}
+          onUpdate={updated => {
+            setLots(prev => prev.map(l => l.id === updated.id ? { ...l, ...updated } : l))
+            setCertLot((prev: any) => prev ? { ...prev, ...updated } : prev)
+          }}
+        />
+      )}
 
       {/* ── KPI dynamiques cliquables ──────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(activeGens.length + 1, 5)}, 1fr)`, gap: 12, marginBottom: 16 }}>
@@ -1620,7 +1821,14 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   : '—'
                 return (
                   <tr key={l.id}>
-                    <td><span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span></td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
+                        {l.certificatPath && (
+                          <BadgeCheck size={13} title="Lot certifié" style={{ color: '#d97706', flexShrink: 0 }} />
+                        )}
+                      </div>
+                    </td>
                     <td>
                       {varietyMap[l.idVariete] ? (
                         <div>
@@ -1721,6 +1929,12 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                             <Download size={13} />
                           </button>
                         )}
+                        <button
+                          className="btn btn-ghost"
+                          style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: l.certificatPath ? '#d97706' : 'var(--text-muted)' }}
+                          title={l.certificatPath ? 'Voir / gérer le certificat' : 'Joindre un certificat'}
+                          onClick={() => setCertLot(l)}
+                        ><BadgeCheck size={13} /></button>
                       </div>
                     </td>
                   </tr>

@@ -27,4 +27,9 @@ public class Espece {
     @Size(max = 200)
     @Column(name = "nom_scientifique", length = 200)
     private String nomScientifique;
+
+    /** Chemin relatif vers le PDF de l'itinéraire technique (ex: itineraires/456.pdf) */
+    @Size(max = 500)
+    @Column(name = "itineraire_tech_path", length = 500)
+    private String itineraireTechPath;
 }

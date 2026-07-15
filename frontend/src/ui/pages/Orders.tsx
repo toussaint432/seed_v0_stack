@@ -12,22 +12,27 @@ interface Props { roleKey: string }
 
 // ─── Statuts ─────────────────────────────────────────────────────────────────
 const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> = {
-  SOUMISE:        { label: 'Soumise',        bg: '#eff6ff', color: '#1d4ed8' },
-  ACCEPTEE:       { label: 'Acceptée',       bg: '#f0fdf4', color: '#15803d' },
-  EN_PREPARATION: { label: 'En préparation', bg: '#f5f3ff', color: '#6d28d9' },
-  LIVREE:         { label: 'Livrée',         bg: '#ecfdf5', color: '#065f46' },
-  ANNULEE:        { label: 'Annulée',        bg: '#fef2f2', color: '#dc2626' },
-  REJETEE:        { label: 'Rejetée',        bg: '#fef2f2', color: '#dc2626' },
+  SOUMISE:        { label: 'Soumise',           bg: '#eff6ff', color: '#1d4ed8' },
+  EN_NEGOCIATION: { label: 'En négociation',    bg: '#fefce8', color: '#92400e' },
+  ACCORDEE:       { label: 'Accordée',          bg: '#f0fdf4', color: '#15803d' },
+  EN_LIVRAISON:   { label: 'En livraison',      bg: '#f5f3ff', color: '#6d28d9' },
+  LIVREE:         { label: 'Livrée',            bg: '#ecfdf5', color: '#065f46' },
+  ANNULEE:        { label: 'Annulée',           bg: '#fef2f2', color: '#dc2626' },
+  REJETEE:        { label: 'Rejetée',           bg: '#fef2f2', color: '#dc2626' },
+  ACCEPTEE:       { label: 'Acceptée',          bg: '#f0fdf4', color: '#15803d' },
+  EN_PREPARATION: { label: 'En préparation',    bg: '#f5f3ff', color: '#6d28d9' },
 }
 const PAGE_SIZE = 10
 const PIPELINE_STEPS = [
-  { key: 'SOUMISE',        label: 'Soumise' },
-  { key: 'ACCEPTEE',       label: 'Acceptée' },
-  { key: 'EN_PREPARATION', label: 'En préparation' },
-  { key: 'LIVREE',         label: 'Livrée' },
+  { key: 'SOUMISE',         label: 'Soumise'       },
+  { key: 'EN_NEGOCIATION',  label: 'Négociation'   },
+  { key: 'ACCORDEE',        label: 'Accordée'      },
+  { key: 'EN_LIVRAISON',    label: 'En livraison'  },
+  { key: 'LIVREE',          label: 'Livrée'        },
 ]
 const PIPELINE_IDX: Record<string, number> = {
-  SOUMISE: 0, ACCEPTEE: 1, EN_PREPARATION: 2, LIVREE: 3,
+  SOUMISE: 0, EN_NEGOCIATION: 1, ACCORDEE: 2, EN_LIVRAISON: 3, LIVREE: 4,
+  ACCEPTEE: 1, EN_PREPARATION: 2,
 }
 const TERMINAL = ['ANNULEE', 'REJETEE']
 const NEXT_ACTIONS: Record<string, { statut: string; label: string; danger?: boolean }[]> = {
@@ -63,29 +68,28 @@ function fmtDatetime(value?: string | null): string {
 type KpiKey = 'pending' | 'accepted' | 'rejected' | 'delivered'
 const KPI_FILTER: Record<KpiKey, (o: any) => boolean> = {
   pending:   o => o.statut === 'SOUMISE',
-  accepted:  o => ['ACCEPTEE','EN_PREPARATION'].includes(o.statut),
+  accepted:  o => ['ACCEPTEE','EN_PREPARATION','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON'].includes(o.statut),
   rejected:  o => ['ANNULEE','REJETEE'].includes(o.statut),
   delivered: o => o.statut === 'LIVREE',
 }
 
 // ─── Types et constantes du graphe d'évolution ────────────────────────────────
 type Periode  = '7J' | '4S' | '3M' | '6M' | '12M'
-type SerieKey = 'LIVREE' | 'ACCEPTEE' | 'EN_PREPARATION' | 'SOUMISE' | 'ANNULEE'
+type SerieKey = 'LIVREE' | 'EN_COURS' | 'SOUMISE' | 'ANNULEE'
 
 interface PointData extends Record<SerieKey, number> {
   label: string; sublabel: string; total: number
 }
 
 const SERIE_CFG: ReadonlyArray<{ key: SerieKey; label: string; couleur: string }> = [
-  { key: 'LIVREE',         label: 'Livrées',             couleur: '#10b981' },
-  { key: 'ACCEPTEE',       label: 'Acceptées',           couleur: '#22c55e' },
-  { key: 'EN_PREPARATION', label: 'En préparation',      couleur: '#f59e0b' },
-  { key: 'SOUMISE',        label: 'Soumises',            couleur: '#3b82f6' },
-  { key: 'ANNULEE',        label: 'Annulées/Rejetées',   couleur: '#ef4444' },
+  { key: 'LIVREE',   label: 'Livrées',        couleur: '#10b981' },
+  { key: 'EN_COURS', label: 'En cours',        couleur: '#f59e0b' },
+  { key: 'SOUMISE',  label: 'Soumises',        couleur: '#3b82f6' },
+  { key: 'ANNULEE',  label: 'Annulées/Rejet.', couleur: '#ef4444' },
 ]
 
 const SERIE_COULEUR: Record<SerieKey, string> = {
-  LIVREE: '#10b981', ACCEPTEE: '#22c55e', EN_PREPARATION: '#f59e0b', SOUMISE: '#3b82f6', ANNULEE: '#ef4444',
+  LIVREE: '#10b981', EN_COURS: '#f59e0b', SOUMISE: '#3b82f6', ANNULEE: '#ef4444',
 }
 
 // Calcul des ticks de l'axe Y à intervalles lisibles
@@ -103,11 +107,10 @@ function buildPointData(label: string, sublabel: string, cmds: any[]): PointData
   const nb = (ss: string[]) => cmds.filter(o => ss.includes(o.statut)).length
   return {
     label, sublabel, total: cmds.length,
-    SOUMISE:        nb(['SOUMISE']),
-    ACCEPTEE:       nb(['ACCEPTEE']),
-    EN_PREPARATION: nb(['EN_PREPARATION']),
-    LIVREE:         nb(['LIVREE']),
-    ANNULEE:        nb(['ANNULEE', 'REJETEE']),
+    SOUMISE:  nb(['SOUMISE']),
+    EN_COURS: nb(['ACCEPTEE','EN_PREPARATION','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON']),
+    LIVREE:   nb(['LIVREE']),
+    ANNULEE:  nb(['ANNULEE', 'REJETEE']),
   }
 }
 
@@ -261,7 +264,7 @@ function EvolutionChart({ orders }: { orders: any[] }) {
     : 50
 
   // Ordre d'empilement bas → haut (annulées au fond, livrées au sommet)
-  const ORDRE: SerieKey[] = ['ANNULEE', 'SOUMISE', 'EN_PREPARATION', 'ACCEPTEE', 'LIVREE']
+  const ORDRE: SerieKey[] = ['ANNULEE', 'SOUMISE', 'EN_COURS', 'LIVREE']
 
   return (
     <div className="card" style={{ padding: '16px 20px', marginBottom: 16 }}>
@@ -539,39 +542,76 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
               </div>
             ))}
           </div>
-          {Array.isArray(detail.lignes) && detail.lignes.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>
-                Lignes ({detail.lignes.length})
+          {Array.isArray(detail.lignes) && detail.lignes.length > 0 && (() => {
+            const hasProposee = detail.lignes.some((l: any) => l.quantiteProposee != null)
+            const totalDemande = detail.lignes.reduce((s: number, l: any) => s + Number(l.quantiteDemandee || 0), 0)
+            const totalValidee = hasProposee ? detail.lignes.reduce((s: number, l: any) => s + Number(l.quantiteProposee ?? l.quantiteDemandee ?? 0), 0) : null
+            const hasDiff = totalValidee !== null && totalValidee !== totalDemande
+            return (
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  Lignes ({detail.lignes.length})
+                  {hasDiff && (
+                    <span style={{ fontSize: 10.5, fontWeight: 600, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a', borderRadius: 4, padding: '2px 7px', textTransform: 'none', letterSpacing: 0 }}>
+                      Demandé : {totalDemande} kg → Validé : {totalValidee} kg ({totalValidee! - totalDemande > 0 ? '+' : ''}{totalValidee! - totalDemande} kg)
+                    </span>
+                  )}
+                </div>
+                <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)' }}>Variété</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)' }}>Génération</th>
+                      <th style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>{hasProposee ? 'Demandée' : 'Quantité'}</th>
+                      {hasProposee && <th style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>Validée</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {detail.lignes.map((l: any, i: number) => {
+                      const v = varieties.find((vv: any) => vv.id === l.idVariete)
+                      const diff = hasProposee && l.quantiteProposee != null
+                        ? Number(l.quantiteProposee) - Number(l.quantiteDemandee)
+                        : null
+                      return (
+                        <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <td style={{ padding: '6px 10px', fontWeight: 500 }}>
+                            {v ? v.nomVariete : `Variété #${l.idVariete}`}
+                            {v && <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 5 }}>({v.codeVariete})</span>}
+                          </td>
+                          <td style={{ padding: '6px 10px', color: 'var(--text-muted)' }}>
+                            {GEN_LABELS[l.idGeneration] ?? `Gén. #${l.idGeneration}`}
+                          </td>
+                          <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: hasProposee ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                            {l.quantiteDemandee} {l.unite}
+                          </td>
+                          {hasProposee && (
+                            <td style={{ padding: '6px 10px', textAlign: 'right' }}>
+                              {l.quantiteProposee != null ? (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                                  <strong style={{ color: diff === 0 ? 'var(--text-primary)' : diff! < 0 ? '#b45309' : '#15803d' }}>
+                                    {l.quantiteProposee} {l.unite}
+                                  </strong>
+                                  {diff !== 0 && (
+                                    <span style={{
+                                      fontSize: 10, fontWeight: 700, borderRadius: 3, padding: '1px 5px',
+                                      background: diff! < 0 ? '#fef3c7' : '#dcfce7',
+                                      color: diff! < 0 ? '#92400e' : '#166534',
+                                    }}>
+                                      {diff! > 0 ? '+' : ''}{diff} kg
+                                    </span>
+                                  )}
+                                </span>
+                              ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                            </td>
+                          )}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
-                    {['Variété','Génération','Quantité'].map(h => (
-                      <th key={h} style={{ padding: '6px 10px', textAlign: h === 'Quantité' ? 'right' : 'left', fontWeight: 600, color: 'var(--text-secondary)' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {detail.lignes.map((l: any, i: number) => {
-                    const v = varieties.find((vv: any) => vv.id === l.idVariete)
-                    return (
-                      <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                        <td style={{ padding: '6px 10px', fontWeight: 500 }}>
-                          {v ? v.nomVariete : `Variété #${l.idVariete}`}
-                          {v && <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 5 }}>({v.codeVariete})</span>}
-                        </td>
-                        <td style={{ padding: '6px 10px', color: 'var(--text-muted)' }}>
-                          {GEN_LABELS[l.idGeneration] ?? `Gén. #${l.idGeneration}`}
-                        </td>
-                        <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600 }}>{l.quantiteDemandee} {l.unite}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+            )
+          })()}
           {onUpdateStatus && nextActions.length > 0 && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>Action :</span>
@@ -789,20 +829,22 @@ function VueQuotataire({ setToast }: { setToast: any }) {
    VUE MULTIPLICATEUR
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueMultiplicateur({ setToast }: { setToast: any }) {
-  const [onglet,      setOnglet]      = useState<'recues'|'demandes'>('recues')
-  const [recues,      setRecues]      = useState<any[]>([])
-  const [demandes,    setDemandes]    = useState<any[]>([])
-  const [loadingR,    setLoadingR]    = useState(true)
-  const [loadingD,    setLoadingD]    = useState(true)
-  const [kpiFilter,   setKpiFilter]   = useState<KpiKey | null>(null)
-  const [search,      setSearch]      = useState('')
-  const [refusModal,  setRefusModal]  = useState<{ id: number; code: string } | null>(null)
-  const [motif,       setMotif]       = useState('')
-  const [saving,      setSaving]      = useState(false)
-  const [varieties,   setVarieties]   = useState<any[]>([])
-  const [orgs,        setOrgs]        = useState<any[]>([])
-  const [showForm,    setShowForm]    = useState(false)
-  const [formSaving,  setFormSaving]  = useState(false)
+  const [onglet,        setOnglet]        = useState<'recues'|'demandes'>('recues')
+  const [recues,        setRecues]        = useState<any[]>([])
+  const [demandes,      setDemandes]      = useState<any[]>([])
+  const [loadingR,      setLoadingR]      = useState(true)
+  const [loadingD,      setLoadingD]      = useState(true)
+  const [kpiFilter,     setKpiFilter]     = useState<KpiKey | null>(null)
+  const [search,        setSearch]        = useState('')
+  const [refusModal,    setRefusModal]    = useState<{ id: number; code: string } | null>(null)
+  const [motif,         setMotif]         = useState('')
+  const [saving,        setSaving]        = useState(false)
+  const [actioning,     setActioning]     = useState<number | null>(null)
+  const [varieties,     setVarieties]     = useState<any[]>([])
+  const [orgs,          setOrgs]          = useState<any[]>([])
+  const [showForm,      setShowForm]      = useState(false)
+  const [formSaving,    setFormSaving]    = useState(false)
+  const [voirPropModal, setVoirPropModal] = useState<any | null>(null)
   const [form, setForm] = useState({
     observations: '',
     lignes: [{ idVariete: '', quantite: '', unite: 'kg' }],
@@ -875,13 +917,24 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
     finally { setSaving(false) }
   }
 
+  async function accuserReception(id: number, code: string) {
+    setActioning(id)
+    try {
+      await api.patch(endpoints.orderAccuserReception(id), {})
+      setToast({ msg: `Réception accusée pour ${code} — semences créditées dans votre stock`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de l\'accusé de réception', type: 'error' })
+    } finally { setActioning(null) }
+  }
+
   const activeOrders = onglet === 'recues' ? recues : demandes
   const loading      = onglet === 'recues' ? loadingR : loadingD
 
   const pendingCount   = recues.filter(o => o.statut === 'SOUMISE').length
-  const confirmedCount = recues.filter(o => o.statut === 'ACCEPTEE').length
+  const confirmedCount = recues.filter(o => ['ACCEPTEE','EN_NEGOCIATION','ACCORDEE','EN_PREPARATION'].includes(o.statut)).length
   const demandesTotal  = demandes.length
-  const demandesAccept = demandes.filter(o => ['ACCEPTEE','EN_PREPARATION','LIVREE'].includes(o.statut)).length
+  const demandesAccept = demandes.filter(o => ['ACCEPTEE','EN_PREPARATION','EN_LIVRAISON','ACCORDEE','LIVREE'].includes(o.statut)).length
 
   const toggleKpi = (k: KpiKey) => { setKpiFilter(kpiFilter === k ? null : k); setSearch('') }
 
@@ -986,8 +1039,33 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             emptyMsg="Aucune demande G3 — cliquez sur « Nouvelle demande G3 » pour en soumettre une"
             varieties={varieties}
             extraColumns={[{
-              head: 'Observations',
-              cell: (o: any) => <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'block', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.observations || '—'}</span>,
+              head: 'Action',
+              cell: (o: any) => {
+                if (o.statut === 'SOUMISE') {
+                  return <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>En attente de proposition</span>
+                }
+                if (o.statut === 'EN_NEGOCIATION') {
+                  return (
+                    <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #d97706, #b45309)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                      onClick={() => setVoirPropModal(o)} disabled={actioning === o.id}>
+                      <Eye size={11} /> Voir proposition
+                    </button>
+                  )
+                }
+                if (o.statut === 'ACCORDEE') {
+                  return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={11} /> Accordée</span>
+                }
+                if (o.statut === 'EN_LIVRAISON') {
+                  return (
+                    <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                      onClick={() => accuserReception(o.id, o.codeCommande)} disabled={actioning === o.id}>
+                      {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <PackageCheck size={11} />}
+                      Accuser réception
+                    </button>
+                  )
+                }
+                return null
+              },
             }]}
           />
         )}
@@ -1074,6 +1152,16 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer l'annulation" />
           </form>
         </Modal>
+      )}
+
+      {voirPropModal && (
+        <VoirPropositionModal
+          commande={voirPropModal}
+          varieties={varieties}
+          onClose={() => setVoirPropModal(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
+        />
       )}
     </div>
   )
@@ -1286,17 +1374,274 @@ function TraiterCommandeG3Modal({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : PROPOSER une allocation (UPSemCL → Multiplicateur)
+   ══════════════════════════════════════════════════════════════════════════════ */
+function ProposeModal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const [lotsG3,     setLotsG3]    = useState<any[]>([])
+  const [loading,    setLoading]   = useState(true)
+  const [saving,     setSaving]    = useState(false)
+  const [selections, setSelections] = useState<Record<number, { idLot: number | null; quantite: string }>>({})
+
+  const lignes: any[] = commande.lignes ?? []
+
+  useEffect(() => {
+    const init: Record<number, { idLot: number | null; quantite: string }> = {}
+    for (const l of lignes) {
+      init[l.id] = {
+        idLot: l.idLotPropose ?? null,
+        quantite: l.quantiteProposee != null ? String(l.quantiteProposee) : String(l.quantiteDemandee ?? ''),
+      }
+    }
+    setSelections(init)
+    api.get(endpoints.lotsCatalogueG3)
+      .then(r => setLotsG3(r.data))
+      .catch(() => setLotsG3([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+  function lotsForLigne(idVariete: number) {
+    return lotsG3.filter((lot: any) => lot.idVariete === idVariete)
+  }
+
+  const isValid = lignes.length > 0 && lignes.every((l: any) => {
+    const sel = selections[l.id]
+    return sel && sel.idLot !== null && sel.quantite && Number(sel.quantite) > 0
+  })
+
+  async function submit() {
+    if (!isValid) return; setSaving(true)
+    try {
+      const propositions = lignes.map((l: any) => ({
+        idLigne: l.id,
+        idLot: selections[l.id].idLot,
+        quantiteProposee: Number(selections[l.id].quantite),
+      }))
+      await api.patch(endpoints.orderProposer(commande.id), { propositions })
+      setToast({ msg: `Proposition envoyée pour ${commande.codeCommande}`, type: 'success' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la proposition', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal
+      title="Proposer une allocation"
+      subtitle={`${commande.codeCommande} — Acheteur : ${commande.usernameAcheteur ?? '—'}`}
+      onClose={onClose} size="lg"
+    >
+      <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Settings2 size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>Sélectionnez le lot G3 disponible et proposez la quantité pour chaque variété. Le multiplicateur pourra <strong>accepter ou refuser</strong> votre proposition avant que vous déclenchiez le transfert physique.</span>
+      </div>
+
+      {lignes.map((ligne: any) => {
+        const lots = lotsForLigne(ligne.idVariete)
+        const sel  = selections[ligne.id] ?? { idLot: null, quantite: '' }
+        const lotSel = lots.find((l: any) => l.id === sel.idLot)
+        return (
+          <div key={ligne.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 14, background: 'var(--surface-2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{varNom(ligne.idVariete)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                  {GEN_LABELS[ligne.idGeneration] ?? `Gén. ${ligne.idGeneration}`} · Demandé : <strong style={{ color: 'var(--text-primary)' }}>{ligne.quantiteDemandee} {ligne.unite}</strong>
+                </div>
+              </div>
+              <span style={{ background: '#fefce8', color: '#92400e', borderRadius: 99, padding: '3px 11px', fontSize: 11.5, fontWeight: 700 }}>
+                G3
+              </span>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Lot à proposer</div>
+              {loading ? (
+                <div className="skeleton" style={{ height: 44, borderRadius: 8 }} />
+              ) : lots.length === 0 ? (
+                <div style={{ padding: '11px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <XCircle size={14} /> Aucun lot G3 disponible pour cette variété.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {lots.map((lot: any) => (
+                    <label key={lot.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', border: `2px solid ${sel.idLot === lot.id ? '#d97706' : 'var(--border)'}`, borderRadius: 9, cursor: 'pointer', background: sel.idLot === lot.id ? '#fefce8' : 'var(--surface)', transition: 'all .12s' }}>
+                      <input type="radio" name={`lot-propose-${ligne.id}`} checked={sel.idLot === lot.id} onChange={() => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], idLot: lot.id } }))} style={{ accentColor: '#d97706', width: 15, height: 15 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, fontFamily: 'monospace' }}>{lot.codeLot}</span>
+                        <span style={{ fontSize: 11.5, color: 'var(--text-muted)', marginLeft: 10 }}>{lot.campagne ?? '—'}</span>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#15803d' }}>{lot.quantiteNette} kg</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>disponible</div>
+                      </div>
+                      <span style={{ fontSize: 10.5, background: lot.statutLot === 'CERTIFIE' ? '#dcfce7' : '#eff6ff', color: lot.statutLot === 'CERTIFIE' ? '#15803d' : '#1d4ed8', borderRadius: 99, padding: '2px 9px', fontWeight: 600 }}>
+                        {lot.statutLot}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 7 }}>
+                Quantité proposée ({ligne.unite})
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="number" value={sel.quantite} min={1}
+                  max={lotSel ? lotSel.quantiteNette : undefined}
+                  onChange={e => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], quantite: e.target.value } }))}
+                  disabled={sel.idLot === null}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 150, outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)' }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  sur <strong>{ligne.quantiteDemandee}</strong> {ligne.unite} demandé{ligne.quantiteDemandee > 1 ? 's' : ''}
+                  {lotSel && <span style={{ color: '#15803d', marginLeft: 8 }}>· lot : {lotSel.quantiteNette} kg dispo</span>}
+                </span>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+        <button
+          className="btn btn-primary"
+          style={{ background: isValid && !saving ? 'linear-gradient(135deg, #d97706, #b45309)' : undefined, border: 'none', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, opacity: !isValid ? 0.6 : 1 }}
+          onClick={submit} disabled={!isValid || saving}
+        >
+          {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><Settings2 size={13} /> Envoyer la proposition</>}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : VOIR PROPOSITION (Multiplicateur) — Accepter ou Refuser
+   ══════════════════════════════════════════════════════════════════════════════ */
+function VoirPropositionModal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const [saving, setSaving] = useState(false)
+
+  const lignes: any[] = (commande.lignes ?? []).filter((l: any) => l.quantiteProposee != null)
+
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+
+  async function accepter() {
+    setSaving(true)
+    try {
+      await api.patch(endpoints.orderAccepterProposition(commande.id), {})
+      setToast({ msg: `Proposition acceptée — l'UPSemCL va déclencher le transfert`, type: 'success' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  async function refuser() {
+    setSaving(true)
+    try {
+      await api.patch(endpoints.orderRefuserProposition(commande.id), {})
+      setToast({ msg: `Proposition refusée — la commande est retournée à SOUMISE`, type: 'success' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal
+      title="Proposition de l'UPSemCL"
+      subtitle={`Commande ${commande.codeCommande}`}
+      onClose={onClose} size="md"
+    >
+      <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Clock size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>L'UPSemCL a proposé les quantités ci-dessous. Vous pouvez <strong>accepter</strong> pour valider le transfert ou <strong>refuser</strong> pour négocier une nouvelle proposition via la messagerie.</span>
+      </div>
+
+      {lignes.length === 0 && (
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: 24 }}>
+          Aucune proposition enregistrée pour cette commande.
+        </div>
+      )}
+
+      {lignes.map((ligne: any) => (
+        <div key={ligne.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginBottom: 12, background: 'var(--surface-2)' }}>
+          <div style={{ fontWeight: 700, fontSize: 13.5, marginBottom: 10 }}>{varNom(ligne.idVariete)}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 3 }}>Quantité demandée</div>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{ligne.quantiteDemandee} {ligne.unite}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 10.5, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 3 }}>Quantité proposée</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: ligne.quantiteProposee < ligne.quantiteDemandee ? '#dc2626' : '#15803d' }}>
+                {ligne.quantiteProposee} {ligne.unite}
+                {ligne.quantiteProposee < ligne.quantiteDemandee && (
+                  <span style={{ fontSize: 10.5, background: '#fef2f2', color: '#dc2626', borderRadius: 6, padding: '1px 6px', marginLeft: 6 }}>
+                    -{(ligne.quantiteDemandee - ligne.quantiteProposee).toFixed(2)} kg
+                  </span>
+                )}
+              </div>
+            </div>
+            {ligne.idLotPropose && (
+              <div style={{ gridColumn: '1 / -1' }}>
+                <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 3 }}>Lot proposé</div>
+                <div style={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>
+                  #{ligne.idLotPropose}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <button className="btn btn-ghost" style={{ color: 'var(--red-600)', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 6 }} onClick={refuser} disabled={saving}>
+          <Ban size={13} /> Refuser
+        </button>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Fermer</button>
+        <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 6 }} onClick={accepter} disabled={saving}>
+          {saving ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle2 size={13} />}
+          Accepter la proposition
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    VUE UPSEMCL / SÉLECTIONNEUR
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
-  const [orders,           setOrders]           = useState<any[]>([])
-  const [orgs,             setOrgs]             = useState<any[]>([])
-  const [varieties,        setVarieties]        = useState<any[]>([])
-  const [loading,          setLoading]          = useState(true)
-  const [kpiFilter,        setKpiFilter]        = useState<KpiKey | null>(null)
-  const [search,           setSearch]           = useState('')
-  /* Commande G3 sélectionnée pour ouverture du modal Préparer & Livrer */
-  const [commandeATraiter, setCommandeATraiter] = useState<any | null>(null)
+  const [orders,            setOrders]            = useState<any[]>([])
+  const [orgs,              setOrgs]              = useState<any[]>([])
+  const [varieties,         setVarieties]         = useState<any[]>([])
+  const [loading,           setLoading]           = useState(true)
+  const [kpiFilter,         setKpiFilter]         = useState<KpiKey | null>(null)
+  const [search,            setSearch]            = useState('')
+  const [commandeATraiter,  setCommandeATraiter]  = useState<any | null>(null)
+  const [commandeAProposer, setCommandeAProposer] = useState<any | null>(null)
+  const [commandeTransfert, setCommandeTransfert] = useState<any | null>(null)
+  const [actioning,         setActioning]         = useState<number | null>(null)
   const isUpsemcl = roleKey === 'seed-upsemcl'
 
   async function fetchAll() {
@@ -1316,16 +1661,25 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
     setToast({ msg: `Commande → ${STATUS_CFG[statut]?.label ?? statut}`, type: 'success' })
     fetchAll()
   }
-  /** Intercepte le bouton "Accepter" sur une commande G3 → ouvre le modal de livraison directe */
-  function handleValiderG3(commande: any) {
-    setCommandeATraiter(commande)
+  function handleValiderG3(commande: any) { setCommandeATraiter(commande) }
+
+  async function handleFaireTransfert(commande: any) {
+    setActioning(commande.id)
+    try {
+      await api.post(endpoints.orderFaireTransfert(commande.id), {})
+      setToast({ msg: `Transfert déclenché pour ${commande.codeCommande} — en attente d'accusé de réception`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors du transfert', type: 'error' })
+    } finally { setActioning(null) }
   }
+
   useEffect(() => { fetchAll() }, [])
 
-  const aTraiter  = orders.filter(o => o.statut === 'SOUMISE').length
-  const acceptees = orders.filter(o => ['ACCEPTEE','EN_PREPARATION'].includes(o.statut)).length
-  const rejetees  = orders.filter(o => ['ANNULEE','REJETEE'].includes(o.statut)).length
-  const livrees   = orders.filter(o => o.statut === 'LIVREE').length
+  const aTraiter   = orders.filter(o => o.statut === 'SOUMISE').length
+  const enCours    = orders.filter(o => ['EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON','ACCEPTEE','EN_PREPARATION'].includes(o.statut)).length
+  const rejetees   = orders.filter(o => ['ANNULEE','REJETEE'].includes(o.statut)).length
+  const livrees    = orders.filter(o => o.statut === 'LIVREE').length
 
   const toggleKpi = (k: KpiKey) => { setKpiFilter(kpiFilter === k ? null : k); setSearch('') }
 
@@ -1335,27 +1689,68 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
     return matchKpi && matchSearch
   })
 
+  const extraColumnsUpsemcl = isUpsemcl ? [{
+    head: 'Action',
+    cell: (o: any) => {
+      if (o.statut === 'SOUMISE') {
+        const hasG3 = Array.isArray(o.lignes) && o.lignes.some((l: any) => l.idGeneration === 4)
+        if (hasG3) {
+          return (
+            <div style={{ display: 'flex', gap: 5 }}>
+              <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #d97706, #b45309)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                onClick={() => setCommandeAProposer(o)} disabled={actioning === o.id}>
+                <Settings2 size={11} /> Proposer
+              </button>
+              <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 8px', color: '#6d28d9', border: '1px solid #ddd6fe' }}
+                title="Livraison directe (ancien flux)" onClick={() => handleValiderG3(o)} disabled={actioning === o.id}>
+                <Zap size={11} />
+              </button>
+            </div>
+          )
+        }
+        return (
+          <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => setCommandeAProposer(o)} disabled={actioning === o.id}>
+            <Settings2 size={11} /> Proposer
+          </button>
+        )
+      }
+      if (o.statut === 'EN_NEGOCIATION') {
+        return <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> En attente multiplicateur</span>
+      }
+      if (o.statut === 'ACCORDEE') {
+        return (
+          <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #6d28d9, #4c1d95)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => handleFaireTransfert(o)} disabled={actioning === o.id}>
+            {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Truck size={11} />}
+            Faire le transfert
+          </button>
+        )
+      }
+      if (o.statut === 'EN_LIVRAISON') {
+        return <span style={{ fontSize: 11, color: '#6d28d9', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Truck size={11} /> En livraison</span>
+      }
+      return null
+    },
+  }] : []
+
   return (
     <div>
-      {/* KPI cliquables */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 14, marginBottom: 16 }}>
         <KpiCard icon={<ShoppingCart size={20} />}  value={orders.length} label="Total reçues"  accent="#3b82f6" loading={loading} onClick={() => setKpiFilter(null)} />
         <KpiCard icon={<Clock size={20} />}          value={aTraiter}      label="À traiter"     accent="#f59e0b" active={kpiFilter === 'pending'}   onClick={() => toggleKpi('pending')}   loading={loading} />
-        <KpiCard icon={<PackageCheck size={20} />}   value={acceptees}     label="En cours"      accent="#22c55e" active={kpiFilter === 'accepted'}   onClick={() => toggleKpi('accepted')}  loading={loading} />
+        <KpiCard icon={<PackageCheck size={20} />}   value={enCours}       label="En cours"      accent="#22c55e" active={kpiFilter === 'accepted'}   onClick={() => toggleKpi('accepted')}  loading={loading} />
         <KpiCard icon={<XCircle size={20} />}        value={rejetees}      label="Rejetées"      accent="#ef4444" active={kpiFilter === 'rejected'}   onClick={() => toggleKpi('rejected')}  loading={loading} />
       </div>
 
       {aTraiter > 0 && (
         <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '11px 18px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#1e40af', fontWeight: 500 }}>
           <Clock size={15} />
-          <strong>{aTraiter} commande{aTraiter > 1 ? 's' : ''}</strong> en attente de votre décision.
-          <button className="btn btn-ghost" style={{ marginLeft: 'auto', fontSize: 12, color: '#1d4ed8', border: '1px solid #bfdbfe' }} onClick={() => toggleKpi('pending')}>
-            Voir
-          </button>
+          <strong>{aTraiter} commande{aTraiter > 1 ? 's' : ''}</strong> en attente de proposition.
+          <button className="btn btn-ghost" style={{ marginLeft: 'auto', fontSize: 12, color: '#1d4ed8', border: '1px solid #bfdbfe' }} onClick={() => toggleKpi('pending')}>Voir</button>
         </div>
       )}
 
-      {/* Graphe */}
       {!loading && <EvolutionChart orders={orders} />}
 
       <div className="card">
@@ -1365,7 +1760,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
             {isUpsemcl ? 'Commandes des multiplicateurs' : 'Commandes reçues'}
             {kpiFilter && (
               <button className="btn btn-ghost" style={{ marginLeft: 8, fontSize: 11, padding: '2px 8px', height: 22, color: 'var(--text-secondary)', border: '1px solid var(--border)' }} onClick={() => setKpiFilter(null)}>
-                <X size={10} /> {STATUS_CFG[kpiFilter === 'pending' ? 'SOUMISE' : kpiFilter === 'accepted' ? 'ACCEPTEE' : kpiFilter === 'rejected' ? 'REJETEE' : 'LIVREE']?.label ?? kpiFilter}
+                <X size={10} /> Filtre actif
               </button>
             )}
             <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{displayed.length}{displayed.length !== orders.length && `/${orders.length}`}</span>
@@ -1373,16 +1768,10 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
           <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
         </div>
 
-        {/* Recherche */}
         <div className="filters-bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34, flex: 1, maxWidth: 340 }}>
             <Search size={13} color="var(--text-muted)" />
-            <input
-              placeholder="Code commande ou client…"
-              value={search}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-              style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1 }}
-            />
+            <input placeholder="Code commande ou client…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1 }} />
             {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
           </div>
           {(search || kpiFilter) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setKpiFilter(null) }}><X size={11} /> Effacer</button>}
@@ -1396,25 +1785,24 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
           varieties={varieties}
           onUpdateStatus={handleUpdateStatus}
           onValiderG3={isUpsemcl ? handleValiderG3 : undefined}
+          extraColumns={extraColumnsUpsemcl}
         />
       </div>
 
-      {/* Stat livrées discrète */}
       {!loading && livrees > 0 && (
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Truck size={13} /> <strong>{livrees}</strong> commande{livrees > 1 ? 's' : ''} livrée{livrees > 1 ? 's' : ''} ce cycle
         </div>
       )}
 
-      {/* Modal Préparer & Livrer : affiché quand un agent UPSemCL valide une commande G3 */}
       {commandeATraiter && (
-        <TraiterCommandeG3Modal
-          commande={commandeATraiter}
-          varieties={varieties}
-          onClose={() => setCommandeATraiter(null)}
-          onSuccess={fetchAll}
-          setToast={setToast}
-        />
+        <TraiterCommandeG3Modal commande={commandeATraiter} varieties={varieties} onClose={() => setCommandeATraiter(null)} onSuccess={fetchAll} setToast={setToast} />
+      )}
+      {commandeAProposer && (
+        <ProposeModal commande={commandeAProposer} varieties={varieties} onClose={() => setCommandeAProposer(null)} onSuccess={fetchAll} setToast={setToast} />
+      )}
+      {commandeTransfert && (
+        <ProposeModal commande={commandeTransfert} varieties={varieties} onClose={() => setCommandeTransfert(null)} onSuccess={fetchAll} setToast={setToast} />
       )}
     </div>
   )

@@ -82,6 +82,11 @@ public class Variete {
     @Column(name = "date_creation", updatable = false)
     private Instant dateCreation;
 
+    /** Chemin relatif vers le PDF de la fiche variétale (ex: fiches/123.pdf) */
+    @Size(max = 500)
+    @Column(name = "fiche_varietale_path", length = 500)
+    private String ficheVarietalePath;
+
     // ── Soft-delete traçable ──────────────────────────────
     @Column(name = "commentaire_archivage", columnDefinition = "TEXT")
     private String commentaireArchivage;
