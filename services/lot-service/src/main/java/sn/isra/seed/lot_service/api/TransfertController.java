@@ -1,15 +1,12 @@
 package sn.isra.seed.lot_service.api;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import sn.isra.seed.lot_service.entity.HistoriqueStatutLot;
-import sn.isra.seed.lot_service.entity.OutboxEvent;
 import sn.isra.seed.lot_service.entity.TransfertLot;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.entity.enums.StatutTransfert;
-import sn.isra.seed.lot_service.kafka.LotEventProducer;
 import sn.isra.seed.lot_service.repo.HistoriqueStatutLotRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
-import sn.isra.seed.lot_service.repo.OutboxEventRepo;
+import sn.isra.seed.lot_service.repo.StockCreditRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
 
 import java.math.BigDecimal;
@@ -31,12 +28,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TransfertController {
 
-    private final TransfertLotRepo      transfertRepo;
-    private final LotRepo               lotRepo;
+    private final TransfertLotRepo       transfertRepo;
+    private final LotRepo                lotRepo;
     private final HistoriqueStatutLotRepo historiqueRepo;
-    private final OutboxEventRepo        outboxRepo;
-    private final LotEventProducer       producer;
-    private final ObjectMapper           om;
+    private final StockCreditRepo         stockCreditRepo;
 
     /* ── GET /api/transferts — tous les transferts du connecté ── */
     @GetMapping
@@ -55,14 +50,14 @@ public class TransfertController {
     /**
      * PUT /api/transferts/{id}/accepter
      *
-     * Body JSON (optionnel) : { "siteCode": "CNRA-BAMBEY" }
-     *   siteCode : code du site de stockage du destinataire.
-     *   Quand fourni, le stock est crédité immédiatement via lot.stock.sync.
-     *   Sans siteCode, le LotTransferConsumer résout le site par org-type (fallback).
+     * Body JSON (optionnel) : { "siteCode": "FERME-MULTI-02" }
      *
-     * Correction bug : la quantiteNette du lot source est déjà déduite lors
-     * de l'initiation du transfert (LotController.transfer). Elle NE doit PAS
-     * être déduite une seconde fois ici.
+     * Crédite le stock du destinataire de manière synchrone et atomique (pas de Kafka).
+     * Résolution du site : siteCode du body → sinon, site principal de l'org du destinataire.
+     * Marque également la commande associée comme LIVREE.
+     *
+     * Note : la quantiteNette du lot source est déjà déduite lors de l'initiation du
+     * transfert (LotController.transfer) — aucune déduction supplémentaire ici.
      */
     @Transactional
     @PutMapping("/{id}/accepter")
@@ -79,13 +74,11 @@ public class TransfertController {
         if (StatutTransfert.EN_ATTENTE != t.getStatut())
             return ResponseEntity.badRequest().<Object>body(Map.of("message", "Transfert déjà traité"));
 
-        String siteCode = (body != null) ? (String) body.get("siteCode") : null;
-
+        // 1. Marquer le transfert ACCEPTE
         t.setStatut(StatutTransfert.ACCEPTE);
         t.setDateAcceptation(LocalDate.now());
 
-        // Mise à jour statut lot — quantiteNette déjà déduite lors de l'initiation du transfert.
-        // Ne passer à TRANSFERE que si le lot est réellement épuisé (transfert partiel possible).
+        // 2. Mise à jour statut lot si épuisé (transfert partiel : statut inchangé)
         lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
             StatutLot ancienStatut = lot.getStatutLot();
             if (lot.getQuantiteNette() == null || lot.getQuantiteNette().compareTo(BigDecimal.ZERO) <= 0) {
@@ -96,50 +89,36 @@ public class TransfertController {
                     "Lot épuisé — transfert " + t.getCodeTransfert() + " accepté ("
                     + t.getQuantite() + " kg)"));
             }
-            // Transfert partiel : quantiteNette > 0 → statut inchangé, lot reste visible dans le catalogue
         });
 
         TransfertLot saved = transfertRepo.save(t);
 
-        // Publication immédiate lot.stock.sync si siteCode fourni (FIFO : crédit au site destinataire)
-        if (siteCode != null && !siteCode.isBlank() && saved.getQuantite() != null) {
-            try {
-                String syncPayload = om.writeValueAsString(Map.of(
-                    "idLot",    saved.getIdLot(),
-                    "codeSite", siteCode,
-                    "quantite", saved.getQuantite(),
-                    "unite",    "kg"
-                ));
-                producer.lotStockSync(syncPayload);
-            } catch (Exception e) {
-                log.warn("Stock sync non publié pour acceptation transfert {} : {}",
-                         saved.getCodeTransfert(), e.getMessage());
-            }
+        // 3. Résoudre le site de stockage du destinataire
+        String siteCode = (body != null) ? (String) body.get("siteCode") : null;
+        if ((siteCode == null || siteCode.isBlank()) && saved.getUsernameDestinataire() != null) {
+            siteCode = stockCreditRepo
+                .findOrgIdByUsername(saved.getUsernameDestinataire())
+                .flatMap(stockCreditRepo::findPrimarySiteByOrgId)
+                .orElse(null);
         }
 
-        // Outbox Transactional Outbox → lot.transfer.accepte (débit site source + crédit fallback)
-        try {
-            Map<String, Object> payloadMap = new java.util.LinkedHashMap<>();
-            payloadMap.put("idTransfertLot",   saved.getId());
-            payloadMap.put("codeTransfert",    saved.getCodeTransfert());
-            payloadMap.put("idLot",            saved.getIdLot());
-            payloadMap.put("quantite",         saved.getQuantite());
-            payloadMap.put("unite",            "kg");
-            payloadMap.put("roleEmetteur",     saved.getRoleEmetteur());
-            payloadMap.put("roleDestinataire", saved.getRoleDestinataire());
-            if (siteCode != null && !siteCode.isBlank()) {
-                payloadMap.put("siteCode", siteCode);
+        // 4. Crédit direct du stock (synchrone, atomique, sans Kafka)
+        if (siteCode != null && !siteCode.isBlank() && saved.getQuantite() != null) {
+            boolean ok = stockCreditRepo.crediterSite(saved.getIdLot(), siteCode, saved.getQuantite());
+            if (ok) {
+                log.info("Stock crédité : lot={} site={} qte={} kg (transfert {})",
+                         saved.getIdLot(), siteCode, saved.getQuantite(), saved.getCodeTransfert());
+            } else {
+                log.error("Échec crédit stock — lot={} site={} (transfert {})",
+                          saved.getIdLot(), siteCode, saved.getCodeTransfert());
             }
-            OutboxEvent event = new OutboxEvent();
-            event.setAggregateType("TransfertLot");
-            event.setAggregateId(saved.getId().toString());
-            event.setType("LOT_TRANSFER_ACCEPTE");
-            event.setPayload(om.writeValueAsString(payloadMap));
-            outboxRepo.save(event);
-        } catch (Exception e) {
-            log.error("Outbox non enregistré pour transfert lot {} : {}",
-                      saved.getCodeTransfert(), e.getMessage());
+        } else {
+            log.warn("Site destinataire introuvable pour transfert {} (destinataire={})",
+                     saved.getCodeTransfert(), saved.getUsernameDestinataire());
         }
+
+        // 5. Passer la commande associée à LIVREE
+        stockCreditRepo.marquerCommandeLivree(saved.getCodeTransfert());
 
         return ResponseEntity.<Object>ok(saved);
     }
