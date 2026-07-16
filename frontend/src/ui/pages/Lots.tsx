@@ -458,8 +458,22 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     ])
     setCatalogueG3(catRes.status === 'fulfilled' ? catRes.value.data : [])
     setLoadingCat(false)
-    setMesLots(mesRes.status === 'fulfilled' ? mesRes.value.data : [])
-    setMonStock(stockRes.status === 'fulfilled' ? stockRes.value.data : [])
+    // Tri: lots propres par createdAt DESC, lots reçus par transfert remontés selon leur stock
+    const rawLots: any[] = mesRes.status === 'fulfilled' ? mesRes.value.data : []
+    const rawStock: any[] = stockRes.status === 'fulfilled' ? stockRes.value.data : []
+    const stockDateByLot: Record<number, string> = {}
+    rawStock.forEach((st: any) => {
+      const lid = st.idLot ?? st.lot?.id
+      if (!lid) return
+      if (!stockDateByLot[lid] || st.createdAt > stockDateByLot[lid]) stockDateByLot[lid] = st.createdAt
+    })
+    rawLots.sort((a, b) => {
+      const da = stockDateByLot[a.id] ?? a.createdAt ?? ''
+      const db = stockDateByLot[b.id] ?? b.createdAt ?? ''
+      return da > db ? -1 : da < db ? 1 : 0
+    })
+    setMesLots(rawLots)
+    setMonStock(rawStock)
     setLoadingMes(false)
     setVarieties(varRes.status === 'fulfilled' ? varRes.value.data : [])
     setTransfertsRecus(trRecus.status === 'fulfilled' ? trRecus.value.data : [])
@@ -838,9 +852,16 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                 : '—'}
                             </td>
                             <td>
-                              <span className={`badge ${l.statutLot === 'DISPONIBLE' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 11 }}>
-                                {l.statutLot}
-                              </span>
+                              {(() => {
+                                const stListBadge = stockByLotId[l.id] ?? []
+                                const stTotalBadge = stListBadge.reduce((s, x) => s + x.qty, 0)
+                                const isRecu = isExternalLot(l) && stTotalBadge > 0
+                                return (
+                                  <span className={`badge ${isRecu || l.statutLot === 'DISPONIBLE' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 11 }}>
+                                    {isRecu ? 'REÇU' : l.statutLot}
+                                  </span>
+                                )
+                              })()}
                             </td>
                             <td>
                               <div style={{ display: 'flex', gap: 4 }}>
@@ -1167,7 +1188,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                     <div>
                                       <span style={{ fontWeight: 700, color: 'var(--green-700)', fontSize: 13 }}>{stTotal.toLocaleString('fr-FR')}</span>
                                       {' '}<span style={{ fontSize: 11, color: 'var(--text-muted)' }}>kg reçus</span>
-                                      {l.quantiteNette != null && (
+                                      {l.quantiteNette != null && Number(l.quantiteNette) > 0 && (
                                         <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
                                           lot source : {Number(l.quantiteNette).toLocaleString('fr-FR')} kg restants
                                         </div>
