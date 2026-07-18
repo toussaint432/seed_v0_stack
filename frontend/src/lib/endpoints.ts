@@ -73,6 +73,9 @@ export const endpoints = {
   movements:  `${STOCK}/movements`,
   sites:      `${STOCK}/sites`,
   siteById:         (id: number) => `${STOCK}/sites/${id}`,
+  /** Sites appartenant à l'org du connecté (multiplicateur / quotataire) */
+  sitesMesSites:        `${STOCK}/sites/mes-sites`,
+  siteMesSitesByCode:   (code: string) => `${STOCK}/sites/mes-sites/${code}`,
   transfers:  `${STOCK}/transfers`,
   transferById:     (id: number) => `${STOCK}/transfers/${id}`,
   catalogue:        `${STOCK}/stocks/catalogue`,

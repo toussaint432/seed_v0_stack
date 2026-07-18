@@ -40,6 +40,12 @@ public class Site {
     @Column(name = "id_organisation")
     private Long idOrganisation;
 
+    @Size(max = 60)
+    private String departement;
+
+    @Column(name = "est_principal", nullable = false)
+    private Boolean estPrincipal = false;
+
     @DecimalMin(value = "-90.0") @DecimalMax(value = "90.0")
     @Column(precision = 10, scale = 6)
     private BigDecimal latitude;

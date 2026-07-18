@@ -87,10 +87,19 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
                       @Param("unite") String unite);
 
   /**
-   * Stock d'une organisation (multiplicateur isolé) : tous ses sites.
-   * Joint sur site.id_organisation pour ne retourner que les stocks de son périmètre.
+   * Stock d'un multiplicateur : uniquement les lots dont il est l'org producteur,
+   * stockés sur ses propres sites. Double filtre site ET lot pour éviter de voir
+   * les lots d'autres organisations (ex : lots UPSemCL transférés par erreur).
    */
-  @Query("SELECT s FROM Stock s WHERE s.site.idOrganisation = :orgId ORDER BY s.updatedAt DESC")
+  @Query(value = """
+      SELECT s.id, s.id_lot, s.id_site, s.quantite_disponible, s.unite, s.updated_at, s.created_at
+      FROM stock s
+      JOIN lot_semencier l ON l.id  = s.id_lot
+      JOIN site si         ON si.id = s.id_site
+      WHERE si.id_organisation      = :orgId
+        AND l.id_org_producteur     = :orgId
+      ORDER BY s.updated_at DESC NULLS LAST
+      """, nativeQuery = true)
   List<Stock> findByOrganisation(@Param("orgId") Long orgId);
 
   /** Vue agrégée par (variété, génération, site) — tous les rôles sauf multiplicateur. */
@@ -119,31 +128,49 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
       """, nativeQuery = true)
   List<StockAgregeView> findAllAgrege();
 
-  /** Vue agrégée filtrée par organisation (multiplicateur). */
+  /**
+   * Vue agrégée filtrée pour un multiplicateur : uniquement ses propres lots.
+   * Requête directe (sans v_stock_agrege) pour pouvoir filtrer sur id_org_producteur
+   * et garantir qu'aucun lot d'une autre organisation ne remonte dans les totaux.
+   */
   @Query(value = """
       SELECT
-          va.id_variete       AS idVariete,
-          va.id_generation    AS idGeneration,
-          va.id_site          AS idSite,
-          va.code_site        AS codeSite,
-          va.nom_site         AS nomSite,
-          va.code_generation  AS codeGeneration,
-          va.nom_variete      AS nomVariete,
-          va.code_variete     AS codeVariete,
-          va.nom_espece       AS nomEspece,
-          va.code_espece      AS codeEspece,
-          va.unite,
-          va.quantite_totale  AS quantiteTotale,
-          va.nb_lots          AS nbLots,
-          TO_CHAR(va.derniere_maj AT TIME ZONE 'UTC',
-                  'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS derniereMaj,
-          TO_CHAR(va.premiere_entree AT TIME ZONE 'UTC',
-                  'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS createdAt,
-          va.lots_detail::text AS lotsDetail
-      FROM v_stock_agrege va
-      JOIN site si ON va.id_site = si.id
-      WHERE si.id_organisation = :orgId
-      ORDER BY va.code_generation, va.nom_variete, va.code_site
+          ls.id_variete                                                               AS idVariete,
+          ls.id_generation                                                            AS idGeneration,
+          s.id_site                                                                   AS idSite,
+          si.code_site                                                                AS codeSite,
+          si.nom_site                                                                 AS nomSite,
+          g.code_generation                                                           AS codeGeneration,
+          v.nom_variete                                                               AS nomVariete,
+          v.code_variete                                                              AS codeVariete,
+          e.nom_commun                                                                AS nomEspece,
+          e.code_espece                                                               AS codeEspece,
+          s.unite,
+          SUM(s.quantite_disponible)                                                  AS quantiteTotale,
+          COUNT(DISTINCT s.id)                                                        AS nbLots,
+          TO_CHAR(MAX(s.updated_at) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS derniereMaj,
+          TO_CHAR(MIN(s.created_at) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS createdAt,
+          json_agg(json_build_object(
+              'idStock',   s.id,
+              'idLot',     ls.id,
+              'codeLot',   ls.code_lot,
+              'quantite',  s.quantite_disponible,
+              'unite',     s.unite,
+              'statut',    ls.statut_lot,
+              'campagne',  ls.campagne,
+              'createdAt', to_char(s.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          ) ORDER BY s.created_at)::text                                              AS lotsDetail
+      FROM stock s
+      JOIN lot_semencier ls     ON s.id_lot      = ls.id
+      JOIN site si              ON s.id_site      = si.id
+      JOIN generation_semence g ON ls.id_generation = g.id
+      JOIN variete v            ON ls.id_variete    = v.id
+      JOIN espece e             ON v.id_espece      = e.id
+      WHERE si.id_organisation   = :orgId
+        AND ls.id_org_producteur = :orgId
+      GROUP BY ls.id_variete, ls.id_generation, s.id_site, si.code_site, si.nom_site,
+               g.code_generation, v.nom_variete, v.code_variete, e.nom_commun, e.code_espece, s.unite
+      ORDER BY g.code_generation, v.nom_variete, si.code_site
       """, nativeQuery = true)
   List<StockAgregeView> findAgregeByOrganisation(@Param("orgId") Long orgId);
 

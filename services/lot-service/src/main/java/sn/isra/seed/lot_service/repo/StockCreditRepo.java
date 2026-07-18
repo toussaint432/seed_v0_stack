@@ -52,7 +52,7 @@ public class StockCreditRepo {
      */
     public Optional<String> findPrimarySiteByOrgId(Long idOrg) {
         List<String> rows = jdbc.query(
-            "SELECT code_site FROM site WHERE id_organisation = ? ORDER BY id LIMIT 1",
+            "SELECT code_site FROM site WHERE id_organisation = ? ORDER BY est_principal DESC, id ASC LIMIT 1",
             (rs, i) -> rs.getString("code_site"),
             idOrg
         );

@@ -14,6 +14,7 @@ import sn.isra.seed.order_service.repo.AllocationRepo;
 import sn.isra.seed.order_service.repo.CommandeRepo;
 import sn.isra.seed.order_service.repo.LigneRepo;
 import sn.isra.seed.order_service.repo.LotQuantiteRepo;
+import sn.isra.seed.order_service.repo.LotReceptionRepo;
 import sn.isra.seed.order_service.repo.MembreOrganisationRepo;
 import sn.isra.seed.order_service.repo.StockOrderRepo;
 import sn.isra.seed.order_service.repo.TransfertLotOrderRepo;
@@ -45,6 +46,7 @@ public class OrderController {
   private final MembreOrganisationRepo membreRepo;
   private final StockOrderRepo stockOrderRepo;
   private final LotQuantiteRepo lotQuantiteRepo;
+  private final LotReceptionRepo lotReceptionRepo;
   private final TransfertLotOrderRepo transfertLotOrderRepo;
   private final OrderEventProducer producer;
   private final ObjectMapper om;
@@ -293,13 +295,20 @@ public class OrderController {
    */
   @Transactional
   @PatchMapping("/{id}/accepter-proposition")
-  public ResponseEntity<Commande> accepterProposition(@PathVariable Long id) {
+  public ResponseEntity<Commande> accepterProposition(
+      @PathVariable Long id,
+      @RequestBody(required = false) java.util.Map<String, Object> body) {
+
     Commande commande = commandeRepo.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
 
     if (commande.getStatut() != StatutCommande.EN_NEGOCIATION) {
       throw new ResponseStatusException(HttpStatus.CONFLICT,
           "La commande doit être EN_NEGOCIATION pour accepter la proposition (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    if (body != null && body.get("siteCode") instanceof String sc && !sc.isBlank()) {
+      commande.setSiteDestinationCode(sc);
     }
 
     commande.setStatut(StatutCommande.ACCORDEE);
@@ -432,16 +441,28 @@ public class OrderController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Organisation acheteur non renseignée — impossible de créditer le stock");
     }
 
+    String siteDestCode = commande.getSiteDestinationCode();
+
     for (LigneCommande ligne : commande.getLignes()) {
       if (ligne.getIdLotPropose() == null || ligne.getQuantiteProposee() == null) continue;
 
-      // Créditer le stock de l'organisation multiplicatrice
-      stockOrderRepo.creditOrg(
-          ligne.getIdLotPropose(),
+      String unite = ligne.getUnite() != null ? ligne.getUnite() : "kg";
+
+      // Créer un nouveau lot_semencier au nom du multiplicateur (enfant du lot UPSemCL)
+      String codeLot = "REC-" + commande.getId() + "-L" + ligne.getId();
+      Long newLotId = lotReceptionRepo.createReceptionLot(
+          ligne.getIdLotPropose(), codeLot,
           commande.getIdOrganisationAcheteur(),
-          ligne.getQuantiteProposee(),
-          ligne.getUnite() != null ? ligne.getUnite() : "kg"
+          commande.getUsernameAcheteur(),
+          ligne.getQuantiteProposee(), unite
       );
+
+      // Créditer le stock du NOUVEAU lot au site choisi par le multiplicateur
+      if (siteDestCode != null && !siteDestCode.isBlank()) {
+        stockOrderRepo.creditSiteCode(newLotId, siteDestCode, ligne.getQuantiteProposee(), unite);
+      } else {
+        stockOrderRepo.creditOrg(newLotId, commande.getIdOrganisationAcheteur(), ligne.getQuantiteProposee(), unite);
+      }
     }
 
     // Valider le transfert_lot (EN_ATTENTE → ACCEPTE)
@@ -523,13 +544,16 @@ public class OrderController {
       // 2b. Débiter le stock UPSemCL (table stock) — no-op si pas encore d'entrée stock
       stockOrderRepo.debitUpsemcl(item.idLot(), item.quantite());
 
-      // 2c. Créditer le stock du multiplicateur (table stock, INSERT ON CONFLICT UPDATE)
-      stockOrderRepo.creditOrg(
-          item.idLot(),
+      // 2c. Créer un lot de réception pour le multiplicateur + créditer son site principal
+      String uniteItem = ligne.getUnite() != null ? ligne.getUnite() : "kg";
+      String codeLotRec = "REC-" + commande.getId() + "-L" + item.idLigne();
+      Long newLotId = lotReceptionRepo.createReceptionLot(
+          item.idLot(), codeLotRec,
           commande.getIdOrganisationAcheteur(),
-          item.quantite(),
-          ligne.getUnite() != null ? ligne.getUnite() : "kg"
+          commande.getUsernameAcheteur(),
+          item.quantite(), uniteItem
       );
+      stockOrderRepo.creditOrg(newLotId, commande.getIdOrganisationAcheteur(), item.quantite(), uniteItem);
 
       // 2d. Débiter la quantité nette du lot source (+ statut → TRANSFERE si épuisé)
       var lotSource = lotQuantiteRepo.findById(item.idLot()).orElse(null);

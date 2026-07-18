@@ -4,6 +4,8 @@ import {
   AlertTriangle, Activity, Eye, AlertCircle, Info,
 } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
+import { api } from '../../lib/api'
+import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -155,9 +157,11 @@ export function Users({ roleKey }: Props) {
   const [eventSearch, setEventSearch]     = useState('')
   const [eventTypeFilter, setEventTypeFilter] = useState('')
 
+  const [organisations, setOrganisations] = useState<any[]>([])
+
   const [form, setForm] = useState({
     username: '', firstName: '', lastName: '', email: '',
-    password: '', role: 'seed-selector',
+    password: '', role: 'seed-selector', orgId: '',
   })
 
   function adminHeaders() {
@@ -198,7 +202,11 @@ export function Users({ roleKey }: Props) {
   }
 
   useEffect(() => {
-    if (roleKey === 'seed-admin') { fetchUsers(); fetchEvents() }
+    if (roleKey === 'seed-admin') {
+      fetchUsers()
+      fetchEvents()
+      api.get(endpoints.organisations).then(r => setOrganisations(r.data || [])).catch(() => {})
+    }
   }, [])
 
   const filtered = users.filter(u =>
@@ -239,6 +247,7 @@ export function Users({ roleKey }: Props) {
     e.preventDefault()
     setSaving(true)
     try {
+      // 1. Créer l'utilisateur dans Keycloak
       const createRes = await fetch(`${KEYCLOAK_ADMIN}/admin/realms/${REALM}/users`, {
         method: 'POST',
         headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
@@ -253,6 +262,8 @@ export function Users({ roleKey }: Props) {
       const location = createRes.headers.get('Location') ?? ''
       const newUserId = location.split('/').pop()
       if (!newUserId) throw new Error('ID utilisateur introuvable')
+
+      // 2. Assigner le rôle plateforme
       const rolesRes = await fetch(`${KEYCLOAK_ADMIN}/admin/realms/${REALM}/roles/${form.role}`, { headers: adminHeaders() })
       if (!rolesRes.ok) throw new Error('Rôle introuvable')
       const roleObj = await rolesRes.json()
@@ -261,13 +272,36 @@ export function Users({ roleKey }: Props) {
         headers: { ...adminHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify([roleObj]),
       })
-      setToast({ msg: `Utilisateur ${form.username} créé avec succès (mot de passe temporaire)`, type: 'success' })
+
+      // 3. Lier l'utilisateur à son organisation (membre_organisation)
+      const resolvedOrgId = resolveOrgId(form.role, form.orgId)
+      if (resolvedOrgId) {
+        const nomComplet = [form.firstName, form.lastName].filter(Boolean).join(' ') || form.username
+        await api.post(endpoints.membres, {
+          keycloakUsername: form.username,
+          keycloakRole:     form.role,
+          nomComplet,
+          idOrganisation:   resolvedOrgId,
+          roleDansOrg:      'MEMBRE',
+          principal:        true,
+        })
+      }
+
+      setToast({ msg: `Utilisateur ${form.username} créé avec succès`, type: 'success' })
       setShowForm(false)
-      setForm({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'seed-selector' })
+      setForm({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'seed-selector', orgId: '' })
       fetchUsers()
     } catch (err: any) {
       setToast({ msg: err?.message ?? 'Erreur lors de la création', type: 'error' })
     } finally { setSaving(false) }
+  }
+
+  function resolveOrgId(role: string, orgId: string): number | null {
+    if (role === 'seed-selector' || role === 'seed-admin') {
+      const isra = organisations.find(o => o.typeOrganisation === 'ISRA')
+      return isra?.id ?? 1
+    }
+    return orgId ? Number(orgId) : null
   }
 
   async function toggleUserStatus(userId: string, currentlyEnabled: boolean) {
@@ -592,11 +626,57 @@ export function Users({ roleKey }: Props) {
                 <FormInput type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="••••••••" required />
               </Field>
               <Field label="Rôle plateforme" required>
-                <FormSelect value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
+                <FormSelect value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value, orgId: '' }))}>
                   {ROLES_PLATFORM.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </FormSelect>
               </Field>
             </FormRow>
+
+            {/* Organisation — obligatoire pour UPSemCL, Multiplicateur, Quotataire */}
+            {['seed-upsemcl', 'seed-multiplicator', 'seed-quotataire'].includes(form.role) && (
+              <Field label="Organisation" required hint="Organisation à laquelle appartient cet utilisateur">
+                {(() => {
+                  const typeFilter: Record<string, string[]> = {
+                    'seed-upsemcl':       ['UPSEMCL'],
+                    'seed-multiplicator': ['MULTIPLICATEUR', 'COOPERATIVE'],
+                    'seed-quotataire':    ['AUTRE'],
+                  }
+                  const types = typeFilter[form.role] ?? []
+                  const filtered = organisations.filter(o => types.includes(o.typeOrganisation) && o.active !== false)
+                  return (
+                    <select
+                      value={form.orgId}
+                      onChange={e => setForm(f => ({ ...f, orgId: e.target.value }))}
+                      required
+                      style={{
+                        width: '100%', padding: '0 12px', height: 36, borderRadius: 6,
+                        border: '1px solid var(--border-strong)', background: 'var(--surface)',
+                        fontSize: 13, fontFamily: 'Outfit, sans-serif', color: 'var(--text)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <option value="">— Sélectionner une organisation —</option>
+                      {filtered.map((o: any) => (
+                        <option key={o.id} value={o.id}>
+                          {o.nomOrganisation ?? o.nom_organisation} ({o.codeOrganisation ?? o.code_organisation})
+                        </option>
+                      ))}
+                    </select>
+                  )
+                })()}
+              </Field>
+            )}
+
+            {(form.role === 'seed-selector' || form.role === 'seed-admin') && (
+              <div style={{
+                padding: '8px 14px', borderRadius: 8, marginBottom: 16,
+                background: 'var(--blue-50)', border: '1px solid var(--blue-200)',
+                fontSize: 12, color: 'var(--blue-700)',
+              }}>
+                Organisation automatique : <strong>ISRA CNRA Bambey</strong>
+              </div>
+            )}
+
             <FormActions onCancel={() => setShowForm(false)} loading={saving} submitLabel="Créer l'utilisateur" />
           </form>
         </Modal>

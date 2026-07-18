@@ -63,6 +63,7 @@ export function Transfers({ roleKey }: Props) {
   const [transfers, setTransfers] = useState<any[]>([])
   const [lots, setLots] = useState<any[]>([])
   const [sites, setSites] = useState<any[]>([])
+  const [mesSites, setMesSites] = useState<any[]>([])
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [loading, setLoading] = useState(true)
@@ -70,7 +71,7 @@ export function Transfers({ roleKey }: Props) {
   const [currentPage, setCurrentPage] = useState(1)
   const [showForm, setShowForm] = useState(false)
   const [showDetail, setShowDetail] = useState<any>(null)
-  // Modal acceptation avec sélection de site destination (enregistrement FIFO en stock)
+  // Modal acceptation — sélection du site de stockage du destinataire
   const [acceptModal, setAcceptModal] = useState<any>(null)
   const [acceptSiteCode, setAcceptSiteCode] = useState('')
   const [acceptSaving, setAcceptSaving] = useState(false)
@@ -112,16 +113,19 @@ export function Transfers({ roleKey }: Props) {
   async function fetchAll() {
     setLoading(true)
     const lotsUrl = roleKey === 'seed-multiplicator' ? endpoints.lotsMesLots : endpoints.lots
-    const [tRes, lRes, rRes, sRes] = await Promise.allSettled([
+    const needsMesSites = ['seed-multiplicator', 'seed-quotataire'].includes(roleKey)
+    const [tRes, lRes, rRes, sRes, msRes] = await Promise.allSettled([
       api.get(endpoints.transfertsLot),
       api.get(lotsUrl),
       api.get(endpoints.transfertsRecus),
       api.get(endpoints.sites),
+      needsMesSites ? api.get(endpoints.sitesMesSites) : Promise.resolve({ data: [] }),
     ])
     setTransfers(tRes.status === 'fulfilled' ? tRes.value.data : [])
     setLots(lRes.status === 'fulfilled' ? lRes.value.data : [])
     setRecus(rRes.status === 'fulfilled' ? rRes.value.data : [])
     setSites(sRes.status === 'fulfilled' ? sRes.value.data : [])
+    setMesSites(msRes.status === 'fulfilled' ? msRes.value.data : [])
     setLoading(false)
   }
 
@@ -336,7 +340,11 @@ export function Transfers({ roleKey }: Props) {
                   {t.observations && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontStyle: 'italic', marginTop: 2 }}>{t.observations}</div>}
                 </div>
                 <button className="btn btn-primary" style={{ height: 30, fontSize: 12 }}
-                  onClick={() => { setAcceptModal(t); setAcceptSiteCode('') }}>
+                  onClick={() => {
+                    const principal = mesSites.find((s: any) => s.estPrincipal) ?? mesSites[0]
+                    setAcceptModal(t)
+                    setAcceptSiteCode(principal?.codeSite ?? '')
+                  }}>
                   <CheckCircle2 size={12} /> Accepter
                 </button>
                 <button className="btn btn-ghost" style={{ height: 30, fontSize: 12, color: '#ef4444', borderColor: '#fca5a5' }}
@@ -478,7 +486,11 @@ export function Transfers({ roleKey }: Props) {
                               className="btn btn-ghost"
                               style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#15803d', background: '#f0fdf4', border: '1px solid #bbf7d0' }}
                               title="Accepter ce transfert"
-                              onClick={() => { setAcceptModal(t); setAcceptSiteCode('') }}
+                              onClick={() => {
+                                const principal = mesSites.find((s: any) => s.estPrincipal) ?? mesSites[0]
+                                setAcceptModal(t)
+                                setAcceptSiteCode(principal?.codeSite ?? '')
+                              }}
                             ><CheckCircle2 size={12} /></button>
                             <button
                               className="btn btn-ghost"
@@ -600,7 +612,7 @@ export function Transfers({ roleKey }: Props) {
         </Modal>
       )}
 
-      {/* Modal Acceptation — sélection site de stockage (FIFO) */}
+      {/* Modal Acceptation — sélection du site de stockage de réception */}
       {acceptModal && (
         <Modal
           title="Accepter le transfert"
@@ -610,30 +622,45 @@ export function Transfers({ roleKey }: Props) {
         >
           <form onSubmit={e => { e.preventDefault(); confirmerAcceptation() }}>
             <Field
-              label="Site de stockage de réception"
-              hint="Sélectionnez le site où les semences seront stockées. Le stock sera crédité automatiquement selon la règle FIFO."
+              label="Site de réception du stock"
+              hint={mesSites.length === 0
+                ? 'Aucun site trouvé pour votre organisation. Créez un site dans « Mes Sites ».'
+                : 'Les semences seront créditées dans ce site. Le site principal est présélectionné.'}
             >
-              <FormSelect
-                value={acceptSiteCode}
-                onChange={e => setAcceptSiteCode(e.target.value)}
-              >
-                <option value="">— Aucun site (enregistrement manuel plus tard) —</option>
-                {sites.map((s: any) => (
-                  <option key={s.id} value={s.codeSite}>
-                    {s.codeSite} — {s.nomSite}
-                  </option>
-                ))}
-              </FormSelect>
+              {mesSites.length > 0 ? (
+                <FormSelect
+                  value={acceptSiteCode}
+                  onChange={v => setAcceptSiteCode(v)}
+                  options={[
+                    { value: '', label: '— Choisir un site —' },
+                    ...mesSites.map((s: any) => ({
+                      value: s.codeSite,
+                      label: `${s.nomSite}${s.estPrincipal ? ' ★' : ''} (${s.codeSite})`,
+                    })),
+                  ]}
+                />
+              ) : (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 8,
+                  background: '#fffbeb', border: '1px solid #fbbf24',
+                  fontSize: 12.5, color: '#92400e',
+                }}>
+                  Aucun site enregistré. Rendez-vous dans <strong>Mes Sites</strong> pour créer votre premier site de stockage.
+                </div>
+              )}
             </Field>
+
             {acceptSiteCode && (
               <div style={{
                 padding: '10px 14px', borderRadius: 8,
                 background: '#f0fdf4', border: '1px solid #bbf7d0',
                 fontSize: 12.5, color: '#166534', marginBottom: 12,
               }}>
-                ✓ <strong>{Number(acceptModal.quantite || 0).toLocaleString('fr-FR')} kg</strong> seront crédités au site <strong>{acceptSiteCode}</strong> selon la règle FIFO.
+                ✓ <strong>{Number(acceptModal.quantite || 0).toLocaleString('fr-FR')} kg</strong> seront crédités
+                au site <strong>{mesSites.find((s: any) => s.codeSite === acceptSiteCode)?.nomSite ?? acceptSiteCode}</strong>.
               </div>
             )}
+
             <FormActions
               onCancel={() => { setAcceptModal(null); setAcceptSiteCode('') }}
               loading={acceptSaving}

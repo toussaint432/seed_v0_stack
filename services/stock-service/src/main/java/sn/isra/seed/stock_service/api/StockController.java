@@ -69,8 +69,9 @@ public class StockController {
 
     List<String> allowedGens = null;
     if (jwt != null) {
-      if (hasRole(jwt, "seed-upsemcl"))   allowedGens = List.of("G1", "G2", "G3");
-      else if (hasRole(jwt, "seed-selector")) allowedGens = List.of("G0", "G1");
+      if (hasRole(jwt, "seed-upsemcl"))        allowedGens = List.of("G1", "G2", "G3");
+      else if (hasRole(jwt, "seed-selector"))  allowedGens = List.of("G0", "G1");
+      else if (hasRole(jwt, "seed-quotataire")) allowedGens = List.of("R2");
     }
 
     final List<String> finalGens = allowedGens;

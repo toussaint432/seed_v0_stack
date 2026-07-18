@@ -41,8 +41,9 @@ public interface StockOrderRepo extends JpaRepository<Stock, Long> {
     int debitUpsemcl(@Param("idLot") Long idLot, @Param("qte") BigDecimal qte);
 
     /**
-     * Crédite le stock du site de l'organisation destinataire pour un lot donné.
+     * Crédite le stock du site PRINCIPAL de l'organisation destinataire pour un lot donné.
      * INSERT ou UPDATE atomique via ON CONFLICT.
+     * Utilise ORDER BY est_principal DESC, id ASC pour toujours cibler le site principal.
      */
     @Modifying
     @Query(value = """
@@ -50,6 +51,7 @@ public interface StockOrderRepo extends JpaRepository<Stock, Long> {
         SELECT :idLot, s.id, :qte, :unite
           FROM site s
          WHERE s.id_organisation = :idOrg
+         ORDER BY s.est_principal DESC, s.id ASC
          LIMIT 1
         ON CONFLICT (id_lot, id_site) DO UPDATE
            SET quantite_disponible = stock.quantite_disponible + EXCLUDED.quantite_disponible
@@ -58,4 +60,22 @@ public interface StockOrderRepo extends JpaRepository<Stock, Long> {
                   @Param("idOrg") Long idOrg,
                   @Param("qte") BigDecimal qte,
                   @Param("unite") String unite);
+
+    /**
+     * Crédite le stock d'un site explicitement identifié par son code_site.
+     * Utilisé quand le multiplicateur a choisi son site de réception.
+     */
+    @Modifying
+    @Query(value = """
+        INSERT INTO stock (id_lot, id_site, quantite_disponible, unite)
+        VALUES (:idLot,
+                (SELECT id FROM site WHERE code_site = :codeSite LIMIT 1),
+                :qte, :unite)
+        ON CONFLICT (id_lot, id_site) DO UPDATE
+           SET quantite_disponible = stock.quantite_disponible + EXCLUDED.quantite_disponible
+        """, nativeQuery = true)
+    int creditSiteCode(@Param("idLot") Long idLot,
+                       @Param("codeSite") String codeSite,
+                       @Param("qte") BigDecimal qte,
+                       @Param("unite") String unite);
 }

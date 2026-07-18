@@ -54,6 +54,10 @@ public class Commande {
     @Column(name = "code_transfert_genere", length = 80)
     private String codeTransfertGenere;
 
+    @Size(max = 50)
+    @Column(name = "site_destination_code", length = 50)
+    private String siteDestinationCode;
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 

@@ -4,11 +4,16 @@ import sn.isra.seed.stock_service.entity.Site;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import java.util.List;
 import java.util.Optional;
 
 public interface SiteRepo extends JpaRepository<Site, Long> {
 
   Optional<Site> findByCodeSite(String codeSite);
+
+  List<Site> findByIdOrganisationOrderByEstPrincipalDescIdAsc(Long idOrganisation);
+
+  boolean existsByCodeSite(String codeSite);
 
   /**
    * Résolution site ← type d'organisation.

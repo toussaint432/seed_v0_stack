@@ -2209,12 +2209,25 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 <option value="RETIRE">Retiré</option>
               </FormSelect>
             </Field>
-            <Field label="Site de stockage initial" hint="Optionnel — enregistre directement la quantité en stock">
-              <FormSelect value={newLotForm.siteCode} onChange={e => setNewLotForm(f => ({ ...f, siteCode: e.target.value }))}>
-                <option value="">— Sans enregistrement stock immédiat —</option>
-                {formSites.map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}</option>)}
-              </FormSelect>
-            </Field>
+            {(['seed-selector', 'seed-upsemcl'].includes(roleKey)) ? (
+              <Field label="Site de stockage initial">
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px',
+                  background: 'var(--green-50)', border: '1px solid var(--green-200)', borderRadius: 6,
+                  fontSize: 13, color: 'var(--green-800)', fontWeight: 600,
+                }}>
+                  {roleKey === 'seed-selector' ? 'CNRA-BAMBEY — CNRA Bambey' : 'UPSEMCL-SITE-BAMBEY — Site UPSemCL Bambey'}
+                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--green-600)', marginLeft: 'auto' }}>Site fixe</span>
+                </div>
+              </Field>
+            ) : (
+              <Field label="Site de stockage initial" hint="Optionnel — enregistre directement la quantité en stock">
+                <FormSelect value={newLotForm.siteCode} onChange={e => setNewLotForm(f => ({ ...f, siteCode: e.target.value }))}>
+                  <option value="">— Sans enregistrement stock immédiat —</option>
+                  {formSites.map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}</option>)}
+                </FormSelect>
+              </Field>
+            )}
             <FormActions onCancel={() => setShowNewLot(false)} loading={saving} submitLabel="Créer le lot" />
           </form>
         </Modal>
@@ -2324,13 +2337,25 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 Rendement estimé : <strong>{(Number(childForm.productionBruteKg) / Number(childForm.superficieHa)).toFixed(2)} kg/ha</strong>
               </div>
             )}
-            <Field label="Site de stockage" hint="Optionnel — crée ou incrémente automatiquement le stock à ce site">
-              <FormSelect value={childForm.siteCode} onChange={e => setChildForm(f => ({ ...f, siteCode: e.target.value }))}>
-                <option value="">— Sans enregistrement stock immédiat —</option>
-                {(roleKey === 'seed-selector' ? sites.filter((s: any) => s.typeSite === 'STATION_RECHERCHE') : sites)
-                  .map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}</option>)}
-              </FormSelect>
-            </Field>
+            {(['seed-selector', 'seed-upsemcl'].includes(roleKey)) ? (
+              <Field label="Site de stockage">
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px',
+                  background: 'var(--green-50)', border: '1px solid var(--green-200)', borderRadius: 6,
+                  fontSize: 13, color: 'var(--green-800)', fontWeight: 600,
+                }}>
+                  {roleKey === 'seed-selector' ? 'CNRA-BAMBEY — CNRA Bambey' : 'UPSEMCL-SITE-BAMBEY — Site UPSemCL Bambey'}
+                  <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--green-600)', marginLeft: 'auto' }}>Site fixe</span>
+                </div>
+              </Field>
+            ) : (
+              <Field label="Site de stockage" hint="Optionnel — crée ou incrémente automatiquement le stock à ce site">
+                <FormSelect value={childForm.siteCode} onChange={e => setChildForm(f => ({ ...f, siteCode: e.target.value }))}>
+                  <option value="">— Sans enregistrement stock immédiat —</option>
+                  {sites.map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}</option>)}
+                </FormSelect>
+              </Field>
+            )}
             <FormActions onCancel={() => setShowChildLot(false)} loading={saving} submitLabel="Créer le lot enfant" />
           </form>
         </Modal>

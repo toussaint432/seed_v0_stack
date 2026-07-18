@@ -75,6 +75,20 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         """)
     List<LotSemencier> findMesLots(@Param("orgId") Long orgId, @Param("username") String username);
 
+    /**
+     * Lots R2 disponibles visibles par les quotataires pour passer commande.
+     * Seuls les lots de génération R2, statut DISPONIBLE, avec quantité > 0
+     * sont exposés — les quotataires ne doivent pas voir G3/G4/R1.
+     */
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration = 'R2'
+          AND l.statutLot = 'DISPONIBLE'
+          AND l.quantiteNette > 0
+        ORDER BY l.createdAt DESC
+        """)
+    List<LotSemencier> findR2Disponible();
+
     /** Débite la quantité nette du lot parent lors de la création d'un lot enfant. */
     @Modifying
     @Query("UPDATE LotSemencier l SET l.quantiteNette = l.quantiteNette - :qte WHERE l.id = :id")

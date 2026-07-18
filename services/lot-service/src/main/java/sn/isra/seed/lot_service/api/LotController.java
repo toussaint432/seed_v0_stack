@@ -12,10 +12,12 @@ import sn.isra.seed.lot_service.repo.GenerationRepo;
 import sn.isra.seed.lot_service.repo.HistoriqueStatutLotRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
 import sn.isra.seed.lot_service.repo.MembreOrgLotRepo;
+import sn.isra.seed.lot_service.repo.StockCreditRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -32,6 +34,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/lots")
 @RequiredArgsConstructor
@@ -42,8 +45,9 @@ public class LotController {
     private final TransfertLotRepo transfertRepo;
     private final HistoriqueStatutLotRepo historiqueRepo;
     private final MembreOrgLotRepo membreOrgRepo;
+    private final StockCreditRepo stockCreditRepo;
     private final LotEventProducer producer;
-    private final ObjectMapper om; // injecté par Spring (JavaTimeModule inclus)
+    private final ObjectMapper om;
 
     private static final Map<String, String> FLUX_RULES = Map.of(
         "seed-selector",    "seed-upsemcl",
@@ -77,6 +81,11 @@ public class LotController {
             Long orgId = resolveOrgId(jwt);
             if (orgId == null) return List.of();
             return lotRepo.findMesLots(orgId, username);
+        }
+
+        // Isolation quotataire : uniquement les lots R2 DISPONIBLES des multiplicateurs
+        if (roles.contains("seed-quotataire")) {
+            return lotRepo.findR2Disponible();
         }
 
         if (generation != null && !generation.isBlank())
@@ -132,10 +141,13 @@ public class LotController {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                 "Le code lot '" + lot.getCodeLot() + "' existe déjà — modifiez le code (ex : ajoutez -02, -03…).");
         }
-        // save() peut remplacer generation par un proxy bytecode → on réinjecte l'entité pleine
         if (resolvedGen != null) saved.setGeneration(resolvedGen);
         producer.lotCreated(om.writeValueAsString(saved));
-        publishStockSync(saved, siteCode);
+        // Site forcé pour sélectionneurs et UPSemCL — ignoré si non résolu
+        List<String> roles = jwt != null ? extractRealmRoles(jwt) : List.of();
+        String username = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+        String effectiveSite = resolveFixedSite(roles, username);
+        publishStockSync(saved, effectiveSite != null ? effectiveSite : siteCode);
         return saved;
     }
 
@@ -253,24 +265,45 @@ public class LotController {
         }
 
         producer.lotCreated(om.writeValueAsString(saved));
-        publishStockSync(saved, req.siteCode());
+        List<String> childRoles = jwt != null ? extractRealmRoles(jwt) : List.of();
+        String childUsername = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+        String childFixedSite = resolveFixedSite(childRoles, childUsername);
+        publishStockSync(saved, childFixedSite != null ? childFixedSite : req.siteCode());
         return saved;
     }
 
+    /**
+     * Pour sélectionneurs et UPSemCL, résout le site principal de leur org depuis la DB.
+     * Cela garantit que leurs lots vont toujours au bon site (CNRA-BAMBEY / UPSEMCL-SITE-BAMBEY)
+     * indépendamment de ce que le frontend envoie.
+     */
+    private String resolveFixedSite(List<String> roles, String username) {
+        if (roles.contains("seed-selector") || roles.contains("seed-upsemcl")) {
+            return stockCreditRepo.findOrgIdByUsername(username)
+                .flatMap(stockCreditRepo::findPrimarySiteByOrgId)
+                .orElse(null);
+        }
+        return null;
+    }
+
+    /**
+     * Crédite le stock directement via JdbcTemplate (synchrone, atomique).
+     * Kafka est également notifié en best-effort pour l'audit.
+     */
     private void publishStockSync(LotSemencier lot, String siteCode) {
         if (siteCode == null || siteCode.isBlank()) return;
         if (lot.getQuantiteNette() == null || lot.getQuantiteNette().compareTo(BigDecimal.ZERO) <= 0) return;
+        boolean ok = stockCreditRepo.crediterSite(lot.getId(), siteCode, lot.getQuantiteNette());
+        if (ok) log.info("Stock crédité : lot={} site={} qte={} kg", lot.getId(), siteCode, lot.getQuantiteNette());
+        else     log.warn("Échec crédit stock lot={} site={}", lot.getId(), siteCode);
         try {
-            String payload = om.writeValueAsString(Map.of(
+            producer.lotStockSync(om.writeValueAsString(Map.of(
                 "idLot",    lot.getId(),
                 "codeSite", siteCode,
                 "quantite", lot.getQuantiteNette(),
                 "unite",    lot.getUnite() != null ? lot.getUnite() : "kg"
-            ));
-            producer.lotStockSync(payload);
-        } catch (Exception e) {
-            // Non bloquant : l'événement sera perdu mais le lot est créé
-        }
+            )));
+        } catch (Exception ignored) {}
     }
 
     // ── Changer le statut d'un lot (réservé admin) ───────────

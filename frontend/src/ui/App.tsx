@@ -3,7 +3,7 @@ import {
   LayoutDashboard, Leaf, Package, BarChart2,
   Users as UsersIcon, CircleUser, Bell, Search, Menu, LogOut, ChevronRight,
   Activity, Warehouse, ShoppingCart, ArrowRightLeft, Shield,
-  Calendar, MapPin, Building2, Workflow, Server, Store, MessageCircle,
+  Calendar, MapPin, Workflow, Server, Store, MessageCircle,
   Sun, Moon, Monitor, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -18,7 +18,7 @@ import { Certifications } from './pages/Certifications'
 import { Transfers }      from './pages/Transfers'
 import { Campagnes }      from './pages/Campagnes'
 import { Sites }          from './pages/Sites'
-import { Organisations }  from './pages/Organisations'
+import { MesSites }       from './pages/MesSites'
 import { Programs }       from './pages/Programs'
 import { Profile }          from './pages/Profile'
 import { Users }            from './pages/Users'
@@ -28,7 +28,7 @@ import { Messages }          from './pages/Messages'
 type Page =
   | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
   | 'certifications' | 'transfers' | 'campagnes' | 'sites'
-  | 'organisations' | 'programs' | 'profile' | 'users' | 'catalogue'
+  | 'mes-sites' | 'programs' | 'profile' | 'users' | 'catalogue'
   | 'messages'
 
 /* ── Auth helpers ── */
@@ -71,53 +71,55 @@ function getNavSections(roleKey: string): NavSection[] {
   const programs:       NavItem = { id: 'programs',       label: 'Programmes',              icon: Workflow }
   const campagnes:      NavItem = { id: 'campagnes',      label: 'Campagnes',               icon: Calendar }
   const sites:          NavItem = { id: 'sites',          label: 'Sites',                   icon: MapPin }
-  const organisations:  NavItem = { id: 'organisations',  label: 'Organisations',           icon: Building2 }
+  const mesSites:       NavItem = { id: 'mes-sites',      label: 'Mes Sites',               icon: MapPin }
 
   const users:          NavItem = { id: 'users',          label: 'Utilisateurs',            icon: UsersIcon }
 
   switch (roleKey) {
     case 'seed-admin':
       return [
-        { section: 'Général', items: [dashboard] },
-        { section: 'Catalogue', items: [varieties, { ...lots, label: 'Lots & Générations' }] },
-        { section: 'Production', items: [programs, certifications, transfers] },
-        { section: 'Logistique', items: [stocks, orders] },
-        { section: 'Référentiels', items: [campagnes, sites, organisations] },
+        { section: 'Général',        items: [dashboard] },
+        { section: 'Catalogue',      items: [varieties, { ...lots, label: 'Lots & Générations' }] },
+        { section: 'Production',     items: [programs, certifications, transfers] },
+        { section: 'Logistique',     items: [stocks, orders] },
+        { section: 'Référentiels',   items: [campagnes, sites] },
         { section: 'Administration', items: [users] },
       ]
 
     case 'seed-selector':
       return [
-        { section: 'Général', items: [dashboard] },
-        { section: 'Recherche', items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
-        { section: 'Gestion', items: [stocks, transfers, certifications, orders] },
-        { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
+        { section: 'Général',        items: [dashboard] },
+        { section: 'Recherche',      items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
+        { section: 'Gestion',        items: [stocks, transfers, certifications, orders] },
+        { section: 'Communication',  items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
     case 'seed-upsemcl':
       return [
-        { section: 'Général', items: [dashboard] },
-        { section: 'Référentiel', items: [{ ...varieties, label: 'Variétés & Espèces' }] },
+        { section: 'Général',        items: [dashboard] },
+        { section: 'Référentiel',    items: [{ ...varieties, label: 'Variétés & Espèces' }] },
         { section: 'Multiplication', items: [{ ...lots, label: 'Lots G1→G3' }, programs] },
-        { section: 'Gestion', items: [stocks, certifications, transfers, orders] },
-        { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
+        { section: 'Gestion',        items: [stocks, certifications, transfers, orders] },
+        { section: 'Communication',  items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
     case 'seed-multiplicator':
       return [
-        { section: 'Général', items: [dashboard] },
-        { section: 'Référentiel', items: [{ ...varieties, label: 'Variétés & Espèces' }] },
-        { section: 'Production', items: [{ ...lots, label: 'Lots G3→R2' }, programs] },
-        { section: 'Gestion', items: [stocks, certifications, transfers, orders] },
-        { section: 'Communication', items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
+        { section: 'Général',        items: [dashboard] },
+        { section: 'Référentiel',    items: [{ ...varieties, label: 'Variétés & Espèces' }] },
+        { section: 'Production',     items: [{ ...lots, label: 'Mes Lots' }, programs] },
+        { section: 'Logistique',     items: [stocks, certifications, transfers, orders] },
+        { section: 'Mes Données',    items: [mesSites] },
+        { section: 'Communication',  items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
     case 'seed-quotataire':
       return [
-        { section: 'Général',   items: [dashboard] },
-        { section: 'Référentiel', items: [{ ...varieties, label: 'Variétés & Espèces' }, { id: 'catalogue' as Page, label: 'Catalogue R1/R2', icon: Store }] },
-        { section: 'Commandes', items: [orders, { id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
-        { section: 'Réceptions', items: [{ ...lots, label: 'Semences R2 reçues' }] },
+        { section: 'Général',        items: [dashboard] },
+        { section: 'Référentiel',    items: [{ ...varieties, label: 'Variétés & Espèces' }, { id: 'catalogue' as Page, label: 'Catalogue R1/R2', icon: Store }] },
+        { section: 'Commandes',      items: [orders, { id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
+        { section: 'Réceptions',     items: [{ ...lots, label: 'Semences reçues' }] },
+        { section: 'Mes Données',    items: [mesSites] },
       ]
 
     default:
@@ -128,16 +130,16 @@ function getNavSections(roleKey: string): NavSection[] {
 }
 
 const pageTitle: Record<Page, { title: string; sub: string }> = {
-  dashboard:      { title: 'Tableau de bord',           sub: "Vue d'ensemble de la campagne" },
-  varieties:      { title: 'Variétés & Espèces',        sub: 'Catalogue des semences certifiées' },
-  lots:           { title: 'Lots de semences',           sub: 'Suivi des générations G0 → R2' },
-  stocks:         { title: 'Inventaire stock',           sub: 'Disponibilité par site de stockage' },
-  orders:         { title: 'Commandes',                  sub: 'Suivi et gestion des commandes' },
-  certifications: { title: 'Qualité & Certifications',   sub: 'Contrôles qualité et certification des lots' },
-  transfers:      { title: 'Transferts',                 sub: 'Transferts inter-organisations de semences' },
-  campagnes:      { title: 'Campagnes agricoles',        sub: 'Gestion des campagnes de production' },
-  sites:          { title: 'Sites',                      sub: 'Sites de stockage et production' },
-  organisations:  { title: 'Organisations',              sub: 'Acteurs de la chaîne semencière' },
+  dashboard:      { title: 'Tableau de bord',             sub: "Vue d'ensemble de la campagne" },
+  varieties:      { title: 'Variétés & Espèces',          sub: 'Catalogue des semences certifiées' },
+  lots:           { title: 'Lots de semences',             sub: 'Suivi des générations G0 → R2' },
+  stocks:         { title: 'Inventaire stock',             sub: 'Disponibilité par site de stockage' },
+  orders:         { title: 'Commandes',                    sub: 'Suivi et gestion des commandes' },
+  certifications: { title: 'Qualité & Certifications',     sub: 'Contrôles qualité et certification des lots' },
+  transfers:      { title: 'Transferts',                   sub: 'Transferts inter-organisations de semences' },
+  campagnes:      { title: 'Campagnes agricoles',          sub: 'Gestion des campagnes de production' },
+  sites:          { title: 'Sites',                        sub: 'Sites de stockage et production — vue globale' },
+  'mes-sites':    { title: 'Mes Sites',                    sub: 'Vos sites de stockage et de multiplication' },
   programs:       { title: 'Programmes de multiplication', sub: 'Planification et suivi des multiplications' },
   profile:        { title: 'Mon profil',                   sub: 'Informations et paramètres de votre compte' },
   users:          { title: 'Gestion des utilisateurs',     sub: 'Comptes et rôles de la plateforme' },
@@ -582,7 +584,7 @@ export function App() {
           {validPage === 'transfers'      && <Transfers      roleKey={user.roleKey} />}
           {validPage === 'campagnes'      && <Campagnes      roleKey={user.roleKey} />}
           {validPage === 'sites'          && <Sites          roleKey={user.roleKey} />}
-          {validPage === 'organisations'  && <Organisations  roleKey={user.roleKey} />}
+          {validPage === 'mes-sites'      && <MesSites       roleKey={user.roleKey} />}
           {validPage === 'programs'       && <Programs       roleKey={user.roleKey} />}
           {validPage === 'profile'        && <Profile        roleKey={user.roleKey} />}
           {validPage === 'users'          && <Users          roleKey={user.roleKey} />}

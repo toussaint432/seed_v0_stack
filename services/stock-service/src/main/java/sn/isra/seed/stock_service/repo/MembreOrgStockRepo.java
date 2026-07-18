@@ -18,16 +18,22 @@ public class MembreOrgStockRepo {
 
     private final JdbcTemplate jdbc;
 
-    /**
-     * Retourne l'id_organisation du membre identifié par son username Keycloak.
-     * Retourne Optional.empty() si l'utilisateur n'est pas dans membre_organisation.
-     */
     public Optional<Long> findOrgIdByUsername(String username) {
         if (username == null || username.isBlank()) return Optional.empty();
         List<Long> rows = jdbc.query(
             "SELECT id_organisation FROM membre_organisation WHERE keycloak_username = ? LIMIT 1",
             (rs, i) -> rs.getLong("id_organisation"),
             username
+        );
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    public Optional<String> findOrgCodeById(Long orgId) {
+        if (orgId == null) return Optional.empty();
+        List<String> rows = jdbc.query(
+            "SELECT code_organisation FROM organisation WHERE id = ? LIMIT 1",
+            (rs, i) -> rs.getString("code_organisation"),
+            orgId
         );
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }

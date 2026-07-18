@@ -1535,7 +1535,18 @@ function VoirPropositionModal({
 }: {
   commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
 }) {
-  const [saving, setSaving] = useState(false)
+  const [saving,    setSaving]    = useState(false)
+  const [mesSites,  setMesSites]  = useState<any[]>([])
+  const [siteCode,  setSiteCode]  = useState('')
+
+  useEffect(() => {
+    api.get(endpoints.sitesMesSites).then(r => {
+      const sites = r.data ?? []
+      setMesSites(sites)
+      const principal = sites.find((s: any) => s.estPrincipal) ?? sites[0]
+      if (principal) setSiteCode(principal.codeSite)
+    }).catch(() => {})
+  }, [])
 
   const lignes: any[] = (commande.lignes ?? []).filter((l: any) => l.quantiteProposee != null)
 
@@ -1545,9 +1556,13 @@ function VoirPropositionModal({
   }
 
   async function accepter() {
+    if (!siteCode) {
+      setToast({ msg: 'Veuillez choisir un site de réception', type: 'error' })
+      return
+    }
     setSaving(true)
     try {
-      await api.patch(endpoints.orderAccepterProposition(commande.id), {})
+      await api.patch(endpoints.orderAccepterProposition(commande.id), { siteCode })
       setToast({ msg: `Proposition acceptée — l'UPSemCL va déclencher le transfert`, type: 'success' })
       onSuccess(); onClose()
     } catch (err: any) {
@@ -1614,12 +1629,42 @@ function VoirPropositionModal({
         </div>
       ))}
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+      {/* Sélecteur site de réception */}
+      <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', marginTop: 8 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>
+          Site de réception des semences
+        </div>
+        {mesSites.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>Chargement des sites…</div>
+        ) : (
+          <select
+            value={siteCode}
+            onChange={e => setSiteCode(e.target.value)}
+            style={{ width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)', fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)' }}
+          >
+            {mesSites.map((s: any) => (
+              <option key={s.codeSite} value={s.codeSite}>
+                {s.codeSite} — {s.nomSite}{s.estPrincipal ? ' ★' : ''}
+              </option>
+            ))}
+          </select>
+        )}
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+          Le stock et les lots seront enregistrés sur ce site à réception.
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 16 }}>
         <button className="btn btn-ghost" style={{ color: 'var(--red-600)', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: 6 }} onClick={refuser} disabled={saving}>
           <Ban size={13} /> Refuser
         </button>
         <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Fermer</button>
-        <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 6 }} onClick={accepter} disabled={saving}>
+        <button
+          className="btn btn-primary"
+          style={{ background: siteCode ? 'linear-gradient(135deg, #16a34a, #059669)' : undefined, border: 'none', display: 'flex', alignItems: 'center', gap: 6, opacity: !siteCode ? 0.6 : 1 }}
+          onClick={accepter}
+          disabled={saving || !siteCode}
+        >
           {saving ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <CheckCircle2 size={13} />}
           Accepter la proposition
         </button>
