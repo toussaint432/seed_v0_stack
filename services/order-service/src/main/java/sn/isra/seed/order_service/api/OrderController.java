@@ -99,15 +99,13 @@ public class OrderController {
   /**
    * GET /api/orders/mes-demandes-g3
    * Commandes de G3 passées PAR le multiplicateur connecté auprès de l'UPSemCL.
-   * Isolation : filtre sur id_organisation_acheteur = org du connecté.
+   * Isolation stricte par usernameAcheteur : chaque multiplicateur ne voit que SES propres
+   * demandes, même s'il partage un org avec un autre agent.
    */
   @GetMapping("/mes-demandes-g3")
   public List<Commande> mesDemandesG3(@AuthenticationPrincipal Jwt jwt) {
     String username = jwt.getClaimAsString("preferred_username");
-    return membreRepo.findByKeycloakUsername(username)
-        .map(m -> commandeRepo.findByIdOrganisationAcheteurOrderByCreatedAtDesc(
-            m.getOrganisation().getId()))
-        .orElse(List.of());
+    return commandeRepo.findByUsernameAcheteurOrderByCreatedAtDesc(username);
   }
 
   /**
@@ -213,34 +211,50 @@ public class OrderController {
   }
 
   /**
-   * Débite le stock UPSemCL et crédite le stock du multiplicateur acheteur
-   * pour chaque allocation liée à la commande.
-   * Crée également un transfert_lot automatique (statut ACCEPTE) pour chaque allocation.
+   * Débite le stock UPSemCL et crée un lot de réception (REC) pour le multiplicateur acheteur.
+   * Le lot REC reçoit son propre stock crédité et un transfert_lot ACCEPTE pointant sur lui.
+   * Ainsi le lot est visible dans "Mes Lots" (idOrgProducteur = org multiplicateur)
+   * et dans le stock agrégé du multiplicateur, sans pollution par les lots UPSemCL.
    */
   private void appliquerMouvementStock(Commande commande, String emetteur) {
+    if (commande.getIdOrganisationAcheteur() == null || commande.getUsernameAcheteur() == null) {
+      log.warn("appliquerMouvementStock ignoré : org ou username acheteur absent — commande #{}", commande.getId());
+      return;
+    }
     for (LigneCommande ligne : commande.getLignes()) {
       List<AllocationCommande> allocs = allocationRepo.findByLigne_Id(ligne.getId());
       for (AllocationCommande alloc : allocs) {
         try {
+          // 1. Débiter le stock UPSemCL (lot source)
           stockOrderRepo.debitUpsemcl(alloc.getIdLot(), alloc.getQuantiteAllouee());
-          stockOrderRepo.creditOrg(
-              alloc.getIdLot(),
+
+          // 2. Créer un lot REC pour le multiplicateur (enfant du lot UPSemCL)
+          String unite = ligne.getUnite() != null ? ligne.getUnite() : "kg";
+          String codeLotRec = "REC-" + commande.getId() + "-ALLOC-" + alloc.getId();
+          Long newLotId = lotReceptionRepo.createReceptionLot(
+              alloc.getIdLot(), codeLotRec,
               commande.getIdOrganisationAcheteur(),
-              alloc.getQuantiteAllouee(),
-              ligne.getUnite() != null ? ligne.getUnite() : "kg"
+              commande.getUsernameAcheteur(),
+              alloc.getQuantiteAllouee(), unite
           );
-          // Débiter la quantite_nette du lot semencier source
+
+          // 3. Créditer le stock du lot REC au site principal du multiplicateur
+          stockOrderRepo.creditOrg(newLotId, commande.getIdOrganisationAcheteur(),
+              alloc.getQuantiteAllouee(), unite);
+
+          // 4. Débiter la quantite_nette du lot UPSemCL source
           lotQuantiteRepo.debitLotUpsemcl(
               ligne.getIdVariete(), ligne.getIdGeneration(), alloc.getQuantiteAllouee());
-          // Créer le transfert_lot automatique
+
+          // 5. Transfert_lot ACCEPTE pointant sur le lot REC (pas sur le lot UPSemCL)
           String codeTransfert = "AUTO-TL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
           transfertLotOrderRepo.createAutoTransfert(
-              codeTransfert,
-              alloc.getIdLot(),
-              emetteur,
-              commande.getUsernameAcheteur(),
-              alloc.getQuantiteAllouee()
+              codeTransfert, newLotId, emetteur,
+              commande.getUsernameAcheteur(), alloc.getQuantiteAllouee()
           );
+
+          log.info("Livraison (updateStatut) : lot REC {} créé pour org {} à partir du lot UPSemCL {}",
+              codeLotRec, commande.getIdOrganisationAcheteur(), alloc.getIdLot());
         } catch (Exception e) {
           log.error("Mouvement stock échoué — lot={} org={}: {}",
               alloc.getIdLot(), commande.getIdOrganisationAcheteur(), e.getMessage());
@@ -463,9 +477,17 @@ public class OrderController {
       } else {
         stockOrderRepo.creditOrg(newLotId, commande.getIdOrganisationAcheteur(), ligne.getQuantiteProposee(), unite);
       }
+
+      // Rediriger le transfert EN_ATTENTE vers le lot REC avant de l'accepter :
+      // sans cette redirection, le lot UPSemCL source resterait visible dans "Mes Lots"
+      // du multiplicateur via la condition transfert_lot ACCEPTE de findMesLots.
+      if (commande.getCodeTransfertGenere() != null) {
+        transfertLotOrderRepo.updateTransfertIdLot(
+            commande.getCodeTransfertGenere(), ligne.getIdLotPropose(), newLotId);
+      }
     }
 
-    // Valider le transfert_lot (EN_ATTENTE → ACCEPTE)
+    // Valider le transfert_lot redirigé (EN_ATTENTE → ACCEPTE, pointe maintenant sur le lot REC)
     if (commande.getCodeTransfertGenere() != null) {
       transfertLotOrderRepo.accepterTransfert(commande.getCodeTransfertGenere());
     }
@@ -575,12 +597,13 @@ public class OrderController {
             item.idLot(), ancienStatutLot, nouveauStatutLot, emetteur, commentaireLot);
       }
 
-      // 2e. Créer le transfert_lot automatique (statut ACCEPTE) — visible immédiatement
-      //     dans les lots du multiplicateur via findMesLots
+      // 2e. Créer le transfert_lot automatique (statut ACCEPTE) pointant sur le lot REC :
+      //     on lie le transfert au nouveau lot (idOrgProducteur = multiplicateur) et non
+      //     au lot UPSemCL source, pour éviter qu'il n'apparaisse dans "Mes Lots" du multi.
       String codeTransfert = "AUTO-TL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
       transfertLotOrderRepo.createAutoTransfert(
           codeTransfert,
-          item.idLot(),
+          newLotId,
           emetteur,
           commande.getUsernameAcheteur(),
           item.quantite()

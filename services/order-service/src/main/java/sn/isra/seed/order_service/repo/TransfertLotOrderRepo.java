@@ -66,4 +66,20 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
         WHERE code_transfert = :code
         """, nativeQuery = true)
     int accepterTransfert(@Param("code") String code);
+
+    /**
+     * Redirige un transfert EN_ATTENTE vers le lot de réception (REC) créé pour le multiplicateur.
+     * À appeler avant accepterTransfert, dans accuserReception, pour que le transfert_lot
+     * pointe sur le bon lot (idOrgProducteur = multiplicateur) et non sur le lot UPSemCL source.
+     */
+    @Modifying
+    @Query(value = """
+        UPDATE transfert_lot
+        SET id_lot = :newLotId
+        WHERE code_transfert = :code
+          AND id_lot          = :oldLotId
+        """, nativeQuery = true)
+    int updateTransfertIdLot(@Param("code")      String code,
+                              @Param("oldLotId") Long   oldLotId,
+                              @Param("newLotId") Long   newLotId);
 }
