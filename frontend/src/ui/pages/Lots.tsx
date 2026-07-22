@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2 } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -829,7 +829,15 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                         const v = varietyMap[l.idVariete]
                         return (
                           <tr key={l.id}>
-                            <td><span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span></td>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
+                                {l.certificatPath
+                                  ? <ShieldCheck size={13} title="Lot certifié" style={{ color: '#16a34a', flexShrink: 0 }} />
+                                  : <ShieldX size={13} title="Lot non certifié" style={{ color: '#dc2626', flexShrink: 0 }} />
+                                }
+                              </div>
+                            </td>
                             <td>
                               {v ? (
                                 <div>
@@ -1149,7 +1157,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
                                 {l.certificatPath && (
-                                  <BadgeCheck size={13} title="Lot certifié" style={{ color: '#d97706', flexShrink: 0 }} />
+                                  <ShieldCheck size={13} title="Lot certifié" style={{ color: '#16a34a', flexShrink: 0 }} />
                                 )}
                               </div>
                             </td>
@@ -1260,10 +1268,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                 )}
                                 <button
                                   className="btn btn-ghost"
-                                  style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: l.certificatPath ? '#d97706' : 'var(--text-muted)' }}
+                                  style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: l.certificatPath ? '#16a34a' : '#dc2626' }}
                                   title={l.certificatPath ? 'Voir / gérer le certificat' : 'Joindre un certificat'}
                                   onClick={() => setCertLotMult(l)}
-                                ><BadgeCheck size={13} /></button>
+                                >{l.certificatPath ? <ShieldCheck size={13} /> : <ShieldX size={13} />}</button>
                               </div>
                             </td>
                           </tr>
@@ -2005,7 +2013,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
                         {l.certificatPath && (
-                          <BadgeCheck size={13} title="Lot certifié" style={{ color: '#d97706', flexShrink: 0 }} />
+                          <ShieldCheck size={13} title="Lot certifié" style={{ color: '#16a34a', flexShrink: 0 }} />
                         )}
                       </div>
                     </td>
@@ -2111,10 +2119,10 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                         )}
                         <button
                           className="btn btn-ghost"
-                          style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: l.certificatPath ? '#d97706' : 'var(--text-muted)' }}
+                          style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: l.certificatPath ? '#16a34a' : '#dc2626' }}
                           title={l.certificatPath ? 'Voir / gérer le certificat' : 'Joindre un certificat'}
                           onClick={() => setCertLot(l)}
-                        ><BadgeCheck size={13} /></button>
+                        >{l.certificatPath ? <ShieldCheck size={13} /> : <ShieldX size={13} />}</button>
                       </div>
                     </td>
                   </tr>

@@ -33,6 +33,9 @@ public class MembreOrganisation {
     private Boolean principal;
     private String telephone;
 
+    @Column(name = "telephone_public")
+    private Boolean telephonePublic = false;
+
     @Column(name = "created_at")
     private Instant createdAt;
 

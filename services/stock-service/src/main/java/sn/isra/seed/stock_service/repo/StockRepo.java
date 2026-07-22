@@ -175,6 +175,55 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
   List<StockAgregeView> findAgregeByOrganisation(@Param("orgId") Long orgId);
 
   /**
+   * Vue agrégée pour un sélectionneur : ses propres lots G0/G1, uniquement sur les sites
+   * de son organisation (exclut les entrées UPSEMCL créées après transfert).
+   */
+  @Query(value = """
+      SELECT
+          ls.id_variete                                                               AS idVariete,
+          ls.id_generation                                                            AS idGeneration,
+          s.id_site                                                                   AS idSite,
+          si.code_site                                                                AS codeSite,
+          si.nom_site                                                                 AS nomSite,
+          g.code_generation                                                           AS codeGeneration,
+          v.nom_variete                                                               AS nomVariete,
+          v.code_variete                                                              AS codeVariete,
+          e.nom_commun                                                                AS nomEspece,
+          e.code_espece                                                               AS codeEspece,
+          s.unite,
+          SUM(s.quantite_disponible)                                                  AS quantiteTotale,
+          COUNT(DISTINCT s.id)                                                        AS nbLots,
+          TO_CHAR(MAX(s.updated_at) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS derniereMaj,
+          TO_CHAR(MIN(s.created_at) AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"') AS createdAt,
+          json_agg(json_build_object(
+              'idStock',   s.id,
+              'idLot',     ls.id,
+              'codeLot',   ls.code_lot,
+              'quantite',  s.quantite_disponible,
+              'unite',     s.unite,
+              'statut',    ls.statut_lot,
+              'campagne',  ls.campagne,
+              'createdAt', to_char(s.created_at AT TIME ZONE 'UTC','YYYY-MM-DD"T"HH24:MI:SS"Z"')
+          ) ORDER BY s.created_at)::text                                              AS lotsDetail
+      FROM stock s
+      JOIN lot_semencier ls     ON s.id_lot         = ls.id
+      JOIN site si              ON s.id_site         = si.id
+      JOIN generation_semence g ON ls.id_generation  = g.id
+      JOIN variete v            ON ls.id_variete     = v.id
+      JOIN espece e             ON v.id_espece       = e.id
+      WHERE ls.username_createur = :username
+        AND g.code_generation IN ('G0','G1')
+        AND si.id_organisation = (
+            SELECT mo.id_organisation FROM membre_organisation mo
+            WHERE mo.keycloak_username = :username LIMIT 1
+        )
+      GROUP BY ls.id_variete, ls.id_generation, s.id_site, si.code_site, si.nom_site,
+               g.code_generation, v.nom_variete, v.code_variete, e.nom_commun, e.code_espece, s.unite
+      ORDER BY g.code_generation, v.nom_variete, si.code_site
+      """, nativeQuery = true)
+  List<StockAgregeView> findAgregeByUsernameCreateur(@Param("username") String username);
+
+  /**
    * Catalogue public : stocks R1/R2 disponibles chez les multiplicateurs.
    * Filtre optionnel par code espèce et zone agro-écologique.
    * Tri : niveau adaptation (OPTIMAL→ACCEPTABLE→MARGINALE→sans zone) puis quantité DESC.

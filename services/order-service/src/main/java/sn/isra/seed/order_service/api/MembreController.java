@@ -104,6 +104,23 @@ public class MembreController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * PATCH /api/membres/mon-profil — le membre connecté met à jour son téléphone
+     * et sa visibilité (public = visible aux autres rôles, privé = uniquement lui).
+     */
+    @PatchMapping("/mon-profil")
+    public ResponseEntity<MembreOrganisation> updateMonProfil(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody ProfilPatch body) {
+        if (jwt == null) return ResponseEntity.status(401).build();
+        String username = jwt.getClaimAsString("preferred_username");
+        return membreRepo.findByKeycloakUsername(username).map(m -> {
+            if (body.telephone() != null) m.setTelephone(body.telephone());
+            if (body.telephonePublic() != null) m.setTelephonePublic(body.telephonePublic());
+            return ResponseEntity.ok(membreRepo.save(m));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
     /** DTO pour création/mise à jour */
     public record CreateMembreRequest(
             String keycloakUsername,
@@ -114,4 +131,6 @@ public class MembreController {
             Boolean principal,
             String telephone
     ) {}
+
+    record ProfilPatch(String telephone, Boolean telephonePublic) {}
 }

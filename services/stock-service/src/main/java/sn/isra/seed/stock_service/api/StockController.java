@@ -63,14 +63,18 @@ public class StockController {
       Long orgId = resolveOrgId(jwt);
       if (orgId == null) return ResponseEntity.ok(List.of());
       views = stockRepo.findAgregeByOrganisation(orgId);
+    } else if (jwt != null && hasRole(jwt, "seed-selector")) {
+      String username = jwt.getClaimAsString("preferred_username");
+      if (username == null) return ResponseEntity.ok(List.of());
+      views = stockRepo.findAgregeByUsernameCreateur(username);
     } else {
       views = stockRepo.findAllAgrege();
     }
 
     List<String> allowedGens = null;
     if (jwt != null) {
-      if (hasRole(jwt, "seed-upsemcl"))        allowedGens = List.of("G1", "G2", "G3");
-      else if (hasRole(jwt, "seed-selector"))  allowedGens = List.of("G0", "G1");
+      if (hasRole(jwt, "seed-upsemcl"))         allowedGens = List.of("G1", "G2", "G3");
+      else if (hasRole(jwt, "seed-selector"))   allowedGens = List.of("G0", "G1");
       else if (hasRole(jwt, "seed-quotataire")) allowedGens = List.of("R2");
     }
 

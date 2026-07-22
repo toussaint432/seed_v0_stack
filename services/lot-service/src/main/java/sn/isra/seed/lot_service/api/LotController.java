@@ -66,12 +66,13 @@ public class LotController {
             @AuthenticationPrincipal Jwt jwt) {
         List<String> roles = jwt != null ? extractRealmRoles(jwt) : List.of();
 
-        // Isolation sélectionneur : G0+G1 filtrés par spécialisation
+        // Isolation sélectionneur : uniquement ses propres lots G0+G1, filtrés par spécialisation
         if (roles.contains("seed-selector")) {
-            String raw = jwt != null ? jwt.getClaimAsString("specialisation") : null;
-            // Normalisé en majuscules pour correspondre à la query JPQL (évite upper(bytea))
+            String username = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+            if (username == null) return List.of();
+            String raw = jwt.getClaimAsString("specialisation");
             String specialisation = raw != null ? raw.toUpperCase() : null;
-            return lotRepo.findForSelector(specialisation);
+            return lotRepo.findForSelector(username, specialisation);
         }
 
         // Isolation multiplicateur : lots produits + lots reçus via transfert accepté
@@ -278,10 +279,15 @@ public class LotController {
      * indépendamment de ce que le frontend envoie.
      */
     private String resolveFixedSite(List<String> roles, String username) {
-        if (roles.contains("seed-selector") || roles.contains("seed-upsemcl")) {
+        if (roles.contains("seed-selector")) {
             return stockCreditRepo.findOrgIdByUsername(username)
                 .flatMap(stockCreditRepo::findPrimarySiteByOrgId)
-                .orElse(null);
+                .orElse("CNRA-BAMBEY");
+        }
+        if (roles.contains("seed-upsemcl")) {
+            return stockCreditRepo.findOrgIdByUsername(username)
+                .flatMap(stockCreditRepo::findPrimarySiteByOrgId)
+                .orElse("UPSEMCL-SITE-BAMBEY");
         }
         return null;
     }

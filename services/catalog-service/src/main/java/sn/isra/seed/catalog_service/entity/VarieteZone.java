@@ -18,7 +18,7 @@ public class VarieteZone {
     @Column(name = "niveau_adaptation", nullable = false, length = 20)
     private NiveauAdaptation niveauAdaptation = NiveauAdaptation.OPTIMAL;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "id_zone", insertable = false, updatable = false)
     private ZoneAgro zone;
 }

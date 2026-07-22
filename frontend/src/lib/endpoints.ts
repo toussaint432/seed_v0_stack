@@ -106,6 +106,8 @@ export const endpoints = {
   membresByOrg:     (orgId: number) => `${ORDER}/membres/organisation/${orgId}`,
   /** Membres filtrés par rôle Keycloak — ex. membresByRole('seed-multiplicator') */
   membresByRole:    (role: string) => `${ORDER}/membres?role=${encodeURIComponent(role)}`,
+  /** Mettre à jour le téléphone et sa visibilité (public/privé) pour le connecté */
+  membreMonProfil:  `${ORDER}/membres/mon-profil`,
 
   // ── Order Service — Multiplicateur ──
   stockMonStock:           `${STOCK}/stocks/mon-stock`,

@@ -1,0 +1,2 @@
+ALTER TABLE membre_organisation
+    ADD COLUMN IF NOT EXISTS telephone_public BOOLEAN NOT NULL DEFAULT FALSE;

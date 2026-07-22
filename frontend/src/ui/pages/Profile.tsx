@@ -1,10 +1,12 @@
-import { useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
+import { useRef, useState, useEffect, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import {
   User, Mail, Shield, Calendar, LogOut, Key,
   Camera, Edit3, Check, X, Lock, Eye, EyeOff, RefreshCw, Trash2,
-  Clock, Globe, Bell,
+  Clock, Globe, Bell, Phone,
 } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
+import { api } from '../../lib/api'
+import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -44,10 +46,21 @@ export function Profile({ roleKey }: Props) {
   const [showNew,       setShowNew]       = useState(false)
   const [showConfirm,   setShowConfirm]   = useState(false)
 
+  const [telephone,     setTelephone]     = useState('')
+  const [telPublic,     setTelPublic]     = useState(false)
+  const [savingTel,     setSavingTel]     = useState(false)
+
   const [photoUrl, setPhotoUrl] = useState<string | null>(
     localStorage.getItem(`seed-avatar-${userId}`)
   )
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    api.get(endpoints.membreMe).then(res => {
+      setTelephone(res.data.telephone || '')
+      setTelPublic(res.data.telephonePublic ?? false)
+    }).catch(() => {})
+  }, [userId])
 
   const displayName = [firstName, lastName].filter(Boolean).join(' ') || username
   const initials    = ((firstName || username).charAt(0) + (lastName || '').charAt(0)).toUpperCase().slice(0, 2) || 'U'
@@ -79,6 +92,18 @@ export function Profile({ roleKey }: Props) {
     setLastName (token.family_name || '')
     setEmail    (token.email       || '')
     setEditing(false)
+  }
+
+  async function saveTelephone() {
+    setSavingTel(true)
+    try {
+      const res = await api.patch(endpoints.membreMonProfil, { telephone: telephone || null, telephonePublic: telPublic })
+      setTelephone(res.data.telephone || '')
+      setTelPublic(res.data.telephonePublic ?? false)
+      setToast({ msg: 'Téléphone mis à jour', type: 'success' })
+    } catch {
+      setToast({ msg: 'Erreur lors de la mise à jour du téléphone', type: 'error' })
+    } finally { setSavingTel(false) }
   }
 
   async function saveProfile(e: FormEvent) {
@@ -323,10 +348,73 @@ export function Profile({ roleKey }: Props) {
           {/* Informations personnelles */}
           <div className="card" style={{ padding: '20px 22px' }}>
             <SectionTitle icon={<User size={12} />} color={accent}>Informations personnelles</SectionTitle>
-            <InfoRow label="Prénom"            value={token.given_name  || '—'} icon={<User size={12} />}     accent={accent} />
-            <InfoRow label="Nom"               value={token.family_name || '—'} icon={<User size={12} />}     accent={accent} />
-            <InfoRow label="Nom d'utilisateur" value={username}                  icon={<User size={12} />} accent={accent} mono />
-            <InfoRow label="Email"             value={token.email || '—'}        icon={<Mail size={12} />}     accent={accent} last />
+            <InfoRow label="Prénom"            value={token.given_name  || '—'} icon={<User size={12} />}  accent={accent} />
+            <InfoRow label="Nom"               value={token.family_name || '—'} icon={<User size={12} />}  accent={accent} />
+            <InfoRow label="Nom d'utilisateur" value={username}                  icon={<User size={12} />}  accent={accent} mono />
+            <InfoRow label="Email"             value={token.email || '—'}        icon={<Mail size={12} />}  accent={accent} />
+            {/* Téléphone — éditable inline */}
+            <div style={{ paddingTop: 10, borderTop: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 22, height: 22, borderRadius: 5, background: `${accent}12`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Phone size={12} />
+                  </div>
+                  <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 500 }}>Téléphone</span>
+                </div>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
+                  padding: '2px 8px', borderRadius: 99, fontSize: 10.5, fontWeight: 600,
+                  background: telPublic ? `${accent}18` : 'var(--surface-2)',
+                  color: telPublic ? accent : 'var(--text-muted)',
+                  border: `1px solid ${telPublic ? accent + '44' : 'var(--border)'}`,
+                }}>
+                  {telPublic ? <><Eye size={10} /> Public</> : <><EyeOff size={10} /> Privé</>}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
+                <input
+                  type="tel"
+                  value={telephone}
+                  onChange={e => setTelephone(e.target.value)}
+                  placeholder="+221 77 000 00 00"
+                  style={{
+                    flex: 1, height: 32, padding: '0 10px', borderRadius: 7, fontSize: 13,
+                    border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)',
+                    fontFamily: 'DM Mono, monospace',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setTelPublic(p => !p)}
+                  title={telPublic ? 'Rendre privé' : 'Rendre public (visible par UPSemCL et quotataires)'}
+                  style={{
+                    height: 32, padding: '0 10px', borderRadius: 7, border: '1px solid var(--border)',
+                    background: telPublic ? `${accent}18` : 'var(--surface-2)', color: telPublic ? accent : 'var(--text-muted)',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap',
+                  }}
+                >
+                  {telPublic ? <><Eye size={11} /> Public</> : <><EyeOff size={11} /> Privé</>}
+                </button>
+                <button
+                  type="button"
+                  onClick={saveTelephone}
+                  disabled={savingTel}
+                  style={{
+                    height: 32, padding: '0 12px', borderRadius: 7, border: 'none',
+                    background: accent, color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                    display: 'flex', alignItems: 'center', gap: 5, opacity: savingTel ? 0.65 : 1,
+                  }}
+                >
+                  {savingTel ? <RefreshCw size={11} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Check size={11} />}
+                  Enregistrer
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.5 }}>
+                {telPublic
+                  ? 'Visible par les agents UPSemCL et les quotataires'
+                  : 'Uniquement visible par vous'}
+              </p>
+            </div>
           </div>
 
           {/* Accès & Session */}

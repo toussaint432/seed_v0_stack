@@ -60,6 +60,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [zonesTarget,   setZonesTarget]   = useState<any>(null)
   const [zonesRows,     setZonesRows]     = useState<{ idZone: string; niveauAdaptation: string }[]>([])
   const [savingZones,   setSavingZones]   = useState(false)
+  const [zonesReadOnly, setZonesReadOnly] = useState(false)
 
   type PdfUploadCtx  = { type: 'fiche' | 'itineraire'; id: number; name: string }
   type PdfViewerState = { url: string; title: string; downloadName: string; ctx?: PdfUploadCtx }
@@ -364,8 +365,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     setShowVarieteForm(true)
   }
 
-  async function openZones(v: any) {
+  async function openZones(v: any, readOnly = false) {
     setZonesTarget(v)
+    setZonesReadOnly(readOnly)
     setZonesRows([])
     const [zonesRes, assignedRes] = await Promise.allSettled([
       api.get(endpoints.zones),
@@ -375,7 +377,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     if (assignedRes.status === 'fulfilled') {
       const assigned: any[] = assignedRes.value.data
       setZonesRows(assigned.map((z: any) => ({
-        idZone: String(z.zone?.id ?? z.idZone ?? ''),
+        idZone: String(z.zone?.id ?? z.id?.idZone ?? ''),
         niveauAdaptation: z.niveauAdaptation ?? 'OPTIMAL',
       })))
     }
@@ -1216,6 +1218,17 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                                   <History size={13} />
                                 </button>
                               )}
+                              {/* Zones agro-écologiques — visible à tous les rôles */}
+                              {!isArchived && (
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--primary)' : 'var(--text-muted)' }}
+                                  onClick={() => openZones(v, !allowed)}
+                                  title={allowed ? 'Zones agro-écologiques (édition)' : 'Zones agro-écologiques (lecture seule)'}
+                                >
+                                  <MapPin size={13} />
+                                </button>
+                              )}
                               {/* Gestion admin/sélectionneur */}
                               {isAdminOrSelector && (
                                 <>
@@ -1228,14 +1241,6 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                                         title={allowed ? 'Modifier' : dTitle}
                                       >
                                         <Edit2 size={13} />
-                                      </button>
-                                      <button
-                                        className="btn btn-ghost"
-                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--primary)' : undefined, ...dStyle }}
-                                        onClick={() => { if (allowed) openZones(v) }}
-                                        title={allowed ? 'Zones agro-écologiques' : dTitle}
-                                      >
-                                        <MapPin size={13} />
                                       </button>
                                       <button
                                         className="btn btn-ghost"
@@ -1494,32 +1499,83 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {zonesTarget && (
-        <Modal title="Zones recommandées" subtitle={`${zonesTarget.codeVariete} — ${zonesTarget.nomVariete}`} onClose={() => setZonesTarget(null)}>
-          <form onSubmit={saveZones}>
+        <Modal
+          title={zonesReadOnly ? 'Zones recommandées' : 'Zones recommandées — Édition'}
+          subtitle={`${zonesTarget.codeVariete} — ${zonesTarget.nomVariete}`}
+          onClose={() => setZonesTarget(null)}
+        >
+          {zonesReadOnly ? (
             <div className="zone-section">
               <div className="zone-section-title">
                 <MapPin size={14} /> Zones agro-écologiques du Sénégal
               </div>
-              <div className="zone-assignment-list">
-                {zonesRows.map((row, i) => (
-                  <div key={i} className="zone-assignment-row">
-                    <select value={row.idZone} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setZonesRows(rows => rows.map((r, j) => j === i ? { ...r, idZone: e.target.value } : r))} style={{ flex: 2 }}>
-                      <option value="">— Zone —</option>
-                      {allZones.map(z => <option key={z.id} value={z.id}>{z.code} — {z.nom}</option>)}
-                    </select>
-                    <select value={row.niveauAdaptation} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setZonesRows(rows => rows.map((r, j) => j === i ? { ...r, niveauAdaptation: e.target.value } : r))} style={{ flex: 1 }}>
-                      <option value="OPTIMAL">Optimal</option>
-                      <option value="ACCEPTABLE">Acceptable</option>
-                      <option value="MARGINALE">Marginale</option>
-                    </select>
-                    <button type="button" className="zone-remove-btn" onClick={() => setZonesRows(rows => rows.filter((_, j) => j !== i))} title="Retirer cette zone">✕</button>
-                  </div>
-                ))}
+              {zonesRows.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text-muted)' }}>
+                  <MapPin size={28} style={{ opacity: 0.2, marginBottom: 8 }} />
+                  <div style={{ fontSize: 13 }}>Aucune zone renseignée pour cette variété.</div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, padding: '10px 0' }}>
+                  {zonesRows.map((row, i) => {
+                    const zone = allZones.find(z => String(z.id) === String(row.idZone))
+                    const niveauColors: Record<string, { bg: string; color: string; border: string; label: string }> = {
+                      OPTIMAL:    { bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0', label: 'Optimal' },
+                      ACCEPTABLE: { bg: '#fffbeb', color: '#d97706', border: '#fde68a', label: 'Acceptable' },
+                      MARGINALE:  { bg: '#fff1f2', color: '#e11d48', border: '#fecdd3', label: 'Marginale' },
+                    }
+                    const style = niveauColors[row.niveauAdaptation] ?? niveauColors.OPTIMAL
+                    return (
+                      <div key={i} style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 6,
+                        padding: '5px 12px', borderRadius: 99,
+                        background: style.bg, color: style.color,
+                        border: `1px solid ${style.border}`,
+                        fontSize: 12.5, fontWeight: 600,
+                      }}>
+                        <MapPin size={11} />
+                        {zone ? `${zone.code} — ${zone.nom}` : `Zone ${row.idZone}`}
+                        <span style={{
+                          fontSize: 10.5, fontWeight: 500, opacity: 0.8,
+                          borderLeft: `1px solid ${style.border}`, paddingLeft: 6, marginLeft: 2,
+                        }}>
+                          {style.label}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                <button className="btn btn-secondary" onClick={() => setZonesTarget(null)}>Fermer</button>
               </div>
-              <button type="button" className="zone-add-btn" style={{ marginTop: 10 }} onClick={() => setZonesRows(rows => [...rows, { idZone: '', niveauAdaptation: 'OPTIMAL' }])}>+ Ajouter une zone</button>
             </div>
-            <FormActions onCancel={() => setZonesTarget(null)} loading={savingZones} submitLabel="Enregistrer les zones" />
-          </form>
+          ) : (
+            <form onSubmit={saveZones}>
+              <div className="zone-section">
+                <div className="zone-section-title">
+                  <MapPin size={14} /> Zones agro-écologiques du Sénégal
+                </div>
+                <div className="zone-assignment-list">
+                  {zonesRows.map((row, i) => (
+                    <div key={i} className="zone-assignment-row">
+                      <select value={row.idZone} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setZonesRows(rows => rows.map((r, j) => j === i ? { ...r, idZone: e.target.value } : r))} style={{ flex: 2 }}>
+                        <option value="">— Zone —</option>
+                        {allZones.map(z => <option key={z.id} value={z.id}>{z.code} — {z.nom}</option>)}
+                      </select>
+                      <select value={row.niveauAdaptation} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setZonesRows(rows => rows.map((r, j) => j === i ? { ...r, niveauAdaptation: e.target.value } : r))} style={{ flex: 1 }}>
+                        <option value="OPTIMAL">Optimal</option>
+                        <option value="ACCEPTABLE">Acceptable</option>
+                        <option value="MARGINALE">Marginale</option>
+                      </select>
+                      <button type="button" className="zone-remove-btn" onClick={() => setZonesRows(rows => rows.filter((_, j) => j !== i))} title="Retirer cette zone">✕</button>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="zone-add-btn" style={{ marginTop: 10 }} onClick={() => setZonesRows(rows => [...rows, { idZone: '', niveauAdaptation: 'OPTIMAL' }])}>+ Ajouter une zone</button>
+              </div>
+              <FormActions onCancel={() => setZonesTarget(null)} loading={savingZones} submitLabel="Enregistrer les zones" />
+            </form>
+          )}
         </Modal>
       )}
 
