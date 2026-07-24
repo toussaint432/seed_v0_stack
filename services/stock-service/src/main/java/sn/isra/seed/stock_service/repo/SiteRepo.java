@@ -13,6 +13,10 @@ public interface SiteRepo extends JpaRepository<Site, Long> {
 
   List<Site> findByIdOrganisationOrderByEstPrincipalDescIdAsc(Long idOrganisation);
 
+  List<Site> findByIdMembreOrderByEstPrincipalDescIdAsc(Long idMembre);
+
+  Optional<Site> findByCodeSiteAndIdMembre(String codeSite, Long idMembre);
+
   boolean existsByCodeSite(String codeSite);
 
   /**

@@ -4,8 +4,10 @@ import sn.isra.seed.stock_service.entity.Site;
 import sn.isra.seed.stock_service.entity.enums.TypeSite;
 import sn.isra.seed.stock_service.repo.MembreOrgStockRepo;
 import sn.isra.seed.stock_service.repo.SiteRepo;
+import sn.isra.seed.stock_service.repo.StockRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
@@ -19,8 +21,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class SiteController {
 
-    private final SiteRepo          siteRepo;
+    private final SiteRepo           siteRepo;
     private final MembreOrgStockRepo membreRepo;
+    private final StockRepo          stockRepo;
+    private final JdbcTemplate       jdbc;
 
     /* ── GET /api/sites — tous les sites (admin / lecture publique) ── */
     @GetMapping
@@ -39,23 +43,19 @@ public class SiteController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /* ── GET /api/sites/mes-sites — sites appartenant à l'org du connecté ── */
+    /* ── GET /api/sites/mes-sites — sites du membre connecté (isolation individuelle) ── */
     @GetMapping("/mes-sites")
     public ResponseEntity<?> mesSites(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
-        var orgId = membreRepo.findOrgIdByUsername(username);
-        if (orgId.isEmpty())
-            return ResponseEntity.ok(List.of());
-        return ResponseEntity.ok(
-            siteRepo.findByIdOrganisationOrderByEstPrincipalDescIdAsc(orgId.get())
-        );
+        var membreId = membreRepo.findMembreIdByUsername(username);
+        if (membreId.isEmpty()) return ResponseEntity.ok(List.of());
+        return ResponseEntity.ok(siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId.get()));
     }
 
     /**
      * POST /api/sites/mes-sites
-     * Crée un site pour l'organisation du connecté (multiplicateur ou quotataire).
-     * Le code est auto-généré : SITE-{CODE_ORG}-{N:02d}
-     * Body : { nomSite, typeSite, departement, localite, region, latitude, longitude }
+     * Crée un site pour le membre connecté. Code auto-généré : SITE-{USERNAME_PREFIX}-{N:02d}.
+     * Body : { nomSite, typeSite, zoneCode, departement, localite, region, latitude, longitude }
      */
     @PostMapping("/mes-sites")
     public ResponseEntity<?> creerMonSite(
@@ -63,19 +63,22 @@ public class SiteController {
             @AuthenticationPrincipal Jwt jwt) {
 
         String username = jwt.getClaimAsString("preferred_username");
-        var orgIdOpt = membreRepo.findOrgIdByUsername(username);
-        if (orgIdOpt.isEmpty())
-            return ResponseEntity.badRequest().body(Map.of("message", "Organisation introuvable pour cet utilisateur"));
+        var membreIdOpt = membreRepo.findMembreIdByUsername(username);
+        var orgIdOpt    = membreRepo.findOrgIdByUsername(username);
+        if (membreIdOpt.isEmpty())
+            return ResponseEntity.badRequest().body(Map.of("message", "Membre introuvable"));
 
-        Long   orgId   = orgIdOpt.get();
-        String orgCode = membreRepo.findOrgCodeById(orgId).orElse("SITE");
+        Long membreId = membreIdOpt.get();
+        Long orgId    = orgIdOpt.orElse(null);
 
-        // Générer code unique SITE-{ORG_CODE}-{N:02d}
-        List<Site> existing = siteRepo.findByIdOrganisationOrderByEstPrincipalDescIdAsc(orgId);
+        // Code unique basé sur le username : SITE-{PREFIX}-{N:02d}
+        String prefix = username.toUpperCase().replaceAll("[^A-Z0-9]", "");
+        if (prefix.length() > 6) prefix = prefix.substring(0, 6);
+        List<Site> existing = siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId);
         String codeSite;
         int n = existing.size() + 1;
         do {
-            codeSite = String.format("SITE-%s-%02d", orgCode, n++);
+            codeSite = String.format("SITE-%s-%02d", prefix, n++);
         } while (siteRepo.existsByCodeSite(codeSite));
 
         String nomSite = getString(body, "nomSite");
@@ -91,8 +94,9 @@ public class SiteController {
         s.setRegion(getString(body, "region"));
         s.setLatitude(parseBD(body.get("latitude")));
         s.setLongitude(parseBD(body.get("longitude")));
+        s.setZoneCode(getString(body, "zoneCode"));
+        s.setIdMembre(membreId);
         s.setIdOrganisation(orgId);
-        // Premier site de l'org → principal par défaut
         s.setEstPrincipal(existing.isEmpty());
 
         return ResponseEntity.ok(siteRepo.save(s));
@@ -100,8 +104,8 @@ public class SiteController {
 
     /**
      * PUT /api/sites/mes-sites/{code}
-     * Modifie un site appartenant à l'org du connecté.
-     * Body : { nomSite, typeSite, departement, localite, region, latitude, longitude }
+     * Modifie un site appartenant au membre connecté.
+     * Body : { nomSite, typeSite, zoneCode, departement, localite, region, latitude, longitude }
      */
     @PutMapping("/mes-sites/{code}")
     public ResponseEntity<?> modifierMonSite(
@@ -110,25 +114,83 @@ public class SiteController {
             @AuthenticationPrincipal Jwt jwt) {
 
         String username = jwt.getClaimAsString("preferred_username");
-        var orgIdOpt = membreRepo.findOrgIdByUsername(username);
-        if (orgIdOpt.isEmpty())
+        var membreIdOpt = membreRepo.findMembreIdByUsername(username);
+        if (membreIdOpt.isEmpty())
             return ResponseEntity.status(403).body(Map.of("message", "Accès non autorisé"));
 
-        return siteRepo.findByCodeSite(code).map(s -> {
-            if (!orgIdOpt.get().equals(s.getIdOrganisation()))
-                return ResponseEntity.status(403).<Object>body(Map.of("message", "Ce site n'appartient pas à votre organisation"));
-
+        Long membreId = membreIdOpt.get();
+        return siteRepo.findByCodeSiteAndIdMembre(code, membreId).map(s -> {
             String nom = getString(body, "nomSite");
             if (nom != null && !nom.isBlank()) s.setNomSite(nom.trim());
-            if (body.containsKey("typeSite"))   s.setTypeSite(parseType(body.get("typeSite").toString()));
+            if (body.containsKey("typeSite"))    s.setTypeSite(parseType(body.get("typeSite").toString()));
+            if (body.containsKey("zoneCode"))    s.setZoneCode(getString(body, "zoneCode"));
             if (body.containsKey("departement")) s.setDepartement(getString(body, "departement"));
             if (body.containsKey("localite"))    s.setLocalite(getString(body, "localite"));
             if (body.containsKey("region"))      s.setRegion(getString(body, "region"));
             if (body.containsKey("latitude"))    s.setLatitude(parseBD(body.get("latitude")));
             if (body.containsKey("longitude"))   s.setLongitude(parseBD(body.get("longitude")));
-
             return ResponseEntity.<Object>ok(siteRepo.save(s));
-        }).orElse(ResponseEntity.notFound().build());
+        }).orElse(ResponseEntity.status(403).build());
+    }
+
+    /**
+     * DELETE /api/sites/mes-sites/{code}
+     * Règles : pas de stock > 0 sur ce site, et pas le seul site du membre.
+     */
+    @DeleteMapping("/mes-sites/{code}")
+    public ResponseEntity<?> supprimerMonSite(
+            @PathVariable String code,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        String username = jwt.getClaimAsString("preferred_username");
+        var membreIdOpt = membreRepo.findMembreIdByUsername(username);
+        if (membreIdOpt.isEmpty())
+            return ResponseEntity.status(403).body(Map.of("message", "Accès non autorisé"));
+
+        Long membreId = membreIdOpt.get();
+        return siteRepo.findByCodeSiteAndIdMembre(code, membreId).map(s -> {
+            List<Site> mesSites = siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId);
+            if (mesSites.size() <= 1)
+                return ResponseEntity.badRequest().<Object>body(
+                    Map.of("message", "Impossible de supprimer votre unique site"));
+
+            // Vérifier stock restant
+            Integer stockRestant = jdbc.queryForObject(
+                "SELECT COALESCE(SUM(quantite_disponible), 0) FROM stock WHERE id_site = ?",
+                Integer.class, s.getId());
+            if (stockRestant != null && stockRestant > 0)
+                return ResponseEntity.badRequest().<Object>body(
+                    Map.of("message", "Ce site contient encore " + stockRestant + " kg en stock — videz le stock avant de supprimer"));
+
+            if (Boolean.TRUE.equals(s.getEstPrincipal())) {
+                mesSites.stream().filter(o -> !o.getId().equals(s.getId())).findFirst()
+                    .ifPresent(next -> { next.setEstPrincipal(true); siteRepo.save(next); });
+            }
+            siteRepo.delete(s);
+            return ResponseEntity.<Object>noContent().build();
+        }).orElse(ResponseEntity.status(403).build());
+    }
+
+    /**
+     * PATCH /api/sites/mes-sites/{code}/principal
+     * Définit ce site comme principal pour le membre connecté.
+     */
+    @PatchMapping("/mes-sites/{code}/principal")
+    public ResponseEntity<?> definirPrincipal(
+            @PathVariable String code,
+            @AuthenticationPrincipal Jwt jwt) {
+
+        String username = jwt.getClaimAsString("preferred_username");
+        var membreIdOpt = membreRepo.findMembreIdByUsername(username);
+        if (membreIdOpt.isEmpty())
+            return ResponseEntity.status(403).body(Map.of("message", "Accès non autorisé"));
+
+        Long membreId = membreIdOpt.get();
+        return siteRepo.findByCodeSiteAndIdMembre(code, membreId).map(s -> {
+            siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId)
+                .forEach(o -> { o.setEstPrincipal(o.getId().equals(s.getId())); siteRepo.save(o); });
+            return ResponseEntity.<Object>ok(s);
+        }).orElse(ResponseEntity.status(403).build());
     }
 
     /* ── Admin : CRUD complet ── */

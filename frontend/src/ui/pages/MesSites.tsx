@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { MapPin, Plus, RefreshCw, Edit2, CheckCircle2, Star } from 'lucide-react'
+import { MapPin, Plus, RefreshCw, Edit2, CheckCircle2, Star, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
@@ -102,13 +102,10 @@ export function MesSites({ roleKey }: Props) {
 
   function openEdit(s: any) {
     setEditCode(s.codeSite)
-    const matchedCode = Object.entries(ZAE_GPS).find(([, gps]) =>
-      s.region?.toLowerCase().includes(gps.region.split('/')[0].trim().toLowerCase())
-    )?.[0] ?? ''
     setForm({
       nomSite:    s.nomSite    ?? '',
       typeSite:   s.typeSite   ?? 'FERME',
-      zoneCode:   matchedCode,
+      zoneCode:   s.zoneCode   ?? '',
       departement:s.departement ?? '',
       localite:   s.localite   ?? '',
       region:     s.region     ?? '',
@@ -126,6 +123,7 @@ export function MesSites({ roleKey }: Props) {
       const payload = {
         nomSite:    form.nomSite.trim(),
         typeSite:   form.typeSite,
+        zoneCode:   form.zoneCode    || undefined,
         departement:form.departement || undefined,
         localite:   form.localite    || undefined,
         region:     form.region      || undefined,
@@ -144,6 +142,27 @@ export function MesSites({ roleKey }: Props) {
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la sauvegarde', type: 'error' })
     } finally { setSaving(false) }
+  }
+
+  async function supprimerSite(s: any) {
+    if (!window.confirm(`Supprimer le site "${s.nomSite}" ? Cette action est irréversible.`)) return
+    try {
+      await api.delete(endpoints.siteMesSitesByCode(s.codeSite))
+      setToast({ msg: `Site "${s.nomSite}" supprimé`, type: 'success' })
+      fetchSites()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Impossible de supprimer ce site', type: 'error' })
+    }
+  }
+
+  async function definirPrincipal(s: any) {
+    try {
+      await api.patch(endpoints.siteMesSitesPrincipal(s.codeSite))
+      setToast({ msg: `"${s.nomSite}" défini comme site principal`, type: 'success' })
+      fetchSites()
+    } catch {
+      setToast({ msg: 'Erreur lors de la mise à jour', type: 'error' })
+    }
   }
 
   const roleLabel = roleKey === 'seed-multiplicator' ? 'Multiplicateur' : 'Quotataire / OP'
@@ -222,7 +241,13 @@ export function MesSites({ roleKey }: Props) {
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
             {sites.map(s => (
-              <SiteCard key={s.id} site={s} canManage={canManage} onEdit={() => openEdit(s)} />
+              <SiteCard
+                key={s.id} site={s} canManage={canManage} zones={zones}
+                onEdit={() => openEdit(s)}
+                onDelete={() => supprimerSite(s)}
+                onSetPrincipal={() => definirPrincipal(s)}
+                isOnly={sites.length === 1}
+              />
             ))}
           </div>
         )}
@@ -352,9 +377,15 @@ export function MesSites({ roleKey }: Props) {
 }
 
 /* ── Card d'un site ── */
-function SiteCard({ site, canManage, onEdit }: { site: any; canManage: boolean; onEdit: () => void }) {
+function SiteCard({
+  site, canManage, zones, onEdit, onDelete, onSetPrincipal, isOnly,
+}: {
+  site: any; canManage: boolean; zones: any[]; isOnly: boolean;
+  onEdit: () => void; onDelete: () => void; onSetPrincipal: () => void;
+}) {
   const typeLabel = TYPE_LABELS[site.typeSite] ?? site.typeSite
-  const hasGps = site.latitude != null && site.longitude != null
+  const hasGps    = site.latitude != null && site.longitude != null
+  const zoneLabel = site.zoneCode ? (zones.find(z => z.code === site.zoneCode)?.nom ?? site.zoneCode) : null
 
   return (
     <div style={{
@@ -364,9 +395,9 @@ function SiteCard({ site, canManage, onEdit }: { site: any; canManage: boolean; 
       boxShadow: site.estPrincipal ? '0 0 0 2px var(--green-100)' : 'none',
     }}>
       {/* En-tête */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 700, fontSize: 14 }}>{site.nomSite}</span>
             {site.estPrincipal && (
               <span style={{
@@ -374,7 +405,7 @@ function SiteCard({ site, canManage, onEdit }: { site: any; canManage: boolean; 
                 borderRadius: 20, padding: '1px 8px', fontSize: 10, fontWeight: 700,
                 display: 'flex', alignItems: 'center', gap: 3,
               }}>
-                <Star size={9} />Principal
+                <Star size={9} /> Principal
               </span>
             )}
           </div>
@@ -383,24 +414,54 @@ function SiteCard({ site, canManage, onEdit }: { site: any; canManage: boolean; 
           </code>
         </div>
         {canManage && (
-          <button
-            onClick={onEdit}
-            style={{
-              background: 'none', border: '1px solid var(--border)', borderRadius: 6,
-              padding: '4px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center',
-              gap: 5, fontSize: 11, color: 'var(--text-muted)',
-            }}
-          >
-            <Edit2 size={11} /> Modifier
-          </button>
+          <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+            <button
+              onClick={onEdit}
+              style={{
+                background: 'none', border: '1px solid var(--border)', borderRadius: 6,
+                padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                gap: 4, fontSize: 11, color: 'var(--text-muted)',
+              }}
+              title="Modifier ce site"
+            >
+              <Edit2 size={11} /> Modifier
+            </button>
+            {!site.estPrincipal && (
+              <button
+                onClick={onSetPrincipal}
+                style={{
+                  background: 'none', border: '1px solid var(--green-300)', borderRadius: 6,
+                  padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  gap: 4, fontSize: 11, color: 'var(--green-700)',
+                }}
+                title="Définir comme site principal"
+              >
+                <Star size={11} />
+              </button>
+            )}
+            {!isOnly && (
+              <button
+                onClick={onDelete}
+                style={{
+                  background: 'none', border: '1px solid var(--red-200)', borderRadius: 6,
+                  padding: '4px 8px', cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  gap: 4, fontSize: 11, color: 'var(--red-600)',
+                }}
+                title="Supprimer ce site"
+              >
+                <Trash2 size={11} />
+              </button>
+            )}
+          </div>
         )}
       </div>
 
       {/* Infos */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
         <Chip color="blue">{typeLabel}</Chip>
+        {zoneLabel && <Chip color="green">{zoneLabel}</Chip>}
         {site.departement && <Chip color="gray">{site.departement}</Chip>}
-        {site.region     && <Chip color="gray">{site.region}</Chip>}
+        {site.region      && <Chip color="gray">{site.region}</Chip>}
       </div>
 
       {site.localite && (

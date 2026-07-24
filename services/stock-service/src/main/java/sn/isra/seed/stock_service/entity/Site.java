@@ -46,6 +46,13 @@ public class Site {
     @Column(name = "est_principal", nullable = false)
     private Boolean estPrincipal = false;
 
+    @Column(name = "id_membre")
+    private Long idMembre;
+
+    @Size(max = 10)
+    @Column(name = "zone_code", length = 10)
+    private String zoneCode;
+
     @DecimalMin(value = "-90.0") @DecimalMax(value = "90.0")
     @Column(precision = 10, scale = 6)
     private BigDecimal latitude;
