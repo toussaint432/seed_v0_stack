@@ -14,7 +14,6 @@ import { Lots }           from './pages/Lots'
 import { Stocks }         from './pages/Stocks'
 import { Orders }         from './pages/Orders'
 import { Dashboard }      from './pages/Dashboard'
-import { Certifications } from './pages/Certifications'
 import { Transfers }      from './pages/Transfers'
 import { Campagnes }      from './pages/Campagnes'
 import { Sites }          from './pages/Sites'
@@ -24,6 +23,7 @@ import { Profile }          from './pages/Profile'
 import { Users }            from './pages/Users'
 import { CataloguePublic }  from './pages/CataloguePublic'
 import { Messages }          from './pages/Messages'
+import { Certifications }    from './pages/Certifications'
 
 type Page =
   | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
@@ -66,7 +66,7 @@ function getNavSections(roleKey: string): NavSection[] {
   const lots:           NavItem = { id: 'lots',           label: 'Lots semenciers',         icon: Package }
   const stocks:         NavItem = { id: 'stocks',         label: 'Stock',                   icon: Warehouse }
   const orders:         NavItem = { id: 'orders',         label: 'Commandes',               icon: ShoppingCart }
-  const certifications: NavItem = { id: 'certifications', label: 'Qualité & Certif.',       icon: Shield }
+  const certifications: NavItem = { id: 'certifications', label: 'Contrôle & Certif.',      icon: Shield }
   const transfers:      NavItem = { id: 'transfers',      label: 'Transferts',              icon: ArrowRightLeft }
   const programs:       NavItem = { id: 'programs',       label: 'Programmes',              icon: Workflow }
   const campagnes:      NavItem = { id: 'campagnes',      label: 'Campagnes',               icon: Calendar }
@@ -90,7 +90,7 @@ function getNavSections(roleKey: string): NavSection[] {
       return [
         { section: 'Général',        items: [dashboard] },
         { section: 'Recherche',      items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
-        { section: 'Gestion',        items: [stocks, transfers, certifications, orders] },
+        { section: 'Gestion',        items: [stocks, transfers, orders] },
         { section: 'Communication',  items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
@@ -107,7 +107,7 @@ function getNavSections(roleKey: string): NavSection[] {
       return [
         { section: 'Général',        items: [dashboard] },
         { section: 'Référentiel',    items: [{ ...varieties, label: 'Variétés & Espèces' }] },
-        { section: 'Production',     items: [{ ...lots, label: 'Mes Lots' }, programs] },
+        { section: 'Production',     items: [{ ...lots, label: 'Catalogue & Lots' }, programs] },
         { section: 'Logistique',     items: [stocks, certifications, transfers, orders] },
         { section: 'Mes Données',    items: [mesSites] },
         { section: 'Communication',  items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
@@ -135,7 +135,7 @@ const pageTitle: Record<Page, { title: string; sub: string }> = {
   lots:           { title: 'Lots de semences',             sub: 'Suivi des générations G0 → R2' },
   stocks:         { title: 'Inventaire stock',             sub: 'Disponibilité par site de stockage' },
   orders:         { title: 'Commandes',                    sub: 'Suivi et gestion des commandes' },
-  certifications: { title: 'Qualité & Certifications',     sub: 'Contrôles qualité et certification des lots' },
+  certifications: { title: 'Contrôle & Certification',     sub: 'Certification des lots multiplicateurs — validation UPSemCL/Admin' },
   transfers:      { title: 'Transferts',                   sub: 'Transferts inter-organisations de semences' },
   campagnes:      { title: 'Campagnes agricoles',          sub: 'Gestion des campagnes de production' },
   sites:          { title: 'Sites',                        sub: 'Sites de stockage et production — vue globale' },
@@ -299,7 +299,7 @@ export function App() {
   const notifications: Array<{ id: number; type: 'message' | 'transfer' | 'system'; title: string; sub: string; time: string; read: boolean }> = [
     ...(unread > 0 ? [{ id: 1, type: 'message' as const, title: `${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''}`, sub: 'Messagerie plateforme', time: 'maintenant', read: false }] : []),
     { id: 2, type: 'transfer' as const, title: 'Transfert en attente de validation', sub: 'Un lot G3 attend votre approbation', time: 'il y a 2h', read: false },
-    { id: 3, type: 'system' as const, title: 'Plateforme Sen Jiw opérationnelle', sub: 'Tous les services sont actifs', time: 'il y a 5h', read: true },
+    { id: 3, type: 'system' as const, title: 'Plateforme Sen Jiwu opérationnelle', sub: 'Tous les services sont actifs', time: 'il y a 5h', read: true },
   ]
   const unreadNotif = notifications.filter(n => !n.read).length
 
@@ -313,10 +313,10 @@ export function App() {
         {/* Logo */}
         <div className="sidebar-logo">
           <div className="sidebar-logo-mark">
-            <img src="/SENJIW.svg" alt="Sen Jiw" style={{ height: 26, width: 26, objectFit: 'contain' }} />
+            <img src="/SENJIWU.png" alt="Sen Jiwu" style={{ height: 26, width: 26, objectFit: 'contain' }} />
           </div>
           <div className="sidebar-logo-text">
-            <h1>Sen Jiw</h1>
+            <h1>Sen Jiwu</h1>
             <p>Filière semencière</p>
           </div>
         </div>
@@ -416,7 +416,11 @@ export function App() {
             <nav className="topbar-breadcrumb">
               <span>CNRA</span>
               <ChevronRight size={13} />
-              <span>{pageTitle[validPage].title}</span>
+              <span>
+                {validPage === 'lots'
+                  ? (allNavItems.find(i => i.id === 'lots')?.label ?? pageTitle[validPage].title)
+                  : pageTitle[validPage].title}
+              </span>
             </nav>
           </div>
 

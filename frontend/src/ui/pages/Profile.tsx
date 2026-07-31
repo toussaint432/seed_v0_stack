@@ -2,7 +2,7 @@ import { useRef, useState, useEffect, type ChangeEvent, type FormEvent, type Rea
 import {
   User, Mail, Shield, Calendar, LogOut, Key,
   Camera, Edit3, Check, X, Lock, Eye, EyeOff, RefreshCw, Trash2,
-  Clock, Globe, Bell, Phone,
+  Clock, Globe, Bell, Phone, Sprout,
 } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
@@ -10,9 +10,6 @@ import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
-
-const KEYCLOAK_BASE = 'http://localhost:18080'
-const REALM         = 'seed-v0'
 
 const ROLE_INFO: Record<string, { label: string; color: string; bg: string; description: string; icon: string }> = {
   'seed-admin':         { label: 'Administrateur ISRA', color: '#7c3aed', bg: '#f5f3ff', description: 'Supervision globale — accès complet à toute la plateforme', icon: '◆' },
@@ -37,9 +34,11 @@ export function Profile({ roleKey }: Props) {
   const [pwdSaving,  setPwdSaving]  = useState(false)
   const [toast,      setToast]      = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
 
-  const [firstName, setFirstName] = useState(token.given_name  || '')
-  const [lastName,  setLastName]  = useState(token.family_name || '')
-  const [email,     setEmail]     = useState(token.email       || '')
+  const [firstName,    setFirstName]    = useState(token.given_name  || '')
+  const [lastName,     setLastName]     = useState(token.family_name || '')
+  const [email,        setEmail]        = useState(token.email       || '')
+  const [usernameEdit, setUsernameEdit] = useState(username)
+  const [specialisation, setSpecialisation] = useState('')
 
   const [pwdForm,       setPwdForm]       = useState({ current: '', newPwd: '', confirm: '' })
   const [showCurrent,   setShowCurrent]   = useState(false)
@@ -59,6 +58,7 @@ export function Profile({ roleKey }: Props) {
     api.get(endpoints.membreMe).then(res => {
       setTelephone(res.data.telephone || '')
       setTelPublic(res.data.telephonePublic ?? false)
+      setSpecialisation(res.data.specialisation || '')
     }).catch(() => {})
   }, [userId])
 
@@ -88,9 +88,10 @@ export function Profile({ roleKey }: Props) {
   }
 
   function cancelEdit() {
-    setFirstName(token.given_name  || '')
-    setLastName (token.family_name || '')
-    setEmail    (token.email       || '')
+    setFirstName   (token.given_name  || '')
+    setLastName    (token.family_name || '')
+    setEmail       (token.email       || '')
+    setUsernameEdit(username)
     setEditing(false)
   }
 
@@ -108,22 +109,23 @@ export function Profile({ roleKey }: Props) {
 
   async function saveProfile(e: FormEvent) {
     e.preventDefault()
+    if (!usernameEdit.trim()) { setToast({ msg: "Le nom d'utilisateur est obligatoire", type: 'error' }); return }
+    const usernameChanged = usernameEdit.trim() !== username
     setSaving(true)
     try {
-      const res = await fetch(`${KEYCLOAK_BASE}/realms/${REALM}/account`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${keycloak.token}` },
-        body: JSON.stringify({ firstName, lastName, email, username }),
-      })
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}))
-        throw new Error(body.errorMessage || 'Erreur lors de la mise à jour')
+      await api.post(endpoints.membreKeycloakProfil, { firstName, lastName, email, username: usernameEdit.trim() })
+      if (usernameChanged) {
+        setToast({ msg: "Profil mis à jour — reconnexion nécessaire dans 2 s", type: 'success' })
+        setEditing(false)
+        setTimeout(() => keycloak.logout({ redirectUri: window.location.origin }), 2000)
+      } else {
+        await keycloak.updateToken(-1)
+        setToast({ msg: 'Profil mis à jour avec succès', type: 'success' })
+        setEditing(false)
       }
-      await keycloak.updateToken(-1)
-      setToast({ msg: 'Profil mis à jour avec succès', type: 'success' })
-      setEditing(false)
     } catch (err: any) {
-      setToast({ msg: err.message || 'Erreur', type: 'error' })
+      const msg = err.response?.data?.errorMessage || err.message || 'Erreur lors de la mise à jour'
+      setToast({ msg, type: 'error' })
     } finally { setSaving(false) }
   }
 
@@ -324,8 +326,13 @@ export function Profile({ roleKey }: Props) {
               <FormInput type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="m.diallo@isra.sn" />
             </Field>
             <FormRow>
-              <Field label="Nom d'utilisateur" hint="Non modifiable">
-                <FormInput value={username} disabled style={{ opacity: 0.55, cursor: 'not-allowed', background: 'var(--surface-2)' }} />
+              <Field label="Nom d'utilisateur" hint="Modifiable · reconnexion requise si changé">
+                <FormInput
+                  value={usernameEdit}
+                  onChange={e => setUsernameEdit(e.target.value.toLowerCase().replace(/\s+/g, '.'))}
+                  placeholder="ibrahima.ndiaye"
+                  required
+                />
               </Field>
               <Field label="Rôle plateforme" hint="Géré par l'administrateur">
                 <FormInput value={role?.label || roleKey} disabled style={{ opacity: 0.55, cursor: 'not-allowed', background: 'var(--surface-2)' }} />
@@ -352,6 +359,15 @@ export function Profile({ roleKey }: Props) {
             <InfoRow label="Nom"               value={token.family_name || '—'} icon={<User size={12} />}  accent={accent} />
             <InfoRow label="Nom d'utilisateur" value={username}                  icon={<User size={12} />}  accent={accent} mono />
             <InfoRow label="Email"             value={token.email || '—'}        icon={<Mail size={12} />}  accent={accent} />
+            {roleKey === 'seed-selector' && (
+              <InfoRow
+                label="Spécialisation"
+                value={specialisation || '—'}
+                icon={<Sprout size={12} />}
+                accent={accent}
+                valueStyle={specialisation ? { color: accent, fontWeight: 700 } : { color: 'var(--text-muted)', fontStyle: 'italic' }}
+              />
+            )}
             {/* Téléphone — éditable inline */}
             <div style={{ paddingTop: 10, borderTop: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

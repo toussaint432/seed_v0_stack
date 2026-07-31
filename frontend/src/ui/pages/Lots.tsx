@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX, Shield } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -15,6 +15,33 @@ function suggestChildCode(parentCode: string, parentGen: string, childGen: strin
     ? childGen + parentCode.slice(parentGen.length)
     : childGen + '-' + parentCode
   return base + '-01'
+}
+
+// ── Helpers certification (feu tricolore) ─────────────────────────
+type StatutCert = 'SANS_CERTIFICAT' | 'EN_ATTENTE' | 'CERTIFIE' | 'REJETE'
+
+function certShieldIcon(lot: any, size = 13) {
+  const sc: StatutCert = lot.statutCertification || 'SANS_CERTIFICAT'
+  if (sc === 'CERTIFIE')        return <ShieldCheck size={size} title="Lot certifié (approuvé)"              style={{ color: '#16a34a', flexShrink: 0 }} />
+  if (sc === 'EN_ATTENTE')      return <Shield      size={size} title="Certificat en attente de validation"  style={{ color: '#EAB308', flexShrink: 0 }} />
+  if (sc === 'REJETE')          return <ShieldX     size={size} title="Certificat rejeté"                    style={{ color: '#EF4444', flexShrink: 0 }} />
+  /* SANS_CERTIFICAT */          return <Shield      size={size} title="Aucun certificat soumis"              style={{ color: '#EF4444', flexShrink: 0 }} />
+}
+
+function certButtonColor(lot: any): string {
+  const sc: StatutCert = lot.statutCertification || 'SANS_CERTIFICAT'
+  if (sc === 'CERTIFIE')   return '#16a34a'
+  if (sc === 'EN_ATTENTE') return '#EAB308'
+  if (sc === 'REJETE')     return '#EF4444'
+  return '#EF4444'
+}
+
+function certButtonTitle(lot: any): string {
+  const sc: StatutCert = lot.statutCertification || 'SANS_CERTIFICAT'
+  if (sc === 'CERTIFIE')   return 'Voir le certificat (approuvé)'
+  if (sc === 'EN_ATTENTE') return 'Certificat en attente de validation'
+  if (sc === 'REJETE')     return 'Certificat rejeté — resoumettre un nouveau'
+  return 'Joindre un certificat'
 }
 
 const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', G4: 'badge-gold', R1: 'badge-blue', R2: 'badge-green' }
@@ -832,10 +859,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
-                                {l.certificatPath
-                                  ? <ShieldCheck size={13} title="Lot certifié" style={{ color: '#16a34a', flexShrink: 0 }} />
-                                  : <ShieldX size={13} title="Lot non certifié" style={{ color: '#dc2626', flexShrink: 0 }} />
-                                }
+                                {certShieldIcon(l)}
                               </div>
                             </td>
                             <td>
@@ -1156,9 +1180,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
-                                {l.certificatPath && (
-                                  <ShieldCheck size={13} title="Lot certifié" style={{ color: '#16a34a', flexShrink: 0 }} />
-                                )}
+                                {certShieldIcon(l)}
                               </div>
                             </td>
                             <td>
@@ -1268,10 +1290,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                 )}
                                 <button
                                   className="btn btn-ghost"
-                                  style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: l.certificatPath ? '#16a34a' : '#dc2626' }}
-                                  title={l.certificatPath ? 'Voir / gérer le certificat' : 'Joindre un certificat'}
+                                  style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: certButtonColor(l) }}
+                                  title={certButtonTitle(l)}
                                   onClick={() => setCertLotMult(l)}
-                                >{l.certificatPath ? <ShieldCheck size={13} /> : <ShieldX size={13} />}</button>
+                                >{certShieldIcon(l) ?? <Shield size={13} />}</button>
                               </div>
                             </td>
                           </tr>
@@ -2012,9 +2034,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
-                        {l.certificatPath && (
-                          <ShieldCheck size={13} title="Lot certifié" style={{ color: '#16a34a', flexShrink: 0 }} />
-                        )}
+                        {certShieldIcon(l)}
                       </div>
                     </td>
                     <td>
@@ -2119,10 +2139,10 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                         )}
                         <button
                           className="btn btn-ghost"
-                          style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: l.certificatPath ? '#16a34a' : '#dc2626' }}
-                          title={l.certificatPath ? 'Voir / gérer le certificat' : 'Joindre un certificat'}
+                          style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: certButtonColor(l) }}
+                          title={certButtonTitle(l)}
                           onClick={() => setCertLot(l)}
-                        >{l.certificatPath ? <ShieldCheck size={13} /> : <ShieldX size={13} />}</button>
+                        >{certShieldIcon(l) ?? <Shield size={13} />}</button>
                       </div>
                     </td>
                   </tr>

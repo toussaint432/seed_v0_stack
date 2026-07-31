@@ -1,718 +1,845 @@
 import React, { useEffect, useState } from 'react'
 import {
-  Shield, Plus, RefreshCw, Search, X,
-  CheckCircle2, Clock, FileText, Eye,
-  FlaskConical, Upload
+  Shield, ShieldCheck, ShieldX, ShieldAlert,
+  RefreshCw, Search, X, Eye, FileText, Upload,
+  CheckCircle2, Clock, AlertCircle, Ban, ExternalLink,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
-import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
-import { StatusBadge } from '../components/StatusBadge'
-import { Pagination } from '../components/Pagination'
-import { ConfirmDialog } from '../components/ConfirmDialog'
+import { Modal, Field, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
 
-const PAGE_SIZE = 10
+// ── Types ──────────────────────────────────────────────────────────
+type StatutCert = 'SANS_CERTIFICAT' | 'EN_ATTENTE' | 'CERTIFIE' | 'REJETE'
 
-const RESULT_OPTIONS = [
-  { value: 'CONFORME', label: 'Conforme' },
-  { value: 'NON_CONFORME', label: 'Non conforme' },
-]
+interface Lot {
+  id: number
+  codeLot: string
+  statutCertification: StatutCert
+  certificatPath: string | null
+  approbateurUsername: string | null
+  dateApprobation: string | null
+  motifRejetCert: string | null
+  generation?: { codeGeneration: string }
+  codeEspece?: string
+  quantiteNette?: number
+  unite?: string
+  dateProduction?: string
+  usernameCreateur?: string
+  responsableNom?: string
+}
 
-const CERT_RESULT_OPTIONS = [
-  { value: 'CONFORME', label: 'Certifié' },
-  { value: 'NON_CONFORME', label: 'Non conforme' },
-  { value: 'EN_ATTENTE', label: 'En attente' },
-]
+// ── Palette feu tricolore ──────────────────────────────────────────
+const STATUT_META: Record<StatutCert, {
+  label: string; bg: string; color: string; border: string; Icon: React.ElementType
+}> = {
+  SANS_CERTIFICAT: { label: 'Sans certificat', bg: '#fef2f2', color: '#EF4444', border: '#fecaca', Icon: Ban },
+  EN_ATTENTE:      { label: 'En attente',       bg: '#fefce8', color: '#CA8A04', border: '#fde047', Icon: Clock },
+  CERTIFIE:        { label: 'Certifié',          bg: '#f0fdf4', color: '#16a34a', border: '#bbf7d0', Icon: ShieldCheck },
+  REJETE:          { label: 'Rejeté',            bg: '#fef2f2', color: '#EF4444', border: '#fecaca', Icon: ShieldX },
+}
 
-const CONTROL_TYPES = [
-  { value: 'GERMINATION', label: 'Germination' },
-  { value: 'HUMIDITE', label: 'Humidité' },
-  { value: 'PURETE_PHYSIQUE', label: 'Pureté physique' },
-  { value: 'PURETE_SPECIFIQUE', label: 'Pureté spécifique' },
-  { value: 'SANITAIRE', label: 'Sanitaire' },
-  { value: 'COMPLET', label: 'Complet' },
+// ── Badge feu tricolore ────────────────────────────────────────────
+function CertBadge({ statut, size = 'sm' }: { statut: StatutCert; size?: 'sm' | 'md' }) {
+  const m  = STATUT_META[statut]
+  const Icon = m.Icon
+  const px = size === 'md' ? '10px 16px' : '4px 10px'
+  const fs = size === 'md' ? 13 : 11
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: px, fontSize: fs, fontWeight: 700, borderRadius: 20,
+      background: m.bg, color: m.color, border: `1px solid ${m.border}`,
+      whiteSpace: 'nowrap',
+    }}>
+      <Icon size={size === 'md' ? 13 : 11} />
+      {m.label}
+    </span>
+  )
+}
+
+// ── Indicateur feu tricolore (point coloré) ───────────────────────
+function TrafficLight({ statut }: { statut: StatutCert }) {
+  const colors: Record<StatutCert, string> = {
+    SANS_CERTIFICAT: '#EF4444',
+    EN_ATTENTE:      '#EAB308',
+    CERTIFIE:        '#16a34a',
+    REJETE:          '#EF4444',
+  }
+  return (
+    <span style={{
+      display: 'inline-block', width: 10, height: 10, borderRadius: '50%',
+      background: colors[statut], flexShrink: 0,
+      boxShadow: `0 0 0 2px ${colors[statut]}33`,
+    }} />
+  )
+}
+
+// ── Retour UPSemCL — feedback affiché au multiplicateur ───────────
+function RetourUPSemCL({ lot }: { lot: Lot }) {
+  if (lot.statutCertification === 'EN_ATTENTE') {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#EAB308', fontStyle: 'italic' }}>
+        <Clock size={12} style={{ flexShrink: 0 }} />
+        En cours d'examen…
+      </div>
+    )
+  }
+  if (lot.statutCertification === 'CERTIFIE' && lot.approbateurUsername) {
+    return (
+      <div style={{ fontSize: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#16a34a', fontWeight: 600 }}>
+          <CheckCircle2 size={12} />
+          {lot.approbateurUsername}
+        </div>
+        {lot.dateApprobation && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+            {new Date(lot.dateApprobation).toLocaleDateString('fr-FR')}
+          </div>
+        )}
+      </div>
+    )
+  }
+  if (lot.statutCertification === 'REJETE') {
+    return (
+      <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 6, padding: '6px 10px', maxWidth: 230 }}>
+        {lot.approbateurUsername && (
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#EF4444', marginBottom: 3 }}>
+            {lot.approbateurUsername}
+            {lot.dateApprobation && ` · ${new Date(lot.dateApprobation).toLocaleDateString('fr-FR')}`}
+          </div>
+        )}
+        <div style={{ fontSize: 12, color: '#b91c1c', lineHeight: 1.4, overflow: 'hidden', maxHeight: '4.2em' }}>
+          {lot.motifRejetCert || 'Certificat non conforme'}
+        </div>
+      </div>
+    )
+  }
+  return <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+}
+
+const PAGE_SIZE = 12
+const TABS: { id: StatutCert | 'TOUS'; label: string }[] = [
+  { id: 'TOUS',            label: 'Tous' },
+  { id: 'EN_ATTENTE',      label: 'En attente' },
+  { id: 'CERTIFIE',        label: 'Certifiés' },
+  { id: 'REJETE',          label: 'Rejetés' },
+  { id: 'SANS_CERTIFICAT', label: 'Sans certificat' },
 ]
 
 export function Certifications({ roleKey }: Props) {
-  const [activeTab, setActiveTab] = useState<'controls' | 'certifications'>('controls')
-  const [controls, setControls] = useState<any[]>([])
-  const [certifications, setCertifications] = useState<any[]>([])
-  const [lots, setLots] = useState<any[]>([])
-  const [search, setSearch] = useState('')
-  const [filterResult, setFilterResult] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
+  const isReviewer   = roleKey === 'seed-admin' || roleKey === 'seed-upsemcl'
+  const isMultiplicator = roleKey === 'seed-multiplicator'
 
-  // Forms
-  const [showControlForm, setShowControlForm] = useState(false)
-  const [showCertForm, setShowCertForm] = useState(false)
-  const [showDetail, setShowDetail] = useState<any>(null)
-  const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: number; label: string } | null>(null)
-  const [saving, setSaving] = useState(false)
+  const [lots,          setLots]          = useState<Lot[]>([])
+  const [search,        setSearch]        = useState('')
+  const [activeTab,     setActiveTab]     = useState<StatutCert | 'TOUS'>('TOUS')
+  const [loading,       setLoading]       = useState(true)
+  const [fetchError,    setFetchError]    = useState<string | null>(null)
+  const [toast,         setToast]         = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [currentPage,   setCurrentPage]   = useState(1)
+  const [uploadingId,   setUploadingId]   = useState<number | null>(null)
+  const [openingId,     setOpeningId]     = useState<number | null>(null)
+  const [detail,        setDetail]        = useState<Lot | null>(null)
+  const [rejectTarget,  setRejectTarget]  = useState<Lot | null>(null)
+  const [rejectMotif,   setRejectMotif]   = useState('')
+  const [saving,        setSaving]        = useState(false)
 
-  const canCreate = ['seed-admin', 'seed-upsemcl'].includes(roleKey)
-  const canCertify = ['seed-admin'].includes(roleKey)
-  const [uploadingId, setUploadingId] = useState<number | null>(null)
-
-  const [controlForm, setControlForm] = useState({
-    idLot: '', typeControle: 'GERMINATION', dateControle: new Date().toISOString().split('T')[0],
-    tauxGermination: '', tauxHumidite: '', puretePhysique: '', pureteSpecifique: '',
-    conformiteVarietale: '', resultat: 'CONFORME', controleur: '', observations: '',
-  })
-
-  const [certForm, setCertForm] = useState({
-    idLot: '', organismeCertificateur: 'DISEM/ISRA', numeroCertificat: '',
-    dateDemande: new Date().toISOString().split('T')[0], dateInspection: '',
-    dateCertification: '', resultatCertification: 'EN_ATTENTE', motifRejet: '', dateExpiration: '',
-  })
-
-  async function fetchAll() {
+  async function fetchLots() {
     setLoading(true)
-    const lotsUrl = roleKey === 'seed-multiplicator' ? endpoints.lotsMesLots : endpoints.lots
-    const [ctrlRes, certRes, lotsRes] = await Promise.allSettled([
-      api.get(endpoints.controls),
-      api.get(endpoints.certifications),
-      api.get(lotsUrl),
-    ])
-    setControls(ctrlRes.status === 'fulfilled' ? ctrlRes.value.data : [])
-    setCertifications(certRes.status === 'fulfilled' ? certRes.value.data : [])
-    setLots(lotsRes.status === 'fulfilled' ? lotsRes.value.data : [])
-    setLoading(false)
+    setFetchError(null)
+    try {
+      const url = isReviewer
+        ? endpoints.lotsCertifiables
+        : endpoints.lotsMultCertif
+      const res = await api.get(url)
+      const data: Lot[] = res.data || []
+      setLots(data)
+    } catch (err: any) {
+      const status = err?.response?.status
+      if (status === 500 || status === undefined) {
+        setFetchError('Le service est en cours de démarrage ou la migration base de données est en cours. Réessayez dans quelques secondes.')
+      } else if (status === 403) {
+        setFetchError("Vous n'avez pas les droits pour accéder à cette ressource.")
+      } else {
+        setFetchError('Erreur lors du chargement des lots.')
+      }
+      setLots([])
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchLots() }, [])
 
-  // ── Filtres ──
-  const filteredControls = controls.filter(c => {
-    const matchSearch = !search ||
-      c.controleur?.toLowerCase().includes(search.toLowerCase()) ||
-      c.typeControle?.toLowerCase().includes(search.toLowerCase()) ||
-      String(c.idLot).includes(search)
-    const matchResult = !filterResult || c.resultat === filterResult
-    return matchSearch && matchResult
+  // ── Stats KPI ──────────────────────────────────────────────────
+  const statsCounts = {
+    SANS_CERTIFICAT: lots.filter(l => l.statutCertification === 'SANS_CERTIFICAT').length,
+    EN_ATTENTE:      lots.filter(l => l.statutCertification === 'EN_ATTENTE').length,
+    CERTIFIE:        lots.filter(l => l.statutCertification === 'CERTIFIE').length,
+    REJETE:          lots.filter(l => l.statutCertification === 'REJETE').length,
+  }
+
+  // ── Filtre + pagination ────────────────────────────────────────
+  const filtered = lots.filter(l => {
+    const matchTab = activeTab === 'TOUS' || l.statutCertification === activeTab
+    const matchSearch = !search || [l.codeLot, l.codeEspece, l.responsableNom, l.usernameCreateur]
+      .some(v => v?.toLowerCase().includes(search.toLowerCase()))
+    return matchTab && matchSearch
   })
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE)
+  const pageItems  = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
-  const filteredCerts = certifications.filter(c => {
-    const matchSearch = !search ||
-      c.numeroCertificat?.toLowerCase().includes(search.toLowerCase()) ||
-      c.organismeCertificateur?.toLowerCase().includes(search.toLowerCase()) ||
-      String(c.idLot).includes(search)
-    const matchResult = !filterResult || c.resultatCertification === filterResult
-    return matchSearch && matchResult
-  })
+  function goTab(tab: StatutCert | 'TOUS') { setActiveTab(tab); setCurrentPage(1) }
 
-  const activeItems = activeTab === 'controls' ? filteredControls : filteredCerts
-  const pageItems = activeItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-
-  // Stats
-  const conformeCount = controls.filter(c => c.resultat === 'CONFORME').length
-  const certifieCount = certifications.filter(c => c.resultatCertification === 'CONFORME').length
-  const enCoursCount = certifications.filter(c => c.resultatCertification === 'EN_ATTENTE').length
-
-  // ── Submit ──
-  async function submitControl(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true)
+  // ── Upload certificat (multiplicateur) ────────────────────────
+  async function handleUpload(lot: Lot, file: File) {
+    setUploadingId(lot.id)
     try {
-      await api.post(endpoints.controls, {
-        idLot: Number(controlForm.idLot),
-        typeControle: controlForm.typeControle,
-        dateControle: controlForm.dateControle,
-        tauxGermination: controlForm.tauxGermination ? Number(controlForm.tauxGermination) : undefined,
-        tauxHumidite: controlForm.tauxHumidite ? Number(controlForm.tauxHumidite) : undefined,
-        puretePhysique: controlForm.puretePhysique ? Number(controlForm.puretePhysique) : undefined,
-        pureteSpecifique: controlForm.pureteSpecifique ? Number(controlForm.pureteSpecifique) : undefined,
-        conformiteVarietale: controlForm.conformiteVarietale || undefined,
-        resultat: controlForm.resultat,
-        controleur: controlForm.controleur || undefined,
-        observations: controlForm.observations || undefined,
-      })
-      setToast({ msg: 'Contrôle qualité enregistré', type: 'success' })
-      setShowControlForm(false)
-      resetControlForm()
-      fetchAll()
-    } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la création du contrôle', type: 'error' })
-    } finally { setSaving(false) }
-  }
-
-  async function submitCert(e: React.FormEvent) {
-    e.preventDefault(); setSaving(true)
-    try {
-      await api.post(endpoints.certifications, {
-        idLot: Number(certForm.idLot),
-        organismeCertificateur: certForm.organismeCertificateur,
-        numeroCertificat: certForm.numeroCertificat,
-        dateDemande: certForm.dateDemande || undefined,
-        dateInspection: certForm.dateInspection || undefined,
-        dateCertification: certForm.dateCertification || undefined,
-        resultatCertification: certForm.resultatCertification,
-        motifRejet: certForm.motifRejet || undefined,
-        dateExpiration: certForm.dateExpiration || undefined,
-      })
-      setToast({ msg: `Certification ${certForm.numeroCertificat} enregistrée`, type: 'success' })
-      setShowCertForm(false)
-      resetCertForm()
-      fetchAll()
-    } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la certification', type: 'error' })
-    } finally { setSaving(false) }
-  }
-
-  async function handleDelete() {
-    if (!deleteTarget) return
-    setSaving(true)
-    try {
-      const url = deleteTarget.type === 'control'
-        ? endpoints.controlById(deleteTarget.id)
-        : endpoints.certificationById(deleteTarget.id)
-      await api.delete(url)
-      setToast({ msg: `${deleteTarget.label} supprimé`, type: 'success' })
-      setDeleteTarget(null)
-      fetchAll()
-    } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur de suppression', type: 'error' })
-    } finally { setSaving(false) }
-  }
-
-  async function handleUpload(certId: number, file: File) {
-    setUploadingId(certId)
-    try {
-      const formData = new FormData()
-      formData.append('file', file)
-      await api.post(endpoints.certificationUpload(certId), formData, {
+      const fd = new FormData()
+      fd.append('file', file)
+      await api.post(endpoints.lotCertificatUpload(lot.id), fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      setToast({ msg: 'Document uploadé avec succès', type: 'success' })
-      fetchAll()
+      setToast({ msg: `Certificat soumis pour ${lot.codeLot} — en attente de validation`, type: 'success' })
+      fetchLots()
     } catch {
-      setToast({ msg: "Erreur lors de l'upload du document", type: 'error' })
+      setToast({ msg: "Erreur lors de l'envoi du certificat", type: 'error' })
     } finally {
       setUploadingId(null)
     }
   }
 
-  function resetControlForm() {
-    setControlForm({
-      idLot: '', typeControle: 'GERMINATION', dateControle: new Date().toISOString().split('T')[0],
-      tauxGermination: '', tauxHumidite: '', puretePhysique: '', pureteSpecifique: '',
-      conformiteVarietale: '', resultat: 'CONFORME', controleur: '', observations: '',
-    })
+  // ── Approuver (UPSemCL / Admin) ───────────────────────────────
+  async function handleApprouver(lot: Lot) {
+    setSaving(true)
+    try {
+      await api.patch(endpoints.lotCertifier(lot.id))
+      setToast({ msg: `Lot ${lot.codeLot} certifié avec succès`, type: 'success' })
+      fetchLots()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la certification', type: 'error' })
+    } finally { setSaving(false) }
   }
 
-  function resetCertForm() {
-    setCertForm({
-      idLot: '', organismeCertificateur: 'DISEM/ISRA', numeroCertificat: '',
-      dateDemande: new Date().toISOString().split('T')[0], dateInspection: '',
-      dateCertification: '', resultatCertification: 'EN_ATTENTE', motifRejet: '', dateExpiration: '',
-    })
+  // ── Rejeter (UPSemCL / Admin) ─────────────────────────────────
+  async function handleRejeter() {
+    if (!rejectTarget || !rejectMotif.trim()) return
+    setSaving(true)
+    try {
+      await api.patch(endpoints.lotRejeterCert(rejectTarget.id), { motif: rejectMotif.trim() })
+      setToast({ msg: `Certification de ${rejectTarget.codeLot} rejetée`, type: 'success' })
+      setRejectTarget(null)
+      setRejectMotif('')
+      fetchLots()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors du rejet', type: 'error' })
+    } finally { setSaving(false) }
   }
 
-  function getLotLabel(idLot: number): string {
-    const lot = lots.find((l: any) => l.id === idLot)
-    return lot ? lot.codeLot : `Lot #${idLot}`
+  async function openCertificat(lot: Lot) {
+    setOpeningId(lot.id)
+    try {
+      const res = await api.get(endpoints.lotCertificatUrl(lot.id), { responseType: 'blob' })
+      const ext = lot.certificatPath?.split('.').pop()?.toLowerCase() || 'pdf'
+      const mime = ext === 'pdf' ? 'application/pdf'
+        : ext === 'png' ? 'image/png'
+        : ext === 'webp' ? 'image/webp'
+        : 'image/jpeg'
+      const blob = new Blob([res.data], { type: mime })
+      const url  = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      // révoquer après 2 min pour éviter les fuites mémoire
+      setTimeout(() => URL.revokeObjectURL(url), 120_000)
+    } catch {
+      setToast({ msg: 'Impossible d\'ouvrir le certificat', type: 'error' })
+    } finally {
+      setOpeningId(null)
+    }
   }
 
   return (
     <div>
       {toast && <Toast message={toast.msg} type={toast.type} onClose={() => setToast(null)} />}
 
-      {deleteTarget && (
-        <ConfirmDialog
-          title="Supprimer cet enregistrement ?"
-          message={`Vous êtes sur le point de supprimer "${deleteTarget.label}". Cette action est irréversible.`}
-          confirmLabel="Supprimer"
-          variant="danger"
-          loading={saving}
-          onConfirm={handleDelete}
-          onCancel={() => setDeleteTarget(null)}
-        />
+      {/* ── Bannière lots rejetés (multiplicateur uniquement) ── */}
+      {isMultiplicator && !loading && statsCounts.REJETE > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: '#fef2f2', border: '1px solid #fecaca',
+          borderRadius: 10, padding: '12px 18px', marginBottom: 16,
+          fontSize: 13, color: '#b91c1c',
+        }}>
+          <ShieldX size={16} color="#EF4444" style={{ flexShrink: 0 }} />
+          <div>
+            <strong>{statsCounts.REJETE} lot{statsCounts.REJETE > 1 ? 's' : ''}</strong>
+            {statsCounts.REJETE > 1 ? ' ont été rejetés' : ' a été rejeté'} par l'UPSemCL.
+            {' '}Consultez le motif dans le tableau et soumettez un certificat corrigé.
+          </div>
+          <button
+            className="btn btn-secondary"
+            style={{ marginLeft: 'auto', height: 28, fontSize: 12, padding: '0 12px', borderColor: '#fecaca', color: '#EF4444', whiteSpace: 'nowrap' }}
+            onClick={() => goTab('REJETE')}
+          >
+            Voir les rejetés
+          </button>
+        </div>
       )}
 
-      {/* KPI Cards */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon blue"><FlaskConical size={18} /></div>
-          <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : controls.length}</div>
-            <div className="stat-label">Contrôles qualité</div>
-          </div>
+      {/* ── Bannière d'erreur service ── */}
+      {fetchError && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          background: '#fffbeb', border: '1px solid #fde68a',
+          borderRadius: 10, padding: '12px 18px', marginBottom: 16,
+          fontSize: 13, color: '#92400e',
+        }}>
+          <ShieldAlert size={16} color="#EAB308" style={{ flexShrink: 0 }} />
+          <span>{fetchError}</span>
+          <button
+            className="btn btn-secondary"
+            style={{ marginLeft: 'auto', height: 28, fontSize: 12, padding: '0 12px' }}
+            onClick={fetchLots}
+          >
+            <RefreshCw size={12} /> Réessayer
+          </button>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon green"><CheckCircle2 size={18} /></div>
-          <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : conformeCount}</div>
-            <div className="stat-label">Conformes</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon gold"><Shield size={18} /></div>
-          <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : certifieCount}</div>
-            <div className="stat-label">Certifiés</div>
-          </div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon violet"><Clock size={18} /></div>
-          <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : enCoursCount}</div>
-            <div className="stat-label">En cours</div>
-          </div>
-        </div>
+      )}
+
+      {/* ── KPI cards ── */}
+      <div className="stats-grid" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
+        {([
+          { key: 'EN_ATTENTE',      icon: Clock,         label: 'En attente',       bgVar: '#fefce8', colorVar: '#CA8A04' },
+          { key: 'CERTIFIE',        icon: ShieldCheck,   label: 'Certifiés',        bgVar: '#f0fdf4', colorVar: '#16a34a' },
+          { key: 'REJETE',          icon: ShieldX,       label: 'Rejetés',          bgVar: '#fef2f2', colorVar: '#EF4444' },
+          { key: 'SANS_CERTIFICAT', icon: AlertCircle,   label: 'Sans certificat',  bgVar: '#fef2f2', colorVar: '#EF4444' },
+        ] as const).map(({ key, icon: Icon, label, bgVar, colorVar }) => (
+          <button
+            key={key}
+            onClick={() => goTab(key as StatutCert)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 14,
+              background: activeTab === key ? bgVar : 'var(--surface)',
+              border: `1px solid ${activeTab === key ? STATUT_META[key as StatutCert].border : 'var(--border)'}`,
+              borderRadius: 10, padding: '14px 18px', cursor: 'pointer',
+              transition: 'all 0.15s', textAlign: 'left', width: '100%',
+            }}
+          >
+            <div style={{
+              width: 38, height: 38, borderRadius: 8, display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              background: bgVar, flexShrink: 0,
+            }}>
+              <Icon size={18} color={colorVar} />
+            </div>
+            <div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: colorVar, lineHeight: 1.1 }}>
+                {loading ? '–' : statsCounts[key as StatutCert]}
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500 }}>{label}</div>
+            </div>
+            {key === 'EN_ATTENTE' && statsCounts.EN_ATTENTE > 0 && (
+              <span style={{
+                marginLeft: 'auto', minWidth: 22, height: 22, borderRadius: 11,
+                background: '#CA8A04', color: '#fff', fontSize: 11, fontWeight: 700,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '0 6px',
+              }}>
+                {statsCounts.EN_ATTENTE}
+              </span>
+            )}
+          </button>
+        ))}
       </div>
 
-      {/* Tabs */}
+      {/* ── Card principale ── */}
       <div className="card">
-        <div style={{
-          display: 'flex', borderBottom: '1px solid var(--border)',
-          background: 'var(--surface-2)', borderRadius: '8px 8px 0 0',
-        }}>
-          {[
-            { id: 'controls' as const, label: 'Contrôles qualité', icon: FlaskConical, count: controls.length },
-            { id: 'certifications' as const, label: 'Certifications', icon: Shield, count: certifications.length },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveTab(tab.id); setCurrentPage(1); setSearch(''); setFilterResult('') }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '12px 24px', fontSize: 13, fontWeight: 600,
-                background: activeTab === tab.id ? 'var(--surface)' : 'transparent',
-                color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-muted)',
-                border: 'none', borderBottom: activeTab === tab.id ? '2px solid var(--green-600)' : '2px solid transparent',
-                cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
-              }}
-            >
-              <tab.icon size={14} />
-              {tab.label}
-              <span className="badge badge-gray" style={{ fontSize: 10 }}>{tab.count}</span>
-            </button>
-          ))}
 
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, paddingRight: 16 }}>
-            {canCreate && activeTab === 'controls' && (
-              <button className="btn btn-primary" style={{ height: 32, fontSize: 12 }} onClick={() => setShowControlForm(true)}>
-                <Plus size={12} /> Nouveau contrôle
+        {/* Tabs */}
+        <div style={{
+          display: 'flex', gap: 0, borderBottom: '1px solid var(--border)',
+          background: 'var(--surface-2)', borderRadius: '8px 8px 0 0', overflowX: 'auto',
+        }}>
+          {TABS.map(tab => {
+            const count = tab.id === 'TOUS' ? lots.length : statsCounts[tab.id as StatutCert]
+            const active = activeTab === tab.id
+            const m = tab.id !== 'TOUS' ? STATUT_META[tab.id as StatutCert] : null
+            return (
+              <button
+                key={tab.id}
+                onClick={() => goTab(tab.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '11px 18px', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap',
+                  background: active ? 'var(--surface)' : 'transparent',
+                  color: active ? (m ? m.color : 'var(--text-primary)') : 'var(--text-muted)',
+                  border: 'none',
+                  borderBottom: active
+                    ? `2px solid ${m ? m.color : 'var(--green-600)'}`
+                    : '2px solid transparent',
+                  cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                }}
+              >
+                {tab.label}
+                {count > 0 && (
+                  <span style={{
+                    minWidth: 18, height: 18, borderRadius: 9, padding: '0 5px',
+                    background: active ? (m ? m.bg : 'var(--surface-2)') : 'var(--surface-2)',
+                    color: active ? (m ? m.color : 'var(--text-secondary)') : 'var(--text-muted)',
+                    fontSize: 10, fontWeight: 700,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    border: `1px solid ${active && m ? m.border : 'var(--border)'}`,
+                  }}>
+                    {count}
+                  </span>
+                )}
               </button>
-            )}
-            {canCertify && activeTab === 'certifications' && (
-              <button className="btn btn-primary" style={{ height: 32, fontSize: 12 }} onClick={() => setShowCertForm(true)}>
-                <Plus size={12} /> Nouvelle certification
-              </button>
-            )}
-            <button className="btn btn-secondary btn-icon" style={{ width: 32, height: 32 }} onClick={fetchAll}>
-              <RefreshCw size={13} />
+            )
+          })}
+
+          {/* Refresh */}
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', paddingRight: 12 }}>
+            <button
+              className="btn btn-secondary btn-icon"
+              style={{ width: 30, height: 30 }}
+              onClick={fetchLots}
+              title="Actualiser"
+            >
+              <RefreshCw size={12} />
             </button>
           </div>
         </div>
 
-        {/* Filters */}
+        {/* Barre de recherche */}
         <div className="filters-bar">
           <div className="filter-group">
             <label className="filter-label">Recherche</label>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34 }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'var(--surface)', border: '1px solid var(--border-strong)',
+              borderRadius: 6, padding: '0 11px', height: 34,
+            }}>
               <Search size={13} color="var(--text-muted)" />
               <input
-                placeholder={activeTab === 'controls' ? 'Lot, type, contrôleur…' : 'N° certificat, organisme, lot…'}
+                placeholder="Code lot, espèce, multiplicateur…"
                 value={search}
                 onChange={e => { setSearch(e.target.value); setCurrentPage(1) }}
-                style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 220 }}
+                style={{
+                  border: 'none', background: 'none', outline: 'none',
+                  fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 240,
+                }}
               />
-              {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
           </div>
-          <div className="filter-group">
-            <label className="filter-label">Résultat</label>
-            <select
-              className="input"
-              value={filterResult}
-              onChange={e => { setFilterResult(e.target.value); setCurrentPage(1) }}
-              style={{ width: 150 }}
-            >
-              <option value="">Tous</option>
-              {(activeTab === 'controls' ? RESULT_OPTIONS : CERT_RESULT_OPTIONS).map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          {(search || filterResult) && (
-            <button className="btn btn-ghost" onClick={() => { setSearch(''); setFilterResult(''); setCurrentPage(1) }}>
-              <X size={12} /> Effacer
-            </button>
-          )}
           <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
-            {activeItems.length} résultat{activeItems.length > 1 ? 's' : ''}
+            {filtered.length} lot{filtered.length > 1 ? 's' : ''}
           </span>
         </div>
 
         {/* Table */}
         <div className="table-wrapper">
-          {activeTab === 'controls' ? (
-            <table>
-              <thead>
-                <tr>
-                  <th>Lot</th>
-                  <th>Type</th>
-                  <th>Date</th>
-                  <th>Germination</th>
-                  <th>Humidité</th>
-                  <th>Pureté</th>
-                  <th>Résultat</th>
-                  <th>Contrôleur</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? [0, 1, 2, 3].map(i => (
-                  <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
-                )) : pageItems.length === 0 ? (
-                  <tr>
+          <table>
+            <thead>
+              <tr>
+                <th style={{ width: 28 }}></th>
+                <th>Code lot</th>
+                <th>Génération</th>
+                <th>Espèce</th>
+                {isReviewer ? <th>Multiplicateur</th> : <th>Retour UPSemCL</th>}
+                <th>Quantité</th>
+                <th>Statut certification</th>
+                <th>Certificat</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                [0,1,2,3,4].map(i => (
+                  <tr key={i}>
                     <td colSpan={9}>
-                      <div className="empty-state">
-                        <div className="empty-icon"><FlaskConical size={20} /></div>
-                        <div className="empty-title">{search ? 'Aucun résultat' : 'Aucun contrôle qualité'}</div>
-                        <div className="empty-sub">Les contrôles enregistrés apparaîtront ici</div>
-                        {canCreate && !search && (
-                          <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowControlForm(true)}>
-                            + Nouveau contrôle
-                          </button>
-                        )}
-                      </div>
+                      <div className="skeleton" style={{ height: 14, borderRadius: 4 }} />
                     </td>
                   </tr>
-                ) : pageItems.map((c: any) => (
-                  <tr key={c.id}>
-                    <td><span className="td-mono" style={{ fontWeight: 600 }}>{getLotLabel(c.idLot)}</span></td>
-                    <td><span className="badge badge-blue" style={{ fontSize: 11 }}>{c.typeControle}</span></td>
-                    <td style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
-                      {c.dateControle ? new Date(c.dateControle).toLocaleDateString('fr-FR') : '—'}
-                    </td>
-                    <td><span style={{ fontWeight: 600 }}>{c.tauxGermination != null ? `${c.tauxGermination}%` : '—'}</span></td>
-                    <td>{c.tauxHumidite != null ? `${c.tauxHumidite}%` : '—'}</td>
-                    <td>{c.puretePhysique != null ? `${c.puretePhysique}%` : '—'}</td>
-                    <td><StatusBadge status={c.resultat} showIcon /></td>
-                    <td style={{ fontSize: 12.5 }}>{c.controleur || '—'}</td>
+                ))
+              ) : pageItems.length === 0 ? (
+                <tr>
+                  <td colSpan={9}>
+                    <div className="empty-state">
+                      <div className="empty-icon"><Shield size={22} /></div>
+                      <div className="empty-title">
+                        {activeTab === 'EN_ATTENTE'
+                          ? 'Aucun lot en attente de certification'
+                          : activeTab === 'CERTIFIE'
+                          ? 'Aucun lot certifié'
+                          : 'Aucun lot trouvé'}
+                      </div>
+                      <div className="empty-sub">
+                        {activeTab === 'EN_ATTENTE'
+                          ? 'Les lots dont le multiplicateur a soumis un certificat apparaîtront ici.'
+                          : 'Ajustez les filtres ou actualisez la liste.'}
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : pageItems.map((lot) => {
+                const meta = STATUT_META[lot.statutCertification]
+                const gen  = lot.generation?.codeGeneration || '—'
+                const canUpload = isMultiplicator &&
+                  (lot.statutCertification === 'SANS_CERTIFICAT' || lot.statutCertification === 'REJETE')
+                const canApprove = isReviewer && lot.statutCertification === 'EN_ATTENTE'
+                const canReject  = isReviewer && lot.statutCertification === 'EN_ATTENTE'
+
+                return (
+                  <tr key={lot.id}>
                     <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11 }}
-                          onClick={() => setShowDetail(c)} title="Détail">
-                          <Eye size={12} />
-                        </button>
-                        {canCreate && (
-                          <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: 'var(--red-600)' }}
-                            onClick={() => setDeleteTarget({ type: 'control', id: c.id, label: `Contrôle #${c.id}` })} title="Supprimer">
-                            <X size={12} />
-                          </button>
-                        )}
-                      </div>
+                      <TrafficLight statut={lot.statutCertification} />
                     </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>N° Certificat</th>
-                  <th>Lot</th>
-                  <th>Organisme</th>
-                  <th>Demande</th>
-                  <th>Certification</th>
-                  <th>Expiration</th>
-                  <th>Résultat</th>
-                  <th>Document</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? [0, 1, 2, 3].map(i => (
-                  <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
-                )) : pageItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={9}>
-                      <div className="empty-state">
-                        <div className="empty-icon"><Shield size={20} /></div>
-                        <div className="empty-title">{search ? 'Aucun résultat' : 'Aucune certification'}</div>
-                        <div className="empty-sub">Les certifications apparaîtront ici</div>
-                        {canCertify && !search && (
-                          <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowCertForm(true)}>
-                            + Nouvelle certification
-                          </button>
-                        )}
-                      </div>
+                    <td>
+                      <span className="td-mono" style={{ fontWeight: 700 }}>{lot.codeLot}</span>
                     </td>
-                  </tr>
-                ) : pageItems.map((c: any) => (
-                  <tr key={c.id}>
-                    <td><span className="td-mono" style={{ fontWeight: 700 }}>{c.numeroCertificat}</span></td>
-                    <td><span className="td-mono">{getLotLabel(c.idLot)}</span></td>
-                    <td style={{ fontWeight: 500, fontSize: 12.5 }}>{c.organismeCertificateur}</td>
-                    <td style={{ fontSize: 12.5 }}>{c.dateDemande ? new Date(c.dateDemande).toLocaleDateString('fr-FR') : '—'}</td>
-                    <td style={{ fontSize: 12.5 }}>{c.dateCertification ? new Date(c.dateCertification).toLocaleDateString('fr-FR') : '—'}</td>
+                    <td>
+                      <span className="badge badge-blue" style={{ fontSize: 11 }}>{gen}</span>
+                    </td>
+                    <td style={{ fontSize: 12.5, fontWeight: 500 }}>
+                      {lot.codeEspece || '—'}
+                    </td>
+                    {isReviewer ? (
+                      <td style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                        {lot.responsableNom || lot.usernameCreateur || '—'}
+                      </td>
+                    ) : (
+                      <td style={{ verticalAlign: 'middle', paddingTop: 6, paddingBottom: 6 }}>
+                        <RetourUPSemCL lot={lot} />
+                      </td>
+                    )}
                     <td style={{ fontSize: 12.5 }}>
-                      {c.dateExpiration ? (
-                        <span style={{
-                          color: new Date(c.dateExpiration) < new Date() ? 'var(--red-600)' : 'var(--text-secondary)',
-                          fontWeight: new Date(c.dateExpiration) < new Date() ? 600 : 400,
-                        }}>
-                          {new Date(c.dateExpiration).toLocaleDateString('fr-FR')}
-                          {new Date(c.dateExpiration) < new Date() && ' ⚠'}
-                        </span>
-                      ) : '—'}
+                      {lot.quantiteNette != null
+                        ? `${Number(lot.quantiteNette).toLocaleString('fr-FR')} ${lot.unite || 'kg'}`
+                        : '—'}
                     </td>
-                    <td><StatusBadge status={c.resultatCertification} showIcon /></td>
                     <td>
-                      {c.nomDocument ? (
-                        <a
-                          href={endpoints.certificationDocument(c.id)}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                      <CertBadge statut={lot.statutCertification} />
+                    </td>
+
+                    {/* Colonne certificat */}
+                    <td>
+                      {lot.certificatPath ? (
+                        <button
                           className="btn btn-ghost"
-                          style={{ height: 26, padding: '0 8px', fontSize: 11, color: 'var(--green-600)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                          title={c.nomDocument}
+                          onClick={() => openCertificat(lot)}
+                          disabled={openingId === lot.id}
+                          style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 5,
+                            fontSize: 11.5, color: 'var(--green-600)', fontWeight: 600,
+                            height: 26, padding: '0 8px',
+                          }}
+                          title="Voir le certificat"
                         >
-                          <FileText size={12} /> PDF
-                        </a>
-                      ) : canCertify ? (
+                          <FileText size={13} /> {openingId === lot.id ? '…' : 'Voir'}
+                          {openingId !== lot.id && <ExternalLink size={10} />}
+                        </button>
+                      ) : canUpload ? (
                         <label style={{ cursor: 'pointer' }}>
                           <input
                             type="file"
                             accept=".pdf,.jpg,.jpeg,.png"
                             style={{ display: 'none' }}
-                            disabled={uploadingId === c.id}
-                            onChange={e => { if (e.target.files?.[0]) handleUpload(c.id, e.target.files[0]) }}
+                            disabled={uploadingId === lot.id}
+                            onChange={e => { if (e.target.files?.[0]) handleUpload(lot, e.target.files[0]) }}
                           />
                           <span
                             className="btn btn-ghost"
-                            style={{ height: 26, padding: '0 8px', fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                            title="Uploader le certificat"
+                            style={{
+                              height: 26, padding: '0 9px', fontSize: 11,
+                              color: lot.statutCertification === 'REJETE' ? '#EAB308' : 'var(--text-muted)',
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              border: `1px solid ${lot.statutCertification === 'REJETE' ? '#fde68a' : 'var(--border)'}`,
+                            }}
+                            title={lot.statutCertification === 'REJETE' ? 'Soumettre un nouveau certificat' : 'Uploader le certificat'}
                           >
-                            {uploadingId === c.id ? '…' : <Upload size={12} />}
+                            {uploadingId === lot.id ? '…' : <><Upload size={11} /> {lot.statutCertification === 'REJETE' ? 'Resoumettre' : 'Uploader'}</>}
                           </span>
                         </label>
-                      ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
+                      )}
                     </td>
+
+                    {/* Actions */}
                     <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11 }}
-                          onClick={() => setShowDetail(c)} title="Détail">
+                      <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                        <button
+                          className="btn btn-ghost"
+                          style={{ height: 26, padding: '0 8px', fontSize: 11 }}
+                          title="Détail"
+                          onClick={() => setDetail(lot)}
+                        >
                           <Eye size={12} />
                         </button>
-                        {canCertify && (
-                          <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', fontSize: 11, color: 'var(--red-600)' }}
-                            onClick={() => setDeleteTarget({ type: 'certification', id: c.id, label: c.numeroCertificat })} title="Supprimer">
-                            <X size={12} />
+
+                        {canApprove && (
+                          <button
+                            className="btn btn-ghost"
+                            disabled={saving}
+                            onClick={() => handleApprouver(lot)}
+                            style={{
+                              height: 26, padding: '0 9px', fontSize: 11,
+                              color: '#16a34a', border: '1px solid #bbf7d0',
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}
+                            title="Approuver la certification"
+                          >
+                            <CheckCircle2 size={12} /> Approuver
+                          </button>
+                        )}
+
+                        {canReject && (
+                          <button
+                            className="btn btn-ghost"
+                            onClick={() => { setRejectTarget(lot); setRejectMotif('') }}
+                            style={{
+                              height: 26, padding: '0 9px', fontSize: 11,
+                              color: '#EF4444', border: '1px solid #fecaca',
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}
+                            title="Rejeter la certification"
+                          >
+                            <ShieldX size={12} /> Rejeter
                           </button>
                         )}
                       </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                )
+              })}
+            </tbody>
+          </table>
         </div>
 
-        <Pagination
-          currentPage={currentPage}
-          totalItems={activeItems.length}
-          pageSize={PAGE_SIZE}
-          onPageChange={setCurrentPage}
-        />
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div style={{
+            display: 'flex', justifyContent: 'center', alignItems: 'center',
+            gap: 8, padding: '12px 20px', borderTop: '1px solid var(--border)',
+          }}>
+            <button
+              className="btn btn-secondary"
+              style={{ height: 28, padding: '0 10px', fontSize: 12 }}
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(p => p - 1)}
+            >
+              ‹ Précédent
+            </button>
+            <span style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+              {currentPage} / {totalPages}
+            </span>
+            <button
+              className="btn btn-secondary"
+              style={{ height: 28, padding: '0 10px', fontSize: 12 }}
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(p => p + 1)}
+            >
+              Suivant ›
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Detail Modal */}
-      {showDetail && (
+      {/* ── Modal détail ── */}
+      {detail && (
         <Modal
-          title={showDetail.numeroCertificat ? `Certification — ${showDetail.numeroCertificat}` : `Contrôle qualité #${showDetail.id}`}
-          subtitle={`Lot : ${getLotLabel(showDetail.idLot)}`}
-          onClose={() => setShowDetail(null)}
+          title={`Lot ${detail.codeLot}`}
+          subtitle={`Génération ${detail.generation?.codeGeneration || '?'} — ${detail.codeEspece || '?'}`}
+          onClose={() => setDetail(null)}
         >
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {showDetail.typeControle && (
-              <>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Type</div><div style={{ fontSize: 13, fontWeight: 500 }}>{showDetail.typeControle}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date contrôle</div><div style={{ fontSize: 13 }}>{showDetail.dateControle || '—'}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Taux germination</div><div style={{ fontSize: 18, fontWeight: 700 }}>{showDetail.tauxGermination != null ? `${showDetail.tauxGermination}%` : '—'}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Taux humidité</div><div style={{ fontSize: 18, fontWeight: 700 }}>{showDetail.tauxHumidite != null ? `${showDetail.tauxHumidite}%` : '—'}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Pureté physique</div><div style={{ fontSize: 18, fontWeight: 700 }}>{showDetail.puretePhysique != null ? `${showDetail.puretePhysique}%` : '—'}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Résultat</div><StatusBadge status={showDetail.resultat} showIcon size="md" /></div>
-                <div style={{ gridColumn: '1 / -1' }}><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Contrôleur</div><div style={{ fontSize: 13 }}>{showDetail.controleur || '—'}</div></div>
-              </>
-            )}
-            {showDetail.numeroCertificat && (
-              <>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Organisme</div><div style={{ fontSize: 13, fontWeight: 500 }}>{showDetail.organismeCertificateur}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Résultat</div><StatusBadge status={showDetail.resultatCertification} showIcon size="md" /></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date demande</div><div style={{ fontSize: 13 }}>{showDetail.dateDemande || '—'}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date inspection</div><div style={{ fontSize: 13 }}>{showDetail.dateInspection || '—'}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Date certification</div><div style={{ fontSize: 13 }}>{showDetail.dateCertification || '—'}</div></div>
-                <div><div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Expiration</div><div style={{ fontSize: 13 }}>{showDetail.dateExpiration || '—'}</div></div>
-                {showDetail.motifRejet && (
-                  <div style={{ gridColumn: '1 / -1', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 14px' }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', marginBottom: 4 }}>Motif de rejet</div>
-                    <div style={{ fontSize: 13, color: '#dc2626' }}>{showDetail.motifRejet}</div>
+          {/* Statut feu tricolore */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,
+            padding: '14px 18px', borderRadius: 10,
+            background: STATUT_META[detail.statutCertification].bg,
+            border: `1px solid ${STATUT_META[detail.statutCertification].border}`,
+          }}>
+            <TrafficLight statut={detail.statutCertification} />
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', marginBottom: 2 }}>
+                Statut certification
+              </div>
+              <CertBadge statut={detail.statutCertification} size="md" />
+            </div>
+            {detail.approbateurUsername && (
+              <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Par</div>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>{detail.approbateurUsername}</div>
+                {detail.dateApprobation && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    {new Date(detail.dateApprobation).toLocaleDateString('fr-FR')}
                   </div>
                 )}
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Document certificat</div>
-                  {showDetail.nomDocument ? (
-                    <a
-                      href={endpoints.certificationDocument(showDetail.id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--green-600)', fontWeight: 500 }}
-                    >
-                      <FileText size={14} /> {showDetail.nomDocument}
-                    </a>
-                  ) : canCertify ? (
-                    <label style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-muted)' }}>
-                      <input
-                        type="file"
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        style={{ display: 'none' }}
-                        disabled={uploadingId === showDetail.id}
-                        onChange={e => { if (e.target.files?.[0]) { handleUpload(showDetail.id, e.target.files[0]); setShowDetail(null) } }}
-                      />
-                      <Upload size={14} /> {uploadingId === showDetail.id ? 'Upload en cours…' : 'Uploader le certificat (PDF/image)'}
-                    </label>
-                  ) : <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Aucun document</span>}
-                </div>
-              </>
-            )}
-            {showDetail.observations && (
-              <div style={{ gridColumn: '1 / -1' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Observations</div>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{showDetail.observations}</div>
               </div>
             )}
           </div>
+
+          {/* Grille info */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 16 }}>
+            {[
+              { label: 'Code lot',      val: detail.codeLot },
+              { label: 'Génération',    val: detail.generation?.codeGeneration },
+              { label: 'Espèce',        val: detail.codeEspece },
+              { label: 'Quantité',      val: detail.quantiteNette ? `${Number(detail.quantiteNette).toLocaleString('fr-FR')} ${detail.unite || 'kg'}` : undefined },
+              { label: 'Date prod.',    val: detail.dateProduction },
+              { label: 'Multiplicateur',val: detail.responsableNom || detail.usernameCreateur },
+            ].map(({ label, val }) => (
+              <div key={label}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 3 }}>
+                  {label}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 500 }}>{val || '—'}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Motif de rejet */}
+          {detail.motifRejetCert && (
+            <div style={{
+              background: '#fef2f2', border: '1px solid #fecaca',
+              borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+            }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: '#EF4444', textTransform: 'uppercase', marginBottom: 4 }}>
+                Motif de rejet
+              </div>
+              <div style={{ fontSize: 13, color: '#b91c1c', lineHeight: 1.5 }}>{detail.motifRejetCert}</div>
+            </div>
+          )}
+
+          {/* Certificat */}
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>
+              Document certificat
+            </div>
+            {detail.certificatPath ? (
+              <button
+                className="btn btn-secondary"
+                onClick={() => openCertificat(detail)}
+                disabled={openingId === detail.id}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <FileText size={14} />
+                {openingId === detail.id ? 'Chargement…' : 'Ouvrir le certificat'}
+                {openingId !== detail.id && <ExternalLink size={12} />}
+              </button>
+            ) : (
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Aucun document uploadé</span>
+            )}
+          </div>
+
+          {/* Actions depuis le modal (reviewer) */}
+          {isReviewer && detail.statutCertification === 'EN_ATTENTE' && (
+            <div style={{ display: 'flex', gap: 10, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <button
+                className="btn btn-primary"
+                disabled={saving}
+                onClick={async () => { await handleApprouver(detail); setDetail(null) }}
+                style={{ flex: 1, gap: 6, background: '#16a34a', borderColor: '#16a34a' }}
+              >
+                <CheckCircle2 size={14} /> Approuver la certification
+              </button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setRejectTarget(detail); setDetail(null) }}
+                style={{ flex: 1, gap: 6, color: '#EF4444', borderColor: '#fecaca' }}
+              >
+                <ShieldX size={14} /> Rejeter
+              </button>
+            </div>
+          )}
+
+          {/* Upload depuis le modal (multiplicateur) */}
+          {isMultiplicator && (detail.statutCertification === 'SANS_CERTIFICAT' || detail.statutCertification === 'REJETE') && (
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <label style={{ cursor: 'pointer', display: 'inline-block' }}>
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png,.webp"
+                  style={{ display: 'none' }}
+                  disabled={uploadingId === detail.id}
+                  onChange={e => {
+                    if (e.target.files?.[0]) {
+                      handleUpload(detail, e.target.files[0])
+                      setDetail(null)
+                    }
+                  }}
+                />
+                <span className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Upload size={14} />
+                  {uploadingId === detail.id ? 'Envoi en cours…' : 'Soumettre le certificat (PDF / image)'}
+                </span>
+              </label>
+              {detail.statutCertification === 'REJETE' && (
+                <p style={{ marginTop: 8, fontSize: 12, color: 'var(--text-muted)' }}>
+                  Un nouveau document remplacera le précédent et remettra le lot en statut «&nbsp;En attente&nbsp;».
+                </p>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 
-      {/* New Control Modal */}
-      {showControlForm && (
-        <Modal title="Nouveau Contrôle Qualité" subtitle="Enregistrer les résultats d'un contrôle sur un lot" onClose={() => setShowControlForm(false)} size="lg">
-          <form onSubmit={submitControl}>
-            <FormRow>
-              <Field label="Lot" required hint="Sélectionnez le lot à contrôler">
-                <FormSelect value={controlForm.idLot} onChange={e => setControlForm(f => ({ ...f, idLot: e.target.value }))} required>
-                  <option value="">-- Sélectionner un lot --</option>
-                  {lots.map((l: any) => (
-                    <option key={l.id} value={l.id}>{l.codeLot} — {l.generation?.codeGeneration || 'N/A'}</option>
-                  ))}
-                </FormSelect>
-              </Field>
-              <Field label="Type de contrôle" required>
-                <FormSelect value={controlForm.typeControle} onChange={e => setControlForm(f => ({ ...f, typeControle: e.target.value }))}>
-                  {CONTROL_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </FormSelect>
-              </Field>
-            </FormRow>
-            <FormRow>
-              <Field label="Date du contrôle" required>
-                <FormInput type="date" value={controlForm.dateControle} onChange={e => setControlForm(f => ({ ...f, dateControle: e.target.value }))} required />
-              </Field>
-              <Field label="Contrôleur">
-                <FormInput value={controlForm.controleur} onChange={e => setControlForm(f => ({ ...f, controleur: e.target.value }))} placeholder="Nom du contrôleur" />
-              </Field>
-            </FormRow>
-
-            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '16px', marginBottom: 16 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>Résultats d'analyse</div>
-              <FormRow>
-                <Field label="Taux germination (%)">
-                  <FormInput type="number" value={controlForm.tauxGermination} onChange={e => setControlForm(f => ({ ...f, tauxGermination: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" />
-                </Field>
-                <Field label="Taux humidité (%)">
-                  <FormInput type="number" value={controlForm.tauxHumidite} onChange={e => setControlForm(f => ({ ...f, tauxHumidite: e.target.value }))} placeholder="12.0" min="0" max="100" step="0.1" />
-                </Field>
-              </FormRow>
-              <FormRow>
-                <Field label="Pureté physique (%)">
-                  <FormInput type="number" value={controlForm.puretePhysique} onChange={e => setControlForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="99.5" min="0" max="100" step="0.1" />
-                </Field>
-                <Field label="Pureté spécifique (%)">
-                  <FormInput type="number" value={controlForm.pureteSpecifique} onChange={e => setControlForm(f => ({ ...f, pureteSpecifique: e.target.value }))} placeholder="99.0" min="0" max="100" step="0.1" />
-                </Field>
-              </FormRow>
-            </div>
-
-            <FormRow>
-              <Field label="Conformité variétale">
-                <FormSelect value={controlForm.conformiteVarietale} onChange={e => setControlForm(f => ({ ...f, conformiteVarietale: e.target.value }))}>
-                  <option value="">-- Non évalué --</option>
-                  <option value="CONFORME">Conforme</option>
-                  <option value="NON_CONFORME">Non conforme</option>
-                </FormSelect>
-              </Field>
-              <Field label="Résultat global" required>
-                <FormSelect value={controlForm.resultat} onChange={e => setControlForm(f => ({ ...f, resultat: e.target.value }))}>
-                  {RESULT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                </FormSelect>
-              </Field>
-            </FormRow>
-            <Field label="Observations">
+      {/* ── Modal rejet ── */}
+      {rejectTarget && (
+        <Modal
+          title="Rejeter la certification"
+          subtitle={`Lot ${rejectTarget.codeLot} — ${rejectTarget.generation?.codeGeneration || '?'} / ${rejectTarget.codeEspece || '?'}`}
+          onClose={() => { setRejectTarget(null); setRejectMotif('') }}
+        >
+          <div style={{
+            background: '#fef2f2', border: '1px solid #fecaca',
+            borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13,
+            color: '#b91c1c',
+          }}>
+            <ShieldAlert size={14} style={{ display: 'inline', marginRight: 6 }} />
+            Le multiplicateur recevra un refus et devra soumettre un nouveau certificat.
+          </div>
+          <form onSubmit={e => { e.preventDefault(); handleRejeter() }}>
+            <Field label="Motif de rejet *">
               <textarea
-                value={controlForm.observations}
-                onChange={e => setControlForm(f => ({ ...f, observations: e.target.value }))}
-                placeholder="Notes supplémentaires…"
-                style={{ width: '100%', minHeight: 70, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                value={rejectMotif}
+                onChange={e => setRejectMotif(e.target.value)}
+                placeholder="Expliquer pourquoi le certificat est refusé (non-conformité, document illisible, date expirée…)"
+                required
+                style={{
+                  width: '100%', minHeight: 90, padding: '8px 11px',
+                  border: '1px solid var(--border-strong)', borderRadius: 6,
+                  fontSize: 13, fontFamily: 'Outfit, sans-serif',
+                  resize: 'vertical', outline: 'none', boxSizing: 'border-box',
+                }}
               />
             </Field>
-            <FormActions onCancel={() => setShowControlForm(false)} loading={saving} submitLabel="Enregistrer le contrôle" />
-          </form>
-        </Modal>
-      )}
-
-      {/* New Certification Modal */}
-      {showCertForm && (
-        <Modal title="Nouvelle Certification" subtitle="Demande de certification officielle d'un lot" onClose={() => setShowCertForm(false)} size="lg">
-          <form onSubmit={submitCert}>
-            <FormRow>
-              <Field label="Lot à certifier" required>
-                <FormSelect value={certForm.idLot} onChange={e => setCertForm(f => ({ ...f, idLot: e.target.value }))} required>
-                  <option value="">-- Sélectionner un lot --</option>
-                  {lots.map((l: any) => (
-                    <option key={l.id} value={l.id}>{l.codeLot} — {l.generation?.codeGeneration || 'N/A'}</option>
-                  ))}
-                </FormSelect>
-              </Field>
-              <Field label="N° certificat" required hint="Ex: CERT-2026-MIL-001">
-                <FormInput value={certForm.numeroCertificat} onChange={e => setCertForm(f => ({ ...f, numeroCertificat: e.target.value.toUpperCase() }))} placeholder="CERT-2026-MIL-001" required />
-              </Field>
-            </FormRow>
-            <Field label="Organisme certificateur" required>
-              <FormInput value={certForm.organismeCertificateur} onChange={e => setCertForm(f => ({ ...f, organismeCertificateur: e.target.value }))} placeholder="DISEM/ISRA" required />
-            </Field>
-            <FormRow>
-              <Field label="Date de demande"><FormInput type="date" value={certForm.dateDemande} onChange={e => setCertForm(f => ({ ...f, dateDemande: e.target.value }))} /></Field>
-              <Field label="Date d'inspection"><FormInput type="date" value={certForm.dateInspection} onChange={e => setCertForm(f => ({ ...f, dateInspection: e.target.value }))} /></Field>
-            </FormRow>
-            <FormRow>
-              <Field label="Date de certification"><FormInput type="date" value={certForm.dateCertification} onChange={e => setCertForm(f => ({ ...f, dateCertification: e.target.value }))} /></Field>
-              <Field label="Date d'expiration"><FormInput type="date" value={certForm.dateExpiration} onChange={e => setCertForm(f => ({ ...f, dateExpiration: e.target.value }))} /></Field>
-            </FormRow>
-            <Field label="Résultat" required>
-              <FormSelect value={certForm.resultatCertification} onChange={e => setCertForm(f => ({ ...f, resultatCertification: e.target.value }))}>
-                {CERT_RESULT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </FormSelect>
-            </Field>
-            {certForm.resultatCertification === 'NON_CONFORME' && (
-              <Field label="Motif de rejet" required>
-                <textarea
-                  value={certForm.motifRejet}
-                  onChange={e => setCertForm(f => ({ ...f, motifRejet: e.target.value }))}
-                  placeholder="Motif détaillé du rejet…"
-                  required
-                  style={{ width: '100%', minHeight: 70, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
-                />
-              </Field>
-            )}
-            <FormActions onCancel={() => setShowCertForm(false)} loading={saving} submitLabel="Enregistrer la certification" />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => { setRejectTarget(null); setRejectMotif('') }}
+              >
+                Annuler
+              </button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={saving || !rejectMotif.trim()}
+                style={{ background: '#EF4444', borderColor: '#EF4444' }}
+              >
+                {saving ? 'Enregistrement…' : 'Confirmer le rejet'}
+              </button>
+            </div>
           </form>
         </Modal>
       )}

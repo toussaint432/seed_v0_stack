@@ -36,6 +36,10 @@ public class MembreOrganisation {
     @Column(name = "telephone_public")
     private Boolean telephonePublic = false;
 
+    /** Espèce / spéculation de spécialisation — sélectionneurs uniquement */
+    @Column(name = "specialisation")
+    private String specialisation;
+
     @Column(name = "created_at")
     private Instant createdAt;
 

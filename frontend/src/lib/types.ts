@@ -1,5 +1,5 @@
 /* ══════════════════════════════════════════════════════════════
-   Types métier — Plateforme Sen Jiw (ISRA/CNRA)
+   Types métier — Plateforme Sen Jiwu (ISRA/CNRA)
    Synchronisés avec le schéma PostgreSQL (V1→V23) et les DTOs
    Java de chaque micro-service.
    ══════════════════════════════════════════════════════════════ */

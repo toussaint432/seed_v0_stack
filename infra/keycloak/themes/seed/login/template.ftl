@@ -5,7 +5,7 @@
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="robots" content="noindex, nofollow"/>
-  <title>Sen Jiw<#if realm.displayName??> — ${realm.displayName}</#if></title>
+  <title>Sen Jiwu<#if realm.displayName??> — ${realm.displayName}</#if></title>
   <link rel="stylesheet" href="${url.resourcesPath}/css/login.css"/>
   <#if properties.scripts?has_content>
     <#list properties.scripts?split(' ') as script>
@@ -37,10 +37,10 @@
       <!-- Logo -->
       <a href="${properties.frontendUrl}" class="seed-logo">
         <div class="seed-logo-mark">
-          <img src="${url.resourcesPath}/img/SENJIW.svg" alt="Sen Jiw" class="seed-logo-img"/>
+          <img src="${url.resourcesPath}/img/SENJIWU.png" alt="Sen Jiwu" class="seed-logo-img"/>
         </div>
         <div class="seed-logo-text">
-          <strong>Sen Jiw</strong>
+          <strong>Sen Jiwu</strong>
           <small>Filière semencière nationale</small>
         </div>
       </a>
@@ -136,7 +136,7 @@
 
       <!-- Footer -->
       <div class="seed-brand-footer">
-        <span>© ${.now?string("yyyy")} Sen Jiw · République du Sénégal</span>
+        <span>© ${.now?string("yyyy")} Sen Jiwu · République du Sénégal</span>
         <span class="seed-brand-footer-sep">·</span>
         <span>v2.0</span>
       </div>
@@ -158,13 +158,13 @@
       Accueil
     </a>
 
-    <!-- Logo Sen Jiw en haut du panneau droit -->
+    <!-- Logo Sen Jiwu en haut du panneau droit -->
     <div class="seed-panel-logo">
       <div class="seed-panel-logo-mark">
-        <img src="${url.resourcesPath}/img/SENJIW.svg" alt="Sen Jiw"/>
+        <img src="${url.resourcesPath}/img/SENJIWU.png" alt="Sen Jiwu"/>
       </div>
       <div class="seed-panel-logo-text">
-        <strong>Sen Jiw</strong>
+        <strong>Sen Jiwu</strong>
         <span>Plateforme semencière nationale — ISRA</span>
       </div>
     </div>
@@ -186,9 +186,9 @@
         <!-- En-tête -->
         <div class="seed-card-header">
           <div class="seed-card-logo-sm">
-            <img src="${url.resourcesPath}/img/SENJIW.svg" alt="Sen Jiw"/>
+            <img src="${url.resourcesPath}/img/SENJIWU.png" alt="Sen Jiwu"/>
           </div>
-          <div class="seed-card-greeting">Bienvenue sur Sen Jiw</div>
+          <div class="seed-card-greeting">Bienvenue sur Sen Jiwu</div>
           <h1 class="seed-card-title">
             <#nested "header">
           </h1>
@@ -227,7 +227,7 @@
         <span class="seed-form-footer-sep">·</span>
         <span class="seed-form-footer-item">Données chiffrées TLS 1.3</span>
         <span class="seed-form-footer-sep">·</span>
-        <span class="seed-form-footer-item">Sen Jiw · ISRA Sénégal</span>
+        <span class="seed-form-footer-item">Sen Jiwu · ISRA Sénégal</span>
       </div>
 
     </div>

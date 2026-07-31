@@ -9,6 +9,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
+import sn.isra.seed.lot_service.entity.enums.StatutCertification;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -142,10 +143,27 @@ public class LotSemencier {
     @Column(name = "certificat_path", length = 500)
     private String certificatPath;
 
+    // ── Workflow certification (G4/R1/R2) ─────────────────────
+    /** Rouge=SANS_CERTIFICAT → Jaune=EN_ATTENTE → Vert=CERTIFIE | Rouge=REJETE */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "statut_certification", nullable = false, length = 20)
+    private StatutCertification statutCertification = StatutCertification.SANS_CERTIFICAT;
+
+    @Size(max = 150)
+    @Column(name = "approbateur_username", length = 150)
+    private String approbateurUsername;
+
+    @Column(name = "date_approbation")
+    private java.time.Instant dateApprobation;
+
+    @Column(name = "motif_rejet_cert", columnDefinition = "TEXT")
+    private String motifRejetCert;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) createdAt = Instant.now();
         if (statutLot == null) statutLot = StatutLot.DISPONIBLE;
         if (unite == null) unite = "kg";
+        if (statutCertification == null) statutCertification = StatutCertification.SANS_CERTIFICAT;
     }
 }

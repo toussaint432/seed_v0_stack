@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Sen Jiw — Thème Keycloak "seed" v2
+   Sen Jiwu — Thème Keycloak "seed" v2
    Design system: Bricolage Grotesque / Manrope / JetBrains Mono
    Palette: vert #00693e · or #e8b04b · encre #131814
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -521,7 +521,7 @@ body {
 }
 .seed-home-btn:hover svg { transform: translateX(-2px); }
 
-/* ── Logo Sen Jiw panneau droit ── */
+/* ── Logo Sen Jiwu panneau droit ── */
 .seed-panel-logo {
   display: flex;
   align-items: center;

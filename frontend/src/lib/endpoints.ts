@@ -32,9 +32,17 @@ export const endpoints = {
   certificationById:      (id: number) => `${LOT}/certifications/${id}`,
   certificationUpload:    (id: number) => `${LOT}/certifications/${id}/upload`,
   certificationDocument:  (id: number) => `${LOT}/certifications/${id}/document`,
-  lotCertificatUpload: (id: number) => `${LOT}/lots/${id}/certificat`,
-  lotCertificatUrl:    (id: number) => `${LOT}/lots/${id}/certificat`,
-  lotCertificatDelete: (id: number) => `${LOT}/lots/${id}/certificat`,
+  lotCertificatUpload:  (id: number) => `${LOT}/lots/${id}/certificat`,
+  lotCertificatUrl:     (id: number) => `${LOT}/lots/${id}/certificat`,
+  lotCertificatDelete:  (id: number) => `${LOT}/lots/${id}/certificat`,
+  /** Lots G4/R1/R2 en attente de certification (UPSemCL / Admin) */
+  lotsACertifier:       `${LOT}/lots/a-certifier`,
+  /** Tous les lots G4/R1/R2 certifiables — vue complète (UPSemCL / Admin) */
+  lotsCertifiables:     `${LOT}/lots/certifiables`,
+  /** Lots G4/R1/R2 du multiplicateur connecté uniquement (isolation individuelle) */
+  lotsMultCertif:       `${LOT}/lots/mes-lots-certif`,
+  lotCertifier:         (id: number) => `${LOT}/lots/${id}/certifier`,
+  lotRejeterCert:       (id: number) => `${LOT}/lots/${id}/rejeter-certification`,
 
   controls:         `${LOT}/controls`,
   controlById:      (id: number) => `${LOT}/controls/${id}`,
@@ -108,7 +116,9 @@ export const endpoints = {
   /** Membres filtrés par rôle Keycloak — ex. membresByRole('seed-multiplicator') */
   membresByRole:    (role: string) => `${ORDER}/membres?role=${encodeURIComponent(role)}`,
   /** Mettre à jour le téléphone et sa visibilité (public/privé) pour le connecté */
-  membreMonProfil:  `${ORDER}/membres/mon-profil`,
+  membreMonProfil:      `${ORDER}/membres/mon-profil`,
+  /** Proxy backend → Keycloak Account API (évite CORS navigateur → Keycloak) */
+  membreKeycloakProfil: `${ORDER}/membres/keycloak-profil`,
 
   // ── Order Service — Multiplicateur ──
   stockMonStock:           `${STOCK}/stocks/mon-stock`,

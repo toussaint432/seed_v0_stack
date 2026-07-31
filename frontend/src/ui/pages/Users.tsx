@@ -158,10 +158,11 @@ export function Users({ roleKey }: Props) {
   const [eventTypeFilter, setEventTypeFilter] = useState('')
 
   const [organisations, setOrganisations] = useState<any[]>([])
+  const [especes,       setEspeces]       = useState<any[]>([])
 
   const [form, setForm] = useState({
     username: '', firstName: '', lastName: '', email: '',
-    password: '', role: 'seed-selector', orgId: '',
+    password: '', role: 'seed-selector', orgId: '', specialisation: '',
   })
 
   function adminHeaders() {
@@ -206,6 +207,7 @@ export function Users({ roleKey }: Props) {
       fetchUsers()
       fetchEvents()
       api.get(endpoints.organisations).then(r => setOrganisations(r.data || [])).catch(() => {})
+      api.get(endpoints.species).then(r => setEspeces(r.data || [])).catch(() => {})
     }
   }, [])
 
@@ -284,12 +286,13 @@ export function Users({ roleKey }: Props) {
           idOrganisation:   resolvedOrgId,
           roleDansOrg:      'MEMBRE',
           principal:        true,
+          specialisation:   form.specialisation || null,
         })
       }
 
       setToast({ msg: `Utilisateur ${form.username} créé avec succès`, type: 'success' })
       setShowForm(false)
-      setForm({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'seed-selector', orgId: '' })
+      setForm({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'seed-selector', orgId: '', specialisation: '' })
       fetchUsers()
     } catch (err: any) {
       setToast({ msg: err?.message ?? 'Erreur lors de la création', type: 'error' })
@@ -611,7 +614,7 @@ export function Users({ roleKey }: Props) {
 
       {/* ── Modal : Créer utilisateur ─────────────────────── */}
       {showForm && (
-        <Modal title="Nouvel utilisateur" subtitle="Créer un compte sur la plateforme Sen Jiw" onClose={() => setShowForm(false)} size="lg">
+        <Modal title="Nouvel utilisateur" subtitle="Créer un compte sur la plateforme Sen Jiwu" onClose={() => setShowForm(false)} size="lg">
           <form onSubmit={submitCreate}>
             <FormRow>
               <Field label="Prénom" required><FormInput value={form.firstName} onChange={e => setForm(f => ({ ...f, firstName: e.target.value }))} placeholder="Mamadou" required /></Field>
@@ -675,6 +678,29 @@ export function Users({ roleKey }: Props) {
               }}>
                 Organisation automatique : <strong>ISRA CNRA Bambey</strong>
               </div>
+            )}
+
+            {/* Spécialisation — uniquement pour les sélectionneurs */}
+            {form.role === 'seed-selector' && (
+              <Field label="Spécialisation (espèce / spéculation)" hint="Espèce sur laquelle le sélectionneur travaille principalement">
+                <select
+                  value={form.specialisation}
+                  onChange={e => setForm(f => ({ ...f, specialisation: e.target.value }))}
+                  style={{
+                    width: '100%', padding: '0 12px', height: 36, borderRadius: 6,
+                    border: '1px solid var(--border-strong)', background: 'var(--surface)',
+                    fontSize: 13, fontFamily: 'Outfit, sans-serif', color: 'var(--text)',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <option value="">— Sélectionner une espèce —</option>
+                  {especes.map((esp: any) => (
+                    <option key={esp.id} value={esp.nomCommun}>
+                      {esp.nomCommun}{esp.nomScientifique ? ` — ${esp.nomScientifique}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             )}
 
             <FormActions onCancel={() => setShowForm(false)} loading={saving} submitLabel="Créer l'utilisateur" />

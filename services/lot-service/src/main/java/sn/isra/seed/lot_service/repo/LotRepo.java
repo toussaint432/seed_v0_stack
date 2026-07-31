@@ -85,6 +85,41 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         """)
     List<LotSemencier> findR2Disponible();
 
+    /**
+     * Lots G4/R1/R2 des multiplicateurs dont le certificat est uploadé mais
+     * non encore validé (statut EN_ATTENTE) — file de travail UPSemCL / Admin.
+     */
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.statutCertification = sn.isra.seed.lot_service.entity.enums.StatutCertification.EN_ATTENTE
+          AND l.generation.codeGeneration IN ('G4','R1','R2')
+        ORDER BY l.createdAt DESC
+        """)
+    List<LotSemencier> findLotsACertifier();
+
+    /**
+     * Lots G4/R1/R2 produits par UN multiplicateur spécifique (isolation individuelle).
+     * Utilisé exclusivement par la vue Contrôle & Certification côté multiplicateur.
+     */
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.usernameCreateur = :username
+          AND l.generation.codeGeneration IN ('G4','R1','R2')
+        ORDER BY l.statutCertification ASC, l.createdAt DESC
+        """)
+    List<LotSemencier> findMesLotsCertif(@Param("username") String username);
+
+    /**
+     * Tous les lots G4/R1/R2 de multiplicateurs — vue complète pour l'onglet
+     * de certification (UPSemCL / Admin), tous statuts confondus.
+     */
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration IN ('G4','R1','R2')
+        ORDER BY l.statutCertification ASC, l.createdAt DESC
+        """)
+    List<LotSemencier> findAllCertifiables();
+
     /** Débite la quantité nette du lot parent lors de la création d'un lot enfant. */
     @Modifying
     @Query("UPDATE LotSemencier l SET l.quantiteNette = l.quantiteNette - :qte WHERE l.id = :id")
