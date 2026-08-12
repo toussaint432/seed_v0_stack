@@ -17,6 +17,23 @@ services:
       timeout: 5s
       retries: 20
 
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: seed-pgadmin
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@isra.sn}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "127.0.0.1:15050:80"
+    volumes:
+      - seed_pgadmin_data:/var/lib/pgadmin
+      - ./infra/pgadmin/servers.json:/pgadmin4/servers.json:ro
+    mem_limit: 256m
+
   keycloak:
     image: quay.io/keycloak/keycloak:25.0.4
     container_name: seed-keycloak
@@ -180,7 +197,9 @@ services:
 
   # ✅ Base env commun (optionnel mais propre)
   catalog-service:
-    build: ./services/catalog-service
+    build:
+      context: ./services
+      dockerfile: catalog-service/Dockerfile
     container_name: seed-catalog
     restart: unless-stopped
     depends_on:
@@ -211,6 +230,7 @@ services:
       # CORS : autorise 127.0.0.1 ET localhost (équivalents TCP mais origines HTTP différentes)
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
       UPLOADS_DIR: "/app/uploads"
+      SWAGGER_ENABLED: "true"
     volumes:
       - ./data/uploads:/app/uploads
     healthcheck:
@@ -223,7 +243,9 @@ services:
       - "127.0.0.1:18081:8080"
 
   lot-service:
-    build: ./services/lot-service
+    build:
+      context: ./services
+      dockerfile: lot-service/Dockerfile
     container_name: seed-lot
     restart: unless-stopped
     depends_on:
@@ -244,6 +266,7 @@ services:
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
       UPLOADS_DIR: "/app/uploads"
+      SWAGGER_ENABLED: "true"
     volumes:
       - ./data/uploads:/app/uploads
     healthcheck:
@@ -256,7 +279,9 @@ services:
       - "127.0.0.1:18082:8080"
 
   stock-service:
-    build: ./services/stock-service
+    build:
+      context: ./services
+      dockerfile: stock-service/Dockerfile
     container_name: seed-stock
     restart: unless-stopped
     depends_on:
@@ -276,6 +301,7 @@ services:
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+      SWAGGER_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s
@@ -286,7 +312,9 @@ services:
       - "127.0.0.1:18083:8080"
 
   order-service:
-    build: ./services/order-service
+    build:
+      context: ./services
+      dockerfile: order-service/Dockerfile
     container_name: seed-order
     restart: unless-stopped
     depends_on:
@@ -306,6 +334,7 @@ services:
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+      SWAGGER_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s
@@ -421,6 +450,7 @@ services:
 
 volumes:
   seed_pgdata:
+  seed_pgadmin_data:
   keycloak_quarkus_cache:
   seed_grafana_data:
   seed_prometheus_data:

@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeVariete, extractList } from '../../lib/normalizers'
 import { ChatBubble } from '../components/ChatBubble'
 import { AudioRecorder } from '../components/AudioRecorder'
 import { Toast } from '../components/Modal'
@@ -46,6 +47,43 @@ interface MembreInfo {
 const MAX_MSG_LENGTH  = 2000   // caractères max par message
 const MAX_FILE_SIZE   = 5 * 1024 * 1024   // 5 Mo (images)
 const MAX_AUDIO_SIZE  = 2 * 1024 * 1024   // 2 Mo (audio)
+
+/* Labels rôles */
+const ROLE_LABELS: Record<string, string> = {
+  'seed-quotataire':    'Quotataire',
+  'seed-multiplicator': 'Multiplicateur',
+  'seed-upsemcl':       'UPSemCL',
+  'seed-selector':      'Sélectionneur',
+  'seed-admin':         'Admin',
+}
+
+/* Séparateur de date pour les messages */
+function buildWithSeparators(messages: MessageData[]): Array<MessageData | { _sep: string; _key: string }> {
+  const result: Array<MessageData | { _sep: string; _key: string }> = []
+  let lastDate = ''
+  for (const msg of messages) {
+    try {
+      const d = new Date(msg.createdAt)
+      const now = new Date()
+      let label: string
+      if (d.toDateString() === now.toDateString()) {
+        label = "Aujourd'hui"
+      } else {
+        const yest = new Date(now)
+        yest.setDate(now.getDate() - 1)
+        label = d.toDateString() === yest.toDateString()
+          ? 'Hier'
+          : d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+      }
+      if (label !== lastDate) {
+        result.push({ _sep: label, _key: `sep-${msg.id}` })
+        lastDate = label
+      }
+    } catch { /* ignoré */ }
+    result.push(msg)
+  }
+  return result
+}
 
 /* Destinataires autorisés selon le rôle */
 const DEST_ROLES: Record<string, string[]> = {
@@ -116,7 +154,7 @@ export function Messages({ roleKey, username }: Props) {
     if (roleKey === 'seed-quotataire') {
       api.get(endpoints.varieties)
         .then((r: any) => setCmdVarieties(
-          r.data.filter((v: any) => v.statutVariete === 'DIFFUSEE')
+          extractList(r.data).map(normalizeVariete).filter((v: any) => v.statutVariete === 'DIFFUSEE')
         ))
         .catch(() => {})
     }
@@ -317,8 +355,16 @@ export function Messages({ roleKey, username }: Props) {
                     onClick={() => openConv(conv)}>
                     <div className="conv-avatar">{initiales(conv.autreParticipantNom)}</div>
                     <div className="conv-info">
-                      <div className="conv-nom">{conv.autreParticipantNom}</div>
-                      <div className="conv-apercu">{conv.dernierMessage || conv.autreParticipantOrg}</div>
+                      <div className="conv-nom">
+                        {conv.autreParticipantNom}
+                      </div>
+                      <div className="conv-apercu">
+                        {conv.dernierMessage || (
+                          <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            {ROLE_LABELS[conv.autreParticipantRole] ?? conv.autreParticipantOrg}
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="conv-meta">
                       <span className="conv-heure">{formatDate(conv.dernierMessageAt)}</span>
@@ -334,8 +380,11 @@ export function Messages({ roleKey, username }: Props) {
         <div className={`chat-panel ${showMobile === 'list' ? 'hidden' : ''}`}>
           {!selectedConv ? (
             <div className="chat-empty">
-              <MessageCircle size={48} className="chat-empty-icon" />
-              <div style={{ fontSize: 14, color: 'var(--text-muted)' }}>Sélectionnez une conversation</div>
+              <div className="chat-empty-icon">
+                <MessageCircle size={26} />
+              </div>
+              <div className="chat-empty-title">Aucune conversation sélectionnée</div>
+              <div className="chat-empty-sub">Choisissez une conversation dans la liste ou démarrez-en une nouvelle.</div>
             </div>
           ) : (
             <>
@@ -348,7 +397,14 @@ export function Messages({ roleKey, username }: Props) {
                   {initiales(selectedConv.autreParticipantNom)}
                 </div>
                 <div className="chat-header-info">
-                  <div className="chat-contact-nom">{selectedConv.autreParticipantNom}</div>
+                  <div className="chat-contact-nom">
+                    {selectedConv.autreParticipantNom}
+                    {selectedConv.autreParticipantRole && (
+                      <span className="chat-role-badge">
+                        {ROLE_LABELS[selectedConv.autreParticipantRole] ?? selectedConv.autreParticipantRole}
+                      </span>
+                    )}
+                  </div>
                   <div className="chat-contact-sub">{selectedConv.autreParticipantOrg}</div>
                 </div>
                 <button className="btn btn-secondary btn-icon" onClick={() => fetchMessages(selectedConv.id)} title="Rafraîchir">
@@ -362,9 +418,18 @@ export function Messages({ roleKey, username }: Props) {
                   ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 24 }}>Chargement…</div>
                   : messages.length === 0
                     ? <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 32, fontSize: 13 }}>Aucun message — commencez la conversation !</div>
-                    : messages.map(msg => (
-                      <ChatBubble key={msg.id} message={msg} isMine={msg.expediteur === username} />
-                    ))
+                    : buildWithSeparators(messages).map(item => {
+                      if ('_sep' in item) {
+                        return (
+                          <div key={item._key} className="chat-date-sep">
+                            <span>{item._sep}</span>
+                          </div>
+                        )
+                      }
+                      return (
+                        <ChatBubble key={item.id} message={item} isMine={item.expediteur === username} />
+                      )
+                    })
                 }
                 <div ref={messagesEndRef} />
               </div>

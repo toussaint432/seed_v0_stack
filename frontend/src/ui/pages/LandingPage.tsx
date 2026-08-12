@@ -27,6 +27,7 @@ type Lang = 'fr' | 'en'
 const I18N: Record<Lang, Record<string, string>> = {
   fr: {
     navMission: 'Mission',
+    navApercu: 'Aperçu',
     navActeurs: 'Acteurs',
     navPipeline: 'Pipeline',
     navHowto: 'Fonctionnement',
@@ -89,6 +90,7 @@ const I18N: Record<Lang, Record<string, string>> = {
   },
   en: {
     navMission: 'Mission',
+    navApercu: 'Preview',
     navActeurs: 'Actors',
     navPipeline: 'Pipeline',
     navHowto: 'How it works',
@@ -367,6 +369,7 @@ export function LandingPage() {
           <nav style={{ display: 'flex', gap: 2, marginLeft: 'auto' }}>
             {([
               [t.navMission,  '#mission'],
+              [t.navApercu,   '#apercu'],
               [t.navActeurs,  '#acteurs'],
               [t.navPipeline, '#pipeline'],
               [t.navHowto,    '#howto'],
@@ -539,6 +542,20 @@ export function LandingPage() {
             </div>
 
           </div>
+        </div>
+      </section>
+
+      {/* ══ APERÇU ════════════════════════════════════════════════════════ */}
+      <section id="apercu" style={{ padding: '90px 28px', background: T.paper2 }}>
+        <div style={S.container}>
+          <div style={{ textAlign: 'center', maxWidth: 620, margin: '0 auto 48px' }}>
+            <span style={S.eyebrow}>Aperçu de la plateforme</span>
+            <h2 style={S.sectionTitle}>La plateforme en action</h2>
+            <p style={{ ...S.sectionDesc, margin: '0 auto' }}>
+              Explorez les modules clés — de la traçabilité des lots à la messagerie intégrée.
+            </p>
+          </div>
+          <PlatformPreview />
         </div>
       </section>
 
@@ -1058,6 +1075,532 @@ function FAQItem({ q, a, open, onToggle }: { q: string; a: string; open: boolean
         color: T.muted, fontSize: 14, lineHeight: 1.7,
       }}>
         {a}
+      </div>
+    </div>
+  )
+}
+
+/* ── Platform preview (tabbed full-app mockup) ───────────────────────── */
+
+const PREVIEW_TABS = [
+  { label: 'Tableau de bord', path: 'dashboard' },
+  { label: 'Lots semenciers', path: 'lots' },
+  { label: 'Stocks',          path: 'stocks' },
+  { label: 'Commandes',       path: 'orders' },
+  { label: 'Messagerie',      path: 'messages' },
+]
+
+const SIDEBAR_NAV = [
+  { section: 'Général',    items: ['Tableau de bord'] },
+  { section: 'Catalogue',  items: ['Variétés & Espèces', 'Lots semenciers'] },
+  { section: 'Logistique', items: ['Stock', 'Commandes'] },
+  { section: 'Compte',     items: ['Messages', 'Mon profil'] },
+]
+
+const TAB_ACTIVE_ITEM: Record<number, string> = {
+  0: 'Tableau de bord',
+  1: 'Lots semenciers',
+  2: 'Stock',
+  3: 'Commandes',
+  4: 'Messages',
+}
+
+// Micro SVG icons for sidebar
+function SvgDash()  { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1" y="1" width="5" height="5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="7" y="1" width="5" height="5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="1" y="7" width="5" height="5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/><rect x="7" y="7" width="5" height="5" rx="1.2" stroke="currentColor" strokeWidth="1.3"/></svg> }
+function SvgLeaf()  { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 11c1-3 3-6 9-9-3 6-6 8-9 9z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg> }
+function SvgPkg()   { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="1.5" y="3.5" width="10" height="8" rx="1" stroke="currentColor" strokeWidth="1.3"/><path d="M1.5 6h10M5 3.5V2M8 3.5V2" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg> }
+function SvgBox()   { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 4.5l4.5-3 4.5 3v4l-4.5 3-4.5-3v-4z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/><path d="M6.5 1.5v10M2 4.5l4.5 3 4.5-3" stroke="currentColor" strokeWidth="1.3"/></svg> }
+function SvgCart()  { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M1 1.5h1.5l1.5 6h6l1-4H4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/><circle cx="5.5" cy="10.5" r="1" stroke="currentColor" strokeWidth="1.2"/><circle cx="9.5" cy="10.5" r="1" stroke="currentColor" strokeWidth="1.2"/></svg> }
+function SvgMsg()   { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M11 7.5a1.5 1.5 0 01-1.5 1.5H4L2 11V3a1.5 1.5 0 011.5-1.5h6A1.5 1.5 0 0111 3v4.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg> }
+function SvgUser()  { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="4.5" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M1.5 11c0-2.5 2.2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg> }
+
+const ITEM_ICON: Record<string, () => JSX.Element> = {
+  'Tableau de bord': SvgDash,
+  'Variétés & Espèces': SvgLeaf,
+  'Lots semenciers': SvgPkg,
+  'Stock': SvgBox,
+  'Commandes': SvgCart,
+  'Messages': SvgMsg,
+  'Mon profil': SvgUser,
+}
+
+function PlatformPreview() {
+  const [tab, setTab] = useState(0)
+
+  return (
+    <div>
+      {/* Tab selector */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 28, flexWrap: 'wrap' }}>
+        {PREVIEW_TABS.map((pt, i) => (
+          <button key={i} onClick={() => setTab(i)} style={{
+            padding: '8px 18px', borderRadius: 10, cursor: 'pointer',
+            fontWeight: 500, fontSize: 13.5, fontFamily: T.body,
+            border: `1.5px solid ${tab === i ? T.green : T.line}`,
+            background: tab === i ? T.green : '#fff',
+            color: tab === i ? '#fff' : T.ink,
+            transition: 'all 0.18s',
+            boxShadow: tab === i ? '0 4px 12px rgba(0,105,62,0.2)' : 'none',
+          }}>
+            {pt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Browser frame */}
+      <div style={{
+        borderRadius: 18, overflow: 'hidden',
+        border: `1px solid ${T.line}`,
+        boxShadow: '0 32px 80px -24px rgba(0,61,36,0.18), 0 8px 24px rgba(0,0,0,0.04)',
+        background: '#fff',
+      }}>
+        {/* Browser chrome */}
+        <div style={{
+          height: 42, background: T.paper2, borderBottom: `1px solid ${T.line}`,
+          display: 'flex', alignItems: 'center', padding: '0 16px', gap: 10,
+        }}>
+          {['#ef4444', '#f59e0b', '#22c55e'].map(c => (
+            <div key={c} style={{ width: 11, height: 11, borderRadius: '50%', background: c }} />
+          ))}
+          <div style={{
+            flex: 1, maxWidth: 340, margin: '0 auto',
+            height: 24, background: '#fff', borderRadius: 6,
+            border: `1px solid ${T.line}`,
+            display: 'flex', alignItems: 'center', padding: '0 10px', gap: 6,
+          }}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <rect x="1" y="1" width="8" height="8" rx="2" stroke={T.muted} strokeWidth="1"/>
+              <path d="M3 5h4M5 3v4" stroke={T.muted} strokeWidth="1" strokeLinecap="round"/>
+            </svg>
+            <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>
+              localhost:5173/{PREVIEW_TABS[tab].path}
+            </span>
+          </div>
+        </div>
+
+        {/* App layout */}
+        <div style={{ display: 'flex', height: 520, overflow: 'hidden' }}>
+
+          {/* Sidebar */}
+          <div style={{
+            width: 176, background: T.greenDeep, flexShrink: 0,
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}>
+            {/* Logo */}
+            <div style={{
+              padding: '14px 12px 10px', borderBottom: '1px solid rgba(255,255,255,0.07)',
+              display: 'flex', alignItems: 'center', gap: 9,
+            }}>
+              <div style={{
+                width: 28, height: 28, borderRadius: 7, background: '#fff',
+                display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0,
+              }}>
+                <img src="/SENJIWU.png" alt="" style={{ height: 20, width: 'auto' }} />
+              </div>
+              <div>
+                <div style={{ fontFamily: T.display, fontWeight: 700, fontSize: 13, color: '#fff', letterSpacing: '-0.01em', lineHeight: 1.1 }}>Sen Jiwu</div>
+                <div style={{ fontFamily: T.mono, fontSize: 8, color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Filière semencière</div>
+              </div>
+            </div>
+
+            {/* Nav */}
+            <nav style={{ flex: 1, padding: '10px 0', overflowY: 'auto' }}>
+              {SIDEBAR_NAV.map(({ section, items }) => (
+                <div key={section}>
+                  <div style={{ fontFamily: T.mono, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', padding: '8px 12px 4px' }}>
+                    {section}
+                  </div>
+                  {items.map(item => {
+                    const active = TAB_ACTIVE_ITEM[tab] === item
+                    const Icon = ITEM_ICON[item] || SvgDash
+                    return (
+                      <div key={item} style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        padding: '7px 12px', margin: '1px 6px', borderRadius: 7,
+                        background: active ? T.green : 'transparent',
+                        color: active ? '#fff' : 'rgba(255,255,255,0.55)',
+                        fontSize: 12, fontWeight: active ? 600 : 400,
+                        cursor: 'pointer',
+                      }}>
+                        <Icon />
+                        <span style={{ fontFamily: T.body }}>{item}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </nav>
+
+            {/* User footer */}
+            <div style={{
+              padding: '10px 12px', borderTop: '1px solid rgba(255,255,255,0.07)',
+              display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <div style={{
+                width: 26, height: 26, borderRadius: '50%',
+                background: 'linear-gradient(135deg, #7c3aed, #0c1f15)',
+                display: 'grid', placeItems: 'center',
+                color: '#fff', fontSize: 9, fontWeight: 700, flexShrink: 0,
+              }}>AD</div>
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontFamily: T.body, fontSize: 11, color: '#fff', fontWeight: 500, lineHeight: 1.2 }}>Admin ISRA</div>
+                <div style={{ fontFamily: T.mono, fontSize: 8.5, color: 'rgba(255,255,255,0.35)' }}>Administrateur</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Main area */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Topbar */}
+            <div style={{
+              height: 48, background: '#fff', borderBottom: `1px solid ${T.line}`,
+              display: 'flex', alignItems: 'center', padding: '0 20px',
+              justifyContent: 'space-between', flexShrink: 0,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
+                <span style={{ color: T.muted }}>CNRA</span>
+                <span style={{ color: T.line }}>›</span>
+                <span style={{ color: T.ink, fontWeight: 500 }}>{PREVIEW_TABS[tab].label}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ width: 18, height: 18, borderRadius: '50%', background: T.greenSoft, border: `1px solid ${T.line}` }} />
+                <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #0c1f15)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 9.5, fontWeight: 700 }}>AD</div>
+              </div>
+            </div>
+
+            {/* Role banner */}
+            <div style={{
+              height: 32, background: 'rgba(124,58,237,0.05)', borderBottom: '1px solid rgba(124,58,237,0.1)',
+              display: 'flex', alignItems: 'center', padding: '0 20px', gap: 10, flexShrink: 0,
+            }}>
+              <span style={{ background: '#7c3aed', color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Administrateur ISRA</span>
+              <span style={{ fontSize: 11, color: T.muted }}>Supervision globale — accès complet à toute la plateforme</span>
+            </div>
+
+            {/* Page content */}
+            <div style={{ flex: 1, overflowY: 'auto', background: T.paper, padding: '18px 20px' }}>
+              {tab === 0 && <MockDashboard />}
+              {tab === 1 && <MockLots />}
+              {tab === 2 && <MockStocks />}
+              {tab === 3 && <MockCommandes />}
+              {tab === 4 && <MockMessagerie />}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ─── Mock content for each tab ────────────────────────────────── */
+
+function MockKpi({ val, label, sub, color }: { val: string; label: string; sub: string; color: string }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid ${T.line}` }}>
+      <div style={{ fontFamily: T.mono, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: T.muted, marginBottom: 6 }}>{label}</div>
+      <div style={{ fontFamily: T.display, fontWeight: 700, fontSize: 24, color, letterSpacing: '-0.03em', lineHeight: 1 }}>{val}</div>
+      <div style={{ fontFamily: T.mono, fontSize: 9, color: T.muted, marginTop: 4 }}>{sub}</div>
+    </div>
+  )
+}
+
+function GenBadge({ code }: { code: string }) {
+  const g = GENS.find(g => g.code === code) || GENS[0]
+  return (
+    <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 600, color: g.color, background: g.bg, padding: '3px 7px', borderRadius: 5, border: `1px solid ${g.color}20` }}>
+      {code}
+    </span>
+  )
+}
+
+function StatusBadge({ status }: { status: 'Certifié' | 'En cours' | 'En attente' | 'Livré' | 'Alerte' }) {
+  const map: Record<string, { bg: string; color: string }> = {
+    'Certifié':   { bg: 'rgba(0,105,62,0.1)',   color: T.green },
+    'En cours':   { bg: 'rgba(180,83,9,0.1)',    color: '#b45309' },
+    'En attente': { bg: 'rgba(3,105,161,0.1)',   color: '#0369a1' },
+    'Livré':      { bg: 'rgba(124,58,237,0.1)',  color: '#7c3aed' },
+    'Alerte':     { bg: 'rgba(196,69,54,0.1)',   color: T.terra },
+  }
+  const s = map[status] || map['En cours']
+  return (
+    <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 600, color: s.color, background: s.bg, padding: '3px 8px', borderRadius: 5 }}>
+      {status}
+    </span>
+  )
+}
+
+function MockTable({ cols, rows }: { cols: string[]; rows: (string | JSX.Element)[][] }) {
+  return (
+    <div style={{ background: '#fff', borderRadius: 10, border: `1px solid ${T.line}`, overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: cols.map(() => '1fr').join(' '), borderBottom: `1px solid ${T.line}`, padding: '8px 14px' }}>
+        {cols.map(c => (
+          <span key={c} style={{ fontFamily: T.mono, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.muted }}>{c}</span>
+        ))}
+      </div>
+      {rows.map((row, i) => (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: cols.map(() => '1fr').join(' '), padding: '9px 14px', borderBottom: i < rows.length - 1 ? `1px solid ${T.line}` : 'none', alignItems: 'center' }}>
+          {row.map((cell, j) => (
+            <div key={j} style={{ fontFamily: T.body, fontSize: 11.5, color: T.ink }}>
+              {cell}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function MockDashboard() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* KPIs */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <MockKpi val="142" label="Lots actifs"    sub="↑ 12 ce mois"         color={T.green} />
+        <MockKpi val="89.3 t" label="Stock total" sub="4 espèces"             color="#0369a1" />
+        <MockKpi val="7"   label="Commandes"      sub="3 en attente"          color={T.goldDeep} />
+        <MockKpi val="12"  label="En certification" sub="soumis cette semaine" color="#7c3aed" />
+      </div>
+      {/* Chart */}
+      <div style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid ${T.line}` }}>
+        <div style={{ fontFamily: T.mono, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.muted, marginBottom: 12 }}>Stock par génération (tonnes)</div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 80 }}>
+          {[
+            { code: 'G0', h: 22, qty: '3.1 t' }, { code: 'G1', h: 48, qty: '12 t' },
+            { code: 'G2', h: 62, qty: '18 t' }, { code: 'G3', h: 80, qty: '24 t' },
+            { code: 'G4', h: 55, qty: '16 t' }, { code: 'R1', h: 38, qty: '10 t' },
+            { code: 'R2', h: 26, qty: '6.2 t' },
+          ].map(b => {
+            const g = GENS.find(g => g.code === b.code)!
+            return (
+              <div key={b.code} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontFamily: T.mono, fontSize: 8, color: T.muted }}>{b.qty}</span>
+                <div style={{ width: '100%', height: b.h, background: g.color + 'cc', borderRadius: '4px 4px 0 0', minHeight: 6 }} />
+                <span style={{ fontFamily: T.mono, fontSize: 9, color: g.color, fontWeight: 600 }}>{b.code}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {/* Recent lots */}
+      <MockTable
+        cols={['Référence', 'Espèce', 'Génération', 'Quantité', 'Statut']}
+        rows={[
+          ['LOT-2025-0142', 'Mil Souna', <GenBadge code="G2" />, '12 000 kg', <StatusBadge status="Certifié" />],
+          ['LOT-2025-0141', 'Arachide Fleur 11', <GenBadge code="R1" />, '8 500 kg', <StatusBadge status="En cours" />],
+          ['LOT-2025-0140', 'Sorgho Fadda', <GenBadge code="G3" />, '6 000 kg', <StatusBadge status="En attente" />],
+        ]}
+      />
+    </div>
+  )
+}
+
+function MockLots() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Search bar */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ flex: 1, height: 34, background: '#fff', borderRadius: 8, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 8 }}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke={T.muted} strokeWidth="1.3"/><path d="M8 8l2.5 2.5" stroke={T.muted} strokeWidth="1.3" strokeLinecap="round"/></svg>
+          <span style={{ fontFamily: T.body, fontSize: 12, color: T.muted }}>Rechercher un lot…</span>
+        </div>
+        {['G0/G1', 'G2/G3', 'R1/R2'].map(f => (
+          <div key={f} style={{ padding: '6px 12px', borderRadius: 7, background: T.paper2, border: `1px solid ${T.line}`, fontFamily: T.mono, fontSize: 10, color: T.muted }}>
+            {f}
+          </div>
+        ))}
+        <div style={{ padding: '7px 14px', borderRadius: 8, background: T.green, color: '#fff', fontFamily: T.body, fontSize: 12, fontWeight: 600 }}>
+          + Nouveau lot
+        </div>
+      </div>
+
+      <MockTable
+        cols={['Référence', 'Espèce', 'Variété', 'Génération', 'Campagne', 'Quantité', 'Statut']}
+        rows={[
+          ['LOT-2025-0142', 'Mil', 'Souna 3',    <GenBadge code="G2" />, '2025-2026', '12 000 kg', <StatusBadge status="Certifié" />],
+          ['LOT-2025-0141', 'Arachide', 'Fleur 11', <GenBadge code="R1" />, '2025-2026', '8 500 kg', <StatusBadge status="En cours" />],
+          ['LOT-2025-0140', 'Sorgho', 'Fadda',    <GenBadge code="G3" />, '2025-2026', '6 000 kg', <StatusBadge status="En attente" />],
+          ['LOT-2025-0139', 'Niébé', 'Mouride',   <GenBadge code="G1" />, '2025-2026', '4 200 kg', <StatusBadge status="Certifié" />],
+          ['LOT-2025-0138', 'Maïs', 'Hybrid 1',   <GenBadge code="R2" />, '2025-2026', '20 000 kg', <StatusBadge status="Livré" />],
+        ]}
+      />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px' }}>
+        <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>Affichage 1–5 sur 142 lots</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {['1', '2', '3', '…', '29'].map((p, i) => (
+            <div key={p} style={{ width: 26, height: 26, borderRadius: 6, background: i === 0 ? T.green : '#fff', border: `1px solid ${i === 0 ? T.green : T.line}`, color: i === 0 ? '#fff' : T.ink, display: 'grid', placeItems: 'center', fontFamily: T.mono, fontSize: 10 }}>{p}</div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function MockStocks() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+        <MockKpi val="89.3 t"  label="Stock total"     sub="toutes espèces"    color={T.green} />
+        <MockKpi val="5"       label="Espèces tracées" sub="en inventaire"     color="#0369a1" />
+        <MockKpi val="8"       label="Sites actifs"    sub="ISRA / partenaires" color={T.goldDeep} />
+        <MockKpi val="2"       label="Alertes seuil"   sub="↓ sous le minimum" color={T.terra} />
+      </div>
+
+      <MockTable
+        cols={['Site de stockage', 'Espèce', 'Variété', 'Génération', 'Qté disponible', 'Statut']}
+        rows={[
+          ['Bambey — CNRA', 'Mil', 'Souna 3', <GenBadge code="G2" />, '12 000 kg', <StatusBadge status="Certifié" />],
+          ['Thiès — UPS', 'Arachide', 'Fleur 11', <GenBadge code="R1" />, '8 500 kg', <StatusBadge status="En cours" />],
+          ['Kaolack — Mult.', 'Sorgho', 'Fadda', <GenBadge code="G3" />, '6 000 kg', <StatusBadge status="En attente" />],
+          ['Saint-Louis — SAED', 'Niébé', 'Mouride', <GenBadge code="G1" />, '3 200 kg', <StatusBadge status="Alerte" />],
+        ]}
+      />
+
+      {/* Progress bars per site */}
+      <div style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid ${T.line}` }}>
+        <div style={{ fontFamily: T.mono, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.muted, marginBottom: 12 }}>Couverture par site</div>
+        {[
+          { site: 'Bambey — CNRA', pct: 82, color: T.green },
+          { site: 'Thiès — UPS', pct: 65, color: T.goldDeep },
+          { site: 'Kaolack — Mult.', pct: 47, color: '#0369a1' },
+          { site: 'Saint-Louis — SAED', pct: 18, color: T.terra },
+        ].map(s => (
+          <div key={s.site} style={{ marginBottom: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+              <span style={{ fontSize: 11, color: T.ink }}>{s.site}</span>
+              <span style={{ fontFamily: T.mono, fontSize: 10, fontWeight: 600, color: s.color }}>{s.pct}%</span>
+            </div>
+            <div style={{ height: 5, background: T.line, borderRadius: 999, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${s.pct}%`, background: s.color, borderRadius: 999 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function MockCommandes() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* Status tabs */}
+      <div style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${T.line}`, paddingBottom: 0 }}>
+        {[
+          { label: 'Toutes', count: 31, active: true },
+          { label: 'En attente', count: 7, active: false },
+          { label: 'Validées', count: 19, active: false },
+          { label: 'Livrées', count: 5, active: false },
+        ].map(tab => (
+          <div key={tab.label} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '8px 14px', cursor: 'pointer', borderBottom: tab.active ? `2px solid ${T.green}` : '2px solid transparent',
+            fontFamily: T.body, fontSize: 12.5, fontWeight: tab.active ? 600 : 400,
+            color: tab.active ? T.green : T.muted,
+          }}>
+            {tab.label}
+            <span style={{ fontFamily: T.mono, fontSize: 9.5, background: tab.active ? T.green : T.paper2, color: tab.active ? '#fff' : T.muted, padding: '1px 6px', borderRadius: 4 }}>
+              {tab.count}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <MockTable
+        cols={['Référence', 'Variété', 'Quantité', 'Partenaire', 'Date', 'Statut']}
+        rows={[
+          ['CMD-2026-0031', 'Mil Souna 3 — G3', '5 000 kg', 'Coopérative Saloum', '03/08/2026', <StatusBadge status="En attente" />],
+          ['CMD-2026-0030', 'Arachide Fleur 11 — R1', '8 000 kg', 'GIE Thiès Sud', '01/08/2026', <StatusBadge status="Certifié" />],
+          ['CMD-2026-0029', 'Sorgho Fadda — G2', '3 200 kg', 'SAED Saint-Louis', '29/07/2026', <StatusBadge status="En cours" />],
+          ['CMD-2026-0028', 'Niébé Mouride — R2', '12 000 kg', 'OP Casamance', '27/07/2026', <StatusBadge status="Livré" />],
+          ['CMD-2026-0027', 'Maïs Hybrid 1 — R1', '6 500 kg', 'Mult. Louga', '24/07/2026', <StatusBadge status="Livré" />],
+        ]}
+      />
+    </div>
+  )
+}
+
+function MockMessagerie() {
+  const msgs = [
+    { from: 'Moussa Diallo', role: 'Multiplicateur', last: 'Lot G3 disponible pour transfert', time: '14:32', unread: 2 },
+    { from: 'Fatou Ndiaye', role: 'UPSemCL', last: 'Certification validée pour LOT-0141', time: '11:05', unread: 0 },
+    { from: 'Ibrahima Fall', role: 'Quotataire', last: 'Commande de 5 000 kg de Mil', time: 'Hier', unread: 1 },
+  ]
+  const bubbles = [
+    { mine: false, text: 'Bonjour, le lot LOT-2025-0142 est prêt pour certification.', time: '14:28' },
+    { mine: true,  text: 'Merci Moussa. Les documents ont bien été reçus. Je lance la procédure de contrôle.', time: '14:30' },
+    { mine: false, text: 'Parfait. La quantité disponible est de 12 000 kg — génération G2 certifiée.', time: '14:32' },
+    { mine: true,  text: "D'accord, je valide le transfert vers Bambey CNRA.", time: '14:35' },
+  ]
+
+  return (
+    <div style={{ display: 'flex', height: 340, background: '#fff', borderRadius: 10, border: `1px solid ${T.line}`, overflow: 'hidden' }}>
+      {/* Conversation list */}
+      <div style={{ width: 220, borderRight: `1px solid ${T.line}`, flexShrink: 0, overflowY: 'auto' }}>
+        <div style={{ padding: '10px 12px', borderBottom: `1px solid ${T.line}` }}>
+          <div style={{ height: 28, background: T.paper, borderRadius: 6, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 6 }}>
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="4.5" cy="4.5" r="3" stroke={T.muted} strokeWidth="1.2"/><path d="M7 7l2 2" stroke={T.muted} strokeWidth="1.2" strokeLinecap="round"/></svg>
+            <span style={{ fontFamily: T.body, fontSize: 11, color: T.muted }}>Rechercher…</span>
+          </div>
+        </div>
+        {msgs.map((m, i) => (
+          <div key={i} style={{
+            padding: '10px 12px', borderBottom: `1px solid ${T.line}`,
+            background: i === 0 ? T.greenSoft : '#fff',
+            cursor: 'pointer',
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 3 }}>
+              <span style={{ fontFamily: T.body, fontSize: 12, fontWeight: 600, color: T.ink }}>{m.from}</span>
+              <span style={{ fontFamily: T.mono, fontSize: 9, color: T.muted }}>{m.time}</span>
+            </div>
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.green, marginBottom: 3 }}>{m.role}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: T.body, fontSize: 10.5, color: T.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>{m.last}</span>
+              {m.unread > 0 && (
+                <span style={{ background: T.green, color: '#fff', borderRadius: '50%', width: 16, height: 16, display: 'grid', placeItems: 'center', fontSize: 8.5, fontWeight: 700, flexShrink: 0 }}>{m.unread}</span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Chat area */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {/* Chat header */}
+        <div style={{ padding: '10px 14px', borderBottom: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #15803d, #0c1f15)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>MD</div>
+          <div>
+            <div style={{ fontFamily: T.body, fontSize: 13, fontWeight: 600, color: T.ink }}>Moussa Diallo</div>
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.green }}>Multiplicateur</div>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {bubbles.map((b, i) => (
+            <div key={i} style={{ display: 'flex', justifyContent: b.mine ? 'flex-end' : 'flex-start' }}>
+              <div style={{
+                maxWidth: '72%', padding: '8px 12px', borderRadius: b.mine ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                background: b.mine ? T.green : '#fff',
+                border: b.mine ? 'none' : `1px solid ${T.line}`,
+                color: b.mine ? '#fff' : T.ink,
+                fontSize: 11.5, fontFamily: T.body, lineHeight: 1.5,
+              }}>
+                {b.text}
+                <div style={{ fontFamily: T.mono, fontSize: 8.5, marginTop: 4, color: b.mine ? 'rgba(255,255,255,0.55)' : T.muted, textAlign: 'right' }}>
+                  {b.time}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Input bar */}
+        <div style={{ padding: '10px 14px', borderTop: `1px solid ${T.line}`, display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ flex: 1, height: 32, background: T.paper, borderRadius: 8, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', padding: '0 12px' }}>
+            <span style={{ fontFamily: T.body, fontSize: 11.5, color: T.muted }}>Écrire un message…</span>
+          </div>
+          <div style={{ width: 32, height: 32, borderRadius: 8, background: T.green, display: 'grid', placeItems: 'center' }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          </div>
+        </div>
       </div>
     </div>
   )

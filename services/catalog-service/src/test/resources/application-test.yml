@@ -1,0 +1,17 @@
+spring:
+  kafka:
+    bootstrap-servers: localhost:9999
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Surchargé — pas d'appel OIDC discovery au démarrage.
+          # Les tests utilisent SecurityMockMvcRequestPostProcessors.jwt() → décodeur jamais appelé.
+          issuer-uri: ""
+          jwk-set-uri: https://test-fake.example.com/.well-known/jwks.json
+
+uploads:
+  dir: /tmp/catalog-test-uploads
+
+cors:
+  allowed-origins: http://localhost:5173

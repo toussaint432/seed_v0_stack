@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 @Entity
-@Table(name="generation_semence")
+@Table(name = "generation_semence", schema = "lot")
 @Getter @Setter @NoArgsConstructor
 public class Generation {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY)

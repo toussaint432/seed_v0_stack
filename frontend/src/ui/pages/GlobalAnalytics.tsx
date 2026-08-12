@@ -7,6 +7,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
 
 /* ═══════════════════════════════════════════════════════════════
    TYPES
@@ -374,10 +375,10 @@ export function GlobalAnalytics({ roleKey }: Props) {
       api.get(endpoints.varieties),
       api.get(isMultiplicator ? endpoints.stockMonStock  : endpoints.stocks),
     ])
-    setOrders(oR.status    === 'fulfilled' ? oR.value.data : [])
-    setLots(lR.status      === 'fulfilled' ? lR.value.data : [])
-    setVarieties(vR.status === 'fulfilled' ? vR.value.data : [])
-    setStocks(sR.status    === 'fulfilled' ? sR.value.data : [])
+    setOrders(extractList(oR.status === 'fulfilled' ? oR.value.data : null))
+    setLots(extractList(lR.status      === 'fulfilled' ? lR.value.data : null).map(normalizeLot))
+    setVarieties(extractList(vR.status === 'fulfilled' ? vR.value.data : null).map(normalizeVariete))
+    setStocks(extractList(sR.status    === 'fulfilled' ? sR.value.data : null).map(normalizeStock))
     setLoading(false); setRefreshing(false)
   }
 

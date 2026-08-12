@@ -16,7 +16,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "lot_semencier",
+@Table(name = "lot_semencier", schema = "lot",
     indexes = {
         @Index(name = "idx_lot_variete",    columnList = "id_variete"),
         @Index(name = "idx_lot_generation", columnList = "id_generation"),

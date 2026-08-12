@@ -8,7 +8,7 @@ import sn.isra.seed.stock_service.entity.enums.TypeSite;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "site")
+@Table(name = "site", schema = "stock")
 @Getter @Setter @NoArgsConstructor
 public class Site {
 

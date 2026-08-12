@@ -10,7 +10,7 @@ import java.time.Instant;
 import java.util.List;
 
 @Entity
-@Table(name = "commande",
+@Table(name = "commande", schema = "orders",
     indexes = {
         @Index(name = "idx_cmd_statut",   columnList = "statut"),
         @Index(name = "idx_cmd_acheteur", columnList = "id_organisation_acheteur")

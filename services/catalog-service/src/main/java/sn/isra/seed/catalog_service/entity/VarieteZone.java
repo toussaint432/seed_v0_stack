@@ -6,7 +6,7 @@ import lombok.*;
 import sn.isra.seed.catalog_service.entity.enums.NiveauAdaptation;
 
 @Entity
-@Table(name = "variete_zone")
+@Table(name = "variete_zone", schema = "catalog")
 @Getter @Setter @NoArgsConstructor
 public class VarieteZone {
 

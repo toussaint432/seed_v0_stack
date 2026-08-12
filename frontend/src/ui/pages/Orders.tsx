@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeVariete, extractList } from '../../lib/normalizers'
 import { Modal, Field, FormInput, FormSelect, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -678,11 +679,11 @@ function VueQuotataire({ setToast }: { setToast: any }) {
       api.get(endpoints.organisations),
       api.get(endpoints.varieties),
     ])
-    setOrders(ordRes.status === 'fulfilled' ? ordRes.value.data : [])
+    setOrders(ordRes.status === 'fulfilled' ? extractList(ordRes.value.data) : [])
     if (orgRes.status === 'fulfilled')
       setOrgs(orgRes.value.data.filter((o: any) => o.typeOrganisation?.toLowerCase().includes('multiplic') && o.active !== false))
     if (varRes.status === 'fulfilled')
-      setVarieties(varRes.value.data.filter((v: any) => v.statutVariete === 'DIFFUSEE'))
+      setVarieties(extractList(varRes.value.data).map(normalizeVariete).filter((v: any) => v.statutVariete === 'DIFFUSEE'))
     setLoading(false)
   }
   useEffect(() => { fetchAll() }, [])
@@ -858,11 +859,11 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
       api.get(endpoints.varieties),
       api.get(endpoints.organisations),
     ])
-    setRecues(rRes.status === 'fulfilled' ? rRes.value.data : [])
+    setRecues(rRes.status === 'fulfilled' ? extractList(rRes.value.data) : [])
     setLoadingR(false)
-    setDemandes(dRes.status === 'fulfilled' ? dRes.value.data : [])
+    setDemandes(dRes.status === 'fulfilled' ? extractList(dRes.value.data) : [])
     setLoadingD(false)
-    if (varRes.status === 'fulfilled') setVarieties(varRes.value.data)
+    if (varRes.status === 'fulfilled') setVarieties(extractList(varRes.value.data).map(normalizeVariete))
     if (orgRes.status === 'fulfilled')
       setOrgs(orgRes.value.data.filter((o: any) => o.typeOrganisation?.toUpperCase().includes('UPSEMCL') && o.active !== false))
   }
@@ -1696,9 +1697,9 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
       api.get(endpoints.organisations),
       api.get(endpoints.varieties),
     ])
-    setOrders(oRes.status === 'fulfilled' ? oRes.value.data : [])
+    setOrders(oRes.status === 'fulfilled' ? extractList(oRes.value.data) : [])
     setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
-    if (varRes.status === 'fulfilled') setVarieties(varRes.value.data)
+    if (varRes.status === 'fulfilled') setVarieties(extractList(varRes.value.data).map(normalizeVariete))
     setLoading(false)
   }
   async function handleUpdateStatus(id: number, statut: string) {
@@ -1874,9 +1875,9 @@ function VueAdmin({ setToast }: { setToast: any }) {
       api.get(endpoints.organisations),
       api.get(endpoints.varieties),
     ])
-    setOrders(oRes.status === 'fulfilled' ? oRes.value.data : [])
+    setOrders(oRes.status === 'fulfilled' ? extractList(oRes.value.data) : [])
     setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
-    if (varRes.status === 'fulfilled') setVarieties(varRes.value.data)
+    if (varRes.status === 'fulfilled') setVarieties(extractList(varRes.value.data).map(normalizeVariete))
     setLoading(false)
   }
   async function handleUpdateStatus(id: number, statut: string) {

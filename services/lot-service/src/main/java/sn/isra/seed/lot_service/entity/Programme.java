@@ -10,7 +10,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "programme_multiplication")
+@Table(name = "programme_multiplication", schema = "lot")
 @Getter @Setter @NoArgsConstructor
 public class Programme {
 

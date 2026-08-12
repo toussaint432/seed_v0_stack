@@ -1,12 +1,12 @@
-# Sen Jiw — Plateforme de Gestion des Semences Agricoles
+# Sen Jiwu — Plateforme de Gestion des Semences Agricoles
 
 > Système d'information semencier développé pour l'**ISRA / CNRA Bambey — Sénégal**.
 > Architecture microservices · Authentification OAuth2/OIDC · Déploiement Docker Compose
 >
-> *« Sen Jiw » signifie « semence » en wolof.*
+> *« Sen Jiwu » signifie « Votre semence » en wolof.*
 
 [![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%2B%20TypeScript-61DAFB?style=flat-square&logo=react)](https://react.dev)
-[![Backend](https://img.shields.io/badge/Backend-Spring%20Boot%203.3%20%2F%20Java%2021-6DB33F?style=flat-square&logo=springboot)](https://spring.io)
+[![Backend](https://img.shields.io/badge/Backend-Spring%20Boot%203.5%20%2F%20Java%2021-6DB33F?style=flat-square&logo=springboot)](https://spring.io)
 [![Auth](https://img.shields.io/badge/Auth-Keycloak%2025%20OAuth2--PKCE-4D4D4D?style=flat-square&logo=keycloak)](https://www.keycloak.org)
 [![DB](https://img.shields.io/badge/Database-PostgreSQL%2016-336791?style=flat-square&logo=postgresql)](https://postgresql.org)
 [![Broker](https://img.shields.io/badge/Broker-Apache%20Kafka%207.6-231F20?style=flat-square&logo=apachekafka)](https://kafka.apache.org)
@@ -16,7 +16,7 @@
 
 ## Présentation
 
-**Sen Jiw** est une application web professionnelle dédiée à la gestion de la **chaîne de certification semencière** au Sénégal. Elle couvre l'intégralité du cycle de vie des semences — des variétés génétiques pures (G0) jusqu'aux semences commerciales distribuées (R2) — en assurant la traçabilité générationnelle, la gestion des stocks, la certification et la distribution entre acteurs.
+**Sen Jiwu** est une application web professionnelle dédiée à la gestion de la **chaîne de certification semencière** au Sénégal. Elle couvre l'intégralité du cycle de vie des semences — des variétés génétiques pures (G0) jusqu'aux semences commerciales distribuées (R2) — en assurant la traçabilité générationnelle, la gestion des stocks, la certification et la distribution entre acteurs.
 
 ### Modules fonctionnels
 
@@ -71,10 +71,31 @@
                     │   PostgreSQL 16    │   │    Apache Kafka       │
                     │   base « seed »    │   │   Bus d'événements   │
                     │     :15432         │   │      :19092           │
-                    └────────────────────┘   └──────────────────────┘
+                    │                   │   └──────────────────────┘
+                    │  Schema per Svc   │
+                    │  ─────────────    │
+                    │  catalog  · geo   │
+                    │  lot      · stock │
+                    │  orders   · shared│
+                    └────────────────────┘
 
 Monitoring : Prometheus :19090 · Grafana :13000 · Alertmanager :19093 · Kafka UI :18085
 ```
+
+### Schema per Service
+
+La base PostgreSQL `seed` est organisée en **6 schémas distincts** — un par domaine métier — garantissant l'isolation logique des données entre services tout en conservant une base unique :
+
+| Schéma | Propriétaire | Tables principales |
+|---|---|---|
+| `catalog` | catalog-service | `espece`, `variete`, `variete_zone`, `espece_historique`, `variete_historique` |
+| `lot` | lot-service | `lot_semencier`, `campagne`, `generation_semence`, `certification`, `transfert_lot`, `outbox_events` |
+| `stock` | stock-service | `stock`, `site`, `mouvement_stock`, `transfert`, `outbox_events` |
+| `orders` | order-service | `commande`, `ligne_commande`, `allocation_commande` |
+| `shared` | order-service | `organisation`, `membre_organisation`, `conversation`, `message` |
+| `geo` | catalog-service | `regions`, `departements`, `zone_agro`, `departement_zone` |
+
+Les migrations Flyway sont gérées exclusivement par `catalog-service` ; la table `flyway_schema_history` reste dans le schéma `public`.
 
 ---
 
@@ -85,7 +106,7 @@ Monitoring : Prometheus :19090 · Grafana :13000 · Alertmanager :19093 · Kafka
 | Frontend | React + TypeScript | 18 / TS 5 |
 | Build & Serveur | Vite + Nginx (Alpine) | 5.x |
 | Cartographie | Leaflet.js | 1.9 |
-| Backend | Spring Boot + Java | 3.3 / Java 21 |
+| Backend | Spring Boot + Java | 3.5 / Java 21 |
 | Sécurité API | Spring Security, OAuth2/OIDC | — |
 | Base de données | PostgreSQL | 16 |
 | Migrations DB | Flyway | — |
@@ -201,7 +222,7 @@ seed_v0_stack/
 │           ├── App.tsx             # Layout principal, sidebar, navigation par rôle
 │           ├── components/         # Modal, ConfirmDialog, Pagination, StatusBadge, Toast
 │           └── pages/
-│               ├── LandingPage.tsx         # Page d'accueil publique Sen Jiw
+│               ├── LandingPage.tsx         # Page d'accueil publique Sen Jiwu
 │               ├── CataloguePublic.tsx     # Catalogue accessible sans auth + carte Leaflet
 │               ├── Dashboard.tsx           # KPIs, pipeline générationnel
 │               ├── Varieties.tsx           # Espèces & variétés + archivage traçable
@@ -267,7 +288,7 @@ seed_v0_stack/
 └── README.md
 ```
 
-**Migrations Flyway** : 37 migrations versionnées (V1 → V37), appliquées automatiquement par `catalog-service` au démarrage.
+**Migrations Flyway** : 45 migrations versionnées (V1 → V45 + V11.1), appliquées automatiquement par `catalog-service` au démarrage. La table `flyway_schema_history` est maintenue dans le schéma `public`.
 
 ---
 
@@ -332,7 +353,10 @@ docker compose build frontend && docker compose up -d frontend
 - [x] Messagerie interne entre acteurs
 - [x] Tableaux de bord analytiques (global + sélectionneur)
 - [x] Monitoring : Prometheus, Grafana, Alertmanager, Kafka UI
-- [x] 37 migrations Flyway — schéma base de données entièrement versionné
+- [x] 45 migrations Flyway — schéma base de données entièrement versionné (V1 → V45)
+- [x] Schema per Service — 6 schémas PostgreSQL distincts (catalog, lot, stock, orders, shared, geo)
+- [x] Triggers DB auto-synchronisation `code_espece` et `campagne ↔ id_campagne` sur `lot_semencier`
+- [x] Montée de version Spring Boot 3.3 → 3.5
 
 ### En cours / V1.1
 - [ ] Notifications email/SMS sur événements critiques (livraison, certification)
@@ -352,6 +376,6 @@ Il répond aux besoins réels de modernisation et de traçabilité de la filièr
 ---
 
 <div align="center">
-  <sub>Développé par <strong>Toussaint GOMIS</strong> · M2 SI UADB · ISRA / CNRA Bambey · 2025–2026</sub><br>
+  <sub>Développé par <strong>Toussaint GOMIS</strong> · M2 SI UADB · ISRA / CNRA Bambey · 2025–2026 · Sen Jiwu</sub><br>
   <sub>toussaint.gomis@uadb.edu.sn · +221 77 758 28 71</sub>
 </div>

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeLot, normalizeVariete, extractList } from '../../lib/normalizers'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { keycloak } from '../../lib/keycloak'
 import {
@@ -16,14 +17,11 @@ import {
 
 interface Props { roleKey: string }
 
-const GEN_COLOR: Record<string, string> = {
-  G0: '#6366f1', G1: '#0ea5e9', G2: '#22c55e', G3: '#f59e0b',
-  G4: '#c2410c', R1: '#ec4899', R2: '#14b8a6'
-}
-const GEN_BADGE: Record<string, string> = {
-  G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray',
-  G4: 'badge-gold', R1: 'badge-blue',  R2: 'badge-green'
-}
+import { GEN_CHART_COLORS, GEN_COLORS, ROLE_LABELS_LONG } from '../../lib/constants'
+const GEN_COLOR = GEN_CHART_COLORS
+const GEN_BADGE: Record<string, string> = Object.fromEntries(
+  Object.entries(GEN_COLORS).map(([k, v]) => [k, v.badge])
+)
 const UPSEMCL_GENS   = ['G1', 'G2', 'G3']
 const SELECTOR_GENS  = ['G0', 'G1']
 
@@ -33,13 +31,7 @@ const TRANSFER_RULES_STOCK: Record<string, { allowedGens: string[]; source: stri
   'seed-upsemcl':  { allowedGens: ['G3'], source: 'UPSemCL',    destination: 'Multiplicateur', destRoleKey: 'seed-multiplicator' },
 }
 
-const ROLE_LABELS_PDF: Record<string, string> = {
-  'seed-selector':      'Sélectionneur ISRA/CNRA',
-  'seed-upsemcl':       'Unité de Production UPSemCL',
-  'seed-multiplicator': 'Multiplicateur Agréé',
-  'seed-quotataire':    'Distributeur / Quotataire',
-  'seed-admin':         'Administrateur',
-}
+const ROLE_LABELS_PDF = ROLE_LABELS_LONG
 
 const STATUT_STYLE: Record<string, { label: string; color: string; bg: string }> = {
   DISPONIBLE:    { label: 'Disponible',    color: '#15803d', bg: '#f0fdf4' },
@@ -486,8 +478,8 @@ export function Stocks({ roleKey }: Props) {
     const lotsUrl = isMulti ? endpoints.lotsMesLots : endpoints.lots
     await Promise.all([
       api.get(endpoints.stocksAgrege).then(r => setAgregeStocks(r.data)).catch(() => setAgregeStocks([])),
-      api.get(lotsUrl).then(r              => setLots(r.data)).catch(() => {}),
-      api.get(endpoints.varieties).then(r  => setVarieties(r.data)).catch(() => {}),
+      api.get(lotsUrl).then(r              => setLots(extractList(r.data).map(normalizeLot))).catch(() => {}),
+      api.get(endpoints.varieties).then(r  => setVarieties(extractList(r.data).map(normalizeVariete))).catch(() => {}),
       api.get(endpoints.sites).then(r      => setSitesList(r.data)).catch(() => {}),
       api.get(endpoints.movements).then(r  => setMovements(r.data)).catch(() => {}),
       transferRule ? api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {}) : Promise.resolve(),

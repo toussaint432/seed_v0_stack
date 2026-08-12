@@ -8,7 +8,7 @@ import sn.isra.seed.order_service.entity.enums.TypeMessage;
 import java.time.Instant;
 
 @Entity
-@Table(name = "message",
+@Table(name = "message", schema = "shared",
     indexes = {
         @Index(name = "idx_msg_conv", columnList = "id_conversation"),
         @Index(name = "idx_msg_lu",   columnList = "id_conversation, lu")

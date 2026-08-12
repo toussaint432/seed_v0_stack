@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Leaf, Package, BarChart2,
   Users as UsersIcon, CircleUser, Bell, Search, Menu, LogOut, ChevronRight,
@@ -163,13 +164,14 @@ const adminTools = [
 ]
 
 export function App() {
+  const navigate   = useNavigate()
+  const location   = useLocation()
   const [ready,     setReady]     = useState(false)
   // Vrai seulement quand l'URL contient le code OAuth2 (retour post-login KC).
   // Dans ce cas on affiche un loading le temps du token exchange (~200 ms).
   // Pour une visite normale (pas de code dans l'URL), on affiche
   // LandingPage immédiatement sans attendre l'init KC.
   const [isKcCallback] = useState(() => new URLSearchParams(window.location.search).has('code'))
-  const [page,      setPage]      = useState<Page>('dashboard')
   const [collapsed, setCollapsed] = useState(false)
   const [unread,    setUnread]    = useState(0)
   const unreadTimer = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -184,13 +186,16 @@ export function App() {
 
   useEffect(() => {
     initKeycloak()
-      .then(authenticated => {
+      .then(() => {
         setReady(true)
-        // Si l'init réussit mais que l'utilisateur n'est pas connecté → rediriger vers login
-        if (!authenticated) keycloak.login()
+        // Authentifié (post-login KC ou session existante) → dashboard directement.
+        // La landing page ne s'affiche que pour les utilisateurs non authentifiés.
+        if (keycloak.authenticated) {
+          navigate('/dashboard')
+        }
       })
       .catch(() => {
-        // initKeycloak() gère déjà la redirection en cas d'erreur, rien à faire ici
+        setReady(true)
       })
   }, [])
 
@@ -238,9 +243,9 @@ export function App() {
     return () => document.removeEventListener('mousedown', handler)
   }, [cmdOpen, notifOpen])
 
-  // Polling badge non-lus (toutes les 30s, démarré après login)
+  // Polling badge non-lus (toutes les 30s, démarré après login authentifié uniquement)
   useEffect(() => {
-    if (!ready) return
+    if (!ready || !keycloak.authenticated) return
     async function fetchUnread() {
       try {
         const { api } = await import('../lib/api')
@@ -255,19 +260,23 @@ export function App() {
   }, [ready])
 
   if (!ready) {
-    // Visite normale : LandingPage s'affiche immédiatement, l'init KC tourne en arrière-plan.
-    // Callback post-login (code OAuth2 dans l'URL) : loading le temps du token exchange (~200 ms).
-    if (!isKcCallback) return <LandingPage />
-    return (
-      <div className="loading-screen">
-        <div className="loading-logo">
-          <Leaf size={24} color="#fff" />
+    // Pendant l'init Keycloak :
+    // - Callback post-login (code OAuth2 dans l'URL) → spinner
+    // - Visite directe sans code → landing page immédiatement (pas de redirection)
+    if (isKcCallback) {
+      return (
+        <div className="loading-screen">
+          <div className="loading-logo">
+            <Leaf size={24} color="#fff" />
+          </div>
+          <div className="loading-text">Connexion en cours…</div>
         </div>
-        <div className="loading-text">Connexion en cours…</div>
-      </div>
-    )
+      )
+    }
+    return <LandingPage />
   }
 
+  // Après init : non authentifié → landing page
   if (!keycloak.authenticated) {
     return <LandingPage />
   }
@@ -275,7 +284,8 @@ export function App() {
   const user        = getUserInfo()
   const navSections = getNavSections(user.roleKey)
   const allNavItems = navSections.flatMap(s => s.items)
-  const validPage: Page = (page === 'profile' || allNavItems.find(n => n.id === page)) ? page : (allNavItems[0]?.id || 'dashboard')
+  const rawPage = location.pathname.slice(1) as Page
+  const validPage: Page = (rawPage === 'profile' || allNavItems.find(n => n.id === rawPage)) ? rawPage : (allNavItems[0]?.id || 'dashboard')
 
   // Palette de commandes — pages filtrées
   const profileItem: NavItem = { id: 'profile', label: 'Mon profil', icon: CircleUser }
@@ -287,7 +297,7 @@ export function App() {
       )
     : paletteItems
 
-  function goPage(id: Page) { setPage(id); setCmdOpen(false); setCmdQuery('') }
+  function goPage(id: Page) { navigate('/' + id); setCmdOpen(false); setCmdQuery('') }
 
   // Icône & libellé du bouton thème
   const THEME_CYCLE: Array<'system' | 'light' | 'dark'> = ['system', 'light', 'dark']
@@ -295,11 +305,27 @@ export function App() {
   const ThemeIcon  = theme === 'light' ? Sun : theme === 'dark' ? Moon : Monitor
   const themeTitle = theme === 'light' ? 'Mode clair — cliquez pour mode nuit' : theme === 'dark' ? 'Mode nuit — cliquez pour mode auto' : 'Mode auto — cliquez pour mode clair'
 
-  // Notifications simulées (messages non-lus + alertes plateforme)
-  const notifications: Array<{ id: number; type: 'message' | 'transfer' | 'system'; title: string; sub: string; time: string; read: boolean }> = [
-    ...(unread > 0 ? [{ id: 1, type: 'message' as const, title: `${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''}`, sub: 'Messagerie plateforme', time: 'maintenant', read: false }] : []),
-    { id: 2, type: 'transfer' as const, title: 'Transfert en attente de validation', sub: 'Un lot G3 attend votre approbation', time: 'il y a 2h', read: false },
-    { id: 3, type: 'system' as const, title: 'Plateforme Sen Jiwu opérationnelle', sub: 'Tous les services sont actifs', time: 'il y a 5h', read: true },
+  type NotifType = 'message' | 'transfer' | 'order' | 'lot' | 'certification' | 'system'
+  type Notif = { id: number; type: NotifType; title: string; sub: string; time: string; read: boolean; href: string }
+
+  const NOTIF_HREF: Record<NotifType, string> = {
+    message:       '/messages',
+    transfer:      '/transfers',
+    order:         '/orders',
+    lot:           '/lots',
+    certification: '/lots',
+    system:        '/dashboard',
+  }
+
+  const notifications: Notif[] = [
+    ...(unread > 0 ? [{
+      id: 1, type: 'message' as const,
+      title: `${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''}`,
+      sub: 'Messagerie plateforme', time: 'maintenant', read: false,
+      href: NOTIF_HREF.message,
+    }] : []),
+    { id: 2, type: 'transfer', title: 'Transfert en attente de validation', sub: 'Un lot G3 attend votre approbation',     time: 'il y a 2h', read: false, href: NOTIF_HREF.transfer },
+    { id: 3, type: 'system',   title: 'Plateforme Sen Jiwu opérationnelle', sub: 'Tous les services sont actifs',         time: 'il y a 5h', read: true,  href: NOTIF_HREF.system   },
   ]
   const unreadNotif = notifications.filter(n => !n.read).length
 
@@ -330,7 +356,7 @@ export function App() {
                 <button
                   key={id}
                   className={`nav-item ${validPage === id ? 'active' : ''}`}
-                  onClick={() => setPage(id)}
+                  onClick={() => navigate('/' + id)}
                   title={collapsed ? label : undefined}
                 >
                   <span className="nav-icon"><Icon size={16} /></span>
@@ -365,7 +391,7 @@ export function App() {
           <div className="nav-section-label">Compte</div>
           <button
             className={`nav-item ${validPage === 'profile' ? 'active' : ''}`}
-            onClick={() => setPage('profile')}
+            onClick={() => navigate('/profile')}
             title={collapsed ? 'Mon profil' : undefined}
           >
             <span className="nav-icon"><CircleUser size={16} /></span>
@@ -520,18 +546,23 @@ export function App() {
                   </div>
                   <div className="notif-panel-list">
                     {notifications.map(n => (
-                      <div key={n.id} className={`notif-item ${n.read ? 'notif-item--read' : ''}`}>
+                      <button
+                        key={n.id}
+                        className={`notif-item notif-item--clickable ${n.read ? 'notif-item--read' : ''}`}
+                        onClick={() => { navigate(n.href); setNotifOpen(false) }}
+                        title={n.title}
+                      >
                         <div className={`notif-item-dot notif-item-dot--${n.type}`} />
                         <div className="notif-item-body">
                           <div className="notif-item-title">{n.title}</div>
                           <div className="notif-item-sub">{n.sub}</div>
                         </div>
                         <div className="notif-item-time">{n.time}</div>
-                      </div>
+                      </button>
                     ))}
                   </div>
-                  <button className="notif-panel-footer" onClick={() => { setPage('messages'); setNotifOpen(false) }}>
-                    Voir tous les messages
+                  <button className="notif-panel-footer" onClick={() => { navigate('/dashboard'); setNotifOpen(false) }}>
+                    Voir toutes les notifications
                   </button>
                 </div>
               )}
@@ -539,7 +570,7 @@ export function App() {
 
             {/* Avatar cliquable → profil */}
             <button
-              onClick={() => setPage('profile')}
+              onClick={() => navigate('/profile')}
               title={`${user.name} — Mon profil`}
               style={{
                 width: 34, height: 34, borderRadius: '50%', border: 'none',
@@ -578,22 +609,26 @@ export function App() {
         )}
 
         {/* Page */}
-        <main className="page-content" key={validPage}>
-          {validPage === 'dashboard'      && <Dashboard      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />}
-          {validPage === 'varieties'      && <Varieties      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />}
-          {validPage === 'lots'           && <Lots           roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />}
-          {validPage === 'stocks'         && <Stocks         roleKey={user.roleKey} />}
-          {validPage === 'orders'         && <Orders         roleKey={user.roleKey} />}
-          {validPage === 'certifications' && <Certifications roleKey={user.roleKey} />}
-          {validPage === 'transfers'      && <Transfers      roleKey={user.roleKey} />}
-          {validPage === 'campagnes'      && <Campagnes      roleKey={user.roleKey} />}
-          {validPage === 'sites'          && <Sites          roleKey={user.roleKey} />}
-          {validPage === 'mes-sites'      && <MesSites       roleKey={user.roleKey} />}
-          {validPage === 'programs'       && <Programs       roleKey={user.roleKey} />}
-          {validPage === 'profile'        && <Profile        roleKey={user.roleKey} />}
-          {validPage === 'users'          && <Users          roleKey={user.roleKey} />}
-          {validPage === 'catalogue'      && <CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => setPage('messages')} />}
-          {validPage === 'messages'       && <Messages roleKey={user.roleKey} username={user.name} />}
+        <main className="page-content">
+          <Routes>
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/dashboard"      element={<Dashboard      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
+            <Route path="/varieties"      element={<Varieties      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
+            <Route path="/lots"           element={<Lots           roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
+            <Route path="/stocks"         element={<Stocks         roleKey={user.roleKey} />} />
+            <Route path="/orders"         element={<Orders         roleKey={user.roleKey} />} />
+            <Route path="/certifications" element={<Certifications roleKey={user.roleKey} />} />
+            <Route path="/transfers"      element={<Transfers      roleKey={user.roleKey} />} />
+            <Route path="/campagnes"      element={<Campagnes      roleKey={user.roleKey} />} />
+            <Route path="/sites"          element={<Sites          roleKey={user.roleKey} />} />
+            <Route path="/mes-sites"      element={<MesSites       roleKey={user.roleKey} />} />
+            <Route path="/programs"       element={<Programs       roleKey={user.roleKey} />} />
+            <Route path="/profile"        element={<Profile        roleKey={user.roleKey} />} />
+            <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
+            <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />
+            <Route path="/messages"       element={<Messages roleKey={user.roleKey} username={user.name} />} />
+            <Route path="*"              element={<Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
+          </Routes>
         </main>
       </div>
     </div>

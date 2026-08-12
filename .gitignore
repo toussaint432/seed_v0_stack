@@ -10,9 +10,18 @@ node_modules/
 dist/
 .env
 .env.local
+.env.*.local
+
+# Secrets — ne jamais commiter
+*.pem
+*.key
+*.p12
+*.jks
+secrets/
 
 # OS
 .DS_Store
+Thumbs.db
 
 # Docker
 *.pid

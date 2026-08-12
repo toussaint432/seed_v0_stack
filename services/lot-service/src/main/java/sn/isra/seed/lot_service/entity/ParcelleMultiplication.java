@@ -13,7 +13,7 @@ import java.time.LocalDate;
  * Chaque programme peut couvrir plusieurs parcelles réparties sur des sites différents.
  */
 @Entity
-@Table(name = "parcelle_multiplication",
+@Table(name = "parcelle_multiplication", schema = "lot",
     indexes = @Index(name = "idx_parcelle_prog", columnList = "id_programme"))
 @Getter @Setter @NoArgsConstructor
 public class ParcelleMultiplication {

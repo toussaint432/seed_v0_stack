@@ -13,7 +13,7 @@ import java.time.LocalDate;
  * Permet de calculer le ratio objectif/réel et le taux de perte.
  */
 @Entity
-@Table(name = "rendement_production",
+@Table(name = "rendement_production", schema = "lot",
     indexes = @Index(name = "idx_rendement_prog", columnList = "id_programme"))
 @Getter @Setter @NoArgsConstructor
 public class RendementProduction {

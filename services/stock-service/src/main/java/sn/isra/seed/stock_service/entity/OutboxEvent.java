@@ -17,7 +17,7 @@ import java.util.UUID;
  * indisponible.
  */
 @Entity
-@Table(name = "outbox_events",
+@Table(name = "outbox_events", schema = "stock",
     indexes = @Index(name = "idx_outbox_unprocessed", columnList = "created_at")
 )
 @Getter @Setter @NoArgsConstructor

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeLot, extractList } from '../../lib/normalizers'
 import { Modal, Field, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -154,7 +155,7 @@ export function Certifications({ roleKey }: Props) {
         ? endpoints.lotsCertifiables
         : endpoints.lotsMultCertif
       const res = await api.get(url)
-      const data: Lot[] = res.data || []
+      const data: Lot[] = extractList(res.data).map(normalizeLot)
       setLots(data)
     } catch (err: any) {
       const status = err?.response?.status

@@ -11,7 +11,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "transfert_lot",
+@Table(name = "transfert_lot", schema = "lot",
     indexes = {
         @Index(name = "idx_trflot_lot",      columnList = "id_lot"),
         @Index(name = "idx_trflot_emetteur", columnList = "username_emetteur"),

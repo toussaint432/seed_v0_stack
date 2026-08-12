@@ -1,21 +1,11 @@
 package sn.isra.seed.stock_service.api;
 
-import sn.isra.seed.stock_service.api.dto.MovementRequest;
-import sn.isra.seed.stock_service.api.dto.StockAgregeDto;
-import sn.isra.seed.stock_service.api.dto.StockAgregeView;
-import sn.isra.seed.stock_service.api.dto.UpsertStockRequest;
-import sn.isra.seed.stock_service.entity.MouvementStock;
-import sn.isra.seed.stock_service.entity.Site;
-import sn.isra.seed.stock_service.entity.Stock;
-import sn.isra.seed.stock_service.entity.enums.TypeMouvement;
-import sn.isra.seed.stock_service.kafka.StockEventProducer;
-import sn.isra.seed.stock_service.repo.MembreOrgStockRepo;
-import sn.isra.seed.stock_service.repo.MouvementRepo;
-import sn.isra.seed.stock_service.repo.SiteRepo;
-import sn.isra.seed.stock_service.repo.StockRepo;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -23,153 +13,52 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import sn.isra.seed.stock_service.api.dto.MovementRequest;
+import sn.isra.seed.stock_service.api.dto.StockAgregeDto;
+import sn.isra.seed.stock_service.api.dto.StockDto;
+import sn.isra.seed.stock_service.api.dto.UpsertStockRequest;
+import sn.isra.seed.stock_service.api.mapper.StockMapper;
+import sn.isra.seed.stock_service.entity.MouvementStock;
+import sn.isra.seed.stock_service.repo.MouvementRepo;
+import sn.isra.seed.stock_service.repo.StockRepo;
+import sn.isra.seed.stock_service.service.StockService;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import java.math.BigDecimal;
-import java.time.Instant;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api")
 @RequiredArgsConstructor
 public class StockController {
 
-  private final StockRepo stockRepo;
-  private final SiteRepo siteRepo;
+  private final StockRepo    stockRepo;
   private final MouvementRepo mouvementRepo;
-  private final StockEventProducer producer;
-  private final ObjectMapper om;
-  private final MembreOrgStockRepo membreOrgRepo;
+  private final StockService  stockService;
+  private final StockMapper   stockMapper;
 
   @GetMapping("/stocks")
-  public List<Stock> list(@RequestParam(required = false) String site,
-                          @AuthenticationPrincipal Jwt jwt) {
-    // Isolation multiplicateur : ne retourner que son stock
-    if (jwt != null && isMultiplicateur(jwt)) {
-      Long orgId = resolveOrgId(jwt);
-      if (orgId == null) return List.of();
-      return stockRepo.findByOrganisation(orgId);
-    }
-    if (site == null || site.isBlank()) return stockRepo.findAll();
-    return stockRepo.findBySite_CodeSite(site);
+  public Page<StockDto> list(
+      @RequestParam(required = false) String site,
+      @AuthenticationPrincipal Jwt jwt,
+      @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+    return stockService.list(site, jwt, pageable).map(stockMapper::toDto);
   }
 
   @GetMapping("/stocks/agrege")
   public ResponseEntity<List<StockAgregeDto>> agrege(@AuthenticationPrincipal Jwt jwt) {
-    List<StockAgregeView> views;
-
-    if (jwt != null && isMultiplicateur(jwt)) {
-      Long orgId = resolveOrgId(jwt);
-      if (orgId == null) return ResponseEntity.ok(List.of());
-      views = stockRepo.findAgregeByOrganisation(orgId);
-    } else if (jwt != null && hasRole(jwt, "seed-selector")) {
-      String username = jwt.getClaimAsString("preferred_username");
-      if (username == null) return ResponseEntity.ok(List.of());
-      views = stockRepo.findAgregeByUsernameCreateur(username);
-    } else {
-      views = stockRepo.findAllAgrege();
-    }
-
-    List<String> allowedGens = null;
-    if (jwt != null) {
-      if (hasRole(jwt, "seed-upsemcl"))         allowedGens = List.of("G1", "G2", "G3");
-      else if (hasRole(jwt, "seed-selector"))   allowedGens = List.of("G0", "G1");
-      else if (hasRole(jwt, "seed-quotataire")) allowedGens = List.of("R2");
-    }
-
-    final List<String> finalGens = allowedGens;
-    return ResponseEntity.ok(views.stream()
-        .filter(v -> finalGens == null || finalGens.contains(v.getCodeGeneration()))
-        .map(this::toAgregeDto)
-        .collect(Collectors.toList())
-    );
+    return ResponseEntity.ok(stockService.agrege(jwt));
   }
 
-  private StockAgregeDto toAgregeDto(StockAgregeView v) {
-    List<StockAgregeDto.LotDetailDto> details = List.of();
-    String json = v.getLotsDetail();
-    if (json != null && !json.isBlank() && !"null".equals(json)) {
-      try {
-        details = om.readValue(json, new TypeReference<List<StockAgregeDto.LotDetailDto>>() {});
-      } catch (Exception ignored) {}
-    }
-    return new StockAgregeDto(
-        v.getIdVariete(), v.getIdGeneration(), v.getIdSite(),
-        v.getCodeSite(), v.getNomSite(), v.getCodeGeneration(),
-        v.getNomVariete(), v.getCodeVariete(), v.getNomEspece(), v.getCodeEspece(),
-        v.getUnite(), v.getQuantiteTotale(), v.getNbLots(), v.getDerniereMaj(), v.getCreatedAt(), details
-    );
-  }
-
-  /**
-   * Résout l'id_organisation depuis le JWT.
-   * Priorité : claim org_id (si présent) → fallback lookup dans membre_organisation par username.
-   * Le JWT Keycloak de cette plateforme ne contient pas de claim org_id custom,
-   * donc on passe systématiquement par le fallback DB.
-   */
-  private Long resolveOrgId(Jwt jwt) {
-    if (jwt == null) return null;
-    Object orgClaim = jwt.getClaim("org_id");
-    if (orgClaim != null) {
-      try { return Long.parseLong(orgClaim.toString()); }
-      catch (NumberFormatException ignored) {}
-    }
-    String username = jwt.getClaimAsString("preferred_username");
-    return membreOrgRepo.findOrgIdByUsername(username).orElse(null);
-  }
-
-  private boolean hasRole(Jwt jwt, String role) {
-    try {
-      java.util.Map<String, Object> ra = jwt.getClaim("realm_access");
-      if (ra == null) return false;
-      Object roles = ra.get("roles");
-      return roles instanceof java.util.List<?> list && list.contains(role);
-    } catch (Exception e) { return false; }
-  }
-
-  private boolean isMultiplicateur(Jwt jwt) {
-    try {
-      java.util.Map<String, Object> realmAccess = jwt.getClaim("realm_access");
-      if (realmAccess == null) return false;
-      Object roles = realmAccess.get("roles");
-      if (roles instanceof java.util.List<?> list) return list.contains("seed-multiplicator");
-    } catch (Exception ignored) {}
-    return false;
-  }
-
-  /**
-   * GET /api/stocks/mon-stock — stocks propres au multiplicateur connecté.
-   * Isolation par organisation : chaque multiplicateur ne voit que les stocks
-   * des sites rattachés à son organisation (site.id_organisation = org_id du JWT).
-   */
   @GetMapping("/stocks/mon-stock")
-  public ResponseEntity<List<Stock>> monStock(@AuthenticationPrincipal Jwt jwt) {
+  public ResponseEntity<List<StockDto>> monStock(@AuthenticationPrincipal Jwt jwt) {
     if (jwt == null) return ResponseEntity.status(401).build();
-    Long orgId = resolveOrgId(jwt);
+    Long orgId = stockService.resolveOrgId(jwt);
     if (orgId == null) return ResponseEntity.ok(List.of());
-    return ResponseEntity.ok(stockRepo.findByOrganisation(orgId));
+    return ResponseEntity.ok(stockMapper.toDtoList(stockRepo.findByOrganisation(orgId)));
   }
 
   @PostMapping("/stocks")
-  public Stock upsert(@Valid @RequestBody UpsertStockRequest req) throws Exception {
-    Site site = siteRepo.findByCodeSite(req.siteCode()).orElseThrow();
-    Stock stock = stockRepo.findByIdLotAndSite_CodeSite(req.idLot(), req.siteCode())
-        .orElseGet(() -> {
-          Stock s = new Stock();
-          s.setIdLot(req.idLot());
-          s.setSite(site);
-          s.setQuantiteDisponible(BigDecimal.ZERO);
-          s.setUnite(req.unite() == null ? "kg" : req.unite());
-          return s;
-        });
-
-    stock.setQuantiteDisponible(req.quantite());
-    stock.setUnite(req.unite() == null ? stock.getUnite() : req.unite());
-    stock.setUpdatedAt(Instant.now());
-    Stock saved = stockRepo.save(stock);
-    producer.stockUpdated(om.writeValueAsString(saved));
-    return saved;
+  public StockDto upsert(@Valid @RequestBody UpsertStockRequest req) throws Exception {
+    return stockMapper.toDto(stockService.upsert(req));
   }
 
   @GetMapping("/movements")
@@ -179,16 +68,14 @@ public class StockController {
   }
 
   @PutMapping("/stocks/{id}")
-  public ResponseEntity<Stock> updateStock(@PathVariable Long id,
-                                           @Valid @RequestBody UpsertStockRequest req) throws Exception {
-    Stock stock = stockRepo.findById(id)
+  public ResponseEntity<StockDto> updateStock(@PathVariable Long id,
+                                               @Valid @RequestBody UpsertStockRequest req) throws Exception {
+    var stock = stockRepo.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Stock non trouvé"));
     if (req.quantite() != null) stock.setQuantiteDisponible(req.quantite());
     if (req.unite()    != null) stock.setUnite(req.unite());
-    stock.setUpdatedAt(Instant.now());
-    Stock saved = stockRepo.save(stock);
-    producer.stockUpdated(om.writeValueAsString(saved));
-    return ResponseEntity.ok(saved);
+    stock.setUpdatedAt(java.time.Instant.now());
+    return ResponseEntity.ok(stockMapper.toDto(stockRepo.save(stock)));
   }
 
   @Transactional
@@ -200,75 +87,8 @@ public class StockController {
     return ResponseEntity.noContent().build();
   }
 
-  @Transactional
   @PostMapping("/movements")
   public MouvementStock move(@Valid @RequestBody MovementRequest req) throws Exception {
-    BigDecimal q = req.quantite();
-    if (q == null || q.signum() <= 0)
-      throw new IllegalArgumentException("quantite doit être > 0");
-
-    // Parser le type (String → enum)
-    TypeMouvement type;
-    try {
-      type = TypeMouvement.valueOf(req.type().toUpperCase());
-    } catch (IllegalArgumentException e) {
-      throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-          "Type de mouvement invalide : " + req.type() + ". Valeurs acceptées : IN, OUT, TRANSFER");
-    }
-
-    Site src = req.siteSourceCode() == null      ? null : siteRepo.findByCodeSite(req.siteSourceCode()).orElseThrow();
-    Site dst = req.siteDestinationCode() == null ? null : siteRepo.findByCodeSite(req.siteDestinationCode()).orElseThrow();
-
-    switch (type) {
-      case IN -> {
-        if (dst == null) throw new IllegalArgumentException("destination requise pour IN");
-        upsertInternal(req.idLot(), dst.getCodeSite(), q, req.unite());
-      }
-      case OUT -> {
-        if (src == null) throw new IllegalArgumentException("source requise pour OUT");
-        upsertInternal(req.idLot(), src.getCodeSite(), q.negate(), req.unite());
-      }
-      case TRANSFER -> {
-        if (src == null || dst == null)
-          throw new IllegalArgumentException("source et destination requises pour TRANSFER");
-        upsertInternal(req.idLot(), src.getCodeSite(), q.negate(), req.unite());
-        upsertInternal(req.idLot(), dst.getCodeSite(), q, req.unite());
-      }
-    }
-
-    MouvementStock m = new MouvementStock();
-    m.setIdLot(req.idLot());
-    m.setTypeMouvement(type);
-    m.setSiteSource(src);
-    m.setSiteDestination(dst);
-    m.setQuantite(q);
-    m.setUnite(req.unite() == null ? "kg" : req.unite());
-    m.setReferenceOperation(req.reference());
-    m.setCreatedAt(Instant.now());
-    MouvementStock saved = mouvementRepo.save(m);
-
-    producer.stockMoved(om.writeValueAsString(saved));
-    return saved;
-  }
-
-  private void upsertInternal(Long idLot, String siteCode, BigDecimal delta, String unite) {
-    Site site = siteRepo.findByCodeSite(siteCode).orElseThrow();
-    Stock stock = stockRepo.findByIdLotAndSite_CodeSite(idLot, siteCode)
-        .orElseGet(() -> {
-          Stock s = new Stock();
-          s.setIdLot(idLot);
-          s.setSite(site);
-          s.setQuantiteDisponible(BigDecimal.ZERO);
-          s.setUnite(unite == null ? "kg" : unite);
-          return s;
-        });
-    BigDecimal newQ = stock.getQuantiteDisponible().add(delta);
-    if (newQ.signum() < 0)
-      throw new ResponseStatusException(HttpStatus.CONFLICT,
-          "Stock insuffisant au site " + siteCode
-          + " — disponible : " + stock.getQuantiteDisponible() + " " + stock.getUnite());
-    stock.setQuantiteDisponible(newQ);
-    stock.setUpdatedAt(Instant.now());
-    stockRepo.save(stock);
+    return stockService.move(req);
   }
 }

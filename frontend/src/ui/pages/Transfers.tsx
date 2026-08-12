@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeLot, extractList } from '../../lib/normalizers'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
@@ -16,14 +17,7 @@ import { generateFacture, FactureData, FactureResult } from '../../lib/pdf/gener
 interface Props { roleKey: string }
 const PAGE_SIZE = 10
 
-/* ── Labels officiels des rôles ── */
-const ROLE_LABELS: Record<string, string> = {
-  'seed-selector':     'Sélectionneur ISRA/CNRA',
-  'seed-upsemcl':      'Unité de Production UPSemCL',
-  'seed-multiplicator':'Multiplicateur Agréé',
-  'seed-quotataire':   'Distributeur / Quotataire',
-  'seed-admin':        'Administrateur',
-}
+import { ROLE_LABELS_LONG as ROLE_LABELS } from '../../lib/constants'
 
 /* ── Inférence du rôle depuis la génération ── */
 function guessRoleFromGen(gen: string, side: 'emetteur' | 'dest'): string {
@@ -122,7 +116,7 @@ export function Transfers({ roleKey }: Props) {
       needsMesSites ? api.get(endpoints.sitesMesSites) : Promise.resolve({ data: [] }),
     ])
     setTransfers(tRes.status === 'fulfilled' ? tRes.value.data : [])
-    setLots(lRes.status === 'fulfilled' ? lRes.value.data : [])
+    setLots(extractList(lRes.status === 'fulfilled' ? lRes.value.data : null).map(normalizeLot))
     setRecus(rRes.status === 'fulfilled' ? rRes.value.data : [])
     setSites(sRes.status === 'fulfilled' ? sRes.value.data : [])
     setMesSites(msRes.status === 'fulfilled' ? msRes.value.data : [])

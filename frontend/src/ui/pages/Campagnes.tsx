@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { Calendar, Plus, RefreshCw, Edit2, Trash2, Eye, X, CheckCircle2, Clock } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { useFetch } from '../../lib/hooks/useFetch'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -9,8 +10,8 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 interface Props { roleKey: string }
 
 export function Campagnes({ roleKey }: Props) {
-  const [campagnes, setCampagnes] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data: campagnesData, loading, refetch: fetchData } = useFetch<any[]>(endpoints.campagnes, { defaultData: [] })
+  const campagnes = campagnesData ?? []
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editItem, setEditItem] = useState<any>(null)
@@ -23,16 +24,6 @@ export function Campagnes({ roleKey }: Props) {
     codeCampagne: '', libelle: '', dateDebut: '', dateFin: '', statut: 'PLANIFIEE',
   })
 
-  async function fetchData() {
-    setLoading(true)
-    try {
-      const r = await api.get(endpoints.campagnes)
-      setCampagnes(r.data)
-    } catch { setCampagnes([]) }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { fetchData() }, [])
 
   const activeCount = campagnes.filter(c => c.statut === 'EN_COURS').length
 

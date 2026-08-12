@@ -16,7 +16,7 @@ import java.time.LocalDate;
  * Partagé via la même base PostgreSQL (pattern base partagée).
  */
 @Entity
-@Table(name = "transfert_lot")
+@Table(name = "transfert_lot", schema = "lot")
 @Getter @Setter @NoArgsConstructor
 public class TransfertLot {
 

@@ -21,11 +21,26 @@
   <properties>
     <java.version>21</java.version>
     <lombok.version>1.18.34</lombok.version>
+    <mapstruct.version>1.6.3</mapstruct.version>
     <!-- ✅ garde springdoc compatible avec Spring Boot 3.x -->
     <springdoc.version>2.6.0</springdoc.version>
   </properties>
 
   <dependencies>
+
+    <!-- Bibliothèque partagée ISRA/CNRA -->
+    <dependency>
+      <groupId>sn.isra.seed</groupId>
+      <artifactId>seed-common</artifactId>
+      <version>0.0.1-SNAPSHOT</version>
+    </dependency>
+
+    <!-- MapStruct -->
+    <dependency>
+      <groupId>org.mapstruct</groupId>
+      <artifactId>mapstruct</artifactId>
+      <version>${mapstruct.version}</version>
+    </dependency>
 
     <!-- Web -->
     <dependency>
@@ -84,10 +99,40 @@
       <optional>true</optional>
     </dependency>
 
-    <!-- Tests (optionnel mais conseillé) -->
+    <!-- Tests -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-testcontainers</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-core</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.flywaydb</groupId>
+      <artifactId>flyway-database-postgresql</artifactId>
       <scope>test</scope>
     </dependency>
 
@@ -101,19 +146,35 @@
   <build>
     <plugins>
 
-      <!-- ✅ Lombok annotation processor explicite (fiable en Docker Maven) -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
         <configuration>
           <release>${java.version}</release>
           <annotationProcessorPaths>
+            <!-- Lombok AVANT MapStruct (obligatoire) -->
             <path>
               <groupId>org.projectlombok</groupId>
               <artifactId>lombok</artifactId>
               <version>${lombok.version}</version>
             </path>
+            <path>
+              <groupId>org.mapstruct</groupId>
+              <artifactId>mapstruct-processor</artifactId>
+              <version>${mapstruct.version}</version>
+            </path>
           </annotationProcessorPaths>
+        </configuration>
+      </plugin>
+
+      <!-- Ajoute les migrations du catalog-service (schema owner) au classpath test -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <additionalClasspathElements>
+            <additionalClasspathElement>${project.basedir}/../catalog-service/src/main/resources</additionalClasspathElement>
+          </additionalClasspathElements>
         </configuration>
       </plugin>
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { TrendingUp, AlertTriangle, RefreshCw, BarChart2, Activity, Database } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
 
 interface Props {
   userSpecialisation?: string | null
@@ -149,10 +150,10 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
         api.get(endpoints.lots),
       ])
 
-      const orders    = ordersRes.status    === 'fulfilled' ? ordersRes.value.data    : []
-      const varieties = varietiesRes.status === 'fulfilled' ? varietiesRes.value.data : []
-      const stocks    = stocksRes.status    === 'fulfilled' ? stocksRes.value.data    : []
-      const lotsData  = lotsRes.status      === 'fulfilled' ? lotsRes.value.data      : []
+      const orders    = extractList(ordersRes.status === 'fulfilled' ? ordersRes.value.data : null)
+      const varieties = extractList(varietiesRes.status === 'fulfilled' ? varietiesRes.value.data : null).map(normalizeVariete)
+      const stocks    = extractList(stocksRes.status    === 'fulfilled' ? stocksRes.value.data    : null).map(normalizeStock)
+      const lotsData  = extractList(lotsRes.status      === 'fulfilled' ? lotsRes.value.data      : null).map(normalizeLot)
       setLots(lotsData)
       setRawStocks(stocks)
       setRawVarieties(varieties)

@@ -4,6 +4,8 @@ import sn.isra.seed.stock_service.api.dto.CatalogueItem;
 import sn.isra.seed.stock_service.api.dto.CatalogueProximiteItem;
 import sn.isra.seed.stock_service.api.dto.StockAgregeView;
 import sn.isra.seed.stock_service.entity.Stock;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -15,6 +17,7 @@ import java.util.Optional;
 public interface StockRepo extends JpaRepository<Stock, Long> {
 
   List<Stock> findBySite_CodeSite(String codeSite);
+  Page<Stock> findBySite_CodeSite(String codeSite, Pageable pageable);
   Optional<Stock> findByIdLotAndSite_CodeSite(Long idLot, String codeSite);
 
   /**
@@ -101,6 +104,24 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
       ORDER BY s.updated_at DESC NULLS LAST
       """, nativeQuery = true)
   List<Stock> findByOrganisation(@Param("orgId") Long orgId);
+
+  @Query(value = """
+      SELECT s.id, s.id_lot, s.id_site, s.quantite_disponible, s.unite, s.updated_at, s.created_at
+      FROM stock s
+      JOIN lot_semencier l ON l.id  = s.id_lot
+      JOIN site si         ON si.id = s.id_site
+      WHERE si.id_organisation      = :orgId
+        AND l.id_org_producteur     = :orgId
+      ORDER BY s.updated_at DESC NULLS LAST
+      """,
+      countQuery = """
+      SELECT COUNT(*) FROM stock s
+      JOIN lot_semencier l ON l.id  = s.id_lot
+      JOIN site si         ON si.id = s.id_site
+      WHERE si.id_organisation  = :orgId
+        AND l.id_org_producteur = :orgId
+      """, nativeQuery = true)
+  Page<Stock> findByOrganisation(@Param("orgId") Long orgId, Pageable pageable);
 
   /** Vue agrégée par (variété, génération, site) — tous les rôles sauf multiplicateur. */
   @Query(value = """

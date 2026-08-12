@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react'
-import { ShoppingCart } from 'lucide-react'
+import React, { useState, useRef, useEffect } from 'react'
+import { ShoppingCart, Mic, Play, Pause } from 'lucide-react'
 
 interface MessageData {
   id: number
@@ -17,9 +17,16 @@ interface Props {
   isMine: boolean
 }
 
+const ORDER_BASE = `${(import.meta.env.VITE_API_BASE ?? 'http://localhost').replace(/\/$/, '')}:18084`
+
 function formatHeure(iso: string) {
   try { return new Date(iso).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }
   catch { return '' }
+}
+
+function fmt(s: number) {
+  if (!isFinite(s) || s < 0) return '0:00'
+  return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`
 }
 
 function CommandeCard({ contenu }: { contenu: string }) {
@@ -31,7 +38,7 @@ function CommandeCard({ contenu }: { contenu: string }) {
           <ShoppingCart size={14} /> Commande
         </div>
         <div className="bubble-commande-detail">
-          {data.idLot && <div>Lot #{data.idLot}</div>}
+          {data.nomVariete && <div style={{ fontWeight: 600 }}>{data.nomVariete}</div>}
           {data.quantite && <div><strong>{data.quantite}</strong> {data.unite || 'kg'}</div>}
           {data.notes && <div style={{ marginTop: 4, color: 'var(--text-muted)', fontSize: 12 }}>{data.notes}</div>}
         </div>
@@ -42,48 +49,87 @@ function CommandeCard({ contenu }: { contenu: string }) {
   }
 }
 
-function AudioPlayer({ src }: { src: string }) {
+function AudioPlayer({ src, isMine }: { src: string; isMine: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null)
-  const [dur, setDur] = useState<string>('')
+  const [playing, setPlaying]     = useState(false)
+  const [duration, setDuration]   = useState(0)
+  const [currentTime, setCurrent] = useState(0)
+  const [hasError, setHasError]   = useState(false)
 
-  function fmt(s: number) {
-    const m = Math.floor(s / 60)
-    const ss = Math.floor(s % 60)
-    return `${m}:${ss.toString().padStart(2, '0')}`
-  }
+  useEffect(() => {
+    return () => { audioRef.current?.pause() }
+  }, [])
 
-  function handleLoadedMetadata() {
+  function toggle() {
     const a = audioRef.current
     if (!a) return
-    if (isNaN(a.duration) || a.duration === Infinity) {
-      // WebM sans durée — seek au bout pour forcer le calcul
-      a.currentTime = 1e101
+    if (playing) {
+      a.pause()
     } else {
-      setDur(fmt(a.duration))
+      a.play().catch(() => setHasError(true))
     }
   }
 
-  function handleTimeUpdate() {
+  function seek(e: React.MouseEvent<HTMLDivElement>) {
     const a = audioRef.current
-    if (!a) return
-    if (!isNaN(a.duration) && a.duration !== Infinity) {
-      setDur(fmt(a.duration))
-      a.removeEventListener('timeupdate', handleTimeUpdate)
-      a.currentTime = 0
-    }
+    if (!a || !duration) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    a.currentTime = ((e.clientX - rect.left) / rect.width) * duration
+  }
+
+  const progress = duration > 0 ? (currentTime / duration) * 100 : 0
+
+  if (hasError) {
+    return (
+      <div className="audio-player-error">
+        <Mic size={14} />
+        <span>Fichier audio non disponible</span>
+      </div>
+    )
   }
 
   return (
-    <div className="bubble-audio">
+    <div className={`audio-player ${isMine ? 'mine' : 'other'}`}>
       <audio
         ref={audioRef}
-        controls
         src={src}
         preload="metadata"
-        onLoadedMetadata={handleLoadedMetadata}
-        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={() => {
+          const a = audioRef.current
+          if (a && isFinite(a.duration) && a.duration > 0) setDuration(a.duration)
+        }}
+        onDurationChange={() => {
+          const a = audioRef.current
+          if (a && isFinite(a.duration) && a.duration > 0) setDuration(a.duration)
+        }}
+        onTimeUpdate={() => {
+          const a = audioRef.current
+          if (a) setCurrent(a.currentTime)
+        }}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onEnded={() => {
+          setPlaying(false)
+          setCurrent(0)
+          if (audioRef.current) audioRef.current.currentTime = 0
+        }}
+        onError={() => setHasError(true)}
       />
-      {dur && <span className="audio-dur">{dur}</span>}
+
+      <button className="audio-play-btn" onClick={toggle} title={playing ? 'Pause' : 'Lecture'}>
+        {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+      </button>
+
+      <div className="audio-track-wrap" onClick={seek}>
+        <div className="audio-track-bg">
+          <div className="audio-track-fill" style={{ width: `${progress}%` }} />
+          <div className="audio-track-thumb" style={{ left: `${progress}%` }} />
+        </div>
+      </div>
+
+      <span className="audio-time-label">
+        {playing || currentTime > 0 ? fmt(currentTime) : fmt(duration)}
+      </span>
     </div>
   )
 }
@@ -91,19 +137,18 @@ function AudioPlayer({ src }: { src: string }) {
 export function ChatBubble({ message, isMine }: Props) {
   const [lightbox, setLightbox] = useState(false)
 
-  const bubbleClass = `bubble ${isMine ? 'mine' : 'other'}`
-
   const content = (() => {
     switch (message.type) {
       case 'AUDIO':
-        return <AudioPlayer src={`http://localhost:18084${message.urlMedia}`} />
+        return <AudioPlayer src={`${ORDER_BASE}${message.urlMedia}`} isMine={isMine} />
       case 'IMAGE':
         return (
           <div className="bubble-image">
             <img
-              src={`http://localhost:18084${message.urlMedia}`}
+              src={`${ORDER_BASE}${message.urlMedia}`}
               alt={message.nomFichier || 'image'}
               onClick={() => setLightbox(true)}
+              loading="lazy"
             />
           </div>
         )
@@ -117,7 +162,7 @@ export function ChatBubble({ message, isMine }: Props) {
   return (
     <>
       <div className={`bubble-row ${isMine ? 'mine' : 'other'}`}>
-        <div className={bubbleClass}>
+        <div className={`bubble ${isMine ? 'mine' : 'other'}`}>
           {content}
           <div className="bubble-time">{formatHeure(message.createdAt)}</div>
         </div>
@@ -127,7 +172,7 @@ export function ChatBubble({ message, isMine }: Props) {
         <div className="lightbox-overlay" onClick={() => setLightbox(false)}>
           <button className="lightbox-close" onClick={() => setLightbox(false)}>✕</button>
           <img
-            src={`http://localhost:18084${message.urlMedia}`}
+            src={`${ORDER_BASE}${message.urlMedia}`}
             alt={message.nomFichier || 'image'}
             onClick={e => e.stopPropagation()}
           />

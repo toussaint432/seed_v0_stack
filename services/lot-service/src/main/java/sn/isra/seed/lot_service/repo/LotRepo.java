@@ -2,6 +2,8 @@ package sn.isra.seed.lot_service.repo;
 
 import sn.isra.seed.lot_service.entity.LotSemencier;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -17,6 +19,10 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
     List<LotSemencier> findByGeneration_CodeGeneration(String codeGeneration);
     List<LotSemencier> findByIdVariete(Long idVariete);
 
+    // Variantes paginées
+    Page<LotSemencier> findByGeneration_CodeGeneration(String codeGeneration, Pageable pageable);
+    Page<LotSemencier> findByIdVariete(Long idVariete, Pageable pageable);
+
     /**
      * Lots G0+G1 d'un sélectionneur : uniquement ceux qu'il a créés, filtrés par spécialisation.
      * :specialisation doit être passé en MAJUSCULES (UPPER() sur un null non typé échoue en PG).
@@ -30,6 +36,17 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         """)
     List<LotSemencier> findForSelector(@Param("username") String username,
                                        @Param("specialisation") String specialisation);
+
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration IN ('G0','G1')
+          AND l.usernameCreateur = :username
+          AND (:specialisation IS NULL OR UPPER(l.codeEspece) = :specialisation)
+        ORDER BY l.generation.ordreGeneration ASC, l.createdAt DESC
+        """)
+    Page<LotSemencier> findForSelector(@Param("username") String username,
+                                       @Param("specialisation") String specialisation,
+                                       Pageable pageable);
 
     /**
      * Catalogue G3 visible par les multiplicateurs.
@@ -71,6 +88,22 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         """)
     List<LotSemencier> findMesLots(@Param("orgId") Long orgId, @Param("username") String username);
 
+    @Query("""
+        SELECT DISTINCT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration IN ('G3','G4','R1','R2')
+          AND (
+              l.idOrgProducteur = :orgId
+              OR l.id IN (
+                  SELECT t.idLot FROM TransfertLot t
+                  WHERE t.usernameDestinataire = :username
+                    AND t.statut = sn.isra.seed.lot_service.entity.enums.StatutTransfert.ACCEPTE
+              )
+          )
+        ORDER BY l.createdAt DESC
+        """)
+    Page<LotSemencier> findMesLots(@Param("orgId") Long orgId, @Param("username") String username,
+                                   Pageable pageable);
+
     /**
      * Lots R2 disponibles visibles par les quotataires pour passer commande.
      * Seuls les lots de génération R2, statut DISPONIBLE, avec quantité > 0
@@ -84,6 +117,15 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         ORDER BY l.createdAt DESC
         """)
     List<LotSemencier> findR2Disponible();
+
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration = 'R2'
+          AND l.statutLot = 'DISPONIBLE'
+          AND l.quantiteNette > 0
+        ORDER BY l.createdAt DESC
+        """)
+    Page<LotSemencier> findR2Disponible(Pageable pageable);
 
     /**
      * Lots G4/R1/R2 des multiplicateurs dont le certificat est uploadé mais

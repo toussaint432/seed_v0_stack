@@ -29,14 +29,17 @@ spring:
     properties:
       hibernate:
         "[default_batch_fetch_size]": 20
+        "[default_schema]": catalog
   # ── Flyway : catalog-service est le schema owner ──────────
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0  # 0 = avant V1 → toutes les migrations V1-V7 s'exécutent sur DB fraîche
-    out-of-order: false
+    out-of-order: true
     validate-on-migrate: true
+    # flyway_schema_history reste dans public ; search_path explicite pour les migrations
+    schemas: public,catalog,lot,stock,orders,shared,geo
   servlet:
     multipart:
       enabled: true
@@ -62,10 +65,16 @@ management:
         include: health,info,prometheus
   endpoint:
     health:
-      show-details: always
+      show-details: when-authorized
   metrics:
     tags:
       application: ${spring.application.name}
+
+springdoc:
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
 
 uploads:
   # Répertoire de stockage des PDF (monté via volume Docker)

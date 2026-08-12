@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "regions")
+@Table(name = "regions", schema = "geo")
 @Getter @Setter @NoArgsConstructor
 public class Region {
 

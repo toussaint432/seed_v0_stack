@@ -14,7 +14,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "controle_qualite",
+@Table(name = "controle_qualite", schema = "lot",
     indexes = @Index(name = "idx_ctrl_lot", columnList = "id_lot"))
 @Getter @Setter @NoArgsConstructor
 public class ControleQualite {

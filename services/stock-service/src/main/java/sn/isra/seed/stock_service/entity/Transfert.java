@@ -10,7 +10,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "transfert",
+@Table(name = "transfert", schema = "stock",
     indexes = {
         @Index(name = "idx_trf_lot",    columnList = "id_lot"),
         @Index(name = "idx_trf_statut", columnList = "statut")

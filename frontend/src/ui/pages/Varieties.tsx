@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeVariete, extractList } from '../../lib/normalizers'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
@@ -158,7 +159,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       setSpecies([...rawSpecies].sort((a, b) =>
         (a.nomCommun ?? '').localeCompare(b.nomCommun ?? '', 'fr', { sensitivity: 'base' })
       ))
-      setVarieties(v.status === 'fulfilled' ? v.value.data : [])
+      setVarieties(extractList(v.status === 'fulfilled' ? v.value.data : null).map(normalizeVariete))
     }).finally(() => { setLoading(false); setRefreshing(false) })
   }
 

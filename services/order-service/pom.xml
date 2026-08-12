@@ -25,6 +25,13 @@
 
   <dependencies>
 
+    <!-- Bibliothèque partagée ISRA/CNRA -->
+    <dependency>
+      <groupId>sn.isra.seed</groupId>
+      <artifactId>seed-common</artifactId>
+      <version>0.0.1-SNAPSHOT</version>
+    </dependency>
+
     <!-- Web -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

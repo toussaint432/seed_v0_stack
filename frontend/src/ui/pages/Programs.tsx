@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeLot, extractList } from '../../lib/normalizers'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
@@ -55,7 +56,7 @@ export function Programs({ roleKey }: Props) {
       api.get(lotsUrl),
     ])
     setPrograms(pRes.status === 'fulfilled' ? pRes.value.data : [])
-    setLots(lRes.status === 'fulfilled' ? lRes.value.data : [])
+    setLots(extractList(lRes.status === 'fulfilled' ? lRes.value.data : null).map(normalizeLot))
     setLoading(false)
   }
 

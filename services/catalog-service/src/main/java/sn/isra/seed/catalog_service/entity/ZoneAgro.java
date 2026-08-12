@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 
 @Entity
-@Table(name = "zone_agro")
+@Table(name = "zone_agro", schema = "geo")
 @Getter @Setter @NoArgsConstructor
 public class ZoneAgro {
 

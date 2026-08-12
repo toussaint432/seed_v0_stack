@@ -2,6 +2,8 @@ package sn.isra.seed.catalog_service.repo;
 
 import sn.isra.seed.catalog_service.entity.Variete;
 import sn.isra.seed.catalog_service.entity.enums.StatutVariete;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -14,6 +16,10 @@ public interface VarieteRepo extends JpaRepository<Variete, Long> {
   List<Variete> findAllByOrderByNomVarieteAsc();
   List<Variete> findByEspece_IdOrderByNomVarieteAsc(Long especeId);
   List<Variete> findByStatutVarieteOrderByNomVarieteAsc(StatutVariete statut);
+
+  Page<Variete> findAllByOrderByNomVarieteAsc(Pageable pageable);
+  Page<Variete> findByEspece_IdOrderByNomVarieteAsc(Long especeId, Pageable pageable);
+  Page<Variete> findByStatutVarieteOrderByNomVarieteAsc(StatutVariete statut, Pageable pageable);
 
   /** @deprecated utiliser les variantes OrderByNomVarieteAsc */
   List<Variete> findByEspece_Id(Long especeId);

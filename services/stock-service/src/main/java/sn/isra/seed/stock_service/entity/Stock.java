@@ -8,7 +8,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name = "stock",
+@Table(name = "stock", schema = "stock",
     uniqueConstraints = @UniqueConstraint(columnNames = {"id_lot", "id_site"}),
     indexes = {
         @Index(name = "idx_stock_lot",  columnList = "id_lot"),

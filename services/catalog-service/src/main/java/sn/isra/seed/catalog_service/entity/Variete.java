@@ -8,7 +8,7 @@ import sn.isra.seed.catalog_service.entity.enums.StatutVariete;
 import java.time.Instant;
 
 @Entity
-@Table(name = "variete")
+@Table(name = "variete", schema = "catalog")
 @Getter @Setter @NoArgsConstructor
 public class Variete {
 

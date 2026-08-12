@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 @Entity
-@Table(name = "departements",
+@Table(name = "departements", schema = "geo",
     indexes = @Index(name = "idx_dept_region", columnList = "id_region"))
 @Getter @Setter @NoArgsConstructor
 public class Departement {

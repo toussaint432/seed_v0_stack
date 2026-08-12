@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { api }             from '../../lib/api'
 import { endpoints }       from '../../lib/endpoints'
+import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
 import { SelectorAnalytics } from './SelectorAnalytics'
 import { PendingDeliveries } from '../components/PendingDeliveries'
 import { MapSemences }     from '../components/MapSemences'
@@ -124,68 +125,67 @@ function KpiCard({ index, label, value, sub, accent, delay, suffix }: {
   index: number; label: string; value: number
   sub?: string; accent: string; delay: number; suffix?: string
 }) {
-  const [vis,     setVis]     = useState(false)
-  const [hovered, setHovered] = useState(false)
+  const [vis, setVis] = useState(false)
   useEffect(() => { const t = setTimeout(() => setVis(true), delay); return () => clearTimeout(t) }, [delay])
   const displayed = useCountUp(value, delay + 80, vis)
   const seq = String(index + 1).padStart(2, '0')
 
   return (
-    <div
-      style={{
-        background: '#fff',
-        borderRadius: 12,
-        border: `1px solid ${D.line}`,
-        padding: '20px 22px 22px',
-        position: 'relative',
-        opacity: vis ? 1 : 0,
-        transform: vis ? 'translateY(0)' : 'translateY(18px)',
-        transition: 'opacity 0.44s ease, transform 0.44s ease, box-shadow 0.22s ease',
-        boxShadow: hovered ? '0 4px 16px rgba(0,0,0,0.07)' : '0 1px 3px rgba(0,0,0,0.04)',
-        cursor: 'default',
-      }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-    >
-      {/* Numéro séquentiel */}
-      <div style={{
-        fontFamily: D.mono, fontSize: 10, fontWeight: 500,
-        color: D.muted, letterSpacing: '0.06em', marginBottom: 16,
-      }}>
-        {seq}
-      </div>
-
-      {/* Valeur principale */}
-      <div style={{ lineHeight: 1, marginBottom: 10 }}>
-        <span style={{
-          fontFamily: D.display, fontSize: 46, fontWeight: 700,
-          letterSpacing: '-0.03em', color: D.ink,
-          fontVariantNumeric: 'tabular-nums',
+    <div className="kpi-card-outer">
+      <div className="kpi-card-dot" />
+      <div
+        className="kpi-card-inner"
+        style={{
+          background: '#fff',
+          borderRadius: 12,
+          border: `1px solid ${D.line}`,
+          padding: '20px 22px 22px',
+          opacity: vis ? 1 : 0,
+          transform: vis ? 'translateY(0)' : 'translateY(18px)',
+          transition: 'opacity 0.44s ease, transform 0.44s ease',
+          cursor: 'default',
+        }}
+      >
+        {/* Numéro séquentiel */}
+        <div style={{
+          fontFamily: D.mono, fontSize: 10, fontWeight: 500,
+          color: D.muted, letterSpacing: '0.06em', marginBottom: 16,
         }}>
-          {displayed.toLocaleString('fr-FR')}
-        </span>
-        {suffix && (
-          <span style={{ fontFamily: D.mono, fontSize: 15, fontWeight: 500, color: D.muted, marginLeft: 5 }}>
-            {suffix}
+          {seq}
+        </div>
+
+        {/* Valeur principale */}
+        <div style={{ lineHeight: 1, marginBottom: 10 }}>
+          <span style={{
+            fontFamily: D.display, fontSize: 46, fontWeight: 700,
+            letterSpacing: '-0.03em', color: D.ink,
+            fontVariantNumeric: 'tabular-nums',
+          }}>
+            {displayed.toLocaleString('fr-FR')}
           </span>
+          {suffix && (
+            <span style={{ fontFamily: D.mono, fontSize: 15, fontWeight: 500, color: D.muted, marginLeft: 5 }}>
+              {suffix}
+            </span>
+          )}
+        </div>
+
+        {/* Label */}
+        <div style={{
+          fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
+          letterSpacing: '0.12em', color: D.muted, marginBottom: sub ? 8 : 0,
+        }}>
+          {label}
+        </div>
+
+        {/* Sous-info */}
+        {sub && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: accent, display: 'inline-block', opacity: 0.8 }} />
+            <span style={{ fontFamily: D.body, fontSize: 11, color: D.muted, lineHeight: 1 }}>{sub}</span>
+          </div>
         )}
       </div>
-
-      {/* Label */}
-      <div style={{
-        fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
-        letterSpacing: '0.12em', color: D.muted, marginBottom: sub ? 8 : 0,
-      }}>
-        {label}
-      </div>
-
-      {/* Sous-info */}
-      {sub && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ width: 4, height: 4, borderRadius: '50%', background: accent, display: 'inline-block', opacity: 0.8 }} />
-          <span style={{ fontFamily: D.body, fontSize: 11, color: D.muted, lineHeight: 1 }}>{sub}</span>
-        </div>
-      )}
     </div>
   )
 }
@@ -393,10 +393,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       api.get(lotsUrl), api.get(stocksUrl), api.get(ordersUrl), api.get(endpoints.varieties),
     ])
 
-    const lots      = results[0].status === 'fulfilled' ? results[0].value.data : []
-    const stocks    = results[1].status === 'fulfilled' ? results[1].value.data : []
-    const orders    = results[2].status === 'fulfilled' ? results[2].value.data : []
-    const varieties = results[3].status === 'fulfilled' ? results[3].value.data : []
+    const lots      = extractList(results[0].status === 'fulfilled' ? results[0].value.data : []).map(normalizeLot)
+    const stocks    = extractList(results[1].status === 'fulfilled' ? results[1].value.data : []).map(normalizeStock)
+    const orders    = extractList(results[2].status === 'fulfilled' ? results[2].value.data : [])
+    const varieties = extractList(results[3].status === 'fulfilled' ? results[3].value.data : []).map(normalizeVariete)
 
     const genCounts = lots.reduce((acc: Record<string, number>, l: any) => {
       const g = l.generation?.codeGeneration || 'N/A'

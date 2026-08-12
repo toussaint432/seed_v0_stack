@@ -6,7 +6,7 @@ import lombok.*;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name="ligne_commande")
+@Table(name = "ligne_commande", schema = "orders")
 @Getter @Setter @NoArgsConstructor
 public class LigneCommande {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY)

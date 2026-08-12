@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
+import { useFetch } from '../../lib/hooks/useFetch'
 import { MapPin, Plus, RefreshCw, Edit2, Trash2, Search, X, Warehouse, Globe } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -24,11 +25,11 @@ const REGIONS_SENEGAL = [
 ]
 
 export function Sites({ roleKey }: Props) {
-  const [sites, setSites] = useState<any[]>([])
+  const { data: sitesData, loading, refetch: fetchSites } = useFetch<any[]>(endpoints.sites, { defaultData: [] })
+  const sites = sitesData ?? []
   const [search, setSearch] = useState('')
   const [filterType, setFilterType] = useState('')
   const [filterRegion, setFilterRegion] = useState('')
-  const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [showForm, setShowForm] = useState(false)
@@ -43,14 +44,6 @@ export function Sites({ roleKey }: Props) {
     region: '', latitude: '', longitude: '', idOrganisation: '',
   })
 
-  async function fetchSites() {
-    setLoading(true)
-    try { const r = await api.get(endpoints.sites); setSites(r.data) }
-    catch { setSites([]) }
-    finally { setLoading(false) }
-  }
-
-  useEffect(() => { fetchSites() }, [])
 
   const filtered = sites.filter(s => {
     const matchSearch = !search ||

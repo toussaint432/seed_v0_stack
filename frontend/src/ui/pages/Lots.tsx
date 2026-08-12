@@ -3,6 +3,7 @@ import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, E
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { generateTransferDoc, generateNumero, type TransferDocData, type LotPdfData, type PartiePdf } from '../../lib/pdf/generateTransferDoc'
 
@@ -44,10 +45,11 @@ function certButtonTitle(lot: any): string {
   return 'Joindre un certificat'
 }
 
-const GEN_COLORS: Record<string, string> = { G0: 'badge-blue', G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray', G4: 'badge-gold', R1: 'badge-blue', R2: 'badge-green' }
-const GEN_HEX: Record<string, string> = { G0: '#6366f1', G1: '#0ea5e9', G2: '#22c55e', G3: '#f59e0b', G4: '#c2410c', R1: '#ec4899', R2: '#14b8a6' }
-const GEN_BG: Record<string, string> = { G0: '#eff6ff', G1: '#f0fdf4', G2: '#fef9ed', G3: '#f9fafb', G4: '#fff7ed', R1: '#eff6ff', R2: '#f0fdf4' }
-const GEN_BORDER: Record<string, string> = { G0: '#bfdbfe', G1: '#bbf7d0', G2: '#fde68a', G3: '#e5e7eb', G4: '#fed7aa', R1: '#bfdbfe', R2: '#bbf7d0' }
+import { GEN_COLORS as GEN_COLORS_RICH, GEN_CHART_COLORS, ROLE_LABELS } from '../../lib/constants'
+const GEN_COLORS: Record<string, string> = Object.fromEntries(Object.entries(GEN_COLORS_RICH).map(([k, v]) => [k, v.badge]))
+const GEN_HEX    = GEN_CHART_COLORS
+const GEN_BG: Record<string, string>     = Object.fromEntries(Object.entries(GEN_COLORS_RICH).map(([k, v]) => [k, v.bg]))
+const GEN_BORDER: Record<string, string> = Object.fromEntries(Object.entries(GEN_COLORS_RICH).map(([k, v]) => [k, v.border]))
 const ALL_GENS = ['G0','G1','G2','G3','G4','R1','R2']
 const GEN_IDS: Record<string, number> = { G0: 1, G1: 2, G2: 3, G3: 4, G4: 5, R1: 6, R2: 7 }
 const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upsemcl': ['G1','G2','G3'], 'seed-multiplicator': ['G3','G4','R1','R2'], 'seed-quotataire': ['R2'] }
@@ -483,11 +485,11 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       // Transferts G3 EN_ATTENTE destinés au multiplicateur connecté
       api.get(endpoints.transfertsRecus),
     ])
-    setCatalogueG3(catRes.status === 'fulfilled' ? catRes.value.data : [])
+    setCatalogueG3(extractList(catRes.status === 'fulfilled' ? catRes.value.data : null).map(normalizeLot))
     setLoadingCat(false)
     // Tri: lots propres par createdAt DESC, lots reçus par transfert remontés selon leur stock
-    const rawLots: any[] = mesRes.status === 'fulfilled' ? mesRes.value.data : []
-    const rawStock: any[] = stockRes.status === 'fulfilled' ? stockRes.value.data : []
+    const rawLots: any[] = extractList(mesRes.status === 'fulfilled' ? mesRes.value.data : null).map(normalizeLot)
+    const rawStock: any[] = extractList(stockRes.status === 'fulfilled' ? stockRes.value.data : null).map(normalizeStock)
     const stockDateByLot: Record<number, string> = {}
     rawStock.forEach((st: any) => {
       const lid = st.idLot ?? st.lot?.id
@@ -502,7 +504,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     setMesLots(rawLots)
     setMonStock(rawStock)
     setLoadingMes(false)
-    setVarieties(varRes.status === 'fulfilled' ? varRes.value.data : [])
+    setVarieties(extractList(varRes.status === 'fulfilled' ? varRes.value.data : null).map(normalizeVariete))
     setTransfertsRecus(trRecus.status === 'fulfilled' ? trRecus.value.data : [])
     if (orgRes.status === 'fulfilled') {
       const upsemcl = orgRes.value.data.find((o: any) =>
@@ -1630,7 +1632,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     setLoading(true)
     const url = generation ? `${endpoints.lots}?generation=${generation}` : endpoints.lots
     api.get(url).then(r => {
-      let data = r.data
+      let data = extractList(r.data).map(normalizeLot)
       if (roleKey !== 'seed-admin') data = data.filter((l: any) => allowedGens.includes(l.generation?.codeGeneration))
       setLots(data)
     }).catch(() => setLots([])).finally(() => setLoading(false))
@@ -1638,7 +1640,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
 
   useEffect(() => {
     fetchLots()
-    api.get(endpoints.varieties).then(r => setVarieties(r.data)).catch(() => {})
+    api.get(endpoints.varieties).then(r => setVarieties(extractList(r.data).map(normalizeVariete))).catch(() => {})
     api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {})
     api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
   }, [generation])
@@ -1738,11 +1740,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     } finally { setSaving(false) }
   }
 
-  const ROLE_LABEL_MAP: Record<string, string> = {
-    'seed-selector': 'Sélectionneur ISRA', 'seed-upsemcl': 'UPSem-CL',
-    'seed-multiplicator': 'Multiplicateur', 'seed-quotataire': 'Quotataire / OP',
-    'seed-admin': 'Administrateur ISRA',
-  }
+  const ROLE_LABEL_MAP = ROLE_LABELS
 
   async function submitTransfer(e: React.FormEvent) {
     e.preventDefault(); if (!parentLot) return; setSaving(true)

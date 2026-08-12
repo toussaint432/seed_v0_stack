@@ -13,7 +13,7 @@ import java.time.Instant;
  * est enregistrée ici avec l'acteur responsable.
  */
 @Entity
-@Table(name = "historique_statut_lot",
+@Table(name = "historique_statut_lot", schema = "lot",
     indexes = {
         @Index(name = "idx_hist_lot",  columnList = "id_lot"),
         @Index(name = "idx_hist_date", columnList = "created_at")

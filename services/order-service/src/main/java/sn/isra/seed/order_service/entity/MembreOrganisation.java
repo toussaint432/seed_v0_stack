@@ -6,7 +6,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 
 @Entity
-@Table(name = "membre_organisation")
+@Table(name = "membre_organisation", schema = "shared")
 @Getter @Setter @NoArgsConstructor
 public class MembreOrganisation {
 

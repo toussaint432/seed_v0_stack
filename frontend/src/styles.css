@@ -33,6 +33,7 @@
   --text-placeholder:#9db5a3;
 
   /* ── Brand green ── */
+  --primary:   #16a34a;
   --green-50:  #f0fdf4;
   --green-100: #dcfce7;
   --green-200: #bbf7d0;
@@ -515,18 +516,25 @@ body {
   border-bottom: 1px solid var(--border);
   transition: background var(--transition);
   cursor: default;
+  width: 100%; text-align: left; background: none; border-left: none; border-right: none; border-top: none;
 }
 .notif-item:last-child { border-bottom: none; }
 .notif-item:hover { background: var(--surface-2); }
 .notif-item--read { opacity: 0.55; }
+.notif-item--clickable { cursor: pointer; }
+.notif-item--clickable:hover { background: var(--surface-2); }
+.notif-item--clickable:hover .notif-item-title { color: var(--green-600); }
 
 .notif-item-dot {
   width: 8px; height: 8px; border-radius: 50%;
   flex-shrink: 0; margin-top: 4px;
 }
-.notif-item-dot--message  { background: var(--green-500); }
-.notif-item-dot--transfer { background: var(--amber-500); }
-.notif-item-dot--system   { background: var(--blue-500); }
+.notif-item-dot--message       { background: var(--green-500); }
+.notif-item-dot--transfer      { background: var(--amber-500); }
+.notif-item-dot--order         { background: var(--amber-500); }
+.notif-item-dot--lot           { background: var(--green-400); }
+.notif-item-dot--certification { background: var(--blue-500); }
+.notif-item-dot--system        { background: var(--blue-500); }
 
 .notif-item-body { flex: 1; min-width: 0; }
 .notif-item-title {
@@ -834,11 +842,11 @@ select.input { cursor: pointer; }
 }
 .btn-ghost:hover { background: var(--surface-3); border-color: var(--border); }
 
-.btn-danger {
+.btn-danger-soft {
   background: var(--red-50); color: var(--red-600);
   border: 1px solid #fecaca;
 }
-.btn-danger:hover { background: #fee2e2; }
+.btn-danger-soft:hover { background: #fee2e2; }
 
 .btn-icon {
   width: 32px; height: 32px; padding: 0;
@@ -1378,8 +1386,18 @@ tbody td {
   background: var(--surface);
   flex-shrink: 0;
 }
-.chat-header-info { flex: 1; }
-.chat-contact-nom { font-weight: 700; font-size: 14px; color: var(--text-primary); }
+.chat-header-info { flex: 1; min-width: 0; }
+.chat-contact-nom {
+  font-weight: 700; font-size: 14px; color: var(--text-primary);
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+}
+.chat-role-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  background: #f0fdf4; color: #16a34a;
+  border: 1px solid #bbf7d0;
+  padding: 1px 7px; border-radius: 10px;
+  text-transform: uppercase;
+}
 .chat-contact-sub { font-size: 12px; color: var(--text-muted); }
 
 /* Zone messages */
@@ -1460,21 +1478,74 @@ tbody td {
 }
 .bubble-commande-detail { font-size: 12.5px; color: var(--text-primary); }
 
-/* Bulle AUDIO */
-.bubble-audio {
+/* Player audio custom */
+.audio-player {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  min-width: 200px;
+  max-width: 260px;
 }
-.bubble-audio audio {
-  height: 34px;
-  width: 200px;
-  outline: none;
+.audio-play-btn {
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  border: none;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background .15s, transform .1s;
 }
-.audio-dur {
+.audio-player.mine .audio-play-btn {
+  background: #16a34a;
+  color: #fff;
+}
+.audio-player.other .audio-play-btn {
+  background: #e4e7eb;
+  color: #374151;
+}
+.audio-play-btn:hover { transform: scale(1.08); }
+.audio-track-wrap {
+  flex: 1;
+  padding: 6px 0;
+  cursor: pointer;
+}
+.audio-track-bg {
+  position: relative;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(0,0,0,.15);
+}
+.audio-player.mine .audio-track-bg { background: rgba(0,0,0,.18); }
+.audio-player.other .audio-track-bg { background: rgba(0,0,0,.12); }
+.audio-track-fill {
+  position: absolute;
+  top: 0; left: 0; bottom: 0;
+  border-radius: 2px;
+  transition: width .1s linear;
+}
+.audio-player.mine .audio-track-fill { background: #16a34a; }
+.audio-player.other .audio-track-fill { background: #374151; }
+.audio-track-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  transition: left .1s linear;
+}
+.audio-player.mine .audio-track-thumb { background: #15803d; }
+.audio-player.other .audio-track-thumb { background: #1f2937; }
+.audio-time-label {
   font-size: 11px;
-  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  min-width: 32px;
+  text-align: right;
+  color: var(--text-muted);
+}
+.audio-player-error {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-muted);
 }
 
 /* Bulle IMAGE */
@@ -1629,11 +1700,27 @@ tbody td {
 .chat-empty {
   flex: 1;
   display: flex; align-items: center; justify-content: center;
-  flex-direction: column; gap: 10px;
+  flex-direction: column; gap: 12px;
   color: var(--text-muted);
   background: #f5f5f5;
+  padding: 32px;
+  text-align: center;
 }
-.chat-empty-icon { font-size: 40px; opacity: .3; }
+.chat-empty-icon {
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  background: #f0fdf4;
+  border: 2px solid #bbf7d0;
+  display: flex; align-items: center; justify-content: center;
+  color: #16a34a;
+  opacity: .7;
+}
+.chat-empty-title {
+  font-size: 14px; font-weight: 600; color: var(--text-primary); opacity: .6;
+}
+.chat-empty-sub {
+  font-size: 12.5px; color: var(--text-muted); max-width: 220px; line-height: 1.5;
+}
 
 /* Mobile — masquer/afficher */
 @media (max-width: 767px) {
@@ -1985,4 +2072,99 @@ tbody td {
 [data-theme="dark"] .cart-total { background: #052e16; border-color: #166534; color: #86efac; }
 [data-theme="dark"] .cart-float-btn { box-shadow: 0 4px 18px rgba(0,0,0,.5); }
 [data-theme="dark"] .cart-modal { box-shadow: 0 -6px 36px rgba(0,0,0,.5); }
+
+/* ── KPI Card — Glowing border effect ───────────────────────────────────── */
+.kpi-card-outer {
+  position: relative;
+}
+
+/* Point lumineux qui parcourt le périmètre de la carte */
+.kpi-card-dot {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(34, 197, 94, 0.95) 0%,
+    rgba(0, 105, 62, 0.5)   45%,
+    transparent              70%
+  );
+  filter: blur(3px);
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  animation: kpiDotMove 5s ease-in-out infinite;
+}
+
+.kpi-card-outer:hover .kpi-card-dot { opacity: 1; }
+
+@keyframes kpiDotMove {
+  0%,  100% { top: 6px;               right: 6px; }
+  25%        { top: 6px;               right: calc(100% - 28px); }
+  50%        { top: calc(100% - 28px); right: calc(100% - 28px); }
+  75%        { top: calc(100% - 28px); right: 6px; }
+}
+
+/* Carte intérieure */
+.kpi-card-inner {
+  position: relative;
+  overflow: hidden;
+  transition:
+    border-color 0.3s ease,
+    box-shadow   0.3s ease !important;
+}
+
+/* Rayon lumineux diagonal au hover */
+.kpi-card-inner::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  background: linear-gradient(
+    115deg,
+    transparent            38%,
+    rgba(34,197,94, 0.05)  45%,
+    rgba(201,168,76, 0.07) 50%,
+    rgba(34,197,94, 0.05)  55%,
+    transparent            62%
+  );
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  pointer-events: none;
+}
+
+.kpi-card-outer:hover .kpi-card-inner::after { opacity: 1; }
+
+/* Bordure verte + halo sur hover */
+.kpi-card-outer:hover .kpi-card-inner {
+  border-color: rgba(0, 105, 62, 0.28) !important;
+  box-shadow:
+    0 0 0 1px rgba(34, 197, 94, 0.12),
+    0 6px 20px rgba(0, 105, 62, 0.09),
+    0 2px 6px  rgba(0, 0,  0,  0.05) !important;
+}
+
+/* Accent coloré en haut de carte (barre top subtile) */
+.kpi-card-inner::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(90deg, #00693e, #22c55e, #c9a84c, #22c55e, #00693e);
+  background-size: 200% 100%;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  animation: kpiTopBar 4s linear infinite;
+}
+
+.kpi-card-outer:hover .kpi-card-inner::before { opacity: 1; }
+
+@keyframes kpiTopBar {
+  0%   { background-position: 0%   50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0%   50%; }
+}
 

@@ -467,42 +467,8 @@ export const GEN_LABELS: Record<string, string> = {
   R2: 'Commerciale R2',
 }
 
-export const GEN_COLORS: Record<string, { bg: string; border: string; text: string; badge: string }> = {
-  G0: { bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8', badge: 'badge-blue' },
-  G1: { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d', badge: 'badge-green' },
-  G2: { bg: '#fef9ed', border: '#fde68a', text: '#92660a', badge: 'badge-gold' },
-  G3: { bg: '#faf5ff', border: '#e9d5ff', text: '#6d28d9', badge: 'badge-violet' },
-  R1: { bg: '#f0fdfa', border: '#99f6e4', text: '#0f766e', badge: 'badge-teal' },
-  R2: { bg: '#dcfce7', border: '#86efac', text: '#15803d', badge: 'badge-green' },
-}
-
-// ── Statuts lot — couleurs cohérentes avec GEN_COLORS ──
-
-export const STATUT_LOT_COLORS: Record<StatutLot, { bg: string; border: string; text: string }> = {
-  DISPONIBLE:    { bg: '#dcfce7', border: '#86efac', text: '#15803d' },
-  EN_PRODUCTION: { bg: '#fef3c7', border: '#fde68a', text: '#92660a' },
-  CERTIFIE:      { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },
-  TRANSFERE:     { bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },
-  EPUISE:        { bg: '#f9fafb', border: '#e5e7eb', text: '#6b7280' },
-  RETIRE:        { bg: '#fef2f2', border: '#fecaca', text: '#dc2626' },
-  DECLASS:       { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c' },
-  EN_COURS_CERT: { bg: '#f5f3ff', border: '#ddd6fe', text: '#6d28d9' },
-  SOUCHE:        { bg: '#ecfdf5', border: '#a7f3d0', text: '#047857' },
-  PERDU:         { bg: '#fdf2f8', border: '#f9a8d4', text: '#9d174d' },
-}
-
-export const STATUT_LOT_LABELS: Record<StatutLot, string> = {
-  DISPONIBLE:    'Disponible',
-  EN_PRODUCTION: 'En production',
-  CERTIFIE:      'Certifié',
-  TRANSFERE:     'Transféré',
-  EPUISE:        'Épuisé',
-  RETIRE:        'Retiré',
-  DECLASS:       'Déclassé',
-  EN_COURS_CERT: 'En certification',
-  SOUCHE:        'Souche conservatoire',
-  PERDU:         'Perdu',
-}
+// Ré-exports depuis constants.ts (source de vérité unique)
+export { GEN_COLORS, GEN_CHART_COLORS, ROLE_LABELS, ROLE_LABELS_LONG, STATUT_LOT_COLORS, STATUT_LOT_LABELS } from './constants'
 
 export const STATUT_COMMANDE_LABELS: Record<StatutCommande, string> = {
   SOUMISE:        'Soumise',

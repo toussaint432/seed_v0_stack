@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 @Entity
-@Table(name = "campagne")
+@Table(name = "campagne", schema = "lot")
 @Getter @Setter @NoArgsConstructor
 public class Campagne {
 

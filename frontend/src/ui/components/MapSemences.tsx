@@ -37,10 +37,7 @@ const ROLE_GENS: Record<string, string[]> = {
   'seed-quotataire':    ['R2'],
 }
 
-const GEN_COLORS: Record<string, string> = {
-  G0:'#6366f1', G1:'#0ea5e9', G2:'#22c55e', G3:'#f59e0b',
-  G4:'#c2410c', R1:'#ec4899', R2:'#14b8a6',
-}
+import { GEN_CHART_COLORS as GEN_COLORS } from '../../lib/constants'
 
 /* ── Rayon de bulle proportionnel à √(stock/max) ── */
 function bubbleR(stock: number, max: number, min = 14, maxR = 58): number {

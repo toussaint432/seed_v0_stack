@@ -6,7 +6,7 @@ import lombok.*;
 import java.time.Instant;
 
 @Entity
-@Table(name = "espece_historique")
+@Table(name = "espece_historique", schema = "catalog")
 @Getter @Setter @NoArgsConstructor
 public class EspeceHistorique {
 

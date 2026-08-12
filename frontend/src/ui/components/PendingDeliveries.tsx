@@ -9,6 +9,7 @@ import {
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
+import { normalizeVariete, extractList } from '../../lib/normalizers'
 import {
   generateTransferDoc, generateNumero,
   type TransferDocData, type LotPdfData, type PartiePdf,
@@ -48,14 +49,8 @@ interface LotDetail {
   dateProduction:   string | null
 }
 
-/* ── Constantes ───────────────────────────────────────────────── */
-const ROLE_LABEL: Record<string, string> = {
-  'seed-selector':      'Sélectionneur ISRA',
-  'seed-upsemcl':       'UPSem-CL',
-  'seed-multiplicator': 'Multiplicateur',
-  'seed-quotataire':    'Quotataire / OP',
-  'seed-admin':         'Administrateur ISRA',
-}
+import { ROLE_LABELS } from '../../lib/constants'
+const ROLE_LABEL = ROLE_LABELS
 
 const GEN_CLASS: Record<string, string> = {
   G1: 'badge-green', G2: 'badge-gold', G3: 'badge-gray',
@@ -148,7 +143,7 @@ export function PendingDeliveries({ roleKey }: Props) {
       ])
       if (lotR.status !== 'fulfilled') return
       const lot: LotDetail        = lotR.value.data
-      const varieties: unknown[]  = varR.status === 'fulfilled' ? varR.value.data : []
+      const varieties: unknown[]  = extractList(varR.status === 'fulfilled' ? varR.value.data : null).map(normalizeVariete)
       const variety               = (varieties as Array<Record<string, unknown>>)
                                       .find(v => v.id === lot.idVariete) ?? null
 
@@ -177,7 +172,7 @@ export function PendingDeliveries({ roleKey }: Props) {
       ])
       if (lotR.status !== 'fulfilled') return
       const lot: LotDetail        = lotR.value.data
-      const varieties: unknown[]  = varR.status === 'fulfilled' ? varR.value.data : []
+      const varieties: unknown[]  = extractList(varR.status === 'fulfilled' ? varR.value.data : null).map(normalizeVariete)
       const variety               = (varieties as Array<Record<string, unknown>>)
                                       .find(v => v.id === lot.idVariete) ?? null
       setConfirmTarget({ transfert: t, lot, variety })

@@ -5,7 +5,7 @@ import lombok.*;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "stock")
+@Table(name = "stock", schema = "stock")
 @Getter @Setter @NoArgsConstructor
 public class Stock {
     @Id @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -2,8 +2,10 @@ package sn.isra.seed.order_service.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
+import org.springframework.http.HttpRange;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -20,7 +22,9 @@ import sn.isra.seed.order_service.entity.enums.StatutCommande;
 import sn.isra.seed.order_service.entity.enums.TypeMessage;
 import sn.isra.seed.order_service.repo.*;
 
+import java.io.FilterInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.*;
 import java.time.Instant;
 import java.util.*;
@@ -231,21 +235,69 @@ public class ChatController {
 
     /* ════════════════════════════════════════
        GET /api/chat/files/{filename}
+       — Support Range requests (HTTP 206) pour lecture audio/vidéo
        ════════════════════════════════════════ */
     @GetMapping("/files/{filename}")
-    public ResponseEntity<Resource> serveFile(@PathVariable String filename) throws IOException {
+    public ResponseEntity<InputStreamResource> serveFile(
+            @PathVariable String filename,
+            @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader
+    ) throws IOException {
         if (filename.contains("..") || filename.contains("/"))
             return ResponseEntity.badRequest().build();
 
-        Path file = UPLOAD_DIR.resolve(filename);
-        Resource resource = new UrlResource(file.toUri());
-        if (!resource.exists()) return ResponseEntity.notFound().build();
+        Path filePath = UPLOAD_DIR.resolve(filename);
+        if (!Files.exists(filePath)) return ResponseEntity.notFound().build();
 
-        String contentType = Files.probeContentType(file);
+        String ct = Files.probeContentType(filePath);
+        MediaType mediaType = ct != null ? MediaType.parseMediaType(ct) : MediaType.APPLICATION_OCTET_STREAM;
+        long size = Files.size(filePath);
+
+        if (rangeHeader != null && !rangeHeader.isBlank()) {
+            try {
+                List<HttpRange> ranges = HttpRange.parseRanges(rangeHeader);
+                if (!ranges.isEmpty()) {
+                    long start  = ranges.get(0).getRangeStart(size);
+                    long end    = ranges.get(0).getRangeEnd(size);
+                    long length = end - start + 1;
+                    InputStream is = Files.newInputStream(filePath);
+                    is.skipNBytes(start);
+                    return ResponseEntity.status(HttpStatus.PARTIAL_CONTENT)
+                        .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+                        .header(HttpHeaders.CONTENT_RANGE, "bytes " + start + "-" + end + "/" + size)
+                        .contentType(mediaType)
+                        .contentLength(length)
+                        .body(new InputStreamResource(new BoundedInputStream(is, length)));
+                }
+            } catch (Exception ignored) { /* Range invalide → réponse 200 normale */ }
+        }
+
         return ResponseEntity.ok()
             .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + filename + "\"")
-            .contentType(contentType != null ? MediaType.parseMediaType(contentType) : MediaType.APPLICATION_OCTET_STREAM)
-            .body(resource);
+            .header(HttpHeaders.ACCEPT_RANGES, "bytes")
+            .contentType(mediaType)
+            .contentLength(size)
+            .body(new InputStreamResource(Files.newInputStream(filePath)));
+    }
+
+    private static class BoundedInputStream extends FilterInputStream {
+        private long remaining;
+        BoundedInputStream(InputStream in, long limit) { super(in); this.remaining = limit; }
+
+        @Override
+        public int read() throws IOException {
+            if (remaining <= 0) return -1;
+            int b = super.read();
+            if (b >= 0) remaining--;
+            return b;
+        }
+
+        @Override
+        public int read(byte[] b, int off, int len) throws IOException {
+            if (remaining <= 0) return -1;
+            int r = super.read(b, off, (int) Math.min(len, remaining));
+            if (r > 0) remaining -= r;
+            return r;
+        }
     }
 
     /* ════════════════════════════════════════

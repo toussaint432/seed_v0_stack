@@ -29,11 +29,10 @@ export async function initKeycloak(): Promise<boolean> {
   }
   WIN.__keycloakInitialized = true
 
-  // Si le refresh token expire ou devient invalide (ex : redémarrage Keycloak)
-  // → rediriger vers login proprement sans bloquer l'UI
+  // Si le refresh token expire → retour à la landing page, l'utilisateur choisit de se reconnecter
   keycloak.onAuthRefreshError = () => {
     WIN.__keycloakInitialized = false
-    keycloak.login()
+    window.location.href = window.location.origin
   }
 
   try {
@@ -48,12 +47,9 @@ export async function initKeycloak(): Promise<boolean> {
     })
     return authenticated
   } catch {
-    // Session Keycloak périmée (ex : redémarrage du container Keycloak)
-    // → réinitialiser le flag pour autoriser une nouvelle tentative et rediriger
+    // KC injoignable ou code OAuth expiré → nettoyer l'URL et afficher la landing page
     WIN.__keycloakInitialized = false
-    // Nettoyer les paramètres d'URL obsolètes avant la redirection
     window.history.replaceState({}, '', window.location.pathname)
-    keycloak.login()
     return false
   }
 }

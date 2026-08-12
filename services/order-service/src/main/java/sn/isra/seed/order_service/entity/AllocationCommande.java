@@ -6,7 +6,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 
 @Entity
-@Table(name="allocation_commande")
+@Table(name = "allocation_commande", schema = "orders")
 @Getter @Setter @NoArgsConstructor
 public class AllocationCommande {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY)

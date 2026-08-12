@@ -15,7 +15,7 @@ import java.util.UUID;
  * Le stock-service écoute ce topic pour synchroniser Stock.quantiteDisponible.
  */
 @Entity
-@Table(name = "outbox_events",
+@Table(name = "outbox_events", schema = "lot",
     indexes = @Index(name = "idx_outbox_unprocessed", columnList = "created_at")
 )
 @Getter @Setter @NoArgsConstructor

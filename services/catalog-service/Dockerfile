@@ -1,16 +1,22 @@
 # syntax=docker/dockerfile:1
-# Étape 1 : build avec Maven + JDK 21
 FROM maven:3.9.8-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Cache BuildKit pour le dépôt Maven local — évite de re-télécharger entre les builds
-COPY pom.xml .
+# 1. Installer seed-common dans le cache Maven local
+COPY seed-common/pom.xml ./seed-common/pom.xml
+COPY seed-common/src     ./seed-common/src
+RUN --mount=type=cache,target=/root/.m2 \
+    mvn -B install -f seed-common/pom.xml -DskipTests -q
+
+# 2. Résoudre les dépendances de catalog-service (cache layer)
+COPY catalog-service/pom.xml ./pom.xml
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B dependency:resolve dependency:resolve-plugins -q \
     -Dmaven.wagon.http.retryHandler.count=3 \
     -Dmaven.wagon.http.retryHandler.requestSentRetryEnabled=true
 
-COPY src ./src
+# 3. Compiler et packager
+COPY catalog-service/src ./src
 RUN --mount=type=cache,target=/root/.m2 \
     mvn -B -DskipTests package -q \
     -Dmaven.wagon.http.retryHandler.count=3 \
@@ -21,7 +27,6 @@ RUN ls -lah target && \
     echo "Using jar: $JAR" && \
     cp "$JAR" /app/app.jar
 
-# Étape 2 : runtime
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/app.jar /app/app.jar

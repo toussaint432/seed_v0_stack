@@ -1,0 +1,13 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "seed-postgres",
+      "Group": "Sen Jiwu",
+      "Host": "postgres",
+      "Port": 5432,
+      "MaintenanceDB": "seed",
+      "Username": "seed",
+      "SSLMode": "prefer"
+    }
+  }
+}

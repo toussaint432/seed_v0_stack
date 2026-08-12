@@ -1,4 +1,4 @@
-package sn.isra.seed.catalog_service.config;
+package sn.isra.seed.common.config;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
@@ -19,16 +20,18 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Gestionnaire global d'erreurs — retourne du JSON cohérent pour toutes les
- * exceptions non gérées. Évite les stack traces dans les réponses HTTP.
- */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    // Validation @Valid sur @RequestBody — retourne la liste de tous les champs invalides
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    public ResponseEntity<Map<String, Object>> handleMissingParam(
+            MissingServletRequestParameterException ex, HttpServletRequest req) {
+        return erreur(HttpStatus.BAD_REQUEST, "PARAMETRE_MANQUANT",
+                "Paramètre obligatoire manquant : " + ex.getParameterName(), req);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Map<String, Object>> handleValidation(
             MethodArgumentNotValidException ex, HttpServletRequest req) {
@@ -45,7 +48,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(corps);
     }
 
-    // Validation @Validated sur @RequestParam / @PathVariable
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Map<String, Object>> handleConstraintViolation(
             ConstraintViolationException ex, HttpServletRequest req) {
@@ -62,7 +64,6 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(corps);
     }
 
-    // Doublons ou violations de contraintes d'unicité
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Map<String, Object>> handleDataIntegrity(
             DataIntegrityViolationException ex, HttpServletRequest req) {
@@ -70,7 +71,6 @@ public class GlobalExceptionHandler {
                 "La ressource existe déjà ou viole une contrainte d'intégrité.", req);
     }
 
-    // Exceptions métier levées explicitement dans les controllers
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, Object>> handleResponseStatus(
             ResponseStatusException ex, HttpServletRequest req) {
@@ -78,7 +78,6 @@ public class GlobalExceptionHandler {
                 "ERREUR_METIER", ex.getReason() != null ? ex.getReason() : ex.getMessage(), req);
     }
 
-    // Accès refusé (rôle insuffisant)
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Map<String, Object>> handleAccessDenied(
             AccessDeniedException ex, HttpServletRequest req) {
@@ -86,14 +85,12 @@ public class GlobalExceptionHandler {
                 "Vous n'avez pas les droits nécessaires pour cette action.", req);
     }
 
-    // Paramètre ou valeur illégale (ex: Enum.valueOf() raté)
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<Map<String, Object>> handleIllegalArgument(
             IllegalArgumentException ex, HttpServletRequest req) {
         return erreur(HttpStatus.BAD_REQUEST, "PARAMETRE_INVALIDE", ex.getMessage(), req);
     }
 
-    // Toute autre exception inattendue — log en ERROR, réponse générique
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleGeneric(
             Exception ex, HttpServletRequest req) {

@@ -30,6 +30,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -61,14 +66,17 @@ public class OrderController {
 
   /** Toutes les commandes (admin / upsemcl) — multiplicateur redirigé vers ses commandes reçues */
   @GetMapping
-  public List<Commande> list(@AuthenticationPrincipal Jwt jwt) {
+  public Page<Commande> list(
+      @AuthenticationPrincipal Jwt jwt,
+      @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
     if (jwt != null && isMultiplicateur(jwt)) {
       String username = jwt.getClaimAsString("preferred_username");
       return membreRepo.findByKeycloakUsername(username)
-          .map(m -> commandeRepo.findByIdOrganisationFournisseurOrderByCreatedAtDesc(m.getOrganisation().getId()))
-          .orElse(List.of());
+          .map(m -> commandeRepo.findByIdOrganisationFournisseurOrderByCreatedAtDesc(
+              m.getOrganisation().getId(), pageable))
+          .orElse(Page.empty(pageable));
     }
-    return commandeRepo.findAll();
+    return commandeRepo.findAll(pageable);
   }
 
   private boolean isMultiplicateur(Jwt jwt) {
@@ -91,9 +99,11 @@ public class OrderController {
 
   /** Commandes passées par le quotataire connecté */
   @GetMapping("/mes-commandes")
-  public List<Commande> mesCommandes(@AuthenticationPrincipal Jwt jwt) {
+  public Page<Commande> mesCommandes(
+      @AuthenticationPrincipal Jwt jwt,
+      @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
     String username = jwt.getClaimAsString("preferred_username");
-    return commandeRepo.findByUsernameAcheteurOrderByCreatedAtDesc(username);
+    return commandeRepo.findByUsernameAcheteurOrderByCreatedAtDesc(username, pageable);
   }
 
   /**
@@ -114,14 +124,17 @@ public class OrderController {
    * (quel que soit l'ID d'org), plus celles sans fournisseur explicite.
    */
   @GetMapping("/a-traiter")
-  public List<Commande> aTraiter(@AuthenticationPrincipal Jwt jwt) {
+  public Page<Commande> aTraiter(
+      @AuthenticationPrincipal Jwt jwt,
+      @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
     if (isUpsemcl(jwt)) {
-      return commandeRepo.findForAnyUpsemcl();
+      return commandeRepo.findForAnyUpsemcl(pageable);
     }
     String username = jwt.getClaimAsString("preferred_username");
     return membreRepo.findByKeycloakUsername(username)
-        .map(m -> commandeRepo.findByIdOrganisationFournisseurOrderByCreatedAtDesc(m.getOrganisation().getId()))
-        .orElse(List.of());
+        .map(m -> commandeRepo.findByIdOrganisationFournisseurOrderByCreatedAtDesc(
+            m.getOrganisation().getId(), pageable))
+        .orElse(Page.empty(pageable));
   }
 
   @Transactional

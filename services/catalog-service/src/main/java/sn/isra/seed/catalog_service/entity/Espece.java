@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 import lombok.*;
 
 @Entity
-@Table(name = "espece")
+@Table(name = "espece", schema = "catalog")
 @Getter @Setter @NoArgsConstructor
 public class Espece {
 

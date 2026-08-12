@@ -13,7 +13,7 @@ import java.math.BigDecimal;
  * Partagé via la même base PostgreSQL (pattern base partagée).
  */
 @Entity
-@Table(name = "lot_semencier")
+@Table(name = "lot_semencier", schema = "lot")
 @Getter @Setter @NoArgsConstructor
 public class LotSemencierOrder {
 
