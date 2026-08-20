@@ -803,6 +803,11 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
                 const accent   = nCfg?.color ?? '#6b7280'
                 const stockTonnes = `${v.stockTotal.toLocaleString('fr-FR')} kg`
 
+                /* Fournisseur le plus proche pour cette variété */
+                const closestFournisseur = geoMode
+                  ? v.lots.filter(l => l.distanceKm != null).sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999))[0]
+                  : null
+
                 return (
                   <div key={v.varieteId} style={{ background: 'var(--surface)', borderRadius: 14, border: inCart ? '2px solid #16a34a' : '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.15s, border-color 0.15s' }}>
                     {/* Accent strip */}
@@ -846,6 +851,18 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
                           </div>
                         )}
                       </div>
+
+                      {/* Fournisseur le plus proche (mode géoloc) */}
+                      {closestFournisseur && (
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '6px 10px', fontSize: 11, color: '#1e40af', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Navigation size={11} style={{ color: '#2563eb', flexShrink: 0 }} />
+                          <span style={{ fontWeight: 600 }}>{closestFournisseur.nomOrganisation}</span>
+                          <span style={{ color: '#4b83d4' }}>·</span>
+                          <span>{Math.round(closestFournisseur.distanceKm ?? 0)} km</span>
+                          <span style={{ color: '#4b83d4' }}>·</span>
+                          <span>{closestFournisseur.region}</span>
+                        </div>
+                      )}
 
                       {/* In-cart badge */}
                       {inCart && (

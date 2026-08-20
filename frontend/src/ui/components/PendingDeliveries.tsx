@@ -478,7 +478,7 @@ export function PendingDeliveries({ roleKey }: Props) {
                   className="input"
                   style={{
                     width: '100%', minHeight: 64, resize: 'vertical',
-                    fontFamily: 'Outfit, sans-serif', fontSize: 13,
+                    fontFamily: 'var(--font-sans)', fontSize: 13,
                     boxSizing: 'border-box',
                   }}
                   value={confForm.observations}

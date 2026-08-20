@@ -4,6 +4,7 @@ import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
+import { downloadCsv, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { generateTransferDoc, generateNumero, type TransferDocData, type LotPdfData, type PartiePdf } from '../../lib/pdf/generateTransferDoc'
 
@@ -64,43 +65,74 @@ const ROLE_NODE_COLORS: Record<string, { bg: string; border: string; label: stri
 
 
 function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: string; onClose: () => void }) {
+  const first = chain[0]
+  const last  = chain[chain.length - 1]
+
   return (
     <Modal title={"Traçabilité : " + codeLot} subtitle={"Chaîne générationnelle : " + chain.length + " génération(s)"} onClose={onClose} size="lg">
       <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, overflowX: 'auto', paddingBottom: 8 }}>
         {chain.map((node, i) => {
-          const gen = node.generation || '?'
-          const isLast = i === chain.length - 1
+          const gen        = node.generation || '?'
+          const isLast     = i === chain.length - 1
           const roleColors = ROLE_NODE_COLORS[node.responsableRole] || { bg: '#f9fafb', border: '#e5e7eb', label: '' }
+          const acteurNom  = node.responsableNom || node.nomOrganisation || null
+          const hasRole    = !!node.responsableRole
+
           return (
             <React.Fragment key={node.lotId || i}>
               <div style={{
                 background: GEN_BG[gen] || '#f9fafb',
-                border: `2px solid ${node.responsableRole ? roleColors.border : (GEN_BORDER[gen] || '#e5e7eb')}`,
-                borderRadius: 10, padding: '14px 16px', minWidth: 170, flex: '0 0 auto',
-                boxShadow: isLast ? '0 4px 12px rgba(0,0,0,0.1)' : 'none'
+                border: `2px solid ${hasRole ? roleColors.border : (GEN_BORDER[gen] || '#e5e7eb')}`,
+                borderRadius: 10, padding: '14px 16px', minWidth: 180, flex: '0 0 auto',
+                boxShadow: isLast ? '0 4px 14px rgba(0,0,0,0.1)' : 'none',
+                display: 'flex', flexDirection: 'column',
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                {/* En-tête : génération + tag actuel */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   <span className={"badge " + (GEN_COLORS[gen] || 'badge-gray')} style={{ fontSize: 11 }}>{gen}</span>
-                  {isLast && <span style={{ fontSize: 9, color: '#16a34a', fontWeight: 700, textTransform: 'uppercase' }}>Actuel</span>}
+                  {isLast && (
+                    <span style={{ fontSize: 9, color: '#16a34a', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      Actuel
+                    </span>
+                  )}
                 </div>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, wordBreak: 'break-all' }}>{node.codeLot}</div>
 
-                {/* Phase 1 : Informations acteur */}
-                {node.responsableNom && (
-                  <div style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 6, padding: '6px 8px', marginBottom: 6, border: '1px solid rgba(0,0,0,0.06)' }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Building2 size={10} />
-                      {node.responsableNom}
+                {/* Code lot */}
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, wordBreak: 'break-all', lineHeight: 1.3 }}>
+                  {node.codeLot}
+                </div>
+
+                {/* Bloc acteur — toujours rendu, avec fallback "non renseigné" */}
+                <div style={{
+                  background: hasRole ? roleColors.bg : 'rgba(255,255,255,0.5)',
+                  borderRadius: 6, padding: '7px 9px', marginBottom: 8,
+                  border: `1px solid ${hasRole ? roleColors.border + '66' : 'rgba(0,0,0,0.07)'}`,
+                  flex: 0,
+                }}>
+                  {acteurNom ? (
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'flex-start', gap: 4, lineHeight: 1.3 }}>
+                      <Building2 size={10} style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span>{acteurNom}</span>
                     </div>
-                    {node.responsableRole && (
-                      <div style={{ fontSize: 10, color: roleColors.border, fontWeight: 600, marginTop: 2 }}>
-                        {roleColors.label || node.responsableRole}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  ) : (
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      Acteur non renseigné
+                    </div>
+                  )}
+                  {node.responsableRole && (
+                    <div style={{ fontSize: 10, color: roleColors.border, fontWeight: 700, marginTop: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                      {roleColors.label || node.responsableRole}
+                    </div>
+                  )}
+                  {node.usernameCreateur && (
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                      @{node.usernameCreateur}
+                    </div>
+                  )}
+                </div>
 
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.7 }}>
+                {/* Données techniques */}
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
                   {node.campagne && <div>Campagne: {node.campagne}</div>}
                   <div>Date: {node.dateProduction || 'N/A'}</div>
                   <div>Qté: {node.quantiteNette ? Number(node.quantiteNette).toLocaleString('fr-FR') : 'N/A'} {node.unite}</div>
@@ -108,21 +140,52 @@ function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: stri
                   <div>Pureté: {node.puretePhysique != null ? node.puretePhysique + '%' : 'N/A'}</div>
                 </div>
               </div>
-              {!isLast && <div style={{ display: 'flex', alignItems: 'center', padding: '0 3px', color: '#9ca3af', flexShrink: 0 }}><ChevronRight size={16} /></div>}
+              {!isLast && (
+                <div style={{ display: 'flex', alignItems: 'center', padding: '0 3px', color: '#9ca3af', flexShrink: 0 }}>
+                  <ChevronRight size={16} />
+                </div>
+              )}
             </React.Fragment>
           )
         })}
       </div>
-      <div style={{ marginTop: 20, padding: '14px 18px', background: '#f8faf8', borderRadius: 8, display: 'flex', gap: 28, flexWrap: 'wrap' }}>
-        <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Générations</div><div style={{ fontSize: 22, fontWeight: 700 }}>{chain.length}</div></div>
-        <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Lot origine</div><div style={{ fontSize: 12, fontWeight: 600 }}>{chain[0]?.codeLot}</div></div>
-        <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Germination finale</div><div style={{ fontSize: 22, fontWeight: 700 }}>{chain[chain.length - 1]?.tauxGermination ?? 'N/A'}%</div></div>
-        {chain[0]?.responsableNom && (
-          <div><div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>Producteur initial</div><div style={{ fontSize: 12, fontWeight: 600 }}>{chain[0].responsableNom}</div></div>
+
+      {/* Récapitulatif */}
+      <div style={{ marginTop: 20, padding: '14px 18px', background: 'var(--surface-2)', borderRadius: 8, border: '1px solid var(--border)', display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Générations</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{chain.length}</div>
+        </div>
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Lot origine</div>
+          <div style={{ fontSize: 12, fontWeight: 600 }}>{first?.codeLot}</div>
+        </div>
+        {(first?.responsableNom || first?.nomOrganisation) && (
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Sélectionneur</div>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{first?.responsableNom || first?.nomOrganisation}</div>
+          </div>
         )}
+        {last !== first && (last?.responsableNom || last?.nomOrganisation) && (
+          <div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Acteur final</div>
+            <div style={{ fontSize: 12, fontWeight: 600 }}>{last?.responsableNom || last?.nomOrganisation}</div>
+            {last?.responsableRole && (
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                {ROLE_NODE_COLORS[last.responsableRole]?.label || last.responsableRole}
+              </div>
+            )}
+          </div>
+        )}
+        <div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 2 }}>Germination finale</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>
+            {last?.tauxGermination != null ? last.tauxGermination + '%' : 'N/A'}
+          </div>
+        </div>
       </div>
 
-      {/* Légende */}
+      {/* Légende rôles */}
       <div style={{ marginTop: 14, display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 10, color: 'var(--text-muted)' }}>
         {Object.entries(ROLE_NODE_COLORS).filter(([_, v]) => v.label).map(([_, v]) => (
           <div key={v.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -132,6 +195,24 @@ function LineageModal({ chain, codeLot, onClose }: { chain: any[]; codeLot: stri
         ))}
       </div>
     </Modal>
+  )
+}
+
+/* ── Helpers slide-over panel ───────────────────────────────── */
+function PanelSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8, borderBottom: '1px solid var(--border)', paddingBottom: 6 }}>{title}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>{children}</div>
+    </div>
+  )
+}
+function PanelRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+      <span style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0, minWidth: 120 }}>{label}</span>
+      <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'right' }}>{value ?? '—'}</span>
+    </div>
   )
 }
 
@@ -822,9 +903,30 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
             <div style={{ display: 'flex', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', height: 32 }}>
                 <Package size={12} color="var(--text-muted)" />
-                <input value={searchCat} onChange={e => setSearchCat(e.target.value)} placeholder="Rechercher variété, code lot…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'Outfit, sans-serif', width: 180 }} />
+                <input value={searchCat} onChange={e => setSearchCat(e.target.value)} placeholder="Rechercher variété, code lot…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'var(--font-sans)', width: 180 }} />
                 {searchCat && <button onClick={() => setSearchCat('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>}
               </div>
+              {catFiltered.length > 0 && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ gap: 5, fontSize: 12 }}
+                  onClick={() => downloadCsv(
+                    `catalogue-g3-${new Date().toISOString().slice(0, 10)}`,
+                    ['Code lot', 'Variété', 'Code variété', 'Génération', 'Date production', 'Quantité (kg)', 'Unité', 'Germination (%)', 'Pureté (%)', 'Statut'],
+                    catFiltered.map(l => {
+                      const v = varietyMap[l.idVariete]
+                      return [
+                        l.codeLot ?? '', v?.nomVariete ?? '', v?.codeVariete ?? '',
+                        'G3', formatDateForExport(l.dateProduction),
+                        Number(l.quantiteNette) || 0, l.unite ?? 'kg',
+                        l.tauxGermination ?? '', l.puretePhysique ?? '', l.statutLot ?? '',
+                      ]
+                    })
+                  )}
+                >
+                  <Download size={13} /> CSV
+                </button>
+              )}
               <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
             </div>
           </div>
@@ -931,9 +1033,31 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               <div style={{ display: 'flex', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', height: 32 }}>
                   <Search size={12} color="var(--text-muted)" />
-                  <input value={searchMes} onChange={e => setSearchMes(e.target.value)} placeholder="Code lot, variété, génération…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'Outfit, sans-serif', width: 180 }} />
+                  <input value={searchMes} onChange={e => setSearchMes(e.target.value)} placeholder="Code lot, variété, génération…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'var(--font-sans)', width: 180 }} />
                   {searchMes && <button onClick={() => setSearchMes('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>}
                 </div>
+                {mesLotsFiltered.length > 0 && (
+                  <button
+                    className="btn btn-secondary"
+                    style={{ height: 32, fontSize: 12, gap: 5 }}
+                    onClick={() => downloadCsv(
+                      `mes-lots-${new Date().toISOString().slice(0, 10)}`,
+                      ['Code lot', 'Variété', 'Génération', 'Campagne', 'Date production', 'Quantité (kg)', 'Unité', 'Germination (%)', 'Pureté (%)', 'Statut', 'Site'],
+                      mesLotsFiltered.map((l: any) => {
+                        const v = varietyMap[l.idVariete]
+                        return [
+                          l.codeLot ?? '', v?.nomVariete ?? '', l.generation?.codeGeneration ?? '',
+                          l.campagne ?? '', formatDateForExport(l.dateProduction),
+                          Number(l.quantiteNette) || 0, l.unite ?? 'kg',
+                          l.tauxGermination ?? '', l.puretePhysique ?? '',
+                          l.statutLot ?? '', l.site?.codeSite ?? '',
+                        ]
+                      })
+                    )}
+                  >
+                    <Download size={13} /> CSV
+                  </button>
+                )}
                 <button className="btn btn-primary" style={{ height: 32, fontSize: 12 }} onClick={() => { setNewLotForm(MULT_NEW_FORM_INIT); setShowNewLot(true) }}><Plus size={13} /> Nouveau lot</button>
                 <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
               </div>
@@ -1005,7 +1129,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                     border: filterCampagneMes ? '1.5px solid var(--green-600)' : '1px solid var(--border)',
                     background: filterCampagneMes ? 'var(--green-50,#f0fdf4)' : 'var(--surface)',
                     color: filterCampagneMes ? 'var(--green-700)' : 'var(--text-muted)',
-                    cursor: 'pointer', outline: 'none', fontFamily: 'Outfit, sans-serif', fontWeight: filterCampagneMes ? 700 : 400,
+                    cursor: 'pointer', outline: 'none', fontFamily: 'var(--font-sans)', fontWeight: filterCampagneMes ? 700 : 400,
                   }}
                 >
                   <option value="">Toutes les campagnes</option>
@@ -1557,7 +1681,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                   onChange={e => setCmdForm(f => ({ ...f, observations: e.target.value }))}
                   placeholder="Précisions sur la demande, délai souhaité…"
                   rows={3}
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
                 />
               </Field>
               <FormActions onCancel={() => setShowCommande(false)} loading={saving} submitLabel="Soumettre la demande" />
@@ -1627,6 +1751,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [genFilter,      setGenFilter]       = useState('')
   const [certLot,        setCertLot]         = useState<any | null>(null)
   const canManageCert = ['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey)
+  const [selectedLot,    setSelectedLot]    = useState<any | null>(null)
+  const [chartCollapsed, setChartCollapsed] = useState(false)
 
   async function fetchLots() {
     setLoading(true)
@@ -1672,6 +1798,16 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
 
   const varietyMap: Record<number, { codeVariete: string; nomVariete: string }> =
     Object.fromEntries(varieties.map(v => [v.id, v]))
+
+  const chartHorizData: HorizDatum[] = Object.values(
+    displayLots.reduce((acc: Record<string, HorizDatum>, l) => {
+      const vName = (varietyMap[l.idVariete] as any)?.nomVariete ?? 'Inconnue'
+      const gen   = l.generation?.codeGeneration ?? 'N/A'
+      if (!acc[vName]) acc[vName] = { label: vName, gens: {} }
+      acc[vName].gens[gen] = (acc[vName].gens[gen] ?? 0) + Number(l.quantiteNette || 0)
+      return acc
+    }, {})
+  )
 
   const displayLotsFiltered = displayLots.filter(l => {
     const matchGen = !genFilter || l.generation?.codeGeneration === genFilter
@@ -1947,8 +2083,15 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>{fmtKg(stat.totalKg)}</div>
               )}
               {totalKg > 0 && (
-                <div style={{ marginTop: 10, height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
-                  <div style={{ height: '100%', width: `${Math.min(100, stat.totalKg / totalKg * 100)}%`, background: hex, borderRadius: 2, transition: 'width 0.5s ease' }} />
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                    <div style={{ height: 6, borderRadius: 3, background: 'var(--border)', overflow: 'hidden', flex: 1 }}>
+                      <div style={{ height: '100%', width: `${Math.min(100, stat.totalKg / totalKg * 100)}%`, background: hex, borderRadius: 3, transition: 'width 0.5s ease' }} />
+                    </div>
+                    <span style={{ fontSize: 10, color: hex, fontWeight: 700, marginLeft: 6, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
+                      {Math.round(stat.totalKg / totalKg * 100)}%
+                    </span>
+                  </div>
                 </div>
               )}
             </div>
@@ -1956,10 +2099,47 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         })}
       </div>
 
+      {chartHorizData.length > 0 && (
+        <div className="card" style={{ marginBottom: 16, overflow: 'hidden' }}>
+          <div
+            className="card-header"
+            style={{ cursor: 'pointer', userSelect: 'none' }}
+            onClick={() => setChartCollapsed(c => !c)}
+          >
+            <span className="card-title"><span className="card-title-icon"><Layers size={15} /></span>Production par variété</span>
+            <ChevronRight size={14} style={{ color: 'var(--text-muted)', transform: chartCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .2s' }} />
+          </div>
+          {!chartCollapsed && <MesLotsHorizChart data={chartHorizData} gens={activeGens} />}
+        </div>
+      )}
+
       <div className="card">
         <div className="card-header">
           <span className="card-title"><span className="card-title-icon"><Package size={15} /></span>Liste des Lots</span>
           <div style={{ display: 'flex', gap: 8 }}>
+            {displayLotsFiltered.length > 0 && (
+              <button
+                className="btn btn-secondary"
+                style={{ gap: 5, fontSize: 12 }}
+                onClick={() => downloadCsv(
+                  `lots-${generation || 'tous'}-${new Date().toISOString().slice(0, 10)}`,
+                  ['Code lot', 'Variété', 'Code variété', 'Génération', 'Campagne', 'Date production', 'Quantité (kg)', 'Unité', 'Germination (%)', 'Pureté (%)', 'Statut', 'Site'],
+                  displayLotsFiltered.map(l => {
+                    const v = varietyMap[l.idVariete]
+                    return [
+                      l.codeLot ?? '', v?.nomVariete ?? '', v?.codeVariete ?? '',
+                      l.generation?.codeGeneration ?? '', l.campagne ?? '',
+                      formatDateForExport(l.dateProduction),
+                      Number(l.quantiteNette) || 0, l.unite ?? 'kg',
+                      l.tauxGermination ?? '', l.puretePhysique ?? '',
+                      l.statutLot ?? '', l.site?.codeSite ?? '',
+                    ]
+                  })
+                )}
+              >
+                <Download size={13} /> CSV
+              </button>
+            )}
             {canCreate && <button className="btn btn-primary" onClick={() => setShowNewLot(true)}><Plus size={13} /> Nouveau lot</button>}
             <button className="btn btn-secondary btn-icon" onClick={fetchLots}><RefreshCw size={13} /></button>
           </div>
@@ -1972,7 +2152,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               placeholder="Code lot, variété…"
               value={search}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-              style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1, color: 'var(--text-primary)' }}
+              style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'var(--font-sans)', flex: 1, color: 'var(--text-primary)' }}
             />
             {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0 }}><X size={13} /></button>}
           </div>
@@ -2014,50 +2194,99 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         </div>
         <div className="table-wrapper">
           <table>
-            <thead><tr><th>Code Lot</th><th>Variété</th><th>Génération</th><th>Lot Parent</th><th>Quantité</th><th>Campagne</th><th>Enregistré le</th><th>Producteur</th><th>Statut</th><th>Actions</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Code Lot</th>
+                <th>Variété</th>
+                <th>Gén. / Statut</th>
+                <th>Qualité</th>
+                <th>Quantité</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
             <tbody>
-              {loading ? [0,1,2,3].map(i => <tr key={i}><td colSpan={10}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>) :
-               displayLotsFiltered.length === 0 ? (
-                <tr><td colSpan={10}><div className="empty-state"><div className="empty-icon"><Package size={20} /></div><div className="empty-title">{search || genFilter ? 'Aucun lot pour ce filtre' : 'Aucun lot'}</div>{canCreate && !search && !genFilter && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}</div></td></tr>
-               ) : displayLotsFiltered.map(l => {
+              {loading ? [0,1,2,3].map(i => (
+                <tr key={i}><td colSpan={6}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>
+              )) : displayLotsFiltered.length === 0 ? (
+                <tr><td colSpan={6}>
+                  <div className="empty-state">
+                    <div className="empty-icon"><Package size={20} /></div>
+                    <div className="empty-title">{search || genFilter ? 'Aucun lot pour ce filtre' : 'Aucun lot'}</div>
+                    {canCreate && !search && !genFilter && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}
+                  </div>
+                </td></tr>
+              ) : displayLotsFiltered.map(l => {
                 const gen = l.generation?.codeGeneration || 'N/A'
-                const createdAtStr = l.createdAt
-                  ? new Date(l.createdAt).toLocaleString('fr-FR', {
-                      day: '2-digit', month: '2-digit', year: 'numeric',
-                      hour: '2-digit', minute: '2-digit',
-                    })
-                  : '—'
+                const hex = GEN_HEX[gen] ?? '#6b7280'
+                const v   = varietyMap[l.idVariete] as any
+                const isSelected = selectedLot?.id === l.id
                 return (
-                  <tr key={l.id}>
+                  <tr
+                    key={l.id}
+                    onClick={() => setSelectedLot(l)}
+                    style={{
+                      boxShadow: `inset 3px 0 0 ${hex}`,
+                      cursor: 'pointer',
+                      background: isSelected ? hex + '08' : undefined,
+                      transition: 'background .12s',
+                    }}
+                  >
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                         <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
                         {certShieldIcon(l)}
                       </div>
+                      {l.lotParent?.codeLot && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>
+                          ↑ {l.lotParent.codeLot}
+                        </div>
+                      )}
                     </td>
                     <td>
-                      {varietyMap[l.idVariete] ? (
+                      {v ? (
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{varietyMap[l.idVariete].nomVariete}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{varietyMap[l.idVariete].codeVariete}</div>
+                          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-primary)' }}>{v.nomVariete}</div>
+                          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{v.codeVariete}</div>
                         </div>
                       ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                     </td>
-                    <td><span className={"badge " + (GEN_COLORS[gen] || 'badge-gray')}>{gen}</span></td>
-                    <td>{l.lotParent?.codeLot ? <span className="td-mono" style={{ fontSize: 11 }}>{l.lotParent.codeLot}</span> : <span style={{ color: 'var(--text-muted)' }}>—</span>}</td>
-                    <td><span style={{ fontWeight: 600 }}>{Number(l.quantiteNette).toLocaleString('fr-FR')}</span><span style={{ color: 'var(--text-muted)', marginLeft: 3, fontSize: 12 }}>{l.unite}</span></td>
-                    <td style={{ fontSize: 12 }}>{l.campagne || '—'}</td>
-                    <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', fontFamily: 'DM Mono, monospace' }}>{createdAtStr}</td>
                     <td>
-                      {l.responsableNom ? (
-                        <div>
-                          <div style={{ fontSize: 12, fontWeight: 500 }}>{l.responsableNom}</div>
-                          {l.responsableRole && <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{ROLE_NODE_COLORS[l.responsableRole]?.label || l.responsableRole}</div>}
-                        </div>
-                      ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
+                        <span className={`badge ${GEN_COLORS[gen] || 'badge-gray'}`} style={{ fontSize: 11 }}>{gen}</span>
+                        <span className={`badge ${l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray'}`} style={{ fontSize: 10 }}>{l.statutLot}</span>
+                      </div>
                     </td>
-                    <td><span className={"badge " + (l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray')} style={{ fontSize: 11 }}>{l.statutLot}</span></td>
                     <td>
+                      {l.tauxGermination != null || l.puretePhysique != null ? (
+                        <div style={{ minWidth: 88 }}>
+                          {l.tauxGermination != null && (
+                            <div style={{ marginBottom: 5 }}>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>Germ. {l.tauxGermination}%</div>
+                              <div style={{ height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${Math.min(100, Number(l.tauxGermination))}%`, background: Number(l.tauxGermination) >= 85 ? '#16a34a' : Number(l.tauxGermination) >= 70 ? '#EAB308' : '#EF4444', borderRadius: 2 }} />
+                              </div>
+                            </div>
+                          )}
+                          {l.puretePhysique != null && (
+                            <div>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 2 }}>Pureté {l.puretePhysique}%</div>
+                              <div style={{ height: 3, borderRadius: 2, background: 'var(--border)', overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${Math.min(100, Number(l.puretePhysique))}%`, background: Number(l.puretePhysique) >= 90 ? '#16a34a' : Number(l.puretePhysique) >= 75 ? '#EAB308' : '#EF4444', borderRadius: 2 }} />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>—</span>}
+                    </td>
+                    <td>
+                      <div style={{ fontWeight: 600, fontSize: 13, fontVariantNumeric: 'tabular-nums' }}>
+                        {Number(l.quantiteNette).toLocaleString('fr-FR')} <span style={{ color: 'var(--text-muted)', fontSize: 11, fontWeight: 400 }}>{l.unite}</span>
+                      </div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                        {l.campagne}{l.site?.codeSite ? ` · ${l.site.codeSite}` : ''}
+                      </div>
+                    </td>
+                    <td onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                         <button
                           className="btn btn-ghost"
@@ -2099,7 +2328,6 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                             onClick={() => {
                               setParentLot(l)
                               setTransferForm({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
-                              // Rafraîchir la liste des destinataires à chaque ouverture du modal
                               const targetRole = roleKey === 'seed-selector' ? 'seed-upsemcl' : 'seed-multiplicator'
                               setMembresLoading(true)
                               api.get(endpoints.membresByRole(targetRole))
@@ -2150,6 +2378,167 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
           </table>
         </div>
       </div>
+
+      {/* ── Slide-over panel détail lot ───────────────────────────── */}
+      {selectedLot && (() => {
+        const l   = selectedLot
+        const gen = l.generation?.codeGeneration || 'N/A'
+        const hex = GEN_HEX[gen] ?? '#6b7280'
+        const v   = varietyMap[l.idVariete] as any
+        return (
+          <>
+            <style>{`@keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } }`}</style>
+            <div
+              onClick={() => setSelectedLot(null)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.22)', zIndex: 999 }}
+            />
+            <div style={{
+              position: 'fixed', top: 0, right: 0, bottom: 0, width: 420,
+              background: 'var(--surface)', borderLeft: '1px solid var(--border)',
+              boxShadow: '-6px 0 32px rgba(0,0,0,0.13)',
+              zIndex: 1000, display: 'flex', flexDirection: 'column',
+              animation: 'slideInRight 0.22s ease-out',
+            }}>
+              {/* Header */}
+              <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)', background: hex + '09', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <div>
+                    <span className="td-mono" style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{l.codeLot}</span>
+                    {l.responsableNom && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                        {ROLE_NODE_COLORS[l.responsableRole]?.label || l.responsableRole || ''} {l.responsableNom}
+                      </div>
+                    )}
+                  </div>
+                  <button className="btn btn-ghost btn-icon" onClick={() => setSelectedLot(null)}><X size={15} /></button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span className={`badge ${GEN_COLORS[gen] || 'badge-gray'}`}>{gen}</span>
+                  <span className={`badge ${l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray'}`}>{l.statutLot}</span>
+                  <span style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }}>
+                    {certShieldIcon(l, 12)} {(l.statutCertification || 'SANS_CERTIFICAT').replace(/_/g, ' ')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Body */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+                <PanelSection title="Identité">
+                  <PanelRow label="Variété" value={v ? `${v.nomVariete}` : '—'} />
+                  {v?.codeVariete && <PanelRow label="Code variété" value={<span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{v.codeVariete}</span>} />}
+                  <PanelRow label="Génération" value={gen} />
+                  <PanelRow label="Campagne" value={l.campagne || '—'} />
+                  <PanelRow label="Lot parent" value={l.lotParent?.codeLot
+                    ? <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{l.lotParent.codeLot}</span>
+                    : '—'} />
+                  <PanelRow label="Site" value={l.site?.nomSite || l.site?.codeSite || '—'} />
+                </PanelSection>
+
+                <PanelSection title="Production">
+                  <PanelRow label="Date production" value={l.dateProduction ? new Date(l.dateProduction).toLocaleDateString('fr-FR') : '—'} />
+                  <PanelRow label="Quantité nette" value={l.quantiteNette ? `${Number(l.quantiteNette).toLocaleString('fr-FR')} ${l.unite || 'kg'}` : '—'} />
+                  {l.productionBruteKg && <PanelRow label="Production brute" value={`${Number(l.productionBruteKg).toLocaleString('fr-FR')} kg`} />}
+                  {l.superficieHa && <PanelRow label="Superficie" value={`${l.superficieHa} ha`} />}
+                  {l.cycle && <PanelRow label="Cycle" value={l.cycle} />}
+                  {l.niveauSemence && <PanelRow label="Niveau semence" value={l.niveauSemence} />}
+                </PanelSection>
+
+                <PanelSection title="Qualité">
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Taux de germination</span>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>{l.tauxGermination != null ? `${l.tauxGermination}%` : '—'}</span>
+                    </div>
+                    {l.tauxGermination != null && (
+                      <div style={{ height: 5, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(100, Number(l.tauxGermination))}%`, background: Number(l.tauxGermination) >= 85 ? '#16a34a' : Number(l.tauxGermination) >= 70 ? '#EAB308' : '#EF4444', borderRadius: 3, transition: 'width 0.5s ease' }} />
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Pureté physique</span>
+                      <span style={{ fontSize: 12, fontWeight: 600 }}>{l.puretePhysique != null ? `${l.puretePhysique}%` : '—'}</span>
+                    </div>
+                    {l.puretePhysique != null && (
+                      <div style={{ height: 5, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${Math.min(100, Number(l.puretePhysique))}%`, background: Number(l.puretePhysique) >= 90 ? '#16a34a' : Number(l.puretePhysique) >= 75 ? '#EAB308' : '#EF4444', borderRadius: 3, transition: 'width 0.5s ease' }} />
+                      </div>
+                    )}
+                  </div>
+                </PanelSection>
+
+                <PanelSection title="Certification">
+                  <PanelRow label="Statut" value={
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {certShieldIcon(l, 13)} {(l.statutCertification || 'SANS_CERTIFICAT').replace(/_/g, ' ')}
+                    </span>
+                  } />
+                  {l.certificatPath && <PanelRow label="Fichier" value="Disponible" />}
+                </PanelSection>
+              </div>
+
+              {/* Footer actions */}
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexWrap: 'wrap', gap: 6, flexShrink: 0 }}>
+                <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5, flex: '1 1 auto' }}
+                  onClick={() => { setSelectedLot(null); showLineage(l) }}>
+                  {lineageLoading === l.id ? <RefreshCw size={12} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Eye size={12} />}
+                  Traçabilité
+                </button>
+                <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5, flex: '1 1 auto', color: certButtonColor(l) }}
+                  onClick={() => { setSelectedLot(null); setCertLot(l) }}>
+                  <Shield size={12} /> Certificat
+                </button>
+                {canChildForLot(l) && NEXT_GEN[gen] && (
+                  <button className="btn btn-primary" style={{ fontSize: 12, gap: 5, flex: '1 1 auto' }}
+                    onClick={() => {
+                      const nextGen = NEXT_GEN[gen]
+                      setSelectedLot(null); setParentLot(l)
+                      setChildForm({
+                        codeLot: suggestChildCode(l.codeLot || '', gen, nextGen),
+                        generationCode: nextGen, campagne: l.campagne || new Date().getFullYear().toString(),
+                        dateProduction: '', quantiteNette: '', unite: 'kg',
+                        tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '',
+                        superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '',
+                      })
+                      setShowChildLot(true)
+                    }}>
+                    <GitBranch size={12} /> Créer {NEXT_GEN[gen]}
+                  </button>
+                )}
+                {canTransferLot(l) && l.statutLot !== 'TRANSFERE' && (
+                  <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5, flex: '1 1 auto' }}
+                    onClick={() => {
+                      setSelectedLot(null); setParentLot(l)
+                      setTransferForm({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
+                      const targetRole = roleKey === 'seed-selector' ? 'seed-upsemcl' : 'seed-multiplicator'
+                      setMembresLoading(true)
+                      api.get(endpoints.membresByRole(targetRole))
+                        .then(r => setMembres(r.data))
+                        .catch(() => setMembres([]))
+                        .finally(() => setMembresLoading(false))
+                      setShowTransfer(true)
+                    }}>
+                    <ArrowRightLeft size={12} /> Transférer
+                  </button>
+                )}
+                {l.statutLot === 'TRANSFERE' && bordereauCache.has(l.id) && (
+                  <button className="btn btn-ghost" style={{ fontSize: 12, gap: 5, flex: '1 1 auto', color: '#0369a1' }}
+                    onClick={() => { const cached = bordereauCache.get(l.id); if (cached) generateTransferDoc(cached) }}>
+                    <FileText size={12} /> Bordereau
+                  </button>
+                )}
+                {canReception && gen === 'R2' && (
+                  <button className="btn btn-primary" style={{ fontSize: 12, gap: 5, flex: '1 1 auto' }}
+                    onClick={() => { setSelectedLot(null); setParentLot(l); setReceptionForm({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' }); setShowReception(true) }}>
+                    <Download size={12} /> Réceptionner
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        )
+      })()}
 
       {showNewLot && (() => {
         // Variétés filtrées par spécialisation pour le sélectionneur
@@ -2481,7 +2870,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 <FormInput type="number" value={transferForm.quantite} onChange={e => setTransferForm(f => ({ ...f, quantite: e.target.value }))} placeholder="500" min="0" step="0.01" />
               </Field>
               <Field label="Observations">
-                <textarea value={transferForm.observations} onChange={e => setTransferForm(f => ({ ...f, observations: e.target.value }))} placeholder="Notes sur le transfert…" style={{ width: '100%', minHeight: 70, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+                <textarea value={transferForm.observations} onChange={e => setTransferForm(f => ({ ...f, observations: e.target.value }))} placeholder="Notes sur le transfert…" style={{ width: '100%', minHeight: 70, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
               </Field>
               <FormActions onCancel={() => setShowTransfer(false)} loading={saving} submitLabel="Envoyer le transfert" />
             </form>

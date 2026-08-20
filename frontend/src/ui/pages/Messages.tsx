@@ -452,7 +452,7 @@ export function Messages({ roleKey, username }: Props) {
                           const sel = cmdVarieties.find(v => String(v.id) === e.target.value)
                           setCmdForm(f => ({ ...f, idVariete: e.target.value, nomVariete: sel?.nomVariete ?? '' }))
                         }}
-                        style={{ width: '100%', padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit,sans-serif', background: 'var(--surface)' }}
+                        style={{ width: '100%', padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', background: 'var(--surface)' }}
                       >
                         <option value="">— Choisir une variété —</option>
                         {Object.entries(
@@ -475,9 +475,9 @@ export function Messages({ roleKey, username }: Props) {
                       <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Quantité *</label>
                       <div style={{ display: 'flex', gap: 4 }}>
                         <input type="number" required min="1" value={cmdForm.quantite} onChange={e => setCmdForm(f => ({ ...f, quantite: e.target.value }))}
-                          style={{ flex: 1, padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit,sans-serif' }} placeholder="500" />
+                          style={{ flex: 1, padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)' }} placeholder="500" />
                         <select value={cmdForm.unite} onChange={e => setCmdForm(f => ({ ...f, unite: e.target.value }))}
-                          style={{ width: 54, padding: '5px 4px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 12, fontFamily: 'Outfit,sans-serif' }}>
+                          style={{ width: 54, padding: '5px 4px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 12, fontFamily: 'var(--font-sans)' }}>
                           <option value="kg">kg</option><option value="t">t</option>
                         </select>
                       </div>
@@ -485,7 +485,7 @@ export function Messages({ roleKey, username }: Props) {
                     <div style={{ marginBottom: 8 }}>
                       <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>Notes</label>
                       <input type="text" value={cmdForm.notes} onChange={e => setCmdForm(f => ({ ...f, notes: e.target.value }))}
-                        style={{ width: '100%', padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit,sans-serif' }} placeholder="Livraison Kaffrine…" />
+                        style={{ width: '100%', padding: '5px 9px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)' }} placeholder="Livraison Kaffrine…" />
                     </div>
                     <button type="submit" className="btn btn-primary" style={{ width: '100%', height: 32, fontSize: 12 }} disabled={sending}>
                       Envoyer la commande

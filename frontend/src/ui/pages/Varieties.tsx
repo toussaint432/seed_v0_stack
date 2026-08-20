@@ -9,6 +9,7 @@ import {
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeVariete, extractList } from '../../lib/normalizers'
+import { downloadCsv } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
@@ -56,6 +57,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [desarchiving,     setDesarchiving]     = useState(false)
 
   const [filterStatut, setFilterStatut] = useState<string>('')
+  const [moreMenuId,   setMoreMenuId]   = useState<number | null>(null)
+  const [hoverEspeceId, setHoverEspeceId] = useState<number | null>(null)
 
   const [allZones,      setAllZones]      = useState<any[]>([])
   const [zonesTarget,   setZonesTarget]   = useState<any>(null)
@@ -63,7 +66,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [savingZones,   setSavingZones]   = useState(false)
   const [zonesReadOnly, setZonesReadOnly] = useState(false)
 
-  type PdfUploadCtx  = { type: 'fiche' | 'itineraire'; id: number; name: string }
+  type PdfUploadCtx  = { type: 'fiche' | 'itineraire'; id: number; name: string; codeEspece?: string }
   type PdfViewerState = { url: string; title: string; downloadName: string; ctx?: PdfUploadCtx }
 
   const [pdfViewerModal, setPdfViewerModal] = useState<PdfViewerState | null>(null)
@@ -125,6 +128,13 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfViewerModal?.url])
 
+  useEffect(() => {
+    if (moreMenuId === null) return
+    const close = () => setMoreMenuId(null)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [moreMenuId])
+
   const [especeForm, setEspeceForm] = useState({
     codeEspece: '', nomCommun: '', nomScientifique: '',
   })
@@ -133,6 +143,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
     selectionneurPrincipal: '', anneeCreation: '', cycleMin: '', cycleMax: '',
     statutVariete: 'DIFFUSEE',
     pedigree: '', typeGrain: '', rendementMin: '', rendementMax: '',
+    anneeHomologation: '', natureGenetique: '', numeroSelection: '',
+    vocationCulturale: '', photosensibilite: '', synonyme: '',
   })
 
   const isAdmin           = roleKey === 'seed-admin'
@@ -142,8 +154,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   function canEdit(codeEspece?: string): boolean {
     if (isAdmin) return true
     if (isSelector) {
-      if (!userSpecialisation) return true
-      if (!codeEspece) return false
+      if (!userSpecialisation || !codeEspece) return false
       return codeEspece.toUpperCase() === userSpecialisation.toUpperCase()
     }
     return false
@@ -164,6 +175,13 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   }
 
   useEffect(() => { fetchData() }, [])
+
+  // Auto-sélectionner l'espèce de spécialisation dès que les espèces sont chargées
+  useEffect(() => {
+    if (!isSelector || !userSpecialisation || !species.length || selectedSpeciesId !== null) return
+    const match = species.find(s => s.codeEspece?.toUpperCase() === userSpecialisation.toUpperCase())
+    if (match) setSelectedSpeciesId(match.id)
+  }, [species, isSelector, userSpecialisation])
 
   const selectedSpecies  = species.find(s => s.id === selectedSpeciesId) ?? null
   const selectedVariety  = varieties.find(v => v.id === selectedVarietyId) ?? null
@@ -307,6 +325,12 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           typeGrain:              varieteForm.typeGrain      || null,
           rendementMin:           varieteForm.rendementMin   ? Number(varieteForm.rendementMin)   : null,
           rendementMax:           varieteForm.rendementMax   ? Number(varieteForm.rendementMax)   : null,
+          anneeHomologation:      varieteForm.anneeHomologation ? Number(varieteForm.anneeHomologation) : null,
+          natureGenetique:        varieteForm.natureGenetique   || null,
+          numeroSelection:        varieteForm.numeroSelection   || null,
+          vocationCulturale:      varieteForm.vocationCulturale || null,
+          photosensibilite:       varieteForm.photosensibilite  || null,
+          synonyme:               varieteForm.synonyme          || null,
         })
         setToast({ msg: 'Variété mise à jour', type: 'success' })
       } else {
@@ -324,12 +348,18 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           typeGrain:              varieteForm.typeGrain      || undefined,
           rendementMin:           varieteForm.rendementMin   ? Number(varieteForm.rendementMin)   : undefined,
           rendementMax:           varieteForm.rendementMax   ? Number(varieteForm.rendementMax)   : undefined,
+          anneeHomologation:      varieteForm.anneeHomologation ? Number(varieteForm.anneeHomologation) : undefined,
+          natureGenetique:        varieteForm.natureGenetique   || undefined,
+          numeroSelection:        varieteForm.numeroSelection   || undefined,
+          vocationCulturale:      varieteForm.vocationCulturale || undefined,
+          photosensibilite:       varieteForm.photosensibilite  || undefined,
+          synonyme:               varieteForm.synonyme          || undefined,
         })
         setToast({ msg: `Variété "${varieteForm.nomVariete}" créée`, type: 'success' })
       }
       setShowVarieteForm(false)
       setEditVariete(null)
-      setVarieteForm({ codeVariete: '', nomVariete: '', idEspece: '', origine: '', selectionneurPrincipal: '', anneeCreation: '', cycleMin: '', cycleMax: '', statutVariete: 'DIFFUSEE', pedigree: '', typeGrain: '', rendementMin: '', rendementMax: '' })
+      setVarieteForm({ codeVariete: '', nomVariete: '', idEspece: '', origine: '', selectionneurPrincipal: '', anneeCreation: '', cycleMin: '', cycleMax: '', statutVariete: 'DIFFUSEE', pedigree: '', typeGrain: '', rendementMin: '', rendementMax: '', anneeHomologation: '', natureGenetique: '', numeroSelection: '', vocationCulturale: '', photosensibilite: '', synonyme: '' })
       fetchData(true)
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
@@ -350,6 +380,12 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       typeGrain: v.typeGrain || '',
       rendementMin: v.rendementMin?.toString() || '',
       rendementMax: v.rendementMax?.toString() || '',
+      anneeHomologation: v.anneeHomologation?.toString() || '',
+      natureGenetique: v.natureGenetique || '',
+      numeroSelection: v.numeroSelection || '',
+      vocationCulturale: v.vocationCulturale || '',
+      photosensibilite: v.photosensibilite || '',
+      synonyme: v.synonyme || '',
     })
     setShowVarieteForm(true)
   }
@@ -362,6 +398,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       origine: '', selectionneurPrincipal: '', anneeCreation: '', cycleMin: '', cycleMax: '',
       statutVariete: 'DIFFUSEE',
       pedigree: '', typeGrain: '', rendementMin: '', rendementMax: '',
+      anneeHomologation: '', natureGenetique: '', numeroSelection: '',
+      vocationCulturale: '', photosensibilite: '', synonyme: '',
     })
     setShowVarieteForm(true)
   }
@@ -476,7 +514,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
               <Sprout size={14} color="var(--green-600)" />
-              <code style={{ fontFamily: 'DM Mono, monospace', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>{selectedVariety.codeVariete}</code>
+              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>{selectedVariety.codeVariete}</code>
               <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.nomVariete}</span>
               {selectedSpecies && (
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', borderLeft: '1px solid var(--border)', paddingLeft: 8 }}>
@@ -498,15 +536,15 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             </div>
           </div>
 
-          {/* Fiche variété — cards neutres */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+          {/* ── Ligne 1 : 4 KPI chips ───────────────────────────── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
             {/* Espèce */}
             <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
                 <Leaf size={18} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'Fraunces, serif', color: 'var(--text-primary)', lineHeight: 1.1 }}>{selectedVariety.espece?.codeEspece ?? '—'}</div>
+                <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)', lineHeight: 1.1 }}>{selectedVariety.espece?.codeEspece ?? '—'}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedVariety.espece?.nomCommun ?? 'Espèce'}</div>
               </div>
             </div>
@@ -532,7 +570,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <Clock size={18} />
               </div>
               <div>
-                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Fraunces, serif', color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)', lineHeight: 1.1 }}>
                   {selectedVariety.cycleMin != null && selectedVariety.cycleMax != null
                     ? (selectedVariety.cycleMin === selectedVariety.cycleMax ? `${selectedVariety.cycleMin} j` : `${selectedVariety.cycleMin}–${selectedVariety.cycleMax} j`)
                     : '—'}
@@ -547,7 +585,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <TrendingUp size={18} />
               </div>
               <div>
-                <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'Fraunces, serif', color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)', lineHeight: 1.1 }}>
                   {selectedVariety.rendementMin != null && selectedVariety.rendementMax != null
                     ? (selectedVariety.rendementMin === selectedVariety.rendementMax ? `${selectedVariety.rendementMin} t/ha` : `${selectedVariety.rendementMin}–${selectedVariety.rendementMax} t/ha`)
                     : '—'}
@@ -555,25 +593,129 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Rendement potentiel</div>
               </div>
             </div>
+          </div>
 
-            {/* Sélectionneur — pleine largeur si présent */}
-            {selectedVariety.selectionneurPrincipal && (
-              <div style={{ gridColumn: '1 / -1', background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 9, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                  <User size={15} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.selectionneurPrincipal}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Sélectionneur principal</div>
-                </div>
+          {/* ── Ligne 2 : Identification officielle + Agronomie ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 12, marginBottom: 12 }}>
+
+            {/* Identification officielle */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '16px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                <User size={13} color="var(--green-600)" />
+                <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Identification officielle</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
+                {selectedVariety.selectionneurPrincipal && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Sélectionneur principal</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.selectionneurPrincipal}</div>
+                  </div>
+                )}
                 {selectedVariety.anneeCreation && (
-                  <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-3)', padding: '3px 10px', borderRadius: 6 }}>
-                    Obtention {selectedVariety.anneeCreation}
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Année d'obtention</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{selectedVariety.anneeCreation}</div>
+                  </div>
+                )}
+                {selectedVariety.anneeHomologation && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Homologation</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{selectedVariety.anneeHomologation}</div>
+                  </div>
+                )}
+                {selectedVariety.numeroSelection && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>N° de sélection</div>
+                    <code style={{ fontSize: 11.5, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '2px 7px', borderRadius: 4, border: '1px solid var(--border)' }}>{selectedVariety.numeroSelection}</code>
+                  </div>
+                )}
+                {selectedVariety.synonyme && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Synonyme(s)</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontStyle: 'italic' }}>{selectedVariety.synonyme}</div>
+                  </div>
+                )}
+                {selectedVariety.origine && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Origine</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{selectedVariety.origine}</div>
+                  </div>
+                )}
+                {selectedVariety.pedigree && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Pedigree</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', lineHeight: 1.5 }}>{selectedVariety.pedigree}</div>
+                  </div>
+                )}
+                {!selectedVariety.selectionneurPrincipal && !selectedVariety.anneeCreation && !selectedVariety.anneeHomologation && !selectedVariety.numeroSelection && !selectedVariety.synonyme && !selectedVariety.origine && !selectedVariety.pedigree && (
+                  <div style={{ gridColumn: '1 / -1', color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic', textAlign: 'center', padding: '10px 0' }}>
+                    Aucune donnée d'identification renseignée
                   </div>
                 )}
               </div>
-            )}
+            </div>
+
+            {/* Agronomie */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '16px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                <FlaskConical size={13} color="var(--green-600)" />
+                <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Agronomie</span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {selectedVariety.natureGenetique && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Nature génétique</div>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.natureGenetique}</div>
+                  </div>
+                )}
+                {selectedVariety.photosensibilite && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Photosensibilité</div>
+                    <span style={{
+                      display: 'inline-block', fontSize: 11.5, fontWeight: 600,
+                      padding: '2px 9px', borderRadius: 5,
+                      background: selectedVariety.photosensibilite === 'Sensible' ? '#fef3c7' : selectedVariety.photosensibilite === 'Peu sensible' ? '#f0fdf4' : 'var(--surface-2)',
+                      color: selectedVariety.photosensibilite === 'Sensible' ? '#92400e' : selectedVariety.photosensibilite === 'Peu sensible' ? '#166534' : 'var(--text-secondary)',
+                      border: '1px solid',
+                      borderColor: selectedVariety.photosensibilite === 'Sensible' ? '#fcd34d' : selectedVariety.photosensibilite === 'Peu sensible' ? '#bbf7d0' : 'var(--border)',
+                    }}>{selectedVariety.photosensibilite}</span>
+                  </div>
+                )}
+                {selectedVariety.typeGrain && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Type de grain</div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{selectedVariety.typeGrain}</div>
+                  </div>
+                )}
+                {selectedVariety.vocationCulturale && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Vocation culturale</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{selectedVariety.vocationCulturale}</div>
+                  </div>
+                )}
+                {!selectedVariety.natureGenetique && !selectedVariety.photosensibilite && !selectedVariety.typeGrain && !selectedVariety.vocationCulturale && (
+                  <div style={{ color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic', textAlign: 'center', padding: '10px 0' }}>
+                    Aucune donnée agronomique renseignée
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+
+          {/* ── Ligne 3 : Documents ──────────────────────────────── */}
+          {selectedVariety.ficheVarietalePath && (
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <FileText size={14} color="var(--text-secondary)" />
+              <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Documents</span>
+              <button
+                className="btn btn-ghost"
+                style={{ height: 28, padding: '0 10px', borderRadius: 7, display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', fontWeight: 600 }}
+                onClick={() => setPdfViewerModal({ url: endpoints.varietyFicheUrl(selectedVariety.id), title: `Fiche variétale — ${selectedVariety.nomVariete}`, downloadName: `fiche-${selectedVariety.codeVariete}`, ctx: { type: 'fiche', id: selectedVariety.id, name: `${selectedVariety.codeVariete} — ${selectedVariety.nomVariete}`, codeEspece: selectedVariety.espece?.codeEspece } })}
+              >
+                <FileText size={12} /> Fiche variétale
+              </button>
+            </div>
+          )}
         </div>
 
       ) : selectedSpecies ? (
@@ -588,7 +730,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
               {React.createElement(ESPECE_ICONS[selectedSpecies.codeEspece] ?? ESPECE_ICONS.default, { size: 14, color: 'var(--green-600)' })}
-              <code style={{ fontFamily: 'DM Mono, monospace', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>{selectedSpecies.codeEspece}</code>
+              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>{selectedSpecies.codeEspece}</code>
               <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedSpecies.nomCommun}</span>
               {selectedSpecies.nomScientifique && (
                 <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', borderLeft: '1px solid var(--border)', paddingLeft: 8 }}>
@@ -609,7 +751,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <Sprout size={18} />
               </div>
               <div>
-                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiActive}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'var(--font-sans)', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiActive}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>variétés actives</div>
               </div>
             </div>
@@ -620,7 +762,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                  <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiDiffusee}</div>
+                  <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'var(--font-sans)', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiDiffusee}</div>
                   {!loading && kpiActive > 0 && (
                     <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, background: '#f0fdf4', padding: '1px 6px', borderRadius: 5 }}>{Math.round((kpiDiffusee / kpiActive) * 100)}%</span>
                   )}
@@ -634,7 +776,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <FlaskConical size={18} />
               </div>
               <div>
-                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiEnTest}</div>
+                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'var(--font-sans)', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiEnTest}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>en évaluation</div>
               </div>
             </div>
@@ -645,7 +787,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   <Archive size={18} />
                 </div>
                 <div>
-                  <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-muted)', lineHeight: 1.1 }}>{kpiArchived}</div>
+                  <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'var(--font-sans)', letterSpacing: '-0.03em', color: 'var(--text-muted)', lineHeight: 1.1 }}>{kpiArchived}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>archivées</div>
                 </div>
               </div>
@@ -682,84 +824,44 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
 
         /* Niveau 1 : vue globale */
         <div style={{ marginBottom: 20 }}>
-          {/* KPI cards — design neutre unifié */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
 
-            {/* Espèces */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                <Leaf size={18} />
-              </div>
-              <div>
-                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : species.length}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>espèces cultivées</div>
-              </div>
+            {/* Espèces cultivées */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '18px 20px 20px' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: 10 }}>Espèces cultivées</div>
+              <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1, marginBottom: 8 }}>{loading ? '…' : species.length}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>espèces enregistrées au catalogue</div>
             </div>
 
             {/* Variétés actives */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                <Sprout size={18} />
-              </div>
-              <div>
-                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiActive}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>variétés actives</div>
-              </div>
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '18px 20px 20px' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: 10 }}>Variétés actives</div>
+              <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1, marginBottom: 8 }}>{loading ? '…' : kpiActive}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>toutes espèces confondues</div>
             </div>
 
-            {/* Diffusées */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                <CheckCircle2 size={18} />
+            {/* Taux de diffusion avec mini barre intégrée */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '18px 20px 20px' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: 10 }}>Taux de diffusion</div>
+              <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1, marginBottom: 12 }}>
+                {loading ? '…' : kpiActive > 0 ? Math.round((kpiDiffusee / kpiActive) * 100) : '—'}
+                {!loading && kpiActive > 0 && <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 3 }}>%</span>}
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-                  <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiDiffusee}</div>
-                  {!loading && kpiActive > 0 && (
-                    <span style={{ fontSize: 12, color: '#16a34a', fontWeight: 700, background: '#f0fdf4', padding: '1px 6px', borderRadius: 5 }}>{Math.round((kpiDiffusee / kpiActive) * 100)}%</span>
-                  )}
+              {!loading && kpiActive > 0 && (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 11, color: 'var(--text-muted)' }}>
+                    <span><strong style={{ color: '#16a34a' }}>{kpiDiffusee}</strong> diffusées</span>
+                    <span><strong style={{ color: '#7c3aed' }}>{kpiEnTest}</strong> en test</span>
+                  </div>
+                  <div style={{ height: 5, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', display: 'flex', gap: 2 }}>
+                    {kpiDiffusee > 0 && <div style={{ width: `${(kpiDiffusee / kpiActive) * 100}%`, background: '#16a34a', borderRadius: 99, transition: 'width 0.8s ease' }} />}
+                    {kpiEnTest > 0 && <div style={{ width: `${(kpiEnTest / kpiActive) * 100}%`, background: '#7c3aed', borderRadius: 99, transition: 'width 0.8s ease' }} />}
+                  </div>
                 </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>diffusées</div>
-              </div>
+              )}
             </div>
 
-            {/* En test */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                <FlaskConical size={18} />
-              </div>
-              <div>
-                <div style={{ fontSize: 30, fontWeight: 800, fontFamily: 'Fraunces, serif', letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1.1 }}>{loading ? '…' : kpiEnTest}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>en évaluation</div>
-              </div>
-            </div>
           </div>
-
-          {/* Barre de distribution portfolio */}
-          {!loading && kpiActive > 0 && (
-            <div style={{ background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '10px 16px', boxShadow: 'var(--shadow-xs)', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Catalogue</span>
-              <div style={{ flex: 1, height: 7, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', display: 'flex' }}>
-                {kpiDiffusee > 0 && <div style={{ width: `${(kpiDiffusee / kpiActive) * 100}%`, background: '#16a34a', transition: 'width 0.8s ease' }} />}
-                {kpiEnTest > 0 && <div style={{ width: `${(kpiEnTest / kpiActive) * 100}%`, background: '#7c3aed', transition: 'width 0.8s ease' }} />}
-              </div>
-              <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: 2, background: '#16a34a', display: 'inline-block' }} />
-                  {kpiDiffusee} diffusées
-                </span>
-                {kpiEnTest > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: '#7c3aed', display: 'inline-block' }} />
-                    {kpiEnTest} en test
-                  </span>
-                )}
-                {kpiArchived > 0 && (
-                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{kpiArchived} archivée{kpiArchived > 1 ? 's' : ''}</span>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -842,6 +944,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       tabIndex={0}
                       onClick={() => { setSelectedSpeciesId(isActive ? null : s.id); setSelectedVarietyId(null) }}
                       onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { setSelectedSpeciesId(isActive ? null : s.id); setSelectedVarietyId(null) } }}
+                      onMouseEnter={() => setHoverEspeceId(s.id)}
+                      onMouseLeave={() => setHoverEspeceId(null)}
                       style={{ cursor: 'pointer' }}
                     >
                       <div style={{
@@ -880,15 +984,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                             width: 26, height: 26, borderRadius: 6, flexShrink: 0,
                             background: 'transparent', border: '1px solid transparent',
                             cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: 'var(--text-muted)', transition: 'all 0.15s',
-                          }}
-                          onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                            (e.currentTarget).style.background = 'var(--surface-3)'
-                            ;(e.currentTarget).style.borderColor = 'var(--border)'
-                          }}
-                          onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                            (e.currentTarget).style.background = 'transparent'
-                            ;(e.currentTarget).style.borderColor = 'transparent'
+                            color: 'var(--text-muted)', transition: 'opacity 0.15s',
+                            opacity: hoverEspeceId === s.id ? 1 : 0,
+                            pointerEvents: hoverEspeceId === s.id ? 'auto' : 'none',
                           }}
                         >
                           <History size={11} />
@@ -899,7 +997,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                         onClick={(e: React.MouseEvent) => {
                           e.stopPropagation()
                           if (hasItineraire) {
-                            setPdfViewerModal({ url: endpoints.especeItineraireUrl(s.id), title: `Itinéraire technique — ${s.nomCommun}`, downloadName: `itineraire-${s.codeEspece}.pdf`, ctx: { type: 'itineraire', id: s.id, name: s.nomCommun } })
+                            setPdfViewerModal({ url: endpoints.especeItineraireUrl(s.id), title: `Itinéraire technique — ${s.nomCommun}`, downloadName: `itineraire-${s.codeEspece}.pdf`, ctx: { type: 'itineraire', id: s.id, name: s.nomCommun, codeEspece: s.codeEspece } })
                           } else if (isAdmin || (isSelector && isMySpec)) {
                             setPdfUploadModal({ type: 'itineraire', id: s.id, name: s.nomCommun })
                           }
@@ -912,15 +1010,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           cursor: hasItineraire || isAdmin || (isSelector && isMySpec) ? 'pointer' : 'default',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
                           color: hasItineraire ? '#2563eb' : 'var(--text-muted)',
-                          transition: 'all 0.15s',
-                        }}
-                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-                          if (hasItineraire) { (e.currentTarget as HTMLButtonElement).style.background = '#dbeafe' }
-                          else if (isAdmin || (isSelector && isMySpec)) { (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface-3)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)' }
-                        }}
-                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-                          (e.currentTarget as HTMLButtonElement).style.background = hasItineraire ? '#eff6ff' : 'transparent'
-                          ;(e.currentTarget as HTMLButtonElement).style.borderColor = hasItineraire ? '#bfdbfe' : 'transparent'
+                          transition: 'opacity 0.15s',
+                          opacity: hoverEspeceId === s.id ? 1 : hasItineraire ? 0.6 : 0,
+                          pointerEvents: hoverEspeceId === s.id || hasItineraire ? 'auto' : 'none',
                         }}
                       >
                         {hasItineraire ? <FileText size={11} /> : isAdmin || (isSelector && isMySpec) ? <Upload size={11} /> : <FileText size={11} style={{ opacity: 0.25 }} />}
@@ -951,11 +1043,26 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 {filtered.length}{varieties.length !== filtered.length && `/${varieties.length}`}
               </span>
             </span>
-            {canCreateVariete && (
-              <button className="btn btn-primary" style={{ height: 30, fontSize: 12 }} onClick={openNewVariete}>
-                <Plus size={12} /> Nouvelle variété
-              </button>
-            )}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {filtered.length > 0 && (
+                <button
+                  onClick={() => downloadCsv(
+                    `varietes-${selectedSpecies?.codeEspece ?? 'catalogue'}-${new Date().toISOString().slice(0,10)}`,
+                    ['Code', 'Nom variété', 'Espèce', 'Statut', 'Origine', 'Type grain', 'Cycle min (j)', 'Cycle max (j)', 'Rendement min (t/ha)', 'Rendement max (t/ha)', 'Année création', 'Année homologation', 'Sélectionneur', 'Nature génétique', 'Vocation culturale'],
+                    filtered.map(v => [v.codeVariete, v.nomVariete, v.espece?.nomCommun ?? v.espece?.codeEspece ?? '', v.statutVariete ?? '', v.origine ?? '', v.typeGrain ?? '', v.cycleMin ?? '', v.cycleMax ?? '', v.rendementMin ?? '', v.rendementMax ?? '', v.anneeCreation ?? '', v.anneeHomologation ?? '', v.selectionneurPrincipal ?? '', v.natureGenetique ?? '', v.vocationCulturale ?? ''])
+                  )}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '4px 10px', height: 30, borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', whiteSpace: 'nowrap' as const }}
+                  title="Télécharger la liste des variétés en CSV"
+                >
+                  ⬇ CSV
+                </button>
+              )}
+              {canCreateVariete && (
+                <button className="btn btn-primary" style={{ height: 30, fontSize: 12 }} onClick={openNewVariete}>
+                  <Plus size={12} /> Nouvelle variété
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Barre de recherche + chip espèce active */}
@@ -977,7 +1084,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   placeholder={selectedSpecies ? `Rechercher dans ${selectedSpecies.nomCommun}…` : 'Code, nom, espèce…'}
                   value={search}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-                  style={{ border: 'none', background: 'none', outline: 'none', flex: 1, fontSize: 13, fontFamily: 'Outfit, sans-serif' }}
+                  style={{ border: 'none', background: 'none', outline: 'none', flex: 1, fontSize: 13, fontFamily: 'var(--font-sans)' }}
                 />
                 {search && (
                   <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', color: 'var(--text-muted)' }}>
@@ -1035,8 +1142,6 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                     { field: 'codeVariete',   label: 'Code',        paddingLeft: 20 as number | undefined },
                     { field: 'nomVariete',    label: 'Nom variété', paddingLeft: undefined },
                     { field: 'espece',        label: 'Espèce',      paddingLeft: undefined },
-                    { field: 'cycleMin',      label: 'Cycle',       paddingLeft: undefined },
-                    { field: 'rendementMin',  label: 'Rendement',   paddingLeft: undefined },
                     { field: 'statutVariete', label: 'Statut',      paddingLeft: undefined },
                   ].map(col => {
                     const active = sortField === col.field
@@ -1061,7 +1166,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 {loading
                   ? [0, 1, 2, 3, 4].map(i => (
                       <tr key={i}>
-                        <td colSpan={7}>
+                        <td colSpan={5}>
                           <div className="skeleton" style={{ height: 14, borderRadius: 4 }} />
                         </td>
                       </tr>
@@ -1069,7 +1174,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   : sorted.length === 0
                   ? (
                       <tr>
-                        <td colSpan={7}>
+                        <td colSpan={5}>
                           <div className="empty-state" style={{ padding: '48px 0' }}>
                             <div className="empty-icon"><Sprout size={20} /></div>
                             <div className="empty-title">
@@ -1113,7 +1218,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                               border:       '1px solid',
                               borderColor:  isSelected ? 'var(--green-200)' : 'var(--border)',
                               borderRadius: 5, padding: '2px 7px',
-                              fontSize: 11.5, fontFamily: 'DM Mono, monospace',
+                              fontSize: 11.5, fontFamily: 'var(--font-mono)',
                               fontWeight: 700, letterSpacing: '0.03em',
                               textDecoration: isArchived ? 'line-through' : 'none',
                             }}>
@@ -1124,21 +1229,25 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           {/* Nom variété */}
                           <td>
                             <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 13.5 }}>{v.nomVariete}</div>
-                            {v.origine && (
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{v.origine}</div>
-                            )}
-                            {v.typeGrain && (
-                              <div style={{
-                                display: 'inline-flex', alignItems: 'center', marginTop: 4,
-                                fontSize: 10.5, fontWeight: 500,
-                                padding: '1px 7px', borderRadius: 4,
-                                background: 'var(--surface-2)',
-                                color: 'var(--text-secondary)',
-                                border: '1px solid var(--border)',
-                              }}>
-                                {v.typeGrain}
-                              </div>
-                            )}
+                            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 3, marginTop: 2 }}>
+                              {v.origine && <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{v.origine}</span>}
+                              {v.typeGrain && (
+                                <>
+                                  {v.origine && <span style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.4 }}>·</span>}
+                                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{v.typeGrain}</span>
+                                </>
+                              )}
+                              {(v.cycleMin != null || v.rendementMin != null) && (
+                                <>
+                                  {(v.origine || v.typeGrain) && <span style={{ fontSize: 11, color: 'var(--text-muted)', opacity: 0.4 }}>·</span>}
+                                  <span style={{ fontSize: 10.5, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
+                                    {v.cycleMin != null ? (v.cycleMin === v.cycleMax ? `${v.cycleMin}j` : `${v.cycleMin}–${v.cycleMax}j`) : ''}
+                                    {v.cycleMin != null && v.rendementMin != null ? ' · ' : ''}
+                                    {v.rendementMin != null ? (v.rendementMin === v.rendementMax ? `${v.rendementMin} t/ha` : `${v.rendementMin}–${v.rendementMax} t/ha`) : ''}
+                                  </span>
+                                </>
+                              )}
+                            </div>
                             {isArchived && v.commentaireArchivage && (
                               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 4, marginTop: 4, fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>
                                 <MessageSquare size={10} style={{ marginTop: 1, flexShrink: 0 }} />
@@ -1162,119 +1271,115 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                             ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
                           </td>
 
-                          {/* Cycle */}
-                          <td>
-                            {v.cycleMin != null && v.cycleMax != null
-                              ? <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
-                                  {v.cycleMin === v.cycleMax ? `${v.cycleMin} j` : `${v.cycleMin}–${v.cycleMax} j`}
-                                </span>
-                              : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                          </td>
-
-                          {/* Rendement */}
-                          <td>
-                            {v.rendementMin != null && v.rendementMax != null
-                              ? <span style={{ fontSize: 12.5, color: 'var(--text-secondary)', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
-                                  {v.rendementMin === v.rendementMax
-                                    ? `${v.rendementMin} t/ha`
-                                    : `${v.rendementMin}–${v.rendementMax} t/ha`}
-                                </span>
-                              : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                          </td>
-
                           {/* Statut */}
                           <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
 
                           {/* Actions */}
                           <td onClick={(e: React.MouseEvent) => e.stopPropagation()} style={{ paddingRight: 12 }}>
-                            <div style={{ display: 'flex', gap: 2, justifyContent: 'flex-end', alignItems: 'center' }}>
-                              {/* Fiche variétale — visible pour tous quand disponible */}
-                              {v.ficheVarietalePath ? (
+                            <div style={{ display: 'flex', gap: 3, justifyContent: 'flex-end', alignItems: 'center' }}>
+                              {/* Modifier — bouton principal visible */}
+                              {isAdminOrSelector && !isArchived && (
                                 <button
                                   className="btn btn-ghost"
-                                  style={{ height: 28, padding: '0 8px', borderRadius: 7, display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', fontWeight: 600 }}
-                                  onClick={() => setPdfViewerModal({ url: endpoints.varietyFicheUrl(v.id), title: `Fiche variétale — ${v.nomVariete}`, downloadName: `fiche-${v.codeVariete}`, ctx: { type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}` } })}
-                                  title="Lire la fiche variétale"
+                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', ...dStyle }}
+                                  onClick={() => { if (allowed) openEdit(v) }}
+                                  title={allowed ? 'Modifier' : dTitle}
                                 >
-                                  <FileText size={11} /> Fiche
-                                </button>
-                              ) : isAdminOrSelector && !isArchived && allowed ? (
-                                <button
-                                  className="btn btn-ghost"
-                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}
-                                  onClick={() => setPdfUploadModal({ type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}` })}
-                                  title="Uploader la fiche variétale PDF"
-                                >
-                                  <Upload size={12} />
-                                </button>
-                              ) : null}
-                              {/* Historique des modifications */}
-                              {isAdminOrSelector && (
-                                <button
-                                  className="btn btn-ghost"
-                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}
-                                  onClick={() => openHistorique(v)}
-                                  title="Historique des modifications"
-                                >
-                                  <History size={13} />
+                                  <Edit2 size={13} />
                                 </button>
                               )}
-                              {/* Zones agro-écologiques — visible à tous les rôles */}
-                              {!isArchived && (
+                              {/* Archiver — bouton secondaire visible */}
+                              {isAdminOrSelector && !isArchived && (
                                 <button
                                   className="btn btn-ghost"
-                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--primary)' : 'var(--text-muted)' }}
-                                  onClick={() => openZones(v, !allowed)}
-                                  title={allowed ? 'Zones agro-écologiques (édition)' : 'Zones agro-écologiques (lecture seule)'}
+                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--gold-dark)' : undefined, ...dStyle }}
+                                  onClick={() => { if (allowed) { setArchiveTarget(v); setArchiveComment('') } }}
+                                  title={allowed ? 'Archiver' : dTitle}
                                 >
-                                  <MapPin size={13} />
+                                  <Archive size={13} />
                                 </button>
                               )}
-                              {/* Gestion admin/sélectionneur */}
-                              {isAdminOrSelector && (
+                              {/* Désarchiver + Supprimer pour variétés archivées */}
+                              {isAdminOrSelector && isArchived && allowed && (
                                 <>
-                                  {!isArchived && (
-                                    <>
-                                      <button
-                                        className="btn btn-ghost"
-                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', ...dStyle }}
-                                        onClick={() => { if (allowed) openEdit(v) }}
-                                        title={allowed ? 'Modifier' : dTitle}
-                                      >
-                                        <Edit2 size={13} />
-                                      </button>
-                                      <button
-                                        className="btn btn-ghost"
-                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: allowed ? 'var(--gold-dark)' : undefined, ...dStyle }}
-                                        onClick={() => { if (allowed) { setArchiveTarget(v); setArchiveComment('') } }}
-                                        title={allowed ? 'Archiver' : dTitle}
-                                      >
-                                        <Archive size={13} />
-                                      </button>
-                                    </>
-                                  )}
-                                  {isArchived && allowed && (
-                                    <>
-                                      <button
-                                        className="btn btn-ghost"
-                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green-700)' }}
-                                        onClick={() => setDesarchiveTarget(v)}
-                                        title="Désarchiver"
-                                      >
-                                        <RotateCcw size={13} />
-                                      </button>
-                                      <button
-                                        className="btn btn-ghost"
-                                        style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red-600)' }}
-                                        onClick={() => { setDeleteTarget(v); setDeleteComment('') }}
-                                        title="Supprimer définitivement"
-                                      >
-                                        <Trash2 size={13} />
-                                      </button>
-                                    </>
-                                  )}
+                                  <button
+                                    className="btn btn-ghost"
+                                    style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--green-700)' }}
+                                    onClick={() => setDesarchiveTarget(v)}
+                                    title="Désarchiver"
+                                  >
+                                    <RotateCcw size={13} />
+                                  </button>
+                                  <button
+                                    className="btn btn-ghost"
+                                    style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--red-600)' }}
+                                    onClick={() => { setDeleteTarget(v); setDeleteComment('') }}
+                                    title="Supprimer définitivement"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
                                 </>
                               )}
+                              {/* ··· menu actions secondaires */}
+                              <div style={{ position: 'relative' }}>
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}
+                                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); setMoreMenuId(moreMenuId === v.id ? null : v.id) }}
+                                  title="Plus d'actions"
+                                >
+                                  ···
+                                </button>
+                                {moreMenuId === v.id && (
+                                  <div
+                                    style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.10)', minWidth: 172, padding: 4 }}
+                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                                  >
+                                    {/* Fiche variétale */}
+                                    {v.ficheVarietalePath ? (
+                                      <button
+                                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const }}
+                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--surface-2)' }}
+                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'none' }}
+                                        onClick={() => { setPdfViewerModal({ url: endpoints.varietyFicheUrl(v.id), title: `Fiche variétale — ${v.nomVariete}`, downloadName: `fiche-${v.codeVariete}`, ctx: { type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}`, codeEspece: v.espece?.codeEspece } }); setMoreMenuId(null) }}
+                                      >
+                                        <FileText size={12} /> Fiche variétale
+                                      </button>
+                                    ) : isAdminOrSelector && !isArchived && allowed ? (
+                                      <button
+                                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const }}
+                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--surface-2)' }}
+                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'none' }}
+                                        onClick={() => { setPdfUploadModal({ type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}` }); setMoreMenuId(null) }}
+                                      >
+                                        <Upload size={12} /> Uploader fiche PDF
+                                      </button>
+                                    ) : null}
+                                    {/* Historique */}
+                                    {isAdminOrSelector && (
+                                      <button
+                                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const }}
+                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--surface-2)' }}
+                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'none' }}
+                                        onClick={() => { openHistorique(v); setMoreMenuId(null) }}
+                                      >
+                                        <History size={12} /> Historique
+                                      </button>
+                                    )}
+                                    {/* Zones agro-écologiques */}
+                                    {!isArchived && (
+                                      <button
+                                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const }}
+                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--surface-2)' }}
+                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'none' }}
+                                        onClick={() => { openZones(v, !allowed); setMoreMenuId(null) }}
+                                      >
+                                        <MapPin size={12} /> Zones agro-écologiques
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -1341,7 +1446,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             {/* En-tête identité — code (immuable) + espèce (immuable) */}
             {editVariete ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', marginBottom: 18 }}>
-                <code style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>{editVariete.codeVariete}</code>
+                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>{editVariete.codeVariete}</code>
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>·</span>
                 <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{editVariete.espece?.codeEspece} — {editVariete.espece?.nomCommun}</span>
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>Code et espèce immuables</span>
@@ -1416,6 +1521,43 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </Field>
             </FormRow>
 
+            {/* ── Identification officielle ISRA/CNRA ────────── */}
+            <div style={{ marginTop: 18, marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Identification officielle</span>
+            </div>
+            <FormRow>
+              <Field label="Année d'homologation" hint="Inscription au catalogue national">
+                <FormInput type="number" value={varieteForm.anneeHomologation} onChange={e => setVarieteForm(f => ({ ...f, anneeHomologation: e.target.value }))} placeholder="1975" min="1900" max="2030" />
+              </Field>
+              <Field label="N° de sélection" hint="Référence interne ISRA (ex : IS 9830)">
+                <FormInput value={varieteForm.numeroSelection} onChange={e => setVarieteForm(f => ({ ...f, numeroSelection: e.target.value }))} placeholder="IS 9830" />
+              </Field>
+              <Field label="Synonyme(s)" hint="Autre(s) nom(s) connu(s)">
+                <FormInput value={varieteForm.synonyme} onChange={e => setVarieteForm(f => ({ ...f, synonyme: e.target.value }))} placeholder="73-BS" />
+              </Field>
+            </FormRow>
+
+            {/* ── Agronomie ─────────────────────────────────── */}
+            <div style={{ marginTop: 14, marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Agronomie</span>
+            </div>
+            <FormRow>
+              <Field label="Nature génétique" hint="ex : Lignée pure, OPV, Hybride F1">
+                <FormInput value={varieteForm.natureGenetique} onChange={e => setVarieteForm(f => ({ ...f, natureGenetique: e.target.value }))} placeholder="Lignée pure" />
+              </Field>
+              <Field label="Photosensibilité" hint="Réponse à la durée du jour">
+                <FormSelect value={varieteForm.photosensibilite} onChange={e => setVarieteForm(f => ({ ...f, photosensibilite: e.target.value }))}>
+                  <option value="">— Non renseigné —</option>
+                  <option value="Neutre">Neutre</option>
+                  <option value="Sensible">Sensible</option>
+                  <option value="Peu sensible">Peu sensible</option>
+                </FormSelect>
+              </Field>
+            </FormRow>
+            <Field label="Vocation culturale" hint="Systèmes de culture cibles (pluvial, irrigué, bas-fonds…)">
+              <FormInput value={varieteForm.vocationCulturale} onChange={e => setVarieteForm(f => ({ ...f, vocationCulturale: e.target.value }))} placeholder="Pluvial / Bas-fonds" />
+            </Field>
+
             {editVariete && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', marginTop: 4 }}>
                 <History size={13} color="var(--text-muted)" />
@@ -1439,7 +1581,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           <form onSubmit={submitArchive}>
             <Field label="Motif d'archivage" required hint="Obligatoire — ex : variété obsolète, remplacée par une nouvelle sélection">
               <textarea value={archiveComment} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setArchiveComment(e.target.value)} placeholder="Expliquez pourquoi cette variété est archivée…" required
-                style={{ width: '100%', minHeight: 90, padding: '9px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box', lineHeight: 1.55 }}
+                style={{ width: '100%', minHeight: 90, padding: '9px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', lineHeight: 1.55 }}
                 onFocus={e => { e.currentTarget.style.borderColor = 'var(--border-focus)' }}
                 onBlur={e =>  { e.currentTarget.style.borderColor = 'var(--border-strong)' }}
               />
@@ -1467,7 +1609,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           <form onSubmit={submitDelete}>
             <Field label="Confirmez en tapant la raison de suppression" required hint="Ce commentaire sera enregistré dans le journal d'audit avant suppression">
               <textarea value={deleteComment} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDeleteComment(e.target.value)} placeholder="Raison de la suppression définitive…" required
-                style={{ width: '100%', minHeight: 80, padding: '9px 12px', border: '1px solid #fecaca', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box', lineHeight: 1.55 }}
+                style={{ width: '100%', minHeight: 80, padding: '9px 12px', border: '1px solid #fecaca', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', lineHeight: 1.55 }}
                 onFocus={e => { e.currentTarget.style.borderColor = 'var(--red-500)' }}
                 onBlur={e =>  { e.currentTarget.style.borderColor = '#fecaca' }}
               />
@@ -1616,11 +1758,11 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{h.champ}</td>
                       <td style={{ padding: '9px 12px', color: 'var(--text-muted)', maxWidth: 180 }}>
                         {h.ancienneValeur
-                          ? <span style={{ background: '#fef2f2', color: '#dc2626', padding: '1px 6px', borderRadius: 4, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>{h.ancienneValeur}</span>
+                          ? <span style={{ background: '#fef2f2', color: '#dc2626', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{h.ancienneValeur}</span>
                           : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>—</span>}
                       </td>
                       <td style={{ padding: '9px 12px', maxWidth: 180 }}>
-                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>{h.nouvelleValeur ?? '—'}</span>
+                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{h.nouvelleValeur ?? '—'}</span>
                       </td>
                       <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 99 }}>
@@ -1683,11 +1825,11 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       <td style={{ padding: '9px 12px', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{h.champ ?? '—'}</td>
                       <td style={{ padding: '9px 12px', color: 'var(--text-muted)', maxWidth: 160 }}>
                         {h.ancienneValeur
-                          ? <span style={{ background: '#fef2f2', color: '#dc2626', padding: '1px 6px', borderRadius: 4, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>{h.ancienneValeur}</span>
+                          ? <span style={{ background: '#fef2f2', color: '#dc2626', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{h.ancienneValeur}</span>
                           : <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>—</span>}
                       </td>
                       <td style={{ padding: '9px 12px', maxWidth: 160 }}>
-                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontFamily: 'DM Mono, monospace', fontSize: 11.5 }}>{h.nouvelleValeur ?? '—'}</span>
+                        <span style={{ background: '#f0fdf4', color: '#16a34a', padding: '1px 6px', borderRadius: 4, fontFamily: 'var(--font-mono)', fontSize: 11.5 }}>{h.nouvelleValeur ?? '—'}</span>
                       </td>
                       <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 99 }}>
@@ -1772,8 +1914,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Lecture seule dans votre navigateur.</span>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                {/* Boutons gestion — admin/sélectionneur seulement */}
-                {isAdminOrSelector && pdfViewerModal.ctx && (
+                {/* Boutons gestion — admin ou sélectionneur de la bonne spécialisation */}
+                {pdfViewerModal.ctx && (isAdmin || canEdit(pdfViewerModal.ctx.codeEspece)) && (
                   confirmDelete ? (
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 12px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca' }}>
                       <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 600 }}>Supprimer définitivement ?</span>

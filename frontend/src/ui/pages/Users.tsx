@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react'
 import {
   Users as UsersIcon, Plus, RefreshCw, Search, X, Shield, User,
-  AlertTriangle, Activity, Eye, AlertCircle, Info,
+  AlertTriangle, Activity, Eye, AlertCircle, Info, Download,
 } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
+import { downloadCsv } from '../../lib/exportUtils'
 
 interface Props { roleKey: string }
 
@@ -337,7 +338,7 @@ export function Users({ roleKey }: Props) {
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
         padding: '10px 20px', fontSize: 13, fontWeight: 600,
-        fontFamily: 'Outfit, sans-serif',
+        fontFamily: 'var(--font-sans)',
         color: tab === id ? 'var(--green-600)' : 'var(--text-muted)',
         borderBottom: tab === id ? '2px solid var(--green-600)' : '2px solid transparent',
         marginBottom: -2,
@@ -362,7 +363,7 @@ export function Users({ roleKey }: Props) {
       <input
         placeholder={placeholder} value={value}
         onChange={e => setter(e.target.value)}
-        style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', width }}
+        style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'var(--font-sans)', width }}
       />
       {value && <button onClick={() => setter('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
     </div>
@@ -426,7 +427,33 @@ export function Users({ roleKey }: Props) {
               Utilisateurs
               <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{filtered.length}</span>
             </span>
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={13} /> Nouvel utilisateur</button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {filtered.length > 0 && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ gap: 5, fontSize: 12 }}
+                  onClick={() => downloadCsv(
+                    `utilisateurs-${new Date().toISOString().slice(0, 10)}`,
+                    ['Prénom', 'Nom', 'Username', 'Email', 'Rôle plateforme', 'Statut'],
+                    filtered.map(u => {
+                      const roles        = userRoles[u.id] ?? []
+                      const platformRole = getPlatformRole(roles)
+                      return [
+                        u.firstName ?? '',
+                        u.lastName  ?? '',
+                        u.username  ?? '',
+                        u.email     ?? '',
+                        platformRole ? getRoleLabel(platformRole) : '',
+                        u.enabled ? 'Actif' : 'Inactif',
+                      ]
+                    })
+                  )}
+                >
+                  <Download size={13} /> CSV
+                </button>
+              )}
+              <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={13} /> Nouvel utilisateur</button>
+            </div>
           </div>
 
           {accessError && (
@@ -539,7 +566,7 @@ export function Users({ roleKey }: Props) {
               <select
                 value={eventTypeFilter}
                 onChange={e => setEventTypeFilter(e.target.value)}
-                style={{ height: 34, border: '1px solid var(--border-strong)', borderRadius: 6, background: 'var(--surface)', fontSize: 13, fontFamily: 'Outfit, sans-serif', padding: '0 11px', color: 'var(--text-primary)', cursor: 'pointer' }}
+                style={{ height: 34, border: '1px solid var(--border-strong)', borderRadius: 6, background: 'var(--surface)', fontSize: 13, fontFamily: 'var(--font-sans)', padding: '0 11px', color: 'var(--text-primary)', cursor: 'pointer' }}
               >
                 <option value="">Tous les types</option>
                 {uniqueTypes.map(t => <option key={t} value={t}>{getEventMeta(t).label}</option>)}
@@ -592,7 +619,7 @@ export function Users({ roleKey }: Props) {
                             </td>
                             <td style={{ fontSize: 12 }}>{meta.label}</td>
                             <td><EventStatusBadge status={meta.status} /></td>
-                            <td style={{ fontSize: 12, fontFamily: 'DM Mono, monospace', color: 'var(--text-muted)' }}>{ev.ipAddress ?? '—'}</td>
+                            <td style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{ev.ipAddress ?? '—'}</td>
                             <td style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{formatDate(ev.time)}</td>
                             <td style={{ textAlign: 'center' }}>
                               <button
@@ -654,7 +681,7 @@ export function Users({ roleKey }: Props) {
                       style={{
                         width: '100%', padding: '0 12px', height: 36, borderRadius: 6,
                         border: '1px solid var(--border-strong)', background: 'var(--surface)',
-                        fontSize: 13, fontFamily: 'Outfit, sans-serif', color: 'var(--text)',
+                        fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text)',
                         cursor: 'pointer',
                       }}
                     >
@@ -689,7 +716,7 @@ export function Users({ roleKey }: Props) {
                   style={{
                     width: '100%', padding: '0 12px', height: 36, borderRadius: 6,
                     border: '1px solid var(--border-strong)', background: 'var(--surface)',
-                    fontSize: 13, fontFamily: 'Outfit, sans-serif', color: 'var(--text)',
+                    fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text)',
                     cursor: 'pointer',
                   }}
                 >
@@ -751,7 +778,7 @@ export function Users({ roleKey }: Props) {
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Client</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'DM Mono, monospace' }}>{ev.clientId ?? '—'}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>{ev.clientId ?? '—'}</div>
               </div>
             </div>
 
@@ -777,7 +804,7 @@ export function Users({ roleKey }: Props) {
               <SectionLabel icon={<Info size={12} />} text="Informations" />
               <DetailGrid>
                 <DetailCell label="Adresse IP">
-                  <span style={{ fontFamily: 'DM Mono, monospace', fontWeight: 600 }}>{ev.ipAddress ?? '—'}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{ev.ipAddress ?? '—'}</span>
                 </DetailCell>
                 <DetailCell label="Navigateur">
                   <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: 12 }}>Non renseigné</span>
@@ -801,14 +828,14 @@ export function Users({ roleKey }: Props) {
               {ev.sessionId && (
                 <div style={{ marginTop: 14 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 4 }}>Session ID</div>
-                  <div style={{ fontSize: 11, fontFamily: 'DM Mono, monospace', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{ev.sessionId}</div>
+                  <div style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', wordBreak: 'break-all' }}>{ev.sessionId}</div>
                 </div>
               )}
 
               {ev.details && Object.keys(ev.details).filter(k => !['username', 'auth_method', 'auth_type', 'redirect_uri', 'consent', 'code_id'].includes(k)).length > 0 && (
                 <div style={{ marginTop: 14 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 6 }}>Détails supplémentaires</div>
-                  <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 12px', fontSize: 11, fontFamily: 'DM Mono, monospace', color: 'var(--text-secondary)' }}>
+                  <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '10px 12px', fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
                     {Object.entries(ev.details)
                       .filter(([k]) => !['auth_method', 'auth_type', 'redirect_uri', 'consent', 'code_id'].includes(k))
                       .map(([k, v]) => (

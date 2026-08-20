@@ -66,14 +66,14 @@ function BarChart({ data, height = 120 }: { data: { label: string; value: number
             <text
               x={`${i * barW + barW / 2}%`} y={height - 4}
               textAnchor="middle" fontSize={9} fill="var(--text-muted)"
-              style={{ fontFamily: 'Outfit, sans-serif' }}
+              style={{ fontFamily: 'var(--font-sans)' }}
             >
               {d.label.length > 8 ? d.label.slice(0, 8) + '…' : d.label}
             </text>
             <text
               x={`${i * barW + barW / 2}%`} y={y - 3}
               textAnchor="middle" fontSize={9} fontWeight={700} fill={d.color}
-              style={{ fontFamily: 'Outfit, sans-serif' }}
+              style={{ fontFamily: 'var(--font-sans)' }}
             >
               {d.value}
             </text>
@@ -118,7 +118,7 @@ function LineChart({ data, height = 100, color = '#0369a1' }: { data: MonthlyPoi
         <g key={i}>
           <circle cx={p.x} cy={p.y} r={3} fill={color} />
           <text x={p.x} y={padY + innerH + 11} textAnchor="middle" fontSize={8}
-            fill="var(--text-muted)" style={{ fontFamily: 'Outfit, sans-serif' }}>
+            fill="var(--text-muted)" style={{ fontFamily: 'var(--font-sans)' }}>
             {p.month}
           </text>
         </g>

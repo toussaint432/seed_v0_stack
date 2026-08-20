@@ -428,7 +428,7 @@ export function Certifications({ roleKey }: Props) {
                 onChange={e => { setSearch(e.target.value); setCurrentPage(1) }}
                 style={{
                   border: 'none', background: 'none', outline: 'none',
-                  fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 240,
+                  fontSize: 13, fontFamily: 'var(--font-sans)', width: 240,
                 }}
               />
               {search && (
@@ -819,7 +819,7 @@ export function Certifications({ roleKey }: Props) {
                 style={{
                   width: '100%', minHeight: 90, padding: '8px 11px',
                   border: '1px solid var(--border-strong)', borderRadius: 6,
-                  fontSize: 13, fontFamily: 'Outfit, sans-serif',
+                  fontSize: 13, fontFamily: 'var(--font-sans)',
                   resize: 'vertical', outline: 'none', boxSizing: 'border-box',
                 }}
               />

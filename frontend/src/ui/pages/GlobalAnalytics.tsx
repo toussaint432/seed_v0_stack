@@ -107,7 +107,7 @@ function BarChart({ data, yLabel = 'Quantité demandée (kg)' }: { data: BarDatu
               stroke="var(--border)" strokeWidth={t === TICKS ? 1.5 : 0.7}
               strokeDasharray={t === TICKS ? '0' : '3,4'} />
             <text x={PAD_L - 6} y={y + 4} textAnchor="end"
-              fontSize={9} fill="var(--text-muted)" fontFamily="Outfit,sans-serif">
+              fontSize={9} fill="var(--text-muted)" fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
               {v > 999 ? `${(v/1000).toFixed(0)}k` : v}
             </text>
           </g>
@@ -137,7 +137,7 @@ function BarChart({ data, yLabel = 'Quantité demandée (kg)' }: { data: BarDatu
             {d.value > 0 && (
               <text x={x + bw / 2} y={y - 5} textAnchor="middle"
                 fontSize={isHov ? 10 : 9} fontWeight={700} fill={d.color}
-                fontFamily="Outfit,sans-serif"
+                fontFamily="Plus Jakarta Sans, system-ui, sans-serif"
                 style={{ transition: 'font-size 0.1s' }}>
                 {d.value > 9999 ? `${(d.value/1000).toFixed(1)}k` : d.value.toLocaleString('fr-FR')} kg
               </text>
@@ -146,13 +146,13 @@ function BarChart({ data, yLabel = 'Quantité demandée (kg)' }: { data: BarDatu
             {/* Label X — variété */}
             <text x={x + bw / 2} y={PAD_T + innerH + 14} textAnchor="middle"
               fontSize={9} fill={isHov ? d.color : 'var(--text-secondary)'}
-              fontWeight={isHov ? 700 : 400} fontFamily="Outfit,sans-serif">
+              fontWeight={isHov ? 700 : 400} fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
               {d.label.length > 10 ? d.label.slice(0, 10) + '…' : d.label}
             </text>
             {/* Label X — génération */}
             <text x={x + bw / 2} y={PAD_T + innerH + 26} textAnchor="middle"
               fontSize={8} fill={d.color} fontWeight={600}
-              fontFamily="Outfit,sans-serif" opacity={0.8}>
+              fontFamily="Plus Jakarta Sans, system-ui, sans-serif" opacity={0.8}>
               {d.gen}
             </text>
 
@@ -163,12 +163,12 @@ function BarChart({ data, yLabel = 'Quantité demandée (kg)' }: { data: BarDatu
                   rx={5} fill="var(--text-primary)" opacity={0.92} />
                 <text x={x + bw / 2} y={y - 28} textAnchor="middle"
                   fontSize={9} fill="#fff" fontWeight={700}
-                  fontFamily="Outfit,sans-serif">
+                  fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
                   {d.label}
                 </text>
                 <text x={x + bw / 2} y={y - 16} textAnchor="middle"
                   fontSize={9} fill={d.color} fontWeight={600}
-                  fontFamily="Outfit,sans-serif">
+                  fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
                   {d.value.toLocaleString('fr-FR')} kg · {GEN_LABEL[d.gen] ?? d.gen}
                 </text>
               </g>
@@ -179,7 +179,7 @@ function BarChart({ data, yLabel = 'Quantité demandée (kg)' }: { data: BarDatu
 
       {/* Label axe Y */}
       <text x={10} y={PAD_T + innerH / 2} textAnchor="middle"
-        fontSize={9} fill="var(--text-muted)" fontFamily="Outfit,sans-serif"
+        fontSize={9} fill="var(--text-muted)" fontFamily="Plus Jakarta Sans, system-ui, sans-serif"
         transform={`rotate(-90, 10, ${PAD_T + innerH / 2})`}>
         {yLabel}
       </text>
@@ -237,7 +237,7 @@ function LineChart({ data, color = '#0f766e' }: { data: MonthPoint[]; color?: st
               stroke="var(--border)" strokeWidth={t === TICKS ? 1.5 : 0.7}
               strokeDasharray={t === TICKS ? '0' : '3,4'} />
             <text x={PAD_L - 5} y={y + 4} textAnchor="end"
-              fontSize={9} fill="var(--text-muted)" fontFamily="Outfit,sans-serif">
+              fontSize={9} fill="var(--text-muted)" fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
               {v}
             </text>
           </g>
@@ -271,7 +271,7 @@ function LineChart({ data, color = '#0f766e' }: { data: MonthPoint[]; color?: st
             {/* Label mois */}
             <text x={p.x} y={PAD_T + innerH + 14} textAnchor="middle"
               fontSize={9} fill={isHov ? color : 'var(--text-muted)'}
-              fontWeight={isHov ? 700 : 400} fontFamily="Outfit,sans-serif">
+              fontWeight={isHov ? 700 : 400} fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
               {p.month}
             </text>
 
@@ -279,7 +279,7 @@ function LineChart({ data, color = '#0f766e' }: { data: MonthPoint[]; color?: st
             {p.count > 0 && !isHov && (
               <text x={p.x} y={p.y - 7} textAnchor="middle"
                 fontSize={8} fontWeight={600} fill={color}
-                fontFamily="Outfit,sans-serif" opacity={0.8}>
+                fontFamily="Plus Jakarta Sans, system-ui, sans-serif" opacity={0.8}>
                 {p.count}
               </text>
             )}
@@ -291,10 +291,10 @@ function LineChart({ data, color = '#0f766e' }: { data: MonthPoint[]; color?: st
                   rx={5} fill="var(--text-primary)" opacity={0.92} />
                 <text x={p.x} y={p.y - 28} textAnchor="middle"
                   fontSize={9} fill="#fff" fontWeight={700}
-                  fontFamily="Outfit,sans-serif">{p.month}</text>
+                  fontFamily="Plus Jakarta Sans, system-ui, sans-serif">{p.month}</text>
                 <text x={p.x} y={p.y - 16} textAnchor="middle"
                   fontSize={9} fill={color} fontWeight={600}
-                  fontFamily="Outfit,sans-serif">
+                  fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
                   {p.count} commande{p.count > 1 ? 's' : ''}
                 </text>
               </g>
@@ -305,7 +305,7 @@ function LineChart({ data, color = '#0f766e' }: { data: MonthPoint[]; color?: st
 
       {/* Label axe Y */}
       <text x={10} y={PAD_T + innerH / 2} textAnchor="middle"
-        fontSize={9} fill="var(--text-muted)" fontFamily="Outfit,sans-serif"
+        fontSize={9} fill="var(--text-muted)" fontFamily="Plus Jakarta Sans, system-ui, sans-serif"
         transform={`rotate(-90, 10, ${PAD_T + innerH / 2})`}>
         Nb commandes
       </text>

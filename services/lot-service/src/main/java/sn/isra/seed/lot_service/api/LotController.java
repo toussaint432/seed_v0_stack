@@ -20,6 +20,7 @@ import sn.isra.seed.lot_service.entity.TransfertLot;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.repo.HistoriqueStatutLotRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
+import sn.isra.seed.lot_service.repo.MembreOrgLotRepo;
 import sn.isra.seed.lot_service.service.LotService;
 
 import org.springframework.data.domain.Page;
@@ -42,6 +43,7 @@ public class LotController {
     private final HistoriqueStatutLotRepo historiqueRepo;
     private final LotService              lotService;
     private final LotMapper               lotMapper;
+    private final MembreOrgLotRepo        membreOrgLotRepo;
 
     @GetMapping
     public Page<LotSemencierDto> list(
@@ -115,7 +117,10 @@ public class LotController {
         lotRepo.findById(id).ifPresent(lot -> {
             LotSemencier current = lot;
             while (current != null) {
-                chain.add(0, LineageNode.from(current));
+                String nomOrg = current.getIdOrgProducteur() != null
+                    ? membreOrgLotRepo.findOrgNomById(current.getIdOrgProducteur()).orElse(null)
+                    : null;
+                chain.add(0, LineageNode.from(current, nomOrg));
                 current = current.getLotParent();
             }
         });

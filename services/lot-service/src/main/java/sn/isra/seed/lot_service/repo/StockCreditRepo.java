@@ -21,6 +21,9 @@ public class StockCreditRepo {
 
     private final JdbcTemplate jdbc;
 
+    /** Informations de commande associée à un transfert généré par le order-service. */
+    public record CommandeTransfertInfo(Long commandeId, Long ligneId, Long idOrgAcheteur, String usernameAcheteur) {}
+
     /**
      * Crédite le stock d'un lot dans un site identifié par son code.
      * UPSERT : crée l'entrée si elle n'existe pas, sinon incrémente quantite_disponible.
@@ -81,6 +84,62 @@ public class StockCreditRepo {
         jdbc.update(
             "UPDATE commande SET statut = 'LIVREE' WHERE code_transfert_genere = ? AND statut != 'LIVREE'",
             codeTransfert
+        );
+    }
+
+    /**
+     * Vérifie si un transfert a été généré par le order-service (présence d'une commande liée).
+     * Retourne les informations nécessaires pour créer le lot REC côté lot-service.
+     */
+    public Optional<CommandeTransfertInfo> findCommandeByTransfert(String codeTransfert) {
+        if (codeTransfert == null || codeTransfert.isBlank()) return Optional.empty();
+        List<CommandeTransfertInfo> rows = jdbc.query(
+            """
+            SELECT c.id AS commande_id, l.id AS ligne_id,
+                   c.id_organisation_acheteur, c.username_acheteur
+            FROM commande c
+            JOIN ligne_commande l ON l.id_commande = c.id
+            WHERE c.code_transfert_genere = ?
+            LIMIT 1
+            """,
+            (rs, i) -> new CommandeTransfertInfo(
+                rs.getLong("commande_id"),
+                rs.getLong("ligne_id"),
+                rs.getLong("id_organisation_acheteur"),
+                rs.getString("username_acheteur")
+            ),
+            codeTransfert
+        );
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    /**
+     * Crée un lot de réception (REC) pour le multiplicateur, enfant du lot UPSemCL source.
+     * Copie métadonnées (variété, génération, campagne, espèce) depuis le lot parent.
+     * Retourne l'id du nouveau lot.
+     */
+    public Long createReceptionLot(Long parentId, String codeLot,
+                                    Long idOrgAcheteur, String usernameAcheteur,
+                                    BigDecimal quantite, String unite) {
+        return jdbc.queryForObject(
+            """
+            INSERT INTO lot_semencier (
+                code_lot, id_variete, id_generation, id_lot_parent,
+                campagne, quantite_nette, unite,
+                statut_lot, id_org_producteur, username_createur,
+                created_at, date_production, code_espece
+            )
+            SELECT ?, l.id_variete, l.id_generation, ?,
+                COALESCE(l.campagne, EXTRACT(YEAR FROM NOW())::TEXT),
+                ?, ?,
+                'DISPONIBLE', ?, ?,
+                NOW(), CURRENT_DATE, l.code_espece
+            FROM lot_semencier l
+            WHERE l.id = ?
+            RETURNING id
+            """,
+            Long.class,
+            codeLot, parentId, quantite, unite, idOrgAcheteur, usernameAcheteur, parentId
         );
     }
 }

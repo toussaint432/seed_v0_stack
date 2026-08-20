@@ -1,26 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import type { ReactNode, MouseEvent } from 'react'
 import { keycloak } from '../../lib/keycloak'
-
-/* ── Design tokens ─────────────────────────────────────────────────────── */
-const T = {
-  green:       '#00693e',
-  greenDeep:   '#00393d',
-  greenSoft:   '#e8f1ec',
-  greenBright: '#01b400',
-  greenLeaf:   '#048a14',
-  gold:        '#e8b04b',
-  goldDeep:    '#c08a2a',
-  terra:       '#c44536',
-  ink:         '#131814',
-  paper:       '#fafaf7',
-  paper2:      '#f3f1ea',
-  line:        '#e2dfd3',
-  muted:       '#6e6f6a',
-  display:     "'Bricolage Grotesque', system-ui, sans-serif",
-  body:        "'Manrope', system-ui, sans-serif",
-  mono:        "'JetBrains Mono', ui-monospace, monospace",
-}
+import { TL as T } from '../../lib/tokens'
 
 /* ── Traductions i18n ──────────────────────────────────────────────────── */
 type Lang = 'fr' | 'en'
@@ -163,6 +144,122 @@ const GENS = [
   { code: 'R1', color: '#c2410c', bg: 'rgba(194,65,12,0.12)',   label: 'Commerciale R1' },
   { code: 'R2', color: '#c44536', bg: 'rgba(196,69,54,0.12)',   label: 'Commerciale R2' },
 ]
+
+/* ── Platform preview i18n ───────────────────────────────────────────── */
+type PreviewT = {
+  eyebrow: string; title: string; desc: string
+  tabs: string[]; tabDescs: string[]
+  sideSubtitle: string
+  sideGeneral: string; sideCatalogue: string; sideLogistique: string; sideCompte: string
+  navDash: string; navVar: string; navLots: string; navStock: string
+  navOrders: string; navMsg: string; navProfile: string
+  roleName: string; roleDesc: string
+  kpiLots: string; kpiLotsSub: string
+  kpiTotalStock: string; kpiTotalStockSub: string
+  kpiOrders: string; kpiOrdersSub: string
+  kpiCert: string; kpiCertSub: string
+  kpiStkVal: string; kpiStkValSub: string
+  kpiTracked: string; kpiTrackedSub: string
+  kpiSites: string; kpiSitesSub: string
+  kpiAlerts: string; kpiAlertsSub: string
+  chartGen: string; coverageBy: string
+  colRef: string; colSpecies: string; colVariety: string; colGen: string
+  colCampaign: string; colQty: string; colStatus: string; colSite: string
+  colPartner: string; colDate: string
+  searchLot: string; newLot: string; paginationInfo: string
+  cmdAll: string; cmdPending: string; cmdValidated: string; cmdDelivered: string
+  cmdCounts: number[]
+  stCertified: string; stInProgress: string; stPending: string
+  stDelivered: string; stAlert: string
+  msgSearch: string; msgInput: string; msgRole: string
+}
+
+const PREVIEW_TRANS: Record<Lang, PreviewT> = {
+  fr: {
+    eyebrow: 'Aperçu de la plateforme',
+    title: 'La plateforme en action',
+    desc: 'Explorez les modules clés — de la traçabilité des lots à la messagerie intégrée.',
+    tabs: ['Tableau de bord', 'Lots semenciers', 'Stocks', 'Commandes', 'Messagerie'],
+    tabDescs: [
+      'Vue globale des lots, stocks et certifications en cours.',
+      'Suivi générationnel de chaque lot G0 → R2.',
+      'Inventaire multi-sites avec alertes de seuil.',
+      'Flux de passation de commandes entre acteurs.',
+      'Communication directe entre acteurs de la filière.',
+    ],
+    sideSubtitle: 'Filière semencière',
+    sideGeneral: 'Général', sideCatalogue: 'Catalogue',
+    sideLogistique: 'Logistique', sideCompte: 'Compte',
+    navDash: 'Tableau de bord', navVar: 'Variétés & Espèces',
+    navLots: 'Lots semenciers', navStock: 'Stock',
+    navOrders: 'Commandes', navMsg: 'Messages', navProfile: 'Mon profil',
+    roleName: 'Administrateur ISRA',
+    roleDesc: 'Supervision globale — accès complet à toute la plateforme',
+    kpiLots: 'Lots actifs',        kpiLotsSub: '↑ 12 ce mois',
+    kpiTotalStock: 'Stock total',  kpiTotalStockSub: '4 espèces',
+    kpiOrders: 'Commandes',        kpiOrdersSub: '3 en attente',
+    kpiCert: 'En certification',   kpiCertSub: 'soumis cette semaine',
+    kpiStkVal: 'Stock total',      kpiStkValSub: 'toutes espèces',
+    kpiTracked: 'Espèces tracées', kpiTrackedSub: 'en inventaire',
+    kpiSites: 'Sites actifs',      kpiSitesSub: 'ISRA / partenaires',
+    kpiAlerts: 'Alertes seuil',    kpiAlertsSub: '↓ sous le minimum',
+    chartGen: 'Stock par génération (tonnes)',
+    coverageBy: 'Couverture par site',
+    colRef: 'Référence', colSpecies: 'Espèce', colVariety: 'Variété',
+    colGen: 'Génération', colCampaign: 'Campagne', colQty: 'Quantité',
+    colStatus: 'Statut', colSite: 'Site de stockage',
+    colPartner: 'Partenaire', colDate: 'Date',
+    searchLot: 'Rechercher un lot…', newLot: '+ Nouveau lot',
+    paginationInfo: 'Affichage 1–5 sur 142 lots',
+    cmdAll: 'Toutes', cmdPending: 'En attente', cmdValidated: 'Validées', cmdDelivered: 'Livrées',
+    cmdCounts: [31, 7, 19, 5],
+    stCertified: 'Certifié', stInProgress: 'En cours',
+    stPending: 'En attente', stDelivered: 'Livré', stAlert: 'Alerte',
+    msgSearch: 'Rechercher…', msgInput: 'Écrire un message…', msgRole: 'Multiplicateur',
+  },
+  en: {
+    eyebrow: 'Platform preview',
+    title: 'The platform in action',
+    desc: 'Explore key modules — from lot traceability to integrated messaging.',
+    tabs: ['Dashboard', 'Seed lots', 'Stocks', 'Orders', 'Messaging'],
+    tabDescs: [
+      'Global view of lots, stock and ongoing certifications.',
+      'Generational tracking of every lot G0 → R2.',
+      'Multi-site inventory with threshold alerts.',
+      'Order flow between industry actors.',
+      'Direct communication between seed chain actors.',
+    ],
+    sideSubtitle: 'Seed industry',
+    sideGeneral: 'General', sideCatalogue: 'Catalogue',
+    sideLogistique: 'Logistics', sideCompte: 'Account',
+    navDash: 'Dashboard', navVar: 'Varieties & Species',
+    navLots: 'Seed lots', navStock: 'Stock',
+    navOrders: 'Orders', navMsg: 'Messages', navProfile: 'My profile',
+    roleName: 'ISRA Administrator',
+    roleDesc: 'Global oversight — full access to the entire platform',
+    kpiLots: 'Active lots',         kpiLotsSub: '↑ 12 this month',
+    kpiTotalStock: 'Total stock',   kpiTotalStockSub: '4 species',
+    kpiOrders: 'Orders',            kpiOrdersSub: '3 pending',
+    kpiCert: 'In certification',    kpiCertSub: 'submitted this week',
+    kpiStkVal: 'Total stock',       kpiStkValSub: 'all species',
+    kpiTracked: 'Tracked species',  kpiTrackedSub: 'in inventory',
+    kpiSites: 'Active sites',       kpiSitesSub: 'ISRA / partners',
+    kpiAlerts: 'Threshold alerts',  kpiAlertsSub: '↓ below minimum',
+    chartGen: 'Stock by generation (tonnes)',
+    coverageBy: 'Coverage by site',
+    colRef: 'Reference', colSpecies: 'Species', colVariety: 'Variety',
+    colGen: 'Generation', colCampaign: 'Campaign', colQty: 'Quantity',
+    colStatus: 'Status', colSite: 'Storage site',
+    colPartner: 'Partner', colDate: 'Date',
+    searchLot: 'Search a lot…', newLot: '+ New lot',
+    paginationInfo: 'Showing 1–5 of 142 lots',
+    cmdAll: 'All', cmdPending: 'Pending', cmdValidated: 'Validated', cmdDelivered: 'Delivered',
+    cmdCounts: [31, 7, 19, 5],
+    stCertified: 'Certified', stInProgress: 'In progress',
+    stPending: 'Pending', stDelivered: 'Delivered', stAlert: 'Alert',
+    msgSearch: 'Search…', msgInput: 'Write a message…', msgRole: 'Multiplier',
+  },
+}
 
 /* ── CountUp hook ──────────────────────────────────────────────────────── */
 function useCountUp(target: number, duration = 1600, active = false) {
@@ -549,13 +646,13 @@ export function LandingPage() {
       <section id="apercu" style={{ padding: '90px 28px', background: T.paper2 }}>
         <div style={S.container}>
           <div style={{ textAlign: 'center', maxWidth: 620, margin: '0 auto 48px' }}>
-            <span style={S.eyebrow}>Aperçu de la plateforme</span>
-            <h2 style={S.sectionTitle}>La plateforme en action</h2>
+            <span style={S.eyebrow}>{PREVIEW_TRANS[lang].eyebrow}</span>
+            <h2 style={S.sectionTitle}>{PREVIEW_TRANS[lang].title}</h2>
             <p style={{ ...S.sectionDesc, margin: '0 auto' }}>
-              Explorez les modules clés — de la traçabilité des lots à la messagerie intégrée.
+              {PREVIEW_TRANS[lang].desc}
             </p>
           </div>
-          <PlatformPreview />
+          <PlatformPreview lang={lang} />
         </div>
       </section>
 
@@ -815,13 +912,21 @@ export function LandingPage() {
               <p style={{ fontSize: 14, lineHeight: 1.7, maxWidth: 300 }}>{t.footerTagline}</p>
               {/* Partenaires */}
               <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.07)' }}>
-                <span style={{ fontFamily: T.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', display: 'block', marginBottom: 12 }}>Partenaires</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ height: 34, padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-                    <img src="/SENJIWU.png" alt="Sen Jiwu" style={{ height: 22, width: 'auto', objectFit: 'contain' }} />
+                <span style={{ fontFamily: T.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.4)', display: 'block', marginBottom: 12 }}>Partenaires</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  {/* Logo ISRA (image) */}
+                  <div style={{ height: 46, padding: '6px 14px', borderRadius: 10, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
+                    <img src="/logo-isra.png" alt="ISRA" style={{ height: 28, width: 'auto', objectFit: 'contain', filter: 'brightness(0) invert(1)', opacity: 0.92 }} />
                   </div>
-                  <div style={{ height: 34, padding: '4px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-                    <img src="/logo-isra.png" alt="ISRA" style={{ height: 22, filter: 'brightness(0) invert(1)', opacity: 0.75 }} />
+                  {/* CNRA texte stylisé */}
+                  <div style={{ height: 46, padding: '0 14px', borderRadius: 10, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                    <span style={{ fontFamily: T.display, fontWeight: 800, fontSize: 13, letterSpacing: '0.12em', color: '#fff' }}>CNRA</span>
+                    <span style={{ fontFamily: T.mono, fontSize: 7.5, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' }}>Bambey</span>
+                  </div>
+                  {/* FNRAA texte stylisé */}
+                  <div style={{ height: 46, padding: '0 14px', borderRadius: 10, background: 'rgba(255,255,255,0.14)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+                    <span style={{ fontFamily: T.display, fontWeight: 800, fontSize: 13, letterSpacing: '0.12em', color: '#fff' }}>FNRAA</span>
+                    <span style={{ fontFamily: T.mono, fontSize: 7.5, letterSpacing: '0.06em', color: 'rgba(255,255,255,0.55)', textTransform: 'uppercase' }}>Sénégal</span>
                   </div>
                 </div>
               </div>
@@ -1082,27 +1187,22 @@ function FAQItem({ q, a, open, onToggle }: { q: string; a: string; open: boolean
 
 /* ── Platform preview (tabbed full-app mockup) ───────────────────────── */
 
-const PREVIEW_TABS = [
-  { label: 'Tableau de bord', path: 'dashboard' },
-  { label: 'Lots semenciers', path: 'lots' },
-  { label: 'Stocks',          path: 'stocks' },
-  { label: 'Commandes',       path: 'orders' },
-  { label: 'Messagerie',      path: 'messages' },
-]
+type NavId = 'dash' | 'varieties' | 'lots' | 'stock' | 'orders' | 'messages' | 'profile'
 
-const SIDEBAR_NAV = [
-  { section: 'Général',    items: ['Tableau de bord'] },
-  { section: 'Catalogue',  items: ['Variétés & Espèces', 'Lots semenciers'] },
-  { section: 'Logistique', items: ['Stock', 'Commandes'] },
-  { section: 'Compte',     items: ['Messages', 'Mon profil'] },
-]
+const TAB_ACTIVE_ID: Record<number, NavId> = {
+  0: 'dash', 1: 'lots', 2: 'stock', 3: 'orders', 4: 'messages',
+}
 
-const TAB_ACTIVE_ITEM: Record<number, string> = {
-  0: 'Tableau de bord',
-  1: 'Lots semenciers',
-  2: 'Stock',
-  3: 'Commandes',
-  4: 'Messages',
+const TAB_PATHS = ['dashboard', 'lots', 'stocks', 'orders', 'messages']
+
+type StatusKey = 'certified' | 'inProgress' | 'pending' | 'delivered' | 'alert'
+
+const STATUS_STYLE: Record<StatusKey, { bg: string; color: string }> = {
+  certified:  { bg: 'rgba(0,105,62,0.1)',   color: T.green },
+  inProgress: { bg: 'rgba(180,83,9,0.1)',   color: '#b45309' },
+  pending:    { bg: 'rgba(3,105,161,0.1)',  color: '#0369a1' },
+  delivered:  { bg: 'rgba(124,58,237,0.1)', color: '#7c3aed' },
+  alert:      { bg: 'rgba(196,69,54,0.1)',  color: T.terra },
 }
 
 // Micro SVG icons for sidebar
@@ -1114,37 +1214,81 @@ function SvgCart()  { return <svg width="13" height="13" viewBox="0 0 13 13" fil
 function SvgMsg()   { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M11 7.5a1.5 1.5 0 01-1.5 1.5H4L2 11V3a1.5 1.5 0 011.5-1.5h6A1.5 1.5 0 0111 3v4.5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg> }
 function SvgUser()  { return <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="4.5" r="2.5" stroke="currentColor" strokeWidth="1.3"/><path d="M1.5 11c0-2.5 2.2-4.5 5-4.5s5 2 5 4.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/></svg> }
 
-const ITEM_ICON: Record<string, () => JSX.Element> = {
-  'Tableau de bord': SvgDash,
-  'Variétés & Espèces': SvgLeaf,
-  'Lots semenciers': SvgPkg,
-  'Stock': SvgBox,
-  'Commandes': SvgCart,
-  'Messages': SvgMsg,
-  'Mon profil': SvgUser,
+const NAV_ICON: Record<NavId, () => JSX.Element> = {
+  dash: SvgDash, varieties: SvgLeaf, lots: SvgPkg,
+  stock: SvgBox, orders: SvgCart, messages: SvgMsg, profile: SvgUser,
 }
 
-function PlatformPreview() {
-  const [tab, setTab] = useState(0)
+const TAB_ICON: (() => JSX.Element)[] = [SvgDash, SvgPkg, SvgBox, SvgCart, SvgMsg]
+
+function StatusBadge({ sk, pt }: { sk: StatusKey; pt: PreviewT }) {
+  const s = STATUS_STYLE[sk]
+  const labels: Record<StatusKey, string> = {
+    certified: pt.stCertified, inProgress: pt.stInProgress,
+    pending: pt.stPending, delivered: pt.stDelivered, alert: pt.stAlert,
+  }
+  return (
+    <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 600, color: s.color, background: s.bg, padding: '3px 8px', borderRadius: 5 }}>
+      {labels[sk]}
+    </span>
+  )
+}
+
+function PlatformPreview({ lang }: { lang: Lang }) {
+  const [tab, setTab]               = useState(0)
+  const [visibleTab, setVisibleTab] = useState(0)
+  const [fading, setFading]         = useState(false)
+  const pt = PREVIEW_TRANS[lang]
+
+  const switchTab = (i: number) => {
+    if (i === tab) return
+    setFading(true)
+    setTimeout(() => { setVisibleTab(i); setFading(false) }, 140)
+    setTab(i)
+  }
+
+  const sidebarNav: { section: string; items: { id: NavId; label: string }[] }[] = [
+    { section: pt.sideGeneral,    items: [{ id: 'dash',      label: pt.navDash    }] },
+    { section: pt.sideCatalogue,  items: [{ id: 'varieties', label: pt.navVar     }, { id: 'lots',    label: pt.navLots   }] },
+    { section: pt.sideLogistique, items: [{ id: 'stock',     label: pt.navStock   }, { id: 'orders',  label: pt.navOrders }] },
+    { section: pt.sideCompte,     items: [{ id: 'messages',  label: pt.navMsg     }, { id: 'profile', label: pt.navProfile}] },
+  ]
 
   return (
     <div>
-      {/* Tab selector */}
-      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 28, flexWrap: 'wrap' }}>
-        {PREVIEW_TABS.map((pt, i) => (
-          <button key={i} onClick={() => setTab(i)} style={{
-            padding: '8px 18px', borderRadius: 10, cursor: 'pointer',
-            fontWeight: 500, fontSize: 13.5, fontFamily: T.body,
-            border: `1.5px solid ${tab === i ? T.green : T.line}`,
-            background: tab === i ? T.green : '#fff',
-            color: tab === i ? '#fff' : T.ink,
-            transition: 'all 0.18s',
-            boxShadow: tab === i ? '0 4px 12px rgba(0,105,62,0.2)' : 'none',
-          }}>
-            {pt.label}
-          </button>
-        ))}
+      {/* Tab selector avec icônes */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
+        {pt.tabs.map((label, i) => {
+          const Icon = TAB_ICON[i]
+          const active = tab === i
+          return (
+            <button key={i} onClick={() => switchTab(i)} style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              padding: '8px 16px', borderRadius: 10, cursor: 'pointer',
+              fontWeight: active ? 600 : 400, fontSize: 13, fontFamily: T.body,
+              border: `1.5px solid ${active ? T.green : T.line}`,
+              background: active ? T.green : '#fff',
+              color: active ? '#fff' : T.ink,
+              transition: 'all 0.18s',
+              boxShadow: active ? '0 4px 12px rgba(0,105,62,0.2)' : 'none',
+            }}>
+              <span style={{ color: active ? 'rgba(255,255,255,0.8)' : T.muted, display: 'flex', alignItems: 'center' }}>
+                <Icon />
+              </span>
+              {label}
+            </button>
+          )
+        })}
       </div>
+
+      {/* Description du module actif */}
+      <p style={{
+        textAlign: 'center', fontSize: 13, color: T.muted, fontFamily: T.body,
+        marginBottom: 24, lineHeight: 1.5,
+        opacity: fading ? 0 : 1, transition: 'opacity 0.14s ease',
+      }}>
+        {pt.tabDescs[visibleTab]}
+      </p>
 
       {/* Browser frame */}
       <div style={{
@@ -1172,7 +1316,7 @@ function PlatformPreview() {
               <path d="M3 5h4M5 3v4" stroke={T.muted} strokeWidth="1" strokeLinecap="round"/>
             </svg>
             <span style={{ fontFamily: T.mono, fontSize: 9.5, color: T.muted }}>
-              localhost:5173/{PREVIEW_TABS[tab].path}
+              localhost:5173/{TAB_PATHS[tab]}
             </span>
           </div>
         </div>
@@ -1185,44 +1329,38 @@ function PlatformPreview() {
             width: 176, background: T.greenDeep, flexShrink: 0,
             display: 'flex', flexDirection: 'column', overflow: 'hidden',
           }}>
-            {/* Logo */}
             <div style={{
               padding: '14px 12px 10px', borderBottom: '1px solid rgba(255,255,255,0.07)',
               display: 'flex', alignItems: 'center', gap: 9,
             }}>
-              <div style={{
-                width: 28, height: 28, borderRadius: 7, background: '#fff',
-                display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0,
-              }}>
+              <div style={{ width: 28, height: 28, borderRadius: 7, background: '#fff', display: 'grid', placeItems: 'center', overflow: 'hidden', flexShrink: 0 }}>
                 <img src="/SENJIWU.png" alt="" style={{ height: 20, width: 'auto' }} />
               </div>
               <div>
                 <div style={{ fontFamily: T.display, fontWeight: 700, fontSize: 13, color: '#fff', letterSpacing: '-0.01em', lineHeight: 1.1 }}>Sen Jiwu</div>
-                <div style={{ fontFamily: T.mono, fontSize: 8, color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Filière semencière</div>
+                <div style={{ fontFamily: T.mono, fontSize: 8, color: 'rgba(255,255,255,0.38)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{pt.sideSubtitle}</div>
               </div>
             </div>
 
-            {/* Nav */}
             <nav style={{ flex: 1, padding: '10px 0', overflowY: 'auto' }}>
-              {SIDEBAR_NAV.map(({ section, items }) => (
+              {sidebarNav.map(({ section, items }) => (
                 <div key={section}>
                   <div style={{ fontFamily: T.mono, fontSize: 8.5, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(255,255,255,0.3)', padding: '8px 12px 4px' }}>
                     {section}
                   </div>
-                  {items.map(item => {
-                    const active = TAB_ACTIVE_ITEM[tab] === item
-                    const Icon = ITEM_ICON[item] || SvgDash
+                  {items.map(({ id, label }) => {
+                    const active = TAB_ACTIVE_ID[visibleTab] === id
+                    const Icon = NAV_ICON[id]
                     return (
-                      <div key={item} style={{
+                      <div key={id} style={{
                         display: 'flex', alignItems: 'center', gap: 8,
                         padding: '7px 12px', margin: '1px 6px', borderRadius: 7,
                         background: active ? T.green : 'transparent',
                         color: active ? '#fff' : 'rgba(255,255,255,0.55)',
-                        fontSize: 12, fontWeight: active ? 600 : 400,
-                        cursor: 'pointer',
+                        fontSize: 12, fontWeight: active ? 600 : 400, cursor: 'pointer',
                       }}>
                         <Icon />
-                        <span style={{ fontFamily: T.body }}>{item}</span>
+                        <span style={{ fontFamily: T.body }}>{label}</span>
                       </div>
                     )
                   })}
@@ -1230,27 +1368,17 @@ function PlatformPreview() {
               ))}
             </nav>
 
-            {/* User footer */}
-            <div style={{
-              padding: '10px 12px', borderTop: '1px solid rgba(255,255,255,0.07)',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <div style={{
-                width: 26, height: 26, borderRadius: '50%',
-                background: 'linear-gradient(135deg, #7c3aed, #0c1f15)',
-                display: 'grid', placeItems: 'center',
-                color: '#fff', fontSize: 9, fontWeight: 700, flexShrink: 0,
-              }}>AD</div>
+            <div style={{ padding: '10px 12px', borderTop: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'linear-gradient(135deg, #7c3aed, #0c1f15)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 9, fontWeight: 700, flexShrink: 0 }}>AD</div>
               <div style={{ overflow: 'hidden' }}>
                 <div style={{ fontFamily: T.body, fontSize: 11, color: '#fff', fontWeight: 500, lineHeight: 1.2 }}>Admin ISRA</div>
-                <div style={{ fontFamily: T.mono, fontSize: 8.5, color: 'rgba(255,255,255,0.35)' }}>Administrateur</div>
+                <div style={{ fontFamily: T.mono, fontSize: 8.5, color: 'rgba(255,255,255,0.35)' }}>{pt.roleName.split(' ')[0]}</div>
               </div>
             </div>
           </div>
 
           {/* Main area */}
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            {/* Topbar */}
             <div style={{
               height: 48, background: '#fff', borderBottom: `1px solid ${T.line}`,
               display: 'flex', alignItems: 'center', padding: '0 20px',
@@ -1259,7 +1387,7 @@ function PlatformPreview() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5 }}>
                 <span style={{ color: T.muted }}>CNRA</span>
                 <span style={{ color: T.line }}>›</span>
-                <span style={{ color: T.ink, fontWeight: 500 }}>{PREVIEW_TABS[tab].label}</span>
+                <span style={{ color: T.ink, fontWeight: 500 }}>{pt.tabs[visibleTab]}</span>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <div style={{ width: 18, height: 18, borderRadius: '50%', background: T.greenSoft, border: `1px solid ${T.line}` }} />
@@ -1267,22 +1395,26 @@ function PlatformPreview() {
               </div>
             </div>
 
-            {/* Role banner */}
             <div style={{
               height: 32, background: 'rgba(124,58,237,0.05)', borderBottom: '1px solid rgba(124,58,237,0.1)',
               display: 'flex', alignItems: 'center', padding: '0 20px', gap: 10, flexShrink: 0,
             }}>
-              <span style={{ background: '#7c3aed', color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.04em', textTransform: 'uppercase' }}>Administrateur ISRA</span>
-              <span style={{ fontSize: 11, color: T.muted }}>Supervision globale — accès complet à toute la plateforme</span>
+              <span style={{ background: '#7c3aed', color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 8px', borderRadius: 4, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{pt.roleName}</span>
+              <span style={{ fontSize: 11, color: T.muted }}>{pt.roleDesc}</span>
             </div>
 
-            {/* Page content */}
-            <div style={{ flex: 1, overflowY: 'auto', background: T.paper, padding: '18px 20px' }}>
-              {tab === 0 && <MockDashboard />}
-              {tab === 1 && <MockLots />}
-              {tab === 2 && <MockStocks />}
-              {tab === 3 && <MockCommandes />}
-              {tab === 4 && <MockMessagerie />}
+            {/* Page content — fade animé au changement d'onglet */}
+            <div style={{
+              flex: 1, overflowY: 'auto', background: T.paper, padding: '18px 20px',
+              opacity: fading ? 0 : 1,
+              transform: fading ? 'translateY(5px)' : 'none',
+              transition: 'opacity 0.14s ease, transform 0.14s ease',
+            }}>
+              {visibleTab === 0 && <MockDashboard pt={pt} />}
+              {visibleTab === 1 && <MockLots pt={pt} />}
+              {visibleTab === 2 && <MockStocks pt={pt} />}
+              {visibleTab === 3 && <MockCommandes pt={pt} />}
+              {visibleTab === 4 && <MockMessagerie pt={pt} />}
             </div>
           </div>
         </div>
@@ -1312,21 +1444,6 @@ function GenBadge({ code }: { code: string }) {
   )
 }
 
-function StatusBadge({ status }: { status: 'Certifié' | 'En cours' | 'En attente' | 'Livré' | 'Alerte' }) {
-  const map: Record<string, { bg: string; color: string }> = {
-    'Certifié':   { bg: 'rgba(0,105,62,0.1)',   color: T.green },
-    'En cours':   { bg: 'rgba(180,83,9,0.1)',    color: '#b45309' },
-    'En attente': { bg: 'rgba(3,105,161,0.1)',   color: '#0369a1' },
-    'Livré':      { bg: 'rgba(124,58,237,0.1)',  color: '#7c3aed' },
-    'Alerte':     { bg: 'rgba(196,69,54,0.1)',   color: T.terra },
-  }
-  const s = map[status] || map['En cours']
-  return (
-    <span style={{ fontFamily: T.mono, fontSize: 9.5, fontWeight: 600, color: s.color, background: s.bg, padding: '3px 8px', borderRadius: 5 }}>
-      {status}
-    </span>
-  )
-}
 
 function MockTable({ cols, rows }: { cols: string[]; rows: (string | JSX.Element)[][] }) {
   return (
@@ -1349,19 +1466,17 @@ function MockTable({ cols, rows }: { cols: string[]; rows: (string | JSX.Element
   )
 }
 
-function MockDashboard() {
+function MockDashboard({ pt }: { pt: PreviewT }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* KPIs */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        <MockKpi val="142" label="Lots actifs"    sub="↑ 12 ce mois"         color={T.green} />
-        <MockKpi val="89.3 t" label="Stock total" sub="4 espèces"             color="#0369a1" />
-        <MockKpi val="7"   label="Commandes"      sub="3 en attente"          color={T.goldDeep} />
-        <MockKpi val="12"  label="En certification" sub="soumis cette semaine" color="#7c3aed" />
+        <MockKpi val="142"    label={pt.kpiLots}       sub={pt.kpiLotsSub}       color={T.green} />
+        <MockKpi val="89.3 t" label={pt.kpiTotalStock} sub={pt.kpiTotalStockSub} color="#0369a1" />
+        <MockKpi val="7"      label={pt.kpiOrders}     sub={pt.kpiOrdersSub}     color={T.goldDeep} />
+        <MockKpi val="12"     label={pt.kpiCert}       sub={pt.kpiCertSub}       color="#7c3aed" />
       </div>
-      {/* Chart */}
       <div style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid ${T.line}` }}>
-        <div style={{ fontFamily: T.mono, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.muted, marginBottom: 12 }}>Stock par génération (tonnes)</div>
+        <div style={{ fontFamily: T.mono, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.muted, marginBottom: 12 }}>{pt.chartGen}</div>
         <div style={{ display: 'flex', gap: 6, alignItems: 'flex-end', height: 80 }}>
           {[
             { code: 'G0', h: 22, qty: '3.1 t' }, { code: 'G1', h: 48, qty: '12 t' },
@@ -1380,50 +1495,43 @@ function MockDashboard() {
           })}
         </div>
       </div>
-      {/* Recent lots */}
       <MockTable
-        cols={['Référence', 'Espèce', 'Génération', 'Quantité', 'Statut']}
+        cols={[pt.colRef, pt.colSpecies, pt.colGen, pt.colQty, pt.colStatus]}
         rows={[
-          ['LOT-2025-0142', 'Mil Souna', <GenBadge code="G2" />, '12 000 kg', <StatusBadge status="Certifié" />],
-          ['LOT-2025-0141', 'Arachide Fleur 11', <GenBadge code="R1" />, '8 500 kg', <StatusBadge status="En cours" />],
-          ['LOT-2025-0140', 'Sorgho Fadda', <GenBadge code="G3" />, '6 000 kg', <StatusBadge status="En attente" />],
+          ['LOT-2025-0142', 'Mil Souna',        <GenBadge code="G2" />, '12 000 kg', <StatusBadge sk="certified"  pt={pt} />],
+          ['LOT-2025-0141', 'Arachide Fleur 11',<GenBadge code="R1" />, '8 500 kg',  <StatusBadge sk="inProgress" pt={pt} />],
+          ['LOT-2025-0140', 'Sorgho Fadda',     <GenBadge code="G3" />, '6 000 kg',  <StatusBadge sk="pending"    pt={pt} />],
         ]}
       />
     </div>
   )
 }
 
-function MockLots() {
+function MockLots({ pt }: { pt: PreviewT }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Search bar */}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         <div style={{ flex: 1, height: 34, background: '#fff', borderRadius: 8, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 8 }}>
           <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="5" cy="5" r="3.5" stroke={T.muted} strokeWidth="1.3"/><path d="M8 8l2.5 2.5" stroke={T.muted} strokeWidth="1.3" strokeLinecap="round"/></svg>
-          <span style={{ fontFamily: T.body, fontSize: 12, color: T.muted }}>Rechercher un lot…</span>
+          <span style={{ fontFamily: T.body, fontSize: 12, color: T.muted }}>{pt.searchLot}</span>
         </div>
         {['G0/G1', 'G2/G3', 'R1/R2'].map(f => (
-          <div key={f} style={{ padding: '6px 12px', borderRadius: 7, background: T.paper2, border: `1px solid ${T.line}`, fontFamily: T.mono, fontSize: 10, color: T.muted }}>
-            {f}
-          </div>
+          <div key={f} style={{ padding: '6px 12px', borderRadius: 7, background: T.paper2, border: `1px solid ${T.line}`, fontFamily: T.mono, fontSize: 10, color: T.muted }}>{f}</div>
         ))}
-        <div style={{ padding: '7px 14px', borderRadius: 8, background: T.green, color: '#fff', fontFamily: T.body, fontSize: 12, fontWeight: 600 }}>
-          + Nouveau lot
-        </div>
+        <div style={{ padding: '7px 14px', borderRadius: 8, background: T.green, color: '#fff', fontFamily: T.body, fontSize: 12, fontWeight: 600 }}>{pt.newLot}</div>
       </div>
-
       <MockTable
-        cols={['Référence', 'Espèce', 'Variété', 'Génération', 'Campagne', 'Quantité', 'Statut']}
+        cols={[pt.colRef, pt.colSpecies, pt.colVariety, pt.colGen, pt.colCampaign, pt.colQty, pt.colStatus]}
         rows={[
-          ['LOT-2025-0142', 'Mil', 'Souna 3',    <GenBadge code="G2" />, '2025-2026', '12 000 kg', <StatusBadge status="Certifié" />],
-          ['LOT-2025-0141', 'Arachide', 'Fleur 11', <GenBadge code="R1" />, '2025-2026', '8 500 kg', <StatusBadge status="En cours" />],
-          ['LOT-2025-0140', 'Sorgho', 'Fadda',    <GenBadge code="G3" />, '2025-2026', '6 000 kg', <StatusBadge status="En attente" />],
-          ['LOT-2025-0139', 'Niébé', 'Mouride',   <GenBadge code="G1" />, '2025-2026', '4 200 kg', <StatusBadge status="Certifié" />],
-          ['LOT-2025-0138', 'Maïs', 'Hybrid 1',   <GenBadge code="R2" />, '2025-2026', '20 000 kg', <StatusBadge status="Livré" />],
+          ['LOT-2025-0142', 'Mil',      'Souna 3',  <GenBadge code="G2" />, '2025-2026', '12 000 kg', <StatusBadge sk="certified"  pt={pt} />],
+          ['LOT-2025-0141', 'Arachide', 'Fleur 11', <GenBadge code="R1" />, '2025-2026', '8 500 kg',  <StatusBadge sk="inProgress" pt={pt} />],
+          ['LOT-2025-0140', 'Sorgho',   'Fadda',    <GenBadge code="G3" />, '2025-2026', '6 000 kg',  <StatusBadge sk="pending"    pt={pt} />],
+          ['LOT-2025-0139', 'Niébé',    'Mouride',  <GenBadge code="G1" />, '2025-2026', '4 200 kg',  <StatusBadge sk="certified"  pt={pt} />],
+          ['LOT-2025-0138', 'Maïs',     'Hybrid 1', <GenBadge code="R2" />, '2025-2026', '20 000 kg', <StatusBadge sk="delivered"  pt={pt} />],
         ]}
       />
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 2px' }}>
-        <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>Affichage 1–5 sur 142 lots</span>
+        <span style={{ fontFamily: T.mono, fontSize: 10, color: T.muted }}>{pt.paginationInfo}</span>
         <div style={{ display: 'flex', gap: 6 }}>
           {['1', '2', '3', '…', '29'].map((p, i) => (
             <div key={p} style={{ width: 26, height: 26, borderRadius: 6, background: i === 0 ? T.green : '#fff', border: `1px solid ${i === 0 ? T.green : T.line}`, color: i === 0 ? '#fff' : T.ink, display: 'grid', placeItems: 'center', fontFamily: T.mono, fontSize: 10 }}>{p}</div>
@@ -1434,29 +1542,26 @@ function MockLots() {
   )
 }
 
-function MockStocks() {
+function MockStocks({ pt }: { pt: PreviewT }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-        <MockKpi val="89.3 t"  label="Stock total"     sub="toutes espèces"    color={T.green} />
-        <MockKpi val="5"       label="Espèces tracées" sub="en inventaire"     color="#0369a1" />
-        <MockKpi val="8"       label="Sites actifs"    sub="ISRA / partenaires" color={T.goldDeep} />
-        <MockKpi val="2"       label="Alertes seuil"   sub="↓ sous le minimum" color={T.terra} />
+        <MockKpi val="89.3 t" label={pt.kpiStkVal}  sub={pt.kpiStkValSub}  color={T.green} />
+        <MockKpi val="5"      label={pt.kpiTracked} sub={pt.kpiTrackedSub} color="#0369a1" />
+        <MockKpi val="8"      label={pt.kpiSites}   sub={pt.kpiSitesSub}   color={T.goldDeep} />
+        <MockKpi val="2"      label={pt.kpiAlerts}  sub={pt.kpiAlertsSub}  color={T.terra} />
       </div>
-
       <MockTable
-        cols={['Site de stockage', 'Espèce', 'Variété', 'Génération', 'Qté disponible', 'Statut']}
+        cols={[pt.colSite, pt.colSpecies, pt.colVariety, pt.colGen, pt.colQty, pt.colStatus]}
         rows={[
-          ['Bambey — CNRA', 'Mil', 'Souna 3', <GenBadge code="G2" />, '12 000 kg', <StatusBadge status="Certifié" />],
-          ['Thiès — UPS', 'Arachide', 'Fleur 11', <GenBadge code="R1" />, '8 500 kg', <StatusBadge status="En cours" />],
-          ['Kaolack — Mult.', 'Sorgho', 'Fadda', <GenBadge code="G3" />, '6 000 kg', <StatusBadge status="En attente" />],
-          ['Saint-Louis — SAED', 'Niébé', 'Mouride', <GenBadge code="G1" />, '3 200 kg', <StatusBadge status="Alerte" />],
+          ['Bambey — CNRA',      'Mil',      'Souna 3',  <GenBadge code="G2" />, '12 000 kg', <StatusBadge sk="certified"  pt={pt} />],
+          ['Thiès — UPS',        'Arachide', 'Fleur 11', <GenBadge code="R1" />, '8 500 kg',  <StatusBadge sk="inProgress" pt={pt} />],
+          ['Kaolack — Mult.',    'Sorgho',   'Fadda',    <GenBadge code="G3" />, '6 000 kg',  <StatusBadge sk="pending"    pt={pt} />],
+          ['Saint-Louis — SAED', 'Niébé',    'Mouride',  <GenBadge code="G1" />, '3 200 kg',  <StatusBadge sk="alert"      pt={pt} />],
         ]}
       />
-
-      {/* Progress bars per site */}
       <div style={{ background: '#fff', borderRadius: 10, padding: '14px 16px', border: `1px solid ${T.line}` }}>
-        <div style={{ fontFamily: T.mono, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.muted, marginBottom: 12 }}>Couverture par site</div>
+        <div style={{ fontFamily: T.mono, fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', color: T.muted, marginBottom: 12 }}>{pt.coverageBy}</div>
         {[
           { site: 'Bambey — CNRA', pct: 82, color: T.green },
           { site: 'Thiès — UPS', pct: 65, color: T.goldDeep },
@@ -1478,50 +1583,45 @@ function MockStocks() {
   )
 }
 
-function MockCommandes() {
+function MockCommandes({ pt }: { pt: PreviewT }) {
+  const cmdTabs = [pt.cmdAll, pt.cmdPending, pt.cmdValidated, pt.cmdDelivered]
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* Status tabs */}
-      <div style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${T.line}`, paddingBottom: 0 }}>
-        {[
-          { label: 'Toutes', count: 31, active: true },
-          { label: 'En attente', count: 7, active: false },
-          { label: 'Validées', count: 19, active: false },
-          { label: 'Livrées', count: 5, active: false },
-        ].map(tab => (
-          <div key={tab.label} style={{
+      <div style={{ display: 'flex', gap: 2, borderBottom: `1px solid ${T.line}` }}>
+        {cmdTabs.map((label, i) => (
+          <div key={label} style={{
             display: 'flex', alignItems: 'center', gap: 6,
-            padding: '8px 14px', cursor: 'pointer', borderBottom: tab.active ? `2px solid ${T.green}` : '2px solid transparent',
-            fontFamily: T.body, fontSize: 12.5, fontWeight: tab.active ? 600 : 400,
-            color: tab.active ? T.green : T.muted,
+            padding: '8px 14px', cursor: 'pointer',
+            borderBottom: i === 0 ? `2px solid ${T.green}` : '2px solid transparent',
+            fontFamily: T.body, fontSize: 12.5, fontWeight: i === 0 ? 600 : 400,
+            color: i === 0 ? T.green : T.muted,
           }}>
-            {tab.label}
-            <span style={{ fontFamily: T.mono, fontSize: 9.5, background: tab.active ? T.green : T.paper2, color: tab.active ? '#fff' : T.muted, padding: '1px 6px', borderRadius: 4 }}>
-              {tab.count}
+            {label}
+            <span style={{ fontFamily: T.mono, fontSize: 9.5, background: i === 0 ? T.green : T.paper2, color: i === 0 ? '#fff' : T.muted, padding: '1px 6px', borderRadius: 4 }}>
+              {pt.cmdCounts[i]}
             </span>
           </div>
         ))}
       </div>
-
       <MockTable
-        cols={['Référence', 'Variété', 'Quantité', 'Partenaire', 'Date', 'Statut']}
+        cols={[pt.colRef, pt.colVariety, pt.colQty, pt.colPartner, pt.colDate, pt.colStatus]}
         rows={[
-          ['CMD-2026-0031', 'Mil Souna 3 — G3', '5 000 kg', 'Coopérative Saloum', '03/08/2026', <StatusBadge status="En attente" />],
-          ['CMD-2026-0030', 'Arachide Fleur 11 — R1', '8 000 kg', 'GIE Thiès Sud', '01/08/2026', <StatusBadge status="Certifié" />],
-          ['CMD-2026-0029', 'Sorgho Fadda — G2', '3 200 kg', 'SAED Saint-Louis', '29/07/2026', <StatusBadge status="En cours" />],
-          ['CMD-2026-0028', 'Niébé Mouride — R2', '12 000 kg', 'OP Casamance', '27/07/2026', <StatusBadge status="Livré" />],
-          ['CMD-2026-0027', 'Maïs Hybrid 1 — R1', '6 500 kg', 'Mult. Louga', '24/07/2026', <StatusBadge status="Livré" />],
+          ['CMD-2026-0031', 'Mil Souna 3 — G3',       '5 000 kg',  'Coopérative Saloum', '03/08/2026', <StatusBadge sk="pending"    pt={pt} />],
+          ['CMD-2026-0030', 'Arachide Fleur 11 — R1', '8 000 kg',  'GIE Thiès Sud',      '01/08/2026', <StatusBadge sk="certified"  pt={pt} />],
+          ['CMD-2026-0029', 'Sorgho Fadda — G2',      '3 200 kg',  'SAED Saint-Louis',   '29/07/2026', <StatusBadge sk="inProgress" pt={pt} />],
+          ['CMD-2026-0028', 'Niébé Mouride — R2',     '12 000 kg', 'OP Casamance',       '27/07/2026', <StatusBadge sk="delivered"  pt={pt} />],
+          ['CMD-2026-0027', 'Maïs Hybrid 1 — R1',     '6 500 kg',  'Mult. Louga',        '24/07/2026', <StatusBadge sk="delivered"  pt={pt} />],
         ]}
       />
     </div>
   )
 }
 
-function MockMessagerie() {
+function MockMessagerie({ pt }: { pt: PreviewT }) {
   const msgs = [
-    { from: 'Moussa Diallo', role: 'Multiplicateur', last: 'Lot G3 disponible pour transfert', time: '14:32', unread: 2 },
-    { from: 'Fatou Ndiaye', role: 'UPSemCL', last: 'Certification validée pour LOT-0141', time: '11:05', unread: 0 },
-    { from: 'Ibrahima Fall', role: 'Quotataire', last: 'Commande de 5 000 kg de Mil', time: 'Hier', unread: 1 },
+    { from: 'Moussa Diallo', role: pt.msgRole, last: 'Lot G3 disponible pour transfert',    time: '14:32', unread: 2 },
+    { from: 'Fatou Ndiaye',  role: 'UPSemCL',  last: 'Certification validée pour LOT-0141', time: '11:05', unread: 0 },
+    { from: 'Ibrahima Fall', role: 'Quotataire',last: 'Commande de 5 000 kg de Mil',         time: 'Hier',  unread: 1 },
   ]
   const bubbles = [
     { mine: false, text: 'Bonjour, le lot LOT-2025-0142 est prêt pour certification.', time: '14:28' },
@@ -1537,7 +1637,7 @@ function MockMessagerie() {
         <div style={{ padding: '10px 12px', borderBottom: `1px solid ${T.line}` }}>
           <div style={{ height: 28, background: T.paper, borderRadius: 6, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', padding: '0 10px', gap: 6 }}>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="4.5" cy="4.5" r="3" stroke={T.muted} strokeWidth="1.2"/><path d="M7 7l2 2" stroke={T.muted} strokeWidth="1.2" strokeLinecap="round"/></svg>
-            <span style={{ fontFamily: T.body, fontSize: 11, color: T.muted }}>Rechercher…</span>
+            <span style={{ fontFamily: T.body, fontSize: 11, color: T.muted }}>{pt.msgSearch}</span>
           </div>
         </div>
         {msgs.map((m, i) => (
@@ -1568,7 +1668,7 @@ function MockMessagerie() {
           <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg, #15803d, #0c1f15)', display: 'grid', placeItems: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>MD</div>
           <div>
             <div style={{ fontFamily: T.body, fontSize: 13, fontWeight: 600, color: T.ink }}>Moussa Diallo</div>
-            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.green }}>Multiplicateur</div>
+            <div style={{ fontFamily: T.mono, fontSize: 9, color: T.green }}>{pt.msgRole}</div>
           </div>
         </div>
 
@@ -1595,7 +1695,7 @@ function MockMessagerie() {
         {/* Input bar */}
         <div style={{ padding: '10px 14px', borderTop: `1px solid ${T.line}`, display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ flex: 1, height: 32, background: T.paper, borderRadius: 8, border: `1px solid ${T.line}`, display: 'flex', alignItems: 'center', padding: '0 12px' }}>
-            <span style={{ fontFamily: T.body, fontSize: 11.5, color: T.muted }}>Écrire un message…</span>
+            <span style={{ fontFamily: T.body, fontSize: 11.5, color: T.muted }}>{pt.msgInput}</span>
           </div>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: T.green, display: 'grid', placeItems: 'center' }}>
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M8 3l4 4-4 4" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>

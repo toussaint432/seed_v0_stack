@@ -4,7 +4,7 @@
               localiser les fournisseurs proches, commander depuis la carte.
    ═══════════════════════════════════════════════════════════════ */
 import { useState, useMemo, useCallback, useEffect } from 'react'
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, Circle, Marker, Popup, useMap } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, Tooltip, Circle, Marker, Popup, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import type { PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -74,6 +74,47 @@ const USER_ICON = L.divIcon({
   iconSize: [18, 18],
   iconAnchor: [9, 9],
 })
+
+/* ── Distance Haversine (km) entre deux coordonnées GPS ── */
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+/* ── Icône personnage multiplicateur (DivIcon SVG) ── */
+function createMultiplicateurIcon(orgNom: string, stockTotal: number, maxStock: number, isSelected: boolean): L.DivIcon {
+  const ratio = Math.sqrt(Math.max(stockTotal, 1) / Math.max(maxStock, 1))
+  const cs = Math.round(30 + 18 * ratio)
+  const color = isSelected ? '#1d4ed8' : '#15803d'
+  const light = isSelected ? '#60a5fa' : '#4ade80'
+  const ring  = isSelected ? '#93c5fd' : '#86efac'
+  const name  = orgNom.length > 22 ? orgNom.slice(0, 20) + '…' : orgNom
+  const svgS  = Math.round(cs * 0.52)
+  const html  = `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+    <div style="
+      width:${cs}px;height:${cs}px;border-radius:50%;
+      background:radial-gradient(circle at 38% 32%,${light},${color});
+      border:2.5px solid #fff;
+      box-shadow:0 3px 12px ${color}55,0 0 0 2px ${ring},inset 0 1px 0 rgba(255,255,255,0.35);
+      display:flex;align-items:center;justify-content:center;
+    ">
+      <svg width="${svgS}" height="${svgS}" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="7.5" r="3.5"/>
+        <path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
+      </svg>
+    </div>
+    <div style="
+      background:rgba(255,255,255,0.97);border:1.5px solid ${color}55;border-radius:5px;
+      padding:2px 7px;font-size:9.5px;font-weight:700;white-space:nowrap;margin-top:3px;
+      color:${color};box-shadow:0 1px 5px rgba(0,0,0,0.18);
+      max-width:150px;overflow:hidden;text-overflow:ellipsis;
+    ">${name}</div>
+  </div>`
+  return L.divIcon({ html, className: '', iconSize: [160, cs + 28], iconAnchor: [80, Math.round(cs / 2)] })
+}
 
 /* ── Centrage auto sur la position utilisateur ── */
 function FlyTo({ pos }: { pos: [number, number] | null }) {
@@ -190,11 +231,6 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
     setContactingOrg(orgId)
     await onContacter(orgId).catch(() => {})
     setContactingOrg(null)
-  }
-
-  /* ── Rayon de marqueur site ── */
-  function siteRadius(stock: number): number {
-    return 7 + 14 * Math.sqrt(stock / maxStock)
   }
 
   return (
@@ -348,25 +384,25 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
             </Marker>
           )}
 
-          {/* ── Couche 4 : Sites fournisseurs avec Popup direct ── */}
-          {sites.map(site => {
-            const isSelected = selectedSite?.siteId === site.siteId
-            const color      = isSelected ? '#1d4ed8' : '#16a34a'
-            const radius     = siteRadius(site.stockTotal)
-            /* Meilleure variété du site pour le popup rapide */
-            const topLot = site.lots.slice().sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)[0]
-            const inCart  = topLot ? cart.find(c => c.varieteId === topLot.varieteId) : null
-            const isAdded = topLot ? addedIds.has(topLot.varieteId) : false
+          {/* ── Couche 4 : Multiplicateurs (icône personnage + popup enrichi) ── */}
+          {sites.map((site) => {
+            const isSelected  = selectedSite?.siteId === site.siteId
+            const icon        = createMultiplicateurIcon(site.orgNom, site.stockTotal, maxStock, isSelected)
+            const topLot      = site.lots.slice().sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)[0]
+            const inCart      = topLot ? cart.find(c => c.varieteId === topLot.varieteId) : null
+            const isAdded     = topLot ? addedIds.has(topLot.varieteId) : false
+            const uniqueVar   = new Set(site.lots.map(l => l.varieteId)).size
+            const travelHours = site.distanceKm != null ? Math.round(site.distanceKm / 50) : null
+            const topVarietes = site.lots
+              .slice().sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)
+              .filter((l, i, arr) => arr.findIndex(x => x.varieteId === l.varieteId) === i)
+              .slice(0, 3)
 
             return (
-              <CircleMarker
+              <Marker
                 key={site.siteId}
-                center={[site.lat, site.lng]}
-                radius={radius}
-                pathOptions={{
-                  fillColor: color, fillOpacity: isSelected ? 0.95 : 0.82,
-                  color: '#fff', weight: 2,
-                }}
+                position={[site.lat, site.lng]}
+                icon={icon}
                 eventHandlers={{
                   click: () => {
                     setSelectedSite(site)
@@ -374,95 +410,104 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                   },
                 }}
               >
-                {/* Tooltip au survol */}
-                <Tooltip direction="top" offset={[0, -radius]}>
-                  <div style={{ lineHeight: 1.5 }}>
-                    <div style={{ fontWeight: 700, fontSize: 12 }}>{site.nomSite}</div>
-                    <div style={{ fontSize: 11, color: '#6b7280' }}>{site.orgNom} · {site.region}</div>
-                    <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>
-                      {site.stockTotal.toLocaleString('fr-FR')} kg dispo
+                <Popup maxWidth={296} minWidth={256} className="seed-popup">
+                  <div style={{ fontFamily: 'system-ui,-apple-system,sans-serif', margin: '-14px -14px -10px' }}>
+
+                    {/* ── En-tête ── */}
+                    <div style={{ padding: '12px 14px 10px', background: isSelected ? '#eff6ff' : '#f0fdf4', borderBottom: '1px solid #e5e7eb' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 4 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0d1f11', flex: 1, lineHeight: 1.3 }}>{site.orgNom}</div>
+                        <span style={{ fontSize: 9, fontWeight: 700, background: isSelected ? '#dbeafe' : '#dcfce7', color: isSelected ? '#1d4ed8' : '#15803d', padding: '2px 6px', borderRadius: 4, border: `1px solid ${isSelected ? '#bfdbfe' : '#bbf7d0'}`, whiteSpace: 'nowrap', flexShrink: 0 }}>
+                          Multiplicateur agréé
+                        </span>
+                      </div>
+                      <div style={{ fontSize: 11, color: '#6b7280', display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                        <MapPin size={10} style={{ color: '#16a34a', flexShrink: 0 }} />
+                        <span>{site.region}</span>
+                        {site.zaeCode && (
+                          <span style={{ background: '#f0f4f0', border: '1px solid #d1d5db', padding: '1px 5px', borderRadius: 3, fontSize: 10, color: '#374151' }}>
+                            ZAE {site.zaeCode}
+                          </span>
+                        )}
+                      </div>
                     </div>
+
+                    {/* ── Distance ── */}
                     {site.distanceKm != null && (
-                      <div style={{ fontSize: 10, color: '#1d4ed8' }}>à {Math.round(site.distanceKm)} km</div>
-                    )}
-                  </div>
-                </Tooltip>
-
-                {/* Popup clic : ajout panier direct sans quitter la carte */}
-                <Popup maxWidth={240} className="seed-popup">
-                  <div style={{ fontFamily: 'inherit', minWidth: 200 }}>
-                    {/* En-tête site */}
-                    <div style={{ marginBottom: 8 }}>
-                      <div style={{ fontWeight: 700, fontSize: 13, color: '#0d1f11', lineHeight: 1.3 }}>{site.nomSite}</div>
-                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        {site.orgNom}
-                        {site.distanceKm != null && (
-                          <span style={{ background: '#eff6ff', color: '#1d4ed8', padding: '1px 5px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>
-                            {Math.round(site.distanceKm)} km
+                      <div style={{ padding: '7px 14px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Navigation size={12} style={{ color: '#2563eb', flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#1d4ed8' }}>{Math.round(site.distanceKm)} km</span>
+                        <span style={{ fontSize: 10.5, color: '#4b5563' }}>de votre position</span>
+                        {travelHours != null && (
+                          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#6b7280', fontStyle: 'italic' }}>
+                            ~{travelHours} h de route
                           </span>
                         )}
                       </div>
-                    </div>
-
-                    {/* Stock total */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 8, padding: '5px 8px', background: '#f0fdf4', borderRadius: 6 }}>
-                      <Package size={11} color="#16a34a" />
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>
-                        {site.stockTotal.toLocaleString('fr-FR')} kg disponibles
-                      </span>
-                      <span style={{ fontSize: 10, color: '#6b7280', marginLeft: 'auto' }}>
-                        {new Set(site.lots.map(l => l.varieteId)).size} variété{new Set(site.lots.map(l => l.varieteId)).size > 1 ? 's' : ''}
-                      </span>
-                    </div>
-
-                    {/* Variété principale : saisie quantité + ajout */}
-                    {topLot && (
-                      <div style={{ marginBottom: 8, padding: '8px', background: '#f8fafc', borderRadius: 7, border: '1px solid #e2e8f0' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
-                          <div>
-                            <div style={{ fontWeight: 600, fontSize: 12, color: '#0d1f11' }}>{topLot.nomVariete}</div>
-                            <div style={{ fontSize: 10, color: '#9ca3af', fontFamily: 'monospace' }}>{topLot.codeVariete}</div>
-                          </div>
-                          <span style={{ background: '#dcfce7', color: '#15803d', padding: '2px 6px', borderRadius: 4, fontWeight: 700, fontSize: 11 }}>
-                            {topLot.generation}
-                          </span>
-                        </div>
-                        {inCart && (
-                          <div style={{ fontSize: 11, color: '#15803d', fontWeight: 600, marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <CheckCircle2 size={11} /> {inCart.quantite.toLocaleString('fr-FR')} kg dans le panier
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 5 }}>
-                          <input
-                            type="number" min="1"
-                            placeholder="Qté (kg)"
-                            value={qtyInputs[topLot.varieteId] ?? ''}
-                            onChange={e => setQtyInputs(prev => ({ ...prev, [topLot.varieteId]: e.target.value }))}
-                            style={{ flex: 1, height: 30, borderRadius: 6, border: '1px solid #d1d5db', padding: '0 7px', fontSize: 12 }}
-                          />
-                          <button
-                            onClick={() => handleAdd(topLot)}
-                            style={{ height: 30, padding: '0 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: isAdded ? '#15803d' : '#16a34a', color: '#fff', fontWeight: 600, fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', transition: 'background 0.15s' }}
-                          >
-                            {isAdded ? <><CheckCircle2 size={11} /> Ajouté!</> : <><ShoppingCart size={11} /> Ajouter</>}
-                          </button>
-                        </div>
-                      </div>
                     )}
 
-                    {/* Lien vers les autres variétés du site */}
-                    {new Set(site.lots.map(l => l.varieteId)).size > 1 && (
-                      <button
-                        onClick={() => { setSelectedSite(site); setFlyTarget([site.lat, site.lng]) }}
-                        style={{ width: '100%', height: 28, borderRadius: 6, border: '1px solid #d1d5db', background: 'transparent', fontSize: 11, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}
-                      >
-                        <MapPin size={11} color="#16a34a" />
-                        Voir toutes les variétés ({new Set(site.lots.map(l => l.varieteId)).size}) →
+                    {/* ── Stock + variétés ── */}
+                    <div style={{ padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+                        <Package size={11} style={{ color: '#16a34a', flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>
+                          {site.stockTotal.toLocaleString('fr-FR')} kg disponibles
+                        </span>
+                        <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 'auto' }}>
+                          {uniqueVar} variété{uniqueVar > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                        {topVarietes.map(l => (
+                          <div key={l.lotId} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 7px', background: '#f9fafb', borderRadius: 5, fontSize: 11 }}>
+                            <span style={{ flex: 1, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nomVariete}</span>
+                            <span style={{ background: '#dcfce7', color: '#15803d', padding: '1px 5px', borderRadius: 3, fontWeight: 700, fontSize: 10, flexShrink: 0 }}>{l.generation}</span>
+                            <span style={{ color: '#16a34a', fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{l.quantiteDisponible.toLocaleString('fr-FR')} kg</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ── Actions ── */}
+                    <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {/* Panier pour la variété principale */}
+                      {topLot && (
+                        <div>
+                          {inCart && (
+                            <div style={{ fontSize: 10.5, color: '#15803d', fontWeight: 600, marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <CheckCircle2 size={10} /> {inCart.quantite.toLocaleString('fr-FR')} kg · {topLot.nomVariete}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: 5 }}>
+                            <input type="number" min="1" placeholder="Quantité (kg)"
+                              value={qtyInputs[topLot.varieteId] ?? ''}
+                              onChange={e => setQtyInputs(prev => ({ ...prev, [topLot.varieteId]: e.target.value }))}
+                              style={{ flex: 1, height: 30, borderRadius: 6, border: '1px solid #d1d5db', padding: '0 7px', fontSize: 11 }} />
+                            <button onClick={() => handleAdd(topLot)}
+                              style={{ height: 30, padding: '0 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: isAdded ? '#15803d' : '#16a34a', color: '#fff', fontWeight: 700, fontSize: 10, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, transition: 'background 0.15s' }}>
+                              {isAdded ? <><CheckCircle2 size={10} /> Ajouté!</> : <><ShoppingCart size={10} /> Ajouter</>}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {/* Envoyer un message */}
+                      <button onClick={() => handleContact(site.orgId)} disabled={contactingOrg === site.orgId}
+                        style={{ width: '100%', height: 32, borderRadius: 7, border: 'none', cursor: contactingOrg === site.orgId ? 'wait' : 'pointer', background: contactingOrg === site.orgId ? '#9ca3af' : '#2563eb', color: '#fff', fontWeight: 700, fontSize: 11.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+                        <MessageCircle size={12} />
+                        {contactingOrg === site.orgId ? 'Connexion…' : 'Envoyer un message'}
                       </button>
-                    )}
+                      {/* Voir toutes les variétés */}
+                      {uniqueVar > 1 && (
+                        <button onClick={() => { setSelectedSite(site); setFlyTarget([site.lat, site.lng]) }}
+                          style={{ width: '100%', height: 28, borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', fontSize: 11, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                          <MapPin size={10} style={{ color: '#16a34a' }} />
+                          Voir toutes les variétés ({uniqueVar}) →
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </Popup>
-              </CircleMarker>
+              </Marker>
             )
           })}
         </MapContainer>

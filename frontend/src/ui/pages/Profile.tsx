@@ -185,7 +185,7 @@ export function Profile({ roleKey }: Props) {
           {/* Bande dégradée bas — contraste derrière identité overlap */}
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 110, background: `linear-gradient(to bottom, transparent 0%, ${role?.color ?? '#1b4332'}66 35%, rgba(0,0,0,0.72) 100%)`, pointerEvents: 'none' }} />
           {/* Watermark */}
-          <div style={{ position: 'absolute', left: 28, bottom: 14, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.35)', fontFamily: 'DM Mono, monospace', userSelect: 'none', zIndex: 1 }}>
+          <div style={{ position: 'absolute', left: 28, bottom: 14, fontSize: 10.5, fontWeight: 700, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.35)', fontFamily: 'var(--font-mono)', userSelect: 'none', zIndex: 1 }}>
             SEN JIW · ISRA · SÉNÉGAL
           </div>
           {/* Boutons top-right */}
@@ -203,17 +203,18 @@ export function Profile({ roleKey }: Props) {
         </div>
 
         {/* Corps hero */}
-        <div style={{ padding: '0 32px 26px' }}>
-          {/* Avatar + identité */}
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 22, marginTop: -56 }}>
+        <div style={{ padding: '0 28px 26px' }}>
+          {/* Avatar + identité — avatar chevauche la bannière, identité sur fond card */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 24, marginTop: -56 }}>
+
             {/* Avatar */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <div style={{
                 width: 108, height: 108, borderRadius: '50%',
                 background: role ? `linear-gradient(145deg, ${role.color}, ${role.color}99)` : 'linear-gradient(145deg, #374151, #1f2937)',
-                border: '4px solid white',
+                border: '4px solid var(--surface)',
                 outline: `3px solid ${accent}`,
-                boxShadow: `0 6px 20px rgba(0,0,0,0.25), 0 0 0 6px ${accent}22`,
+                boxShadow: `0 6px 20px rgba(0,0,0,0.3), 0 0 0 6px ${accent}22`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 36, fontWeight: 800, color: '#fff',
                 overflow: 'hidden', userSelect: 'none', letterSpacing: '-0.02em',
@@ -224,16 +225,16 @@ export function Profile({ roleKey }: Props) {
                 }
               </div>
               <button onClick={() => fileRef.current?.click()} title="Changer la photo"
-                style={{ position: 'absolute', bottom: 4, right: 2, width: 28, height: 28, borderRadius: '50%', background: accent, border: '2.5px solid white', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.25)' }}>
+                style={{ position: 'absolute', bottom: 4, right: 2, width: 28, height: 28, borderRadius: '50%', background: accent, border: '2.5px solid var(--surface)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
                 <Camera size={12} />
               </button>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhoto} />
             </div>
 
-            {/* Nom + rôle */}
-            <div style={{ paddingBottom: 6, flex: 1, minWidth: 0 }}>
+            {/* Identité — décalée vers le bas pour s'afficher sur fond clair */}
+            <div style={{ flex: 1, minWidth: 0, paddingTop: 64 }}>
               {role && (
-                <div style={{ marginBottom: 7 }}>
+                <div style={{ marginBottom: 6 }}>
                   <span style={{
                     display: 'inline-flex', alignItems: 'center', gap: 5,
                     background: accent, color: '#fff', borderRadius: 99,
@@ -245,15 +246,25 @@ export function Profile({ roleKey }: Props) {
                   </span>
                 </div>
               )}
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#fff', letterSpacing: '-0.03em', lineHeight: 1.1, fontFamily: 'Fraunces, serif', textShadow: '0 1px 6px rgba(0,0,0,0.45)' }}>
+              <div style={{
+                fontSize: 22, fontWeight: 800,
+                color: 'var(--text-primary)',
+                letterSpacing: '-0.02em', lineHeight: 1.2,
+                fontFamily: 'var(--font-sans)',
+              }}>
                 {displayName}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'rgba(255,255,255,0.92)', background: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.28)', borderRadius: 6, padding: '3px 10px', fontFamily: 'DM Mono, monospace', backdropFilter: 'blur(6px)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, flexWrap: 'wrap' }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  fontSize: 12, color: 'var(--text-secondary)',
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  borderRadius: 6, padding: '3px 10px', fontFamily: 'var(--font-mono)',
+                }}>
                   <User size={10} /> {username}
                 </span>
                 {token.email && (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'rgba(255,255,255,0.72)' }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)' }}>
                     <Mail size={10} /> {token.email}
                   </span>
                 )}
@@ -396,7 +407,7 @@ export function Profile({ roleKey }: Props) {
                   style={{
                     flex: 1, height: 32, padding: '0 10px', borderRadius: 7, fontSize: 13,
                     border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)',
-                    fontFamily: 'DM Mono, monospace',
+                    fontFamily: 'var(--font-mono)',
                   }}
                 />
                 <button
@@ -570,7 +581,7 @@ function InfoRow({
       </div>
       <span style={{
         fontSize: 13, fontWeight: 600, color: 'var(--text-primary)',
-        fontFamily: mono ? 'DM Mono, monospace' : undefined,
+        fontFamily: mono ? 'var(--font-mono)' : undefined,
         ...valueStyle,
       }}>
         {value}

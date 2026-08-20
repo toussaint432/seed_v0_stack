@@ -305,7 +305,7 @@ export function MesSites({ roleKey }: Props) {
                   style={{
                     width: '100%', padding: '0 12px', height: 36, borderRadius: 6,
                     border: '1px solid var(--border-strong)', background: 'var(--surface)',
-                    fontSize: 13, fontFamily: 'Outfit, sans-serif', color: 'var(--text)',
+                    fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text)',
                     cursor: 'pointer',
                   }}
                 >

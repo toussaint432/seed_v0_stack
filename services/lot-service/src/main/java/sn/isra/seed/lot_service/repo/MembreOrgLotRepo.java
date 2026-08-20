@@ -33,4 +33,18 @@ public class MembreOrgLotRepo {
         );
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }
+
+    /**
+     * Retourne le nom de l'organisation par son ID (table shared.organisation).
+     * Utilisé pour enrichir les nœuds du lineage avec le nom lisible de l'org.
+     */
+    public Optional<String> findOrgNomById(Long orgId) {
+        if (orgId == null) return Optional.empty();
+        List<String> rows = jdbc.query(
+            "SELECT nom_organisation FROM shared.organisation WHERE id = ? LIMIT 1",
+            (rs, i) -> rs.getString("nom_organisation"),
+            orgId
+        );
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
 }

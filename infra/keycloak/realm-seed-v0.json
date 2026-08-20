@@ -3,6 +3,7 @@
   "enabled": true,
   "registrationAllowed": false,
   "loginWithEmailAllowed": true,
+  "resetPasswordAllowed": true,
   "duplicateEmailsAllowed": false,
   "clients": [
     {
@@ -420,6 +421,235 @@
       "realmRoles": [
         "seed-quotataire"
       ]
+    },
+    {
+      "username": "selecteur_riz",
+      "enabled": true,
+      "email": "selecteur.riz@seed.local",
+      "firstName": "Oumar",
+      "lastName": "Sélect-RIZ",
+      "attributes": {
+        "specialisation": [
+          "RIZ"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "selectriz123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_mai",
+      "enabled": true,
+      "email": "selecteur.mai@seed.local",
+      "firstName": "Adja",
+      "lastName": "Sélect-MAI",
+      "attributes": {
+        "specialisation": [
+          "MAI"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "selectmai123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_fon",
+      "enabled": true,
+      "email": "selecteur.fon@seed.local",
+      "firstName": "Coumba",
+      "lastName": "Sélect-FON",
+      "attributes": {
+        "specialisation": [
+          "FON"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "selectfon123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_ses",
+      "enabled": true,
+      "email": "selecteur.ses@seed.local",
+      "firstName": "Rokhaya",
+      "lastName": "Sélect-SES",
+      "attributes": {
+        "specialisation": [
+          "SES"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "selectses123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_ble",
+      "enabled": true,
+      "email": "selecteur.ble@seed.local",
+      "firstName": "Mamadou",
+      "lastName": "Sélect-BLE",
+      "attributes": {
+        "specialisation": [
+          "BLE"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "selectble123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "multi_bc_ziguinchor",
+      "enabled": true,
+      "email": "multi.bc@seed.local",
+      "firstName": "Sékou",
+      "lastName": "Multi-Ziguinchor",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "multibcz123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "multi_hc_kolda",
+      "enabled": true,
+      "email": "multi.hc@seed.local",
+      "firstName": "Aissatou",
+      "lastName": "Multi-Kolda",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "multihck123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "multi_mc_sedhiou",
+      "enabled": true,
+      "email": "multi.mc@seed.local",
+      "firstName": "Boubacar",
+      "lastName": "Multi-Sédhiou",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "multimcs123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "multi_nay_thies",
+      "enabled": true,
+      "email": "multi.nay@seed.local",
+      "firstName": "Ndéye",
+      "lastName": "Multi-Thiès",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "multinayt123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "multi_so_tambacounda",
+      "enabled": true,
+      "email": "multi.so@seed.local",
+      "firstName": "Alpha",
+      "lastName": "Multi-Tambacounda",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "multisot123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "multi_vf_stlouis",
+      "enabled": true,
+      "email": "multi.vf@seed.local",
+      "firstName": "Daouda",
+      "lastName": "Multi-StLouis",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "multivfsl123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "multi_zsp_louga",
+      "enabled": true,
+      "email": "multi.zsp@seed.local",
+      "firstName": "Modou",
+      "lastName": "Multi-Louga",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "multizsp123",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
     }
   ],
   "loginTheme": "seed",
@@ -439,5 +669,32 @@
   "waitIncrementSeconds": 60,
   "quickLoginCheckMilliSeconds": 1000,
   "maxDeltaTimeSeconds": 43200,
-  "failureFactor": 5
+  "failureFactor": 5,
+  "eventsEnabled": true,
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "eventsExpiration": 7776000,
+  "enabledEventTypes": [
+    "LOGIN",
+    "LOGIN_ERROR",
+    "LOGOUT",
+    "CODE_TO_TOKEN",
+    "CODE_TO_TOKEN_ERROR",
+    "REFRESH_TOKEN",
+    "REFRESH_TOKEN_ERROR",
+    "UPDATE_PASSWORD",
+    "UPDATE_PASSWORD_ERROR",
+    "UPDATE_PROFILE",
+    "REGISTER",
+    "SEND_RESET_PASSWORD",
+    "RESET_PASSWORD",
+    "VERIFY_EMAIL",
+    "SEND_VERIFY_EMAIL",
+    "REVOKE_GRANT",
+    "INTROSPECT_TOKEN",
+    "INTROSPECT_TOKEN_ERROR",
+    "TOKEN_EXCHANGE",
+    "CLIENT_LOGIN",
+    "DELETE_ACCOUNT"
+  ]
 }

@@ -2,11 +2,12 @@ import React, { useEffect, useState, useMemo } from 'react'
 import {
   ShoppingCart, RefreshCw, Plus, Settings2, Clock, XCircle, PackageCheck,
   Search, X, ChevronLeft, ChevronRight, CheckCircle2, Ban, Eye, Building2,
-  TrendingUp, TrendingDown, BarChart2, Truck, Receipt, Zap,
+  TrendingUp, TrendingDown, BarChart2, Truck, Receipt, Zap, Download,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeVariete, extractList } from '../../lib/normalizers'
+import { downloadCsv, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -51,6 +52,37 @@ const GENERATIONS_CMD = [
 /** Correspondance idGeneration (1–7) → libellé affiché dans les tableaux et modales */
 const GEN_LABELS: Record<number, string> = {
   1: 'G0 — Pré-base', 2: 'G1 — Base', 3: 'G2', 4: 'G3', 5: 'G4', 6: 'R1', 7: 'R2 — Certifiée',
+}
+
+const CSV_HEADERS_ORDERS = ['Code commande', 'Client', 'Fournisseur', 'Statut', 'Variété', 'Génération', 'Qté demandée', 'Qté accordée', 'Unité', 'Date']
+
+function buildOrderCsvRows(
+  orders: any[],
+  orgs: any[],
+  varieties: any[],
+): (string | number | null | undefined)[][] {
+  const orgMap  = Object.fromEntries(orgs.map((o: any) => [o.id, o.nomOrganisation ?? `#${o.id}`]))
+  const varMap  = Object.fromEntries(varieties.map((v: any) => [v.id, v.nomVariete ?? '']))
+  const rows: (string | number | null | undefined)[][] = []
+  for (const o of orders) {
+    const fournisseur = orgMap[o.idOrganisationFournisseur] ?? o.idOrganisationFournisseur ?? ''
+    const lignes: any[] = Array.isArray(o.lignes) ? o.lignes : []
+    if (lignes.length === 0) {
+      rows.push([o.codeCommande, o.client ?? '', fournisseur, o.statut, '', '', '', '', 'kg', formatDateForExport(o.createdAt)])
+    } else {
+      for (const l of lignes) {
+        rows.push([
+          o.codeCommande, o.client ?? '', fournisseur, o.statut,
+          varMap[l.idVariete] ?? '', GEN_LABELS[l.idGeneration] ?? `G${l.idGeneration}`,
+          Number(l.quantiteDemandee) || 0,
+          l.quantiteProposee != null ? Number(l.quantiteProposee) : '',
+          l.unite ?? 'kg',
+          formatDateForExport(o.createdAt),
+        ])
+      }
+    }
+  }
+  return rows
 }
 
 /** Formate un Instant ISO en "dd/MM/yyyy à HH:mm:ss" pour la piste d'audit. */
@@ -322,7 +354,7 @@ function EvolutionChart({ orders }: { orders: any[] }) {
                   strokeWidth={t === 0 ? 1 : 0.6}
                   strokeDasharray={t === 0 ? undefined : '3,3'} />
                 <text x={PL - 4} y={y + 3.5} textAnchor="end" fontSize={8}
-                  fill="var(--text-muted)" fontFamily="Outfit,sans-serif">{t}</text>
+                  fill="var(--text-muted)" fontFamily="Plus Jakarta Sans, system-ui, sans-serif">{t}</text>
               </g>
             )
           })}
@@ -359,14 +391,14 @@ function EvolutionChart({ orders }: { orders: any[] }) {
                   <text x={bx + BARW / 2} y={yBot - 3} textAnchor="middle" fontSize={8}
                     fontWeight="700"
                     fill={isHov ? 'var(--text-primary)' : 'var(--text-muted)'}
-                    fontFamily="Outfit,sans-serif">{d.total}</text>
+                    fontFamily="Plus Jakarta Sans, system-ui, sans-serif">{d.total}</text>
                 )}
 
                 {/* Label axe X */}
                 <text x={bx + BARW / 2} y={PT + PH + 14} textAnchor="middle" fontSize={8}
                   fontWeight={isHov ? '700' : '400'}
                   fill={isHov ? 'var(--text-primary)' : 'var(--text-muted)'}
-                  fontFamily="Outfit,sans-serif">{d.label}</text>
+                  fontFamily="Plus Jakarta Sans, system-ui, sans-serif">{d.label}</text>
               </g>
             )
           })}
@@ -750,6 +782,17 @@ function VueQuotataire({ setToast }: { setToast: any }) {
             <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{displayed.length}{displayed.length !== orders.length && `/${orders.length}`}</span>
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
+            {displayed.length > 0 && (
+              <button
+                className="btn btn-secondary"
+                style={{ gap: 5, fontSize: 12 }}
+                onClick={() => downloadCsv(
+                  `commandes-${new Date().toISOString().slice(0, 10)}`,
+                  CSV_HEADERS_ORDERS,
+                  buildOrderCsvRows(displayed, orgs, varieties),
+                )}
+              ><Download size={13} /> CSV</button>
+            )}
             <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={13} /> Nouvelle commande</button>
             <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
           </div>
@@ -757,7 +800,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
         <div className="filters-bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34, flex: 1, maxWidth: 340 }}>
             <Search size={13} color="var(--text-muted)" />
-            <input placeholder="Code ou client…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1 }} />
+            <input placeholder="Code ou client…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'var(--font-sans)', flex: 1 }} />
             {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
           </div>
           {(search || kpiFilter) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setKpiFilter(null) }}><X size={11} /> Effacer filtres</button>}
@@ -816,7 +859,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
               ))}
             </div>
             <Field label="Observations">
-              <textarea value={form.observations} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm(f => ({ ...f, observations: e.target.value }))} placeholder="Précisions sur la commande…" rows={3} style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
+              <textarea value={form.observations} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm(f => ({ ...f, observations: e.target.value }))} placeholder="Précisions sur la commande…" rows={3} style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
             </Field>
             <FormActions onCancel={() => setShowForm(false)} loading={saving} submitLabel="Soumettre la commande" />
           </form>
@@ -987,6 +1030,17 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{displayed.length}{displayed.length !== activeOrders.length && `/${activeOrders.length}`}</span>
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
+            {displayed.length > 0 && (
+              <button
+                className="btn btn-secondary"
+                style={{ gap: 5, fontSize: 12, height: 32 }}
+                onClick={() => downloadCsv(
+                  `commandes-${onglet}-${new Date().toISOString().slice(0, 10)}`,
+                  CSV_HEADERS_ORDERS,
+                  buildOrderCsvRows(displayed, orgs, varieties),
+                )}
+              ><Download size={13} /> CSV</button>
+            )}
             {onglet === 'demandes' && (
               <button className="btn btn-primary" style={{ fontSize: 12, height: 32, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowForm(true)}>
                 <Plus size={13} /> Nouvelle demande G3
@@ -1003,7 +1057,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
         <div className="filters-bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34, flex: 1, maxWidth: 340 }}>
             <Search size={13} color="var(--text-muted)" />
-            <input placeholder="Code commande…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1 }} />
+            <input placeholder="Code commande…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'var(--font-sans)', flex: 1 }} />
             {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
           </div>
           {(search || kpiFilter) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setKpiFilter(null) }}><X size={11} /> Effacer</button>}
@@ -1136,7 +1190,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setForm(f => ({ ...f, observations: e.target.value }))}
                 placeholder="Précisions sur la demande, délai souhaité…"
                 rows={3}
-                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
               />
             </Field>
             <FormActions onCancel={() => setShowForm(false)} loading={formSaving} submitLabel="Soumettre la demande G3" />
@@ -1148,7 +1202,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
         <Modal title="Annuler la commande" subtitle={`Commande ${refusModal.code}`} onClose={() => setRefusModal(null)} size="sm">
           <form onSubmit={refuser}>
             <Field label="Motif d'annulation" required hint="Visible par le demandeur">
-              <textarea value={motif} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMotif(e.target.value)} placeholder="Stock insuffisant, variété indisponible…" rows={4} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+              <textarea value={motif} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMotif(e.target.value)} placeholder="Stock insuffisant, variété indisponible…" rows={4} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
             </Field>
             <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer l'annulation" />
           </form>
@@ -1337,7 +1391,7 @@ function TraiterCommandeG3Modal({
                   max={lotSelectionne ? Math.min(Number(lotSelectionne.quantiteNette), ligne.quantiteDemandee) : ligne.quantiteDemandee}
                   onChange={e => setQte(ligne.id, e.target.value)}
                   disabled={sel.idLot === null}
-                  style={{ padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 150, outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)', color: sel.idLot === null ? 'var(--text-muted)' : 'var(--text-primary)' }}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: 150, outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)', color: sel.idLot === null ? 'var(--text-muted)' : 'var(--text-primary)' }}
                 />
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   sur <strong>{ligne.quantiteDemandee}</strong> {ligne.unite} demandé{ligne.quantiteDemandee > 1 ? 's' : ''}
@@ -1502,7 +1556,7 @@ function ProposeModal({
                   max={lotSel ? lotSel.quantiteNette : undefined}
                   onChange={e => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], quantite: e.target.value } }))}
                   disabled={sel.idLot === null}
-                  style={{ padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 150, outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)' }}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: 150, outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)' }}
                 />
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   sur <strong>{ligne.quantiteDemandee}</strong> {ligne.unite} demandé{ligne.quantiteDemandee > 1 ? 's' : ''}
@@ -1811,13 +1865,26 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
             )}
             <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{displayed.length}{displayed.length !== orders.length && `/${orders.length}`}</span>
           </span>
-          <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {displayed.length > 0 && (
+              <button
+                className="btn btn-secondary"
+                style={{ gap: 5, fontSize: 12 }}
+                onClick={() => downloadCsv(
+                  `commandes-reçues-${new Date().toISOString().slice(0, 10)}`,
+                  CSV_HEADERS_ORDERS,
+                  buildOrderCsvRows(displayed, orgs, varieties),
+                )}
+              ><Download size={13} /> CSV</button>
+            )}
+            <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
+          </div>
         </div>
 
         <div className="filters-bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34, flex: 1, maxWidth: 340 }}>
             <Search size={13} color="var(--text-muted)" />
-            <input placeholder="Code commande ou client…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1 }} />
+            <input placeholder="Code commande ou client…" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'var(--font-sans)', flex: 1 }} />
             {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
           </div>
           {(search || kpiFilter) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setKpiFilter(null) }}><X size={11} /> Effacer</button>}
@@ -1934,6 +2001,17 @@ function VueAdmin({ setToast }: { setToast: any }) {
             <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{displayed.length}/{orders.length}</span>
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
+            {displayed.length > 0 && (
+              <button
+                className="btn btn-secondary"
+                style={{ gap: 5, fontSize: 12 }}
+                onClick={() => downloadCsv(
+                  `toutes-commandes-${new Date().toISOString().slice(0, 10)}`,
+                  CSV_HEADERS_ORDERS,
+                  buildOrderCsvRows(displayed, orgs, varieties),
+                )}
+              ><Download size={13} /> CSV</button>
+            )}
             <button className="btn btn-secondary" onClick={() => setShowAlloc(true)}><Settings2 size={13} /> Allouer</button>
             <button className="btn btn-secondary btn-icon" onClick={fetchOrders}><RefreshCw size={13} /></button>
           </div>
@@ -1946,7 +2024,7 @@ function VueAdmin({ setToast }: { setToast: any }) {
               placeholder="Code commande ou client…"
               value={search}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
-              style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', flex: 1 }}
+              style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'var(--font-sans)', flex: 1 }}
             />
             {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
           </div>

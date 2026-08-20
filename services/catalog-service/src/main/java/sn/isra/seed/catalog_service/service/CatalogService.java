@@ -68,6 +68,12 @@ public class CatalogService {
         trackStr(changes, v.getId(), "Type de grain",           v.getTypeGrain(),              body.getTypeGrain(),              user);
         trackStr(changes, v.getId(), "Rendement min (t/ha)",    str(v.getRendementMin()),      str(body.getRendementMin()),      user);
         trackStr(changes, v.getId(), "Rendement max (t/ha)",    str(v.getRendementMax()),      str(body.getRendementMax()),      user);
+        trackStr(changes, v.getId(), "Année d'homologation",   str(v.getAnneeHomologation()), str(body.getAnneeHomologation()), user);
+        trackStr(changes, v.getId(), "Nature génétique",       v.getNatureGenetique(),        body.getNatureGenetique(),        user);
+        trackStr(changes, v.getId(), "N° sélection",           v.getNumeroSelection(),        body.getNumeroSelection(),        user);
+        trackStr(changes, v.getId(), "Vocation culturale",     v.getVocationCulturale(),      body.getVocationCulturale(),      user);
+        trackStr(changes, v.getId(), "Photosensibilité",       v.getPhotosensibilite(),       body.getPhotosensibilite(),       user);
+        trackStr(changes, v.getId(), "Synonyme",               v.getSynonyme(),               body.getSynonyme(),               user);
 
         if (body.getNomVariete()             != null) v.setNomVariete(body.getNomVariete());
         if (body.getOrigine()                != null) v.setOrigine(body.getOrigine());
@@ -80,6 +86,12 @@ public class CatalogService {
         if (body.getTypeGrain()              != null) v.setTypeGrain(body.getTypeGrain());
         if (body.getRendementMin()           != null) v.setRendementMin(body.getRendementMin());
         if (body.getRendementMax()           != null) v.setRendementMax(body.getRendementMax());
+        if (body.getAnneeHomologation()      != null) v.setAnneeHomologation(body.getAnneeHomologation());
+        if (body.getNatureGenetique()        != null) v.setNatureGenetique(body.getNatureGenetique());
+        if (body.getNumeroSelection()        != null) v.setNumeroSelection(body.getNumeroSelection());
+        if (body.getVocationCulturale()      != null) v.setVocationCulturale(body.getVocationCulturale());
+        if (body.getPhotosensibilite()       != null) v.setPhotosensibilite(body.getPhotosensibilite());
+        if (body.getSynonyme()               != null) v.setSynonyme(body.getSynonyme());
 
         Variete saved = varieteRepo.save(v);
         if (!changes.isEmpty()) historiqueRepo.saveAll(changes);

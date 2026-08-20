@@ -8,6 +8,7 @@ import {
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, extractList } from '../../lib/normalizers'
+import { downloadCsv, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { keycloak } from '../../lib/keycloak'
 import {
@@ -15,7 +16,7 @@ import {
   TransferDocData, LotPdfData, PartiePdf,
 } from '../../lib/pdf/generateTransferDoc'
 
-interface Props { roleKey: string }
+interface Props { roleKey: string; userSpecialisation?: string | null }
 
 import { GEN_CHART_COLORS, GEN_COLORS, ROLE_LABELS_LONG } from '../../lib/constants'
 const GEN_COLOR = GEN_CHART_COLORS
@@ -408,7 +409,7 @@ function LotDropdown({ lots, value, onChange, placeholder = 'Sélectionner un lo
   )
 }
 
-export function Stocks({ roleKey }: Props) {
+export function Stocks({ roleKey, userSpecialisation }: Props) {
   const [agregeStocks, setAgregeStocks] = useState<any[]>([])
   const [lots,         setLots]         = useState<any[]>([])
   const [varieties,    setVarieties]    = useState<any[]>([])
@@ -495,6 +496,7 @@ export function Stocks({ roleKey }: Props) {
     // Generation filter is already applied server-side; client-side is a safety guard
     if (isUPSemCL)  s = s.filter(st => UPSEMCL_GENS.includes(st.codeGeneration))
     if (isSelector) s = s.filter(st => SELECTOR_GENS.includes(st.codeGeneration))
+    if (isSelector && userSpecialisation) s = s.filter(st => !st.codeEspece || st.codeEspece.toUpperCase() === userSpecialisation.toUpperCase())
     if (site)       s = s.filter(st => st.codeSite === site)
     if (filterGen)  s = s.filter(st => st.codeGeneration === filterGen)
     if (filterSearch) {
@@ -971,6 +973,23 @@ export function Stocks({ roleKey }: Props) {
             {canManage && (
               <button className="btn btn-primary" onClick={() => setShowMvtForm(true)}><Plus size={13} /> Mouvement</button>
             )}
+            {stocks.length > 0 && (
+              <button
+                className="btn btn-secondary"
+                style={{ gap: 5 }}
+                onClick={() => downloadCsv(
+                  `stock-${new Date().toISOString().slice(0, 10)}`,
+                  ['Génération', 'Espèce', 'Variété', 'Code variété', 'Site', 'Quantité totale', 'Unité', 'Nb lots'],
+                  stocks.map((st: any) => [
+                    st.codeGeneration ?? '', st.nomEspece ?? '', st.nomVariete ?? '',
+                    st.codeVariete ?? '', st.codeSite ?? '',
+                    parseFloat(st.quantiteTotale) || 0, st.unite ?? 'kg', st.nbLots ?? '',
+                  ])
+                )}
+              >
+                <Download size={13} /> CSV
+              </button>
+            )}
             <button
               className="btn btn-secondary"
               style={{ gap: 5, background: showHistory ? 'var(--surface-2)' : undefined }}
@@ -1257,6 +1276,34 @@ export function Stocks({ roleKey }: Props) {
                     onClick={() => setHistoryLotId(null)}
                   >Voir tout</button>
                 </div>
+              )}
+              {filteredMvts.length > 0 && (
+                <button
+                  className="btn btn-secondary"
+                  style={{ gap: 5, fontSize: 12 }}
+                  onClick={() => downloadCsv(
+                    `mouvements-stock-${new Date().toISOString().slice(0, 10)}`,
+                    ['Date', 'Type', 'Code lot', 'Variété', 'Site source', 'Site destination', 'Quantité', 'Unité', 'Référence', 'Opérateur'],
+                    filteredMvts.map((m: any) => {
+                      const lot     = lotMap[m.idLot]
+                      const variete = lot ? varMap[lot.idVariete] : null
+                      return [
+                        formatDateForExport(m.createdAt),
+                        m.typeMouvement ?? '',
+                        lot?.codeLot ?? String(m.idLot),
+                        variete?.nomVariete ?? '',
+                        m.siteSource?.codeSite ?? '',
+                        m.siteDestination?.codeSite ?? '',
+                        parseFloat(m.quantite) || 0,
+                        m.unite ?? 'kg',
+                        m.referenceOperation ?? '',
+                        m.usernameOperateur ?? '',
+                      ]
+                    })
+                  )}
+                >
+                  <Download size={13} /> CSV
+                </button>
               )}
               <button className="btn btn-ghost btn-icon" onClick={() => setShowHistory(false)}><X size={13} /></button>
             </div>

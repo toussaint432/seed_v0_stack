@@ -32,6 +32,15 @@ public record VarieteDto(
     Instant       dateCreation,
     String        ficheVarietalePath,
 
+    // Catalogue officiel ISRA/CNRA
+    Integer       anneeHomologation,
+    String        natureGenetique,
+    String        numeroSelection,
+    String        vocationCulturale,
+    String        photosensibilite,
+    String        synonyme,
+    String        itineraireTechPath,
+
     // Archivage (retourné pour l'affichage admin)
     String        commentaireArchivage,
     Instant       dateArchivage,

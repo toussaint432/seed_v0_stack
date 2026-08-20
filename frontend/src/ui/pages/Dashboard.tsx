@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Package, ShoppingCart, Leaf,
   RefreshCw, Plus, Database, ArrowRight,
-  Search, Filter, X,
+  Search, Filter, X, TrendingUp,
+  Navigation, MapPin, Clock,
 } from 'lucide-react'
 import { api }             from '../../lib/api'
 import { endpoints }       from '../../lib/endpoints'
@@ -10,6 +12,9 @@ import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../
 import { SelectorAnalytics } from './SelectorAnalytics'
 import { PendingDeliveries } from '../components/PendingDeliveries'
 import { MapSemences }     from '../components/MapSemences'
+import { TD as D }         from '../../lib/tokens'
+import { downloadCsv, downloadXlsx, formatDateForExport, type XlsxSheet } from '../../lib/exportUtils'
+import { GEN_CHART_COLORS } from '../../lib/constants'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
 
@@ -39,22 +44,20 @@ const ROLE_CFG: Record<string, { color: string; label: string }> = {
 }
 
 /* ── Couleurs par génération ── */
+// Palette unifiée avec Lots.tsx et Stocks.tsx
+const GEN_COLOR = GEN_CHART_COLORS
 const GEN_CFG: Record<string, { bg: string; color: string }> = {
-  G0: { bg: '#eff6ff', color: '#1d4ed8' },
-  G1: { bg: '#f0fdf4', color: '#15803d' },
-  G2: { bg: '#fef9ed', color: '#92660a' },
-  G3: { bg: '#faf5ff', color: '#6d28d9' },
-  G4: { bg: '#fff7ed', color: '#c2410c' },
-  R1: { bg: '#f0fdfa', color: '#0f766e' },
-  R2: { bg: '#dcfce7', color: '#16a34a' },
+  G0: { bg: '#eef2ff', color: GEN_COLOR.G0 },
+  G1: { bg: '#f0f9ff', color: GEN_COLOR.G1 },
+  G2: { bg: '#f0fdf4', color: GEN_COLOR.G2 },
+  G3: { bg: '#fffbeb', color: GEN_COLOR.G3 },
+  G4: { bg: '#fff7ed', color: GEN_COLOR.G4 },
+  R1: { bg: '#fdf2f8', color: GEN_COLOR.R1 },
+  R2: { bg: '#f0fdfa', color: GEN_COLOR.R2 },
 }
 const GEN_LABELS: Record<string, string> = {
   G0: 'Noyau génétique', G1: 'Pré-base',  G2: 'Base',
   G3: 'Certifiée C1',    G4: 'Certifiée C2', R1: 'R1', R2: 'Commerciale R2',
-}
-const GEN_COLOR: Record<string, string> = {
-  G0: '#1d4ed8', G1: '#15803d', G2: '#92660a',
-  G3: '#6d28d9', G4: '#c2410c', R1: '#0f766e', R2: '#16a34a',
 }
 const GEN_LABEL: Record<string, string> = {
   G0: 'Génétique', G1: 'Pré-base', G2: 'Base',
@@ -77,25 +80,6 @@ const GREETINGS: Record<string, { title: string; sub: string }> = {
 }
 
 const REFRESH_MS = 30_000
-
-/* ── Design tokens ── */
-const D = {
-  paper:      '#fafafa',
-  paper2:     '#f8fafc',
-  line:       '#e5e7eb',
-  ink:        '#111827',
-  muted:      '#6b7280',
-  green:      '#00693e',
-  greenDeep:  '#003d24',
-  greenSoft:  '#e8f1ec',
-  blue:       '#1d4ed8',
-  blueLight:  '#eff6ff',
-  blueBorder: '#bfdbfe',
-  terra:      '#c44536',
-  display:    "'Bricolage Grotesque', system-ui, sans-serif",
-  body:       "'Manrope', system-ui, sans-serif",
-  mono:       "'JetBrains Mono', ui-monospace, monospace",
-} as const
 
 /* ────────────────── hook count-up ────────────────── */
 function useCountUp(target: number, delay = 0, enabled = true) {
@@ -128,8 +112,6 @@ function KpiCard({ index, label, value, sub, accent, delay, suffix }: {
   const [vis, setVis] = useState(false)
   useEffect(() => { const t = setTimeout(() => setVis(true), delay); return () => clearTimeout(t) }, [delay])
   const displayed = useCountUp(value, delay + 80, vis)
-  const seq = String(index + 1).padStart(2, '0')
-
   return (
     <div className="kpi-card-outer">
       <div className="kpi-card-dot" />
@@ -139,43 +121,35 @@ function KpiCard({ index, label, value, sub, accent, delay, suffix }: {
           background: '#fff',
           borderRadius: 12,
           border: `1px solid ${D.line}`,
-          padding: '20px 22px 22px',
+          padding: '18px 22px 20px',
           opacity: vis ? 1 : 0,
           transform: vis ? 'translateY(0)' : 'translateY(18px)',
           transition: 'opacity 0.44s ease, transform 0.44s ease',
           cursor: 'default',
         }}
       >
-        {/* Numéro séquentiel */}
+        {/* Label */}
         <div style={{
-          fontFamily: D.mono, fontSize: 10, fontWeight: 500,
-          color: D.muted, letterSpacing: '0.06em', marginBottom: 16,
+          fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
+          letterSpacing: '0.12em', color: D.muted, marginBottom: 12,
         }}>
-          {seq}
+          {label}
         </div>
 
         {/* Valeur principale */}
-        <div style={{ lineHeight: 1, marginBottom: 10 }}>
+        <div style={{ lineHeight: 1, marginBottom: sub ? 10 : 0 }}>
           <span style={{
-            fontFamily: D.display, fontSize: 46, fontWeight: 700,
+            fontFamily: D.display, fontSize: 34, fontWeight: 700,
             letterSpacing: '-0.03em', color: D.ink,
             fontVariantNumeric: 'tabular-nums',
           }}>
             {displayed.toLocaleString('fr-FR')}
           </span>
           {suffix && (
-            <span style={{ fontFamily: D.mono, fontSize: 15, fontWeight: 500, color: D.muted, marginLeft: 5 }}>
+            <span style={{ fontFamily: D.mono, fontSize: 13, fontWeight: 500, color: D.muted, marginLeft: 5 }}>
               {suffix}
             </span>
           )}
-        </div>
-
-        {/* Label */}
-        <div style={{
-          fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
-          letterSpacing: '0.12em', color: D.muted, marginBottom: sub ? 8 : 0,
-        }}>
-          {label}
         </div>
 
         {/* Sous-info */}
@@ -288,7 +262,7 @@ function BarChart({ data, yLabel = 'Stock disponible (kg)' }: { data: BarDatum[]
               stroke="var(--border)" strokeWidth={t === TICKS ? 1.5 : 0.7}
               strokeDasharray={t === TICKS ? '0' : '3,4'} />
             <text x={PAD_L - 6} y={y + 4} textAnchor="end"
-              fontSize={9} fill="var(--text-muted)" fontFamily="Outfit,sans-serif">
+              fontSize={9} fill="var(--text-muted)" fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
               {v > 999 ? `${(v / 1000).toFixed(0)}k` : v}
             </text>
           </g>
@@ -312,27 +286,27 @@ function BarChart({ data, yLabel = 'Stock disponible (kg)' }: { data: BarDatum[]
               rx={5} fill={`url(#db-bar-g${i})`} style={{ transition: 'all 0.15s' }} />
             {d.value > 0 && (
               <text x={x + bw / 2} y={y - 5} textAnchor="middle"
-                fontSize={isHov ? 10 : 9} fontWeight={700} fill={d.color} fontFamily="Outfit,sans-serif"
+                fontSize={isHov ? 10 : 9} fontWeight={700} fill={d.color} fontFamily="Plus Jakarta Sans, system-ui, sans-serif"
                 style={{ transition: 'font-size 0.1s' }}>
                 {d.value > 9999 ? `${(d.value / 1000).toFixed(1)}k` : d.value.toLocaleString('fr-FR')} kg
               </text>
             )}
             <text x={x + bw / 2} y={PAD_T + innerH + 14} textAnchor="middle"
               fontSize={9} fill={isHov ? d.color : 'var(--text-secondary)'}
-              fontWeight={isHov ? 700 : 400} fontFamily="Outfit,sans-serif">
+              fontWeight={isHov ? 700 : 400} fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
               {d.label.length > 10 ? d.label.slice(0, 10) + '…' : d.label}
             </text>
             <text x={x + bw / 2} y={PAD_T + innerH + 26} textAnchor="middle"
-              fontSize={8} fill={d.color} fontWeight={600} fontFamily="Outfit,sans-serif" opacity={0.8}>
+              fontSize={8} fill={d.color} fontWeight={600} fontFamily="Plus Jakarta Sans, system-ui, sans-serif" opacity={0.8}>
               {d.gen}
             </text>
             {isHov && (
               <g>
                 <rect x={x + bw / 2 - 46} y={y - 42} width={92} height={32} rx={5} fill="var(--text-primary)" opacity={0.92} />
-                <text x={x + bw / 2} y={y - 28} textAnchor="middle" fontSize={9} fill="#fff" fontWeight={700} fontFamily="Outfit,sans-serif">
+                <text x={x + bw / 2} y={y - 28} textAnchor="middle" fontSize={9} fill="#fff" fontWeight={700} fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
                   {d.label}
                 </text>
-                <text x={x + bw / 2} y={y - 16} textAnchor="middle" fontSize={9} fill={d.color} fontWeight={600} fontFamily="Outfit,sans-serif">
+                <text x={x + bw / 2} y={y - 16} textAnchor="middle" fontSize={9} fill={d.color} fontWeight={600} fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
                   {d.value.toLocaleString('fr-FR')} kg · {GEN_LABEL[d.gen] ?? d.gen}
                 </text>
               </g>
@@ -343,7 +317,7 @@ function BarChart({ data, yLabel = 'Stock disponible (kg)' }: { data: BarDatum[]
 
       {/* Label axe Y */}
       <text x={10} y={PAD_T + innerH / 2} textAnchor="middle"
-        fontSize={9} fill="var(--text-muted)" fontFamily="Outfit,sans-serif"
+        fontSize={9} fill="var(--text-muted)" fontFamily="Plus Jakarta Sans, system-ui, sans-serif"
         transform={`rotate(-90, 10, ${PAD_T + innerH / 2})`}>
         {yLabel}
       </text>
@@ -351,10 +325,307 @@ function BarChart({ data, yLabel = 'Stock disponible (kg)' }: { data: BarDatum[]
   )
 }
 
+/* ────────────────── Horizontal Bar Chart ────────────────── */
+function HBarChart({ data }: { data: BarDatum[] }) {
+  const [hovered, setHovered] = useState<number | null>(null)
+  if (data.length === 0) return null
+  const max = Math.max(...data.map(d => d.value), 1)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {data.map((d, i) => {
+        const pct   = (d.value / max) * 100
+        const isHov = hovered === i
+        return (
+          <div key={i}
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+            style={{ display: 'grid', gridTemplateColumns: '154px 1fr 88px', alignItems: 'center', gap: 10, cursor: 'default' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{
+                fontSize: 11.5, fontWeight: 500, color: isHov ? D.ink : D.muted,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                transition: 'color 0.15s', flex: 1,
+              }}>
+                {d.label}
+              </span>
+              <span style={{
+                fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, flexShrink: 0,
+                background: GEN_CFG[d.gen]?.bg ?? '#f8f8f8',
+                color: GEN_COLOR[d.gen] ?? '#6b7280',
+                border: `1px solid ${GEN_COLOR[d.gen] ?? '#6b7280'}28`,
+              }}>{d.gen}</span>
+            </div>
+            <div style={{ position: 'relative', height: 6, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+              <div style={{
+                position: 'absolute', left: 0, top: 0, height: '100%',
+                width: `${pct}%`, background: d.color, borderRadius: 99,
+                opacity: isHov ? 1 : 0.82,
+                transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1), opacity 0.15s',
+              }} />
+            </div>
+            <div style={{
+              fontSize: 11.5, fontWeight: 700, textAlign: 'right',
+              fontVariantNumeric: 'tabular-nums', fontFamily: D.mono,
+              color: isHov ? d.color : 'var(--text-secondary)',
+              transition: 'color 0.15s',
+            }}>
+              {d.value >= 1000 ? `${(d.value / 1000).toFixed(1)}k` : d.value.toLocaleString('fr-FR')} kg
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+/* ═══════════════════════════════════════════════════════════
+   QUOTATAIRE HOME — Widgets dédiés
+═══════════════════════════════════════════════════════════ */
+const ORDER_STATUS_CFG: Record<string, { label: string; color: string; bg: string }> = {
+  SOUMISE:        { label: 'Soumise',       color: '#d97706', bg: '#fffbeb' },
+  ACCEPTEE:       { label: 'Acceptée',      color: '#0369a1', bg: '#eff6ff' },
+  EN_PREPARATION: { label: 'En préparation',color: '#0f766e', bg: '#f0fdfa' },
+  LIVREE:         { label: 'Livrée',        color: '#16a34a', bg: '#f0fdf4' },
+  ANNULEE:        { label: 'Annulée',       color: '#dc2626', bg: '#fef2f2' },
+  REJETEE:        { label: 'Rejetée',       color: '#7c3aed', bg: '#faf5ff' },
+}
+
+function QuotataireHome({ accent, navigate, rawOrders }: {
+  accent: string
+  navigate: ReturnType<typeof useNavigate>
+  rawOrders: any[]
+}) {
+  const [stocks,     setStocks]     = useState<any[]>([])
+  const [proches,    setProches]    = useState<any[]>([])
+  const [geoReady,   setGeoReady]   = useState(false)
+  const [loadingCat, setLoadingCat] = useState(true)
+  const [loadingGeo, setLoadingGeo] = useState(true)
+
+  useEffect(() => {
+    api.get(endpoints.catalogue)
+      .then(r => setStocks(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {})
+      .finally(() => setLoadingCat(false))
+
+    if (!navigator.geolocation) { setLoadingGeo(false); return }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const { latitude: lat, longitude: lng } = pos.coords
+        api.get(`${endpoints.catalogueProximite}?lat=${lat}&lng=${lng}&rayonKm=300`)
+          .then(r => { setProches(Array.isArray(r.data) ? r.data : []); setGeoReady(true) })
+          .catch(() => {})
+          .finally(() => setLoadingGeo(false))
+      },
+      () => setLoadingGeo(false),
+      { timeout: 8000, maximumAge: 300000 }
+    )
+  }, [])
+
+  type EspeceRow = { code: string; nom: string; stockKg: number; nbVarietes: number; nbOrgs: number }
+  const especeRows: EspeceRow[] = useMemo(() => {
+    const map: Record<string, { nom: string; stockKg: number; v: Set<number>; o: Set<number> }> = {}
+    for (const item of stocks) {
+      const code = item.codeEspece || '?'
+      if (code === '?') continue
+      if (!map[code]) map[code] = { nom: item.nomEspece || code, stockKg: 0, v: new Set(), o: new Set() }
+      map[code].stockKg += item.quantiteDisponible || 0
+      map[code].v.add(item.varieteId)
+      map[code].o.add(item.organisationId)
+    }
+    return Object.entries(map)
+      .map(([code, d]) => ({ code, nom: d.nom, stockKg: d.stockKg, nbVarietes: d.v.size, nbOrgs: d.o.size }))
+      .sort((a, b) => b.stockKg - a.stockKg)
+  }, [stocks])
+
+  type OrgRow = { orgId: number; orgNom: string; region: string; distanceKm?: number; stockKg: number; nbVarietes: number }
+  const orgRows: OrgRow[] = useMemo(() => {
+    const map: Record<number, OrgRow> = {}
+    for (const item of proches) {
+      const id = item.organisationId
+      if (!map[id]) map[id] = { orgId: id, orgNom: item.nomOrganisation, region: item.region, distanceKm: item.distanceKm, stockKg: 0, nbVarietes: 0 }
+      map[id].stockKg += item.quantiteDisponible || 0
+      map[id].nbVarietes++
+      if (item.distanceKm != null && (map[id].distanceKm == null || item.distanceKm < map[id].distanceKm!))
+        map[id].distanceKm = item.distanceKm
+    }
+    return Object.values(map).sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999)).slice(0, 5)
+  }, [proches])
+
+  const recentOrders = useMemo(
+    () => [...rawOrders].sort((a: any, b: any) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime()).slice(0, 4),
+    [rawOrders]
+  )
+  const pendingCount = rawOrders.filter(o => ['SOUMISE', 'ACCEPTEE', 'EN_PREPARATION'].includes(o.statut ?? '')).length
+
+  const maxKg = especeRows[0]?.stockKg ?? 1
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 20 }}>
+
+      {/* ── Stocks disponibles par espèce ── */}
+      <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+        <div style={{ padding: '14px 20px 12px', borderBottom: `1px solid ${D.line}`, background: D.paper2, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 7, background: '#f0fdf4', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Database size={13} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: D.ink }}>Semences R1/R2 disponibles</div>
+            <div style={{ fontSize: 11, color: D.muted }}>Stocks certifiés — toutes espèces</div>
+          </div>
+          <button onClick={() => navigate('/catalogue')}
+            style={{ fontSize: 11, fontWeight: 600, color: '#16a34a', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            Voir catalogue →
+          </button>
+        </div>
+        {loadingCat ? (
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[1,2,3,4].map(i => <div key={i} className="skeleton" style={{ height: 32, borderRadius: 8 }} />)}
+          </div>
+        ) : especeRows.length === 0 ? (
+          <div style={{ padding: '32px 20px', textAlign: 'center', color: D.muted, fontSize: 13 }}>Aucun stock disponible</div>
+        ) : (
+          <div style={{ padding: '12px 20px 14px', display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {especeRows.map(row => (
+              <div key={row.code} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 700, color: D.ink }}>{row.nom}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                    <div style={{ flex: 1, height: 4, background: '#f0f4f0', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(row.stockKg / maxKg) * 100}%`, background: '#16a34a', borderRadius: 99, transition: 'width 0.7s ease' }} />
+                    </div>
+                    <span style={{ fontSize: 10, color: D.muted, flexShrink: 0 }}>{row.nbVarietes}v · {row.nbOrgs}f</span>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#16a34a', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                  {row.stockKg >= 1000 ? `${(row.stockKg / 1000).toFixed(1)} t` : `${Math.round(row.stockKg)} kg`}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Multiplicateurs proches ── */}
+      <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+        <div style={{ padding: '14px 20px 12px', borderBottom: `1px solid ${D.line}`, background: D.paper2, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 28, height: 28, borderRadius: 7, background: '#eff6ff', color: '#1d4ed8', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <Navigation size={13} />
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: D.ink }}>
+              {geoReady ? 'Multiplicateurs proches' : 'Multiplicateurs agréés'}
+            </div>
+            <div style={{ fontSize: 11, color: D.muted }}>
+              {geoReady ? 'Rayon 300 km · triés par distance' : 'Activez la géoloc pour trier par proximité'}
+            </div>
+          </div>
+          <button onClick={() => navigate('/catalogue')}
+            style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+            Voir sur carte →
+          </button>
+        </div>
+
+        {loadingGeo ? (
+          <div style={{ padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 44, borderRadius: 8 }} />)}
+          </div>
+        ) : orgRows.length === 0 ? (
+          <div style={{ padding: '32px 20px', textAlign: 'center', color: D.muted }}>
+            <MapPin size={28} style={{ opacity: 0.25, marginBottom: 8 }} />
+            <div style={{ fontSize: 13 }}>
+              {geoReady ? 'Aucun multiplicateur dans un rayon de 300 km' : 'Accédez au catalogue pour localiser les fournisseurs'}
+            </div>
+            <button onClick={() => navigate('/catalogue')}
+              style={{ marginTop: 10, fontSize: 12, fontWeight: 600, color: accent, background: `${accent}10`, border: `1px solid ${accent}30`, borderRadius: 7, padding: '6px 14px', cursor: 'pointer' }}>
+              Accéder au catalogue
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {orgRows.map((org, idx) => (
+              <div key={org.orgId}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: idx < orgRows.length - 1 ? `1px solid ${D.line}` : 'none' }}>
+                <div style={{ width: 22, height: 22, borderRadius: '50%', background: idx === 0 ? '#eff6ff' : D.paper2, border: `1.5px solid ${idx === 0 ? '#bfdbfe' : D.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: idx === 0 ? '#1d4ed8' : D.muted, flexShrink: 0 }}>
+                  {idx + 1}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: D.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{org.orgNom}</div>
+                  <div style={{ fontSize: 10.5, color: D.muted, marginTop: 1 }}>
+                    <MapPin size={9} style={{ verticalAlign: 'middle', marginRight: 2 }} />{org.region} · {org.nbVarietes} var.
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                  {org.distanceKm != null && (
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
+                      <Navigation size={9} /> {Math.round(org.distanceKm)} km
+                    </div>
+                  )}
+                  <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>
+                    {org.stockKg >= 1000 ? `${(org.stockKg / 1000).toFixed(1)} t` : `${Math.round(org.stockKg)} kg`}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Commandes récentes (pleine largeur) ── */}
+      {rawOrders.length > 0 && (
+        <div style={{ gridColumn: '1 / -1', background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+          <div style={{ padding: '14px 20px 12px', borderBottom: `1px solid ${D.line}`, background: D.paper2, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: `${accent}12`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <ShoppingCart size={13} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 700, color: D.ink }}>Mes commandes</div>
+              <div style={{ fontSize: 11, color: D.muted }}>
+                {pendingCount > 0 ? `${pendingCount} en cours · ` : ''}{rawOrders.length} commande{rawOrders.length > 1 ? 's' : ''} au total
+              </div>
+            </div>
+            <button onClick={() => navigate('/orders')}
+              style={{ fontSize: 11, fontWeight: 600, color: accent, background: `${accent}10`, border: `1px solid ${accent}30`, borderRadius: 7, padding: '4px 10px', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
+              Toutes les commandes →
+            </button>
+          </div>
+          <div>
+            {recentOrders.map((o: any, idx) => {
+              const s = ORDER_STATUS_CFG[o.statut] ?? { label: o.statut ?? '—', color: '#6b7280', bg: '#f3f4f6' }
+              const nbLignes = o.lignes?.length ?? 0
+              return (
+                <div key={o.id}
+                  style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '10px 20px', borderBottom: idx < recentOrders.length - 1 ? `1px solid ${D.line}` : 'none' }}>
+                  <span style={{ fontFamily: D.mono, fontSize: 12, fontWeight: 700, color: D.ink, minWidth: 160 }}>
+                    {o.codeCommande ?? `CMD-${o.id}`}
+                  </span>
+                  <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: s.bg, color: s.color, whiteSpace: 'nowrap' }}>
+                    {s.label}
+                  </span>
+                  <span style={{ fontSize: 11.5, color: D.muted, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {nbLignes > 0 ? `${nbLignes} variété${nbLignes > 1 ? 's' : ''}` : '—'}
+                    {o.observations ? ` · ${o.observations}` : ''}
+                  </span>
+                  {o.createdAt && (
+                    <span style={{ fontSize: 10.5, color: D.muted, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <Clock size={10} />
+                      {new Date(o.createdAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ══════════════════════════════════════════════════════════
    DASHBOARD
 ══════════════════════════════════════════════════════════ */
 export function Dashboard({ roleKey, userSpecialisation }: Props) {
+  const navigate = useNavigate()
   const [stats, setStats] = useState<Stats>({
     lotsCount: 0, stockTotal: 0, ordersCount: 0, varietiesCount: 0,
     ordersPending: 0, genCounts: {}, recentLots: [],
@@ -367,6 +638,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const [loading,      setLoading]      = useState(true)
   const [refreshing,   setRefreshing]   = useState(false)
   const [heroVis,      setHeroVis]      = useState(false)
+  const [mapExpanded,  setMapExpanded]  = useState(false)
+  const [demandPeriod, setDemandPeriod] = useState<'1m' | '3m' | '6m' | '1a'>('3m')
+  const [demandGen,    setDemandGen]    = useState<'all' | 'G3' | 'R2'>('all')
 
   /* Stock filters */
   const [filterEspece,   setFilterEspece]   = useState('')
@@ -592,6 +866,50 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
   const hasAnyAlerts = criticalCov > 0 || warningCov > 0 || lotsACertifierCount > 0 || stats.ordersPending > 0
 
+  /* ── Demande annuelle par variété (UPSemCL · Sélectionneurs · Multiplicateurs) ── */
+  const showDemandWidget = ['seed-upsemcl', 'seed-selector', 'seed-multiplicator'].includes(roleKey)
+  const DEMAND_DAYS: Record<string, number> = { '1m': 30, '3m': 90, '6m': 180, '1a': 365 }
+  const demandCutoff = Date.now() - (DEMAND_DAYS[demandPeriod] ?? 90) * 86_400_000
+
+  type DemandEntry = { nomVariete: string; codeEspece: string; g3kg: number; r2kg: number }
+  const demandMap: Record<string, DemandEntry> = {}
+
+  if (showDemandWidget) {
+    rawOrders.forEach((o: any) => {
+      if (['ANNULEE', 'REJETEE'].includes(o.statut ?? '')) return
+      if (!o.createdAt || new Date(o.createdAt).getTime() < demandCutoff) return
+      ;(o.lignes ?? []).forEach((ligne: any) => {
+        const gen      = ligne.generation?.codeGeneration ?? '?'
+        const isG3type = ['G0','G1','G2','G3','G4'].includes(gen)
+        const isR2type = ['R1','R2'].includes(gen)
+        if (!isG3type && !isR2type) return
+        const variety = varietyMap[ligne.idVariete ?? -1] ?? {}
+        if (!variety.codeVariete) return
+        if (roleKey === 'seed-selector' && userSpecialisation && variety.espece?.codeEspece !== userSpecialisation) return
+        const qty = parseFloat(ligne.quantiteDemandee ?? 0) || 0
+        const key = variety.codeVariete
+        if (!demandMap[key]) demandMap[key] = {
+          nomVariete: variety.nomVariete ?? key,
+          codeEspece: variety.espece?.codeEspece ?? '?',
+          g3kg: 0, r2kg: 0,
+        }
+        if (isG3type) demandMap[key].g3kg += qty
+        else          demandMap[key].r2kg += qty
+      })
+    })
+  }
+
+  const demandEntries = Object.entries(demandMap)
+    .map(([code, d]) => ({ code, ...d, total: d.g3kg + d.r2kg }))
+    .filter(d => demandGen === 'G3' ? d.g3kg > 0 : demandGen === 'R2' ? d.r2kg > 0 : d.total > 0)
+    .sort((a, b) => demandGen === 'G3' ? b.g3kg - a.g3kg : demandGen === 'R2' ? b.r2kg - a.r2kg : b.total - a.total)
+    .slice(0, 6)
+
+  const demandMax     = Math.max(...demandEntries.map(d => demandGen === 'G3' ? d.g3kg : demandGen === 'R2' ? d.r2kg : d.total), 1)
+  const demandTotalKg = demandEntries.reduce((s, d) => s + (demandGen === 'G3' ? d.g3kg : demandGen === 'R2' ? d.r2kg : d.total), 0)
+  const demandG3Total = demandEntries.reduce((s, d) => s + d.g3kg, 0)
+  const demandR2Total = demandEntries.reduce((s, d) => s + d.r2kg, 0)
+
   return (
     <div>
 
@@ -643,23 +961,89 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
           </p>
         </div>
 
-        {/* Bouton actualiser */}
-        <button
-          onClick={() => fetchAll(true)}
-          disabled={refreshing}
-          style={{
-            background: '#fff', border: `1px solid ${D.line}`,
-            color: D.muted, fontFamily: D.body, fontSize: 12, fontWeight: 500,
-            borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
-            transition: 'border-color 0.15s, color 0.15s',
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = heroCfg.border; (e.currentTarget as HTMLButtonElement).style.color = heroCfg.border }}
-          onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = D.line; (e.currentTarget as HTMLButtonElement).style.color = D.muted }}
-        >
-          <RefreshCw size={12} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
-          Actualiser
-        </button>
+        {/* Actualiser + actions rapides */}
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10, flexShrink: 0 }}>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              onClick={() => fetchAll(true)}
+              disabled={refreshing}
+              style={{
+                background: '#fff', border: `1px solid ${D.line}`,
+                color: D.muted, fontFamily: D.body, fontSize: 12, fontWeight: 500,
+                borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6,
+                transition: 'border-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = heroCfg.border; (e.currentTarget as HTMLButtonElement).style.color = heroCfg.border }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = D.line; (e.currentTarget as HTMLButtonElement).style.color = D.muted }}
+            >
+              <RefreshCw size={12} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
+              Actualiser
+            </button>
+            {roleKey === 'seed-admin' && !loading && (
+              <button
+                onClick={() => {
+                  const sheets: XlsxSheet[] = [
+                    {
+                      name: 'Variétés',
+                      headers: ['Code', 'Nom variété', 'Espèce', 'Origine', 'Statut', 'Cycle min (j)', 'Cycle max (j)', 'Rendement min (t/ha)', 'Rendement max (t/ha)', 'Année création', 'Année homologation', 'Sélectionneur', 'Nature génétique', 'Vocation'],
+                      rows: rawVarieties.map((v: any) => [v.codeVariete, v.nomVariete, v.espece?.nomCommun ?? v.espece?.codeEspece ?? '', v.origine ?? '', v.statutVariete ?? '', v.cycleMin ?? '', v.cycleMax ?? '', v.rendementMin ?? '', v.rendementMax ?? '', v.anneeCreation ?? '', v.anneeHomologation ?? '', v.selectionneurPrincipal ?? '', v.natureGenetique ?? '', v.vocationCulturale ?? '']),
+                    },
+                    {
+                      name: 'Lots',
+                      headers: ['Code lot', 'Variété', 'Génération', 'Campagne', 'Quantité nette (kg)', 'Taux germination (%)', 'Pureté physique (%)', 'Superficie (ha)', 'Statut', 'Créé le', 'Responsable'],
+                      rows: rawLots.map((l: any) => [l.codeLot, l.variete?.nomVariete ?? l.nomVariete ?? '', l.generation?.codeGeneration ?? '', l.campagne ?? '', l.quantiteNette ?? '', l.tauxGermination ?? '', l.puretePhysique ?? '', l.superficieHa ?? '', l.statutLot ?? l.statut ?? '', formatDateForExport(l.createdAt), l.responsableNom ?? '']),
+                    },
+                    {
+                      name: 'Stock disponible',
+                      headers: ['Espèce', 'Code espèce', 'Variété', 'Code variété', 'Génération', 'Stock (kg)', 'Nb lots', 'Demande (kg)'],
+                      rows: stockRows.map(r => [r.nomEspece, r.codeEspece, r.nomVariete, r.codeVariete, r.generation, Math.round(r.stockKg), r.nbLots, Math.round(r.demandKg)]),
+                    },
+                    {
+                      name: 'Commandes',
+                      headers: ['Code commande', 'Client', 'Statut', 'Acheteur (username)', 'Date création', 'Observations'],
+                      rows: rawOrders.map((o: any) => [o.codeCommande ?? '', o.client ?? '', o.statut ?? '', o.usernameAcheteur ?? '', formatDateForExport(o.createdAt), o.observations ?? '']),
+                    },
+                  ]
+                  downloadXlsx(`senjiw-export-complet-${new Date().toISOString().slice(0,10)}`, sheets)
+                }}
+                style={{
+                  background: accent, border: `1px solid ${accent}`,
+                  color: '#fff', fontFamily: D.body, fontSize: 12, fontWeight: 600,
+                  borderRadius: 8, padding: '7px 14px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
+                title="Exporter toutes les données en Excel multi-feuilles"
+              >
+                ⬇ Export complet .xls
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey) && (
+              <button className="btn btn-primary" style={{ background: accent, borderColor: accent, fontSize: 12, padding: '6px 12px' }}
+                onClick={() => navigate('/lots')}>
+                <Plus size={12} /> Nouveau lot
+              </button>
+            )}
+            {['seed-admin','seed-selector'].includes(roleKey) && (
+              <button className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => navigate('/varieties')}>
+                <Leaf size={12} /> Nouvelle variété
+              </button>
+            )}
+            {isQuotaire && (
+              <button className="btn btn-primary" style={{ background: accent, borderColor: accent, fontSize: 12, padding: '6px 12px' }}
+                onClick={() => navigate('/orders')}>
+                <ShoppingCart size={12} /> Passer une commande
+              </button>
+            )}
+            {['seed-admin','seed-upsemcl','seed-multiplicator'].includes(roleKey) && (
+              <button className="btn btn-secondary" style={{ fontSize: 12, padding: '6px 12px' }} onClick={() => navigate('/stocks')}>
+                <Database size={12} /> Mouvement stock
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ═══════════════ KPI CARDS ═══════════════ */}
@@ -681,133 +1065,58 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         }
       </div>
 
-      {/* ══════════════════════════════════════════════════════
-          CENTRE DE PILOTAGE — Alertes & Décisions
-      ══════════════════════════════════════════════════════ */}
+      {/* ═══════════════ WIDGETS QUOTATAIRE ═══════════════ */}
+      {isQuotaire && !loading && (
+        <QuotataireHome accent={accent} navigate={navigate} rawOrders={rawOrders} />
+      )}
+
+      {/* ══ Barre d'alertes compacte ══ */}
       {showStats && (
         <div style={{
-          marginBottom: 20, borderRadius: 14, overflow: 'hidden',
-          border: `1px solid ${hasAnyAlerts ? (criticalCov > 0 ? '#fecaca' : D.blueBorder) : 'var(--border)'}`,
-          boxShadow: criticalCov > 0 ? '0 2px 12px rgba(220,38,38,0.08)' : '0 1px 4px rgba(0,0,0,0.04)',
+          marginBottom: 20, padding: '10px 18px',
+          background: '#fff', borderRadius: 10,
+          border: `1px solid ${criticalCov > 0 ? '#fecaca' : hasAnyAlerts ? D.blueBorder : D.line}`,
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          boxShadow: criticalCov > 0 ? '0 1px 8px rgba(220,38,38,0.07)' : 'none',
         }}>
-          {/* En-tête */}
-          <div style={{
-            padding: '14px 24px', display: 'flex', alignItems: 'center', gap: 12,
-            background: D.paper2,
-            borderBottom: `1px solid ${hasAnyAlerts ? (criticalCov > 0 ? '#fecaca' : D.blueBorder) : D.line}`,
-          }}>
-            <span style={{ fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', color: criticalCov > 0 ? D.terra : hasAnyAlerts ? D.blue : D.green, background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? D.blueLight : D.greenSoft, padding: '3px 10px', borderRadius: 999 }}>
-              {criticalCov > 0 ? 'Alerte' : hasAnyAlerts ? 'Surveillance' : 'Nominal'}
-            </span>
-            <span style={{ fontFamily: D.display, fontSize: 15, fontWeight: 600, color: D.ink }}>Centre de pilotage</span>
-            <span style={{ fontFamily: D.body, fontSize: 12, color: D.muted }}>— alertes &amp; décisions</span>
-            {!loading && (
-              <span style={{
-                marginLeft: 'auto', fontFamily: D.mono, fontSize: 10, fontWeight: 500, borderRadius: 999, padding: '3px 12px',
-                background: criticalCov > 0 ? '#fef2f2' : hasAnyAlerts ? D.blueLight : D.greenSoft,
-                color:      criticalCov > 0 ? D.terra : hasAnyAlerts ? D.blue : D.green,
-                border:     `1px solid ${criticalCov > 0 ? '#fecaca' : hasAnyAlerts ? D.blueBorder : '#bbf7d0'}`,
-              }}>
-                {criticalCov > 0 ? 'Action requise' : hasAnyAlerts ? 'À surveiller' : 'Situation nominale'}
-              </span>
-            )}
-          </div>
-
-          {/* Tuiles d'alertes */}
+          <span style={{ fontFamily: D.mono, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.11em', color: D.muted, flexShrink: 0 }}>
+            Pilotage
+          </span>
+          <span style={{ color: D.line, flexShrink: 0 }}>·</span>
           {loading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', background: '#fff' }}>
-              {[0,1,2,3].map(i => (
-                <div key={i} style={{ padding: '18px 22px', borderRight: i < 3 ? '1px solid var(--border)' : 'none' }}>
-                  <div className="skeleton" style={{ width: 32, height: 32, borderRadius: 8, marginBottom: 10 }} />
-                  <div className="skeleton" style={{ width: 48, height: 26, borderRadius: 5, marginBottom: 6 }} />
-                  <div className="skeleton" style={{ width: 80, height: 11, borderRadius: 4 }} />
-                </div>
-              ))}
-            </div>
-          ) : !hasAnyAlerts ? (
-            <div style={{ padding: '18px 22px', background: '#fff', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: D.green, flexShrink: 0, display: 'inline-block' }} />
-              <div>
-                <div style={{ fontFamily: D.display, fontSize: 13, fontWeight: 600, color: D.green }}>Situation nominale</div>
-                <div style={{ fontFamily: D.body, fontSize: 12, color: D.muted, marginTop: 2 }}>
-                  Stock couvert, aucun lot en attente de certification, commandes traitées.
-                </div>
-              </div>
-            </div>
+            <div className="skeleton" style={{ width: 240, height: 14, borderRadius: 4 }} />
           ) : (
-            <>
-              {/* 4 tuiles */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', background: '#fff' }}>
-                {[
-                  { count: criticalCov,          label: 'Espèces critiques',    sub: 'stock < demande',        clr: '#b91c1c', bg: '#fef2f2', brd: '#fecaca' },
-                  { count: warningCov,            label: 'En tension',           sub: 'stock < 2× demande',     clr: '#92400e', bg: '#fefce8', brd: '#fde68a' },
-                  { count: lotsACertifierCount,   label: 'Lots à certifier',     sub: 'certification en cours', clr: '#1e40af', bg: '#eff6ff', brd: '#bfdbfe' },
-                  { count: stats.ordersPending,   label: 'Cmdes en attente',     sub: 'nécessitent traitement', clr: accent,    bg: `${accent}08`, brd: `${accent}28` },
-                ].map((t, i) => (
-                  <div key={i} style={{
-                    padding: '18px 22px',
-                    borderRight: i < 3 ? `1px solid ${D.line}` : 'none',
-                    background: '#fff',
+            ([
+              { count: criticalCov,        label: criticalCov <= 1 ? 'espèce critique' : 'espèces critiques', clr: '#dc2626', bg: '#fef2f2', brd: '#fecaca', action: false },
+              { count: warningCov,          label: 'en tension',                                                clr: '#d97706', bg: '#fffbeb', brd: '#fde68a', action: false },
+              { count: lotsACertifierCount, label: 'lots à certifier',                                          clr: '#1e40af', bg: '#eff6ff', brd: '#bfdbfe', action: false },
+              { count: stats.ordersPending, label: 'commandes en attente',                                      clr: accent,    bg: `${accent}0d`, brd: `${accent}30`, action: true },
+            ] as { count: number; label: string; clr: string; bg: string; brd: string; action: boolean }[]).map((item, i) => (
+              <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                {i > 0 && <span style={{ color: D.line }}>·</span>}
+                <span
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 5,
+                    fontFamily: D.body, fontSize: 12,
+                    color: item.count > 0 ? item.clr : D.green,
+                    fontWeight: item.count > 0 ? 600 : 400,
+                    cursor: item.action && item.count > 0 ? 'pointer' : 'default',
+                  }}
+                  onClick={item.action && item.count > 0 ? () => navigate('/orders') : undefined}
+                >
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    background: item.count > 0 ? item.bg : D.greenSoft,
+                    color: item.count > 0 ? item.clr : D.green,
+                    border: `1px solid ${item.count > 0 ? item.brd : '#bbf7d0'}`,
                   }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.count > 0 ? t.clr : D.line, display: 'inline-block' }} />
-                      {t.count > 0 && (
-                        <span style={{ fontFamily: D.mono, fontSize: 9, color: t.clr, letterSpacing: '0.06em', background: t.bg, border: `1px solid ${t.brd}`, borderRadius: 4, padding: '2px 6px' }}>
-                          {t.count > 0 ? '!' : ''}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 30, fontWeight: 700, fontFamily: D.display, letterSpacing: '-0.025em', color: t.count > 0 ? t.clr : D.muted, lineHeight: 1 }}>
-                      {t.count}
-                    </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', marginTop: 6 }}>{t.label}</div>
-                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>{t.sub}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Liste des espèces critiques */}
-              {criticalCov > 0 && (
-                <div style={{ borderTop: '1px solid #fecaca', background: '#fef2f208' }}>
-                  <div style={{ padding: '10px 22px 6px', fontSize: 10.5, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '0.09em' }}>
-                    Espèces en rupture de couverture
-                  </div>
-                  {coverageItems.filter(c => c.demandKg > 0 && c.ratio < 1).map((c, i, arr) => {
-                    const pct = Math.min((c.stockKg / c.demandKg) * 100, 100)
-                    return (
-                      <div key={c.code} style={{
-                        display: 'flex', alignItems: 'center', gap: 14, padding: '10px 22px',
-                        borderBottom: i < arr.length - 1 ? '1px solid #fecaca30' : 'none',
-                      }}>
-                        <div style={{ width: 40, textAlign: 'center', flexShrink: 0 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 800, color: '#dc2626' }}>{c.code}</div>
-                          <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.nom !== c.code ? c.nom : ''}</div>
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, fontSize: 11 }}>
-                            <span style={{ color: 'var(--text-muted)' }}>
-                              Stock&nbsp;<span style={{ fontWeight: 700, color: '#dc2626', fontFamily: 'DM Mono, monospace' }}>{c.stockKg.toLocaleString('fr-FR',{maximumFractionDigits:0})}</span> kg
-                            </span>
-                            <span style={{ color: 'var(--text-muted)' }}>
-                              Demande&nbsp;<span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'DM Mono, monospace' }}>{c.demandKg.toLocaleString('fr-FR',{maximumFractionDigits:0})}</span> kg
-                            </span>
-                          </div>
-                          <div style={{ height: 6, background: '#fee2e2', borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${pct}%`, background: 'linear-gradient(90deg,#ef4444,#fca5a5)', borderRadius: 99, transition: 'width 0.7s ease' }} />
-                          </div>
-                        </div>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: '#dc2626', fontFamily: 'DM Mono, monospace', flexShrink: 0 }}>
-                          {c.ratio.toFixed(1)}×
-                        </span>
-                        <span style={{ fontSize: 10.5, fontWeight: 700, borderRadius: 99, padding: '2px 8px', background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', flexShrink: 0 }}>
-                          CRITIQUE
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </>
+                    {item.count > 0 ? '!' : '✓'}
+                  </span>
+                  {item.count} {item.label}
+                  {item.action && item.count > 0 && <span style={{ fontSize: 11, opacity: 0.75 }}>→</span>}
+                </span>
+              </span>
+            ))
           )}
         </div>
       )}
@@ -896,33 +1205,6 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         </div>
       )}
 
-      {/* ═══════════════ ACTIONS RAPIDES ═══════════════ */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        {['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey) && (
-          <a href={endpoints.swagger.lot} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-primary" style={{ background: accent, borderColor: accent, boxShadow: `0 3px 12px ${accent}40` }}>
-              <Plus size={14} /> Nouveau lot
-            </button>
-          </a>
-        )}
-        {['seed-admin','seed-selector'].includes(roleKey) && (
-          <a href={endpoints.swagger.catalog} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-secondary"><Leaf size={13} /> Nouvelle variété</button>
-          </a>
-        )}
-        {isQuotaire && (
-          <a href={endpoints.swagger.order} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-primary" style={{ background: accent, borderColor: accent, boxShadow: `0 3px 12px ${accent}40` }}>
-              <ShoppingCart size={14} /> Passer une commande
-            </button>
-          </a>
-        )}
-        {['seed-admin','seed-upsemcl','seed-multiplicator'].includes(roleKey) && (
-          <a href={endpoints.swagger.stock} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
-            <button className="btn btn-secondary"><Database size={13} /> Mouvement stock</button>
-          </a>
-        )}
-      </div>
 
       {/* ═══════════════ LOTS RÉCENTS ═══════════════ */}
       {showLots && (
@@ -933,9 +1215,30 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             </div>
             <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Lots récents</span>
             {!loading && (
-              <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 99, padding: '2px 10px' }}>
-                {stats.recentLots.length} derniers lots
-              </span>
+              <>
+                <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 99, padding: '2px 10px' }}>
+                  {stats.recentLots.length} derniers lots
+                </span>
+                <button
+                  onClick={() => downloadCsv(
+                    `lots-recents-${new Date().toISOString().slice(0,10)}`,
+                    ['Code lot', 'Variété', 'Espèce', 'Génération', 'Quantité (kg)', 'Unité', 'Statut'],
+                    stats.recentLots.map((l: any) => [
+                      l.codeLot ?? '',
+                      l.variete?.nomVariete ?? varMap[l.idVariete] ?? '',
+                      l.variete?.espece?.nomEspece ?? l.espece?.nomEspece ?? '',
+                      l.generation?.codeGeneration ?? '',
+                      l.quantiteNette ?? l.quantite ?? '',
+                      l.unite ?? 'kg',
+                      l.statutLot ?? l.statut ?? '',
+                    ])
+                  )}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', whiteSpace: 'nowrap' as const }}
+                  title="Télécharger en CSV"
+                >
+                  ⬇ CSV
+                </button>
+              </>
             )}
           </div>
 
@@ -981,7 +1284,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                       onMouseLeave={(e: { currentTarget: HTMLElement }) => (e.currentTarget.style.background = 'transparent')}
                     >
                       <td style={{ padding: '11px 22px', borderLeft: `3px solid ${cfg ? cfg.color : 'var(--border)'}` }}>
-                        <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'DM Mono, monospace', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
                           {l.codeLot}
                         </span>
                       </td>
@@ -1002,7 +1305,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                         }}>{gen}</span>
                       </td>
                       <td style={{ padding: '11px 22px' }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'DM Mono, monospace' }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
                           {(l.quantiteNette ?? l.quantite ?? '—').toLocaleString?.('fr-FR') ?? l.quantiteNette ?? '—'}
                         </span>
                       </td>
@@ -1159,6 +1462,21 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   <X size={11} /> Effacer
                 </button>
               )}
+
+              {/* Export CSV stock */}
+              {!loading && filteredStockRows.length > 0 && (
+                <button
+                  onClick={() => downloadCsv(
+                    `stock-disponible-${new Date().toISOString().slice(0,10)}`,
+                    ['Espèce', 'Code espèce', 'Variété', 'Code variété', 'Génération', 'Stock (kg)', 'Nb lots', 'Demande (kg)'],
+                    filteredStockRows.map(r => [r.nomEspece, r.codeEspece, r.nomVariete, r.codeVariete, r.generation, Math.round(r.stockKg), r.nbLots, Math.round(r.demandKg)])
+                  )}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '5px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', height: 32, whiteSpace: 'nowrap' as const }}
+                  title="Télécharger le stock filtré en CSV"
+                >
+                  ⬇ CSV
+                </button>
+              )}
             </div>
           </div>
 
@@ -1179,21 +1497,21 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                 <>
                   <span style={{ width: 1, height: 14, background: 'var(--border)', flexShrink: 0 }} />
                   <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                    <span style={{ fontWeight: 700, color: accent, fontFamily: 'DM Mono, monospace' }}>
+                    <span style={{ fontWeight: 700, color: accent, fontFamily: 'var(--font-mono)' }}>
                       {(hasStockFilter ? stockTotalFiltered : stockTotalAll).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}
                     </span>
                     <span style={{ marginLeft: 3 }}>kg{hasStockFilter ? ' filtrés' : ' au total'}</span>
                   </span>
                   <span style={{ width: 1, height: 14, background: 'var(--border)', flexShrink: 0 }} />
                   <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'DM Mono, monospace' }}>{stockRows.length}</span>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{stockRows.length}</span>
                     <span style={{ marginLeft: 3 }}>variétés × génération</span>
                   </span>
                   {hasStockFilter && (
                     <>
                       <span style={{ width: 1, height: 14, background: 'var(--border)', flexShrink: 0 }} />
                       <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'DM Mono, monospace' }}>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
                           {[...new Set(filteredStockRows.map(r => r.codeEspece))].length}
                         </span>
                         <span style={{ marginLeft: 3 }}>espèce(s) filtrée(s)</span>
@@ -1223,7 +1541,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   </span>
                 )}
               </div>
-              <BarChart data={filteredStockBarData} yLabel="Stock disponible (kg)" />
+              <HBarChart data={filteredStockBarData} />
               {/* Légende générations */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                 {[...new Set(filteredStockBarData.map(b => b.gen))].map(gen => (
@@ -1330,7 +1648,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                       {/* Variété */}
                       <td style={{ padding: '12px 22px' }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{r.nomVariete}</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'DM Mono, monospace', marginTop: 2 }}>{r.codeVariete}</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{r.codeVariete}</div>
                       </td>
 
                       {/* Génération badge */}
@@ -1349,7 +1667,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                       <td style={{ padding: '12px 22px' }}>
                         <span style={{
                           fontWeight: 800, fontSize: 14, fontVariantNumeric: 'tabular-nums',
-                          fontFamily: 'DM Mono, monospace', letterSpacing: '-0.01em',
+                          fontFamily: 'var(--font-mono)', letterSpacing: '-0.01em',
                           color: isCrit ? '#dc2626' : isLow ? '#92660a' : 'var(--text-primary)',
                         }}>
                           {r.stockKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}
@@ -1382,7 +1700,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                         {r.demandKg > 0 ? (
                           <span style={{
                             fontWeight: 600, fontSize: 13, fontVariantNumeric: 'tabular-nums',
-                            fontFamily: 'DM Mono, monospace',
+                            fontFamily: 'var(--font-mono)',
                             color: r.demandKg > r.stockKg ? '#dc2626' : 'var(--text-secondary)',
                           }}>
                             {r.demandKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} kg
@@ -1403,6 +1721,175 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               100 / {filteredStockRows.length} lignes affichées
             </div>
           )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          DEMANDE VARIÉTÉS — UPSemCL · Sélectionneurs · Multiplicateurs
+      ══════════════════════════════════════════════════════ */}
+      {showDemandWidget && (
+        <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)', marginBottom: 20 }}>
+
+          {/* ── En-tête avec filtres ── */}
+          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${D.line}`, background: 'linear-gradient(135deg,var(--surface-2) 0%,#fff 100%)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const }}>
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: `${accent}12`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <TrendingUp size={14} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7 }}>
+                Demande variétés
+                {roleKey === 'seed-selector' && userSpecialisation && (
+                  <span style={{ fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-mono)', color: accent, background: `${accent}12`, padding: '1px 6px', borderRadius: 4 }}>{userSpecialisation}</span>
+                )}
+                {roleKey === 'seed-multiplicator' && (
+                  <span style={{ fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-mono)', color: '#2563eb', background: '#eff6ff', padding: '1px 6px', borderRadius: 4 }}>R2 — vos acheteurs</span>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Top variétés par quantité commandée · {demandEntries.length > 0 ? `${demandTotalKg >= 1000 ? (demandTotalKg/1000).toFixed(1)+'k' : demandTotalKg.toLocaleString('fr-FR')} kg total` : 'aucune commande'}</div>
+            </div>
+
+            {/* Filtre période */}
+            <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 8, padding: 3 }}>
+              {(['1m','3m','6m','1a'] as const).map(p => (
+                <button key={p} onClick={() => setDemandPeriod(p)} style={{
+                  padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                  fontSize: 11.5, fontWeight: demandPeriod === p ? 700 : 400,
+                  background: demandPeriod === p ? '#fff' : 'transparent',
+                  color: demandPeriod === p ? accent : 'var(--text-muted)',
+                  boxShadow: demandPeriod === p ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.15s',
+                }}>
+                  {p === '1m' ? '1 mois' : p === '3m' ? '3 mois' : p === '6m' ? '6 mois' : '1 an'}
+                </button>
+              ))}
+            </div>
+
+            {/* Export CSV demande */}
+            {!loading && demandEntries.length > 0 && (
+              <button
+                onClick={() => downloadCsv(
+                  `demande-varietes-${demandPeriod}-${new Date().toISOString().slice(0,10)}`,
+                  ['Rang', 'Code variété', 'Variété', 'Code espèce', 'G3 — Mult. (kg)', 'R2 — Quot. (kg)', 'Total (kg)', 'Part (%)'],
+                  demandEntries.map((d, i) => [
+                    i + 1, d.code, d.nomVariete, d.codeEspece,
+                    Math.round(d.g3kg), Math.round(d.r2kg), Math.round(d.total),
+                    demandTotalKg > 0 ? Math.round((d.total / demandTotalKg) * 100) : 0,
+                  ])
+                )}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', whiteSpace: 'nowrap' as const }}
+                title="Télécharger en CSV"
+              >
+                ⬇ CSV
+              </button>
+            )}
+
+            {/* Filtre génération — masqué pour multiplicateurs (toujours R2) */}
+            {roleKey !== 'seed-multiplicator' && (
+              <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 8, padding: 3 }}>
+                {(['all','G3','R2'] as const).map(v => {
+                  const label = v === 'all' ? 'Tout' : v === 'G3' ? 'G3 Mult.' : 'R2 Quot.'
+                  const clr   = v === 'G3' ? GEN_COLOR.G3 : v === 'R2' ? GEN_COLOR.R2 : accent
+                  return (
+                    <button key={v} onClick={() => setDemandGen(v)} style={{
+                      padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                      fontSize: 11.5, fontWeight: demandGen === v ? 700 : 400,
+                      background: demandGen === v ? '#fff' : 'transparent',
+                      color: demandGen === v ? clr : 'var(--text-muted)',
+                      boxShadow: demandGen === v ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                      transition: 'all 0.15s',
+                    }}>{label}</button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ── Corps ── */}
+          <div style={{ padding: '18px 20px' }}>
+            {loading ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {[0,1,2,3].map(i => (
+                  <div key={i} className="skeleton" style={{ height: 18, borderRadius: 6, width: `${82 - i * 10}%` }} />
+                ))}
+              </div>
+            ) : demandEntries.length === 0 ? (
+              <div style={{ textAlign: 'center' as const, padding: '28px 0', color: 'var(--text-muted)' }}>
+                <div style={{ fontSize: 20, marginBottom: 8 }}>📭</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Aucune commande sur cette période</div>
+                <div style={{ fontSize: 11.5, marginTop: 4 }}>Élargissez la fenêtre temporelle ou changez le filtre</div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+                  {demandEntries.map((d, i) => {
+                    const activeQty  = roleKey === 'seed-multiplicator' ? d.r2kg
+                                      : demandGen === 'G3' ? d.g3kg
+                                      : demandGen === 'R2' ? d.r2kg : d.total
+                    const g3pct      = demandMax > 0 ? (d.g3kg / demandMax) * 100 : 0
+                    const r2pct      = demandMax > 0 ? (d.r2kg / demandMax) * 100 : 0
+                    const activePct  = demandMax > 0 ? (activeQty / demandMax) * 100 : 0
+                    const sharePct   = demandTotalKg > 0 ? Math.round((activeQty / demandTotalKg) * 100) : 0
+                    const showSeg    = roleKey !== 'seed-multiplicator' && demandGen === 'all'
+                    return (
+                      <div key={d.code} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 96px', alignItems: 'center', gap: 10 }}>
+                        {/* Label variété + espèce */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', flexShrink: 0, minWidth: 14, textAlign: 'right' as const }}>{i + 1}</span>
+                          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 }}>{d.nomVariete}</span>
+                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>{d.codeEspece}</span>
+                        </div>
+                        {/* Barre */}
+                        <div style={{ position: 'relative', height: 6, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
+                          {showSeg ? (
+                            <>
+                              {g3pct > 0 && <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${g3pct}%`, background: GEN_COLOR.G3, borderRadius: 99, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
+                              {r2pct > 0 && <div style={{ position: 'absolute', left: `${g3pct}%`, top: 0, height: '100%', width: `${r2pct}%`, background: GEN_COLOR.R2, opacity: 0.85, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1), left 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
+                            </>
+                          ) : (
+                            <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${activePct}%`, background: (roleKey === 'seed-multiplicator' || demandGen === 'R2') ? GEN_COLOR.R2 : demandGen === 'G3' ? GEN_COLOR.G3 : accent, borderRadius: 99, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1)' }} />
+                          )}
+                        </div>
+                        {/* Quantité + part */}
+                        <div style={{ textAlign: 'right' as const, lineHeight: 1.2 }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                            {activeQty >= 1000 ? `${(activeQty / 1000).toFixed(1)}k` : activeQty.toLocaleString('fr-FR')} kg
+                          </span>
+                          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{sharePct}%</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {/* Légende bas de carte */}
+                <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--surface-2)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' as const, fontSize: 11 }}>
+                  {(roleKey !== 'seed-multiplicator' && demandGen === 'all') ? (
+                    <>
+                      {demandG3Total > 0 && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-muted)' }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: GEN_COLOR.G3, display: 'inline-block', flexShrink: 0 }} />
+                          G3 — Multiplicateurs · <strong style={{ color: GEN_COLOR.G3 }}>{demandG3Total >= 1000 ? `${(demandG3Total/1000).toFixed(1)}k` : demandG3Total.toLocaleString('fr-FR')} kg</strong>
+                        </span>
+                      )}
+                      {demandR2Total > 0 && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-muted)' }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: GEN_COLOR.R2, display: 'inline-block', flexShrink: 0 }} />
+                          R2 — Quotataires · <strong style={{ color: GEN_COLOR.R2 }}>{demandR2Total >= 1000 ? `${(demandR2Total/1000).toFixed(1)}k` : demandR2Total.toLocaleString('fr-FR')} kg</strong>
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      {demandEntries.length} variété{demandEntries.length > 1 ? 's' : ''} · période {demandPeriod === '1m' ? '1 mois' : demandPeriod === '3m' ? '3 mois' : demandPeriod === '6m' ? '6 mois' : '12 mois'}
+                    </span>
+                  )}
+                  <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
+                    Total · <strong style={{ color: 'var(--text-primary)' }}>{demandTotalKg >= 1000 ? `${(demandTotalKg/1000).toFixed(1)}k` : demandTotalKg.toLocaleString('fr-FR')} kg</strong>
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
@@ -1458,7 +1945,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                           {c.nom !== c.code && <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{c.nom}</span>}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: clr, fontFamily: 'DM Mono, monospace' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: clr, fontFamily: 'var(--font-mono)' }}>
                             {c.ratio >= 99 ? '—' : `${c.ratio.toFixed(1)}×`}
                           </span>
                           <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '1px 7px', background: trackBg, color: clr, border: `1px solid ${isCrit ? '#fecaca' : isWarn ? '#fde68a' : '#bbf7d0'}` }}>
@@ -1479,8 +1966,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                         )}
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
-                        <span>Stock&nbsp;<span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'DM Mono, monospace' }}>{c.stockKg.toLocaleString('fr-FR',{maximumFractionDigits:0})}</span> kg</span>
-                        {c.demandKg > 0 && <span>Demande&nbsp;<span style={{ fontWeight: 700, color: clr, fontFamily: 'DM Mono, monospace' }}>{c.demandKg.toLocaleString('fr-FR',{maximumFractionDigits:0})}</span> kg</span>}
+                        <span>Stock&nbsp;<span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{c.stockKg.toLocaleString('fr-FR',{maximumFractionDigits:0})}</span> kg</span>
+                        {c.demandKg > 0 && <span>Demande&nbsp;<span style={{ fontWeight: 700, color: clr, fontFamily: 'var(--font-mono)' }}>{c.demandKg.toLocaleString('fr-FR',{maximumFractionDigits:0})}</span> kg</span>}
                       </div>
                     </div>
                   )
@@ -1524,21 +2011,21 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                 {/* Résumé global */}
                 <div style={{ padding: '12px 20px 8px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 20, background: 'var(--surface-2)' }}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Fraunces, serif', color: '#15803d', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-sans)', color: '#15803d', letterSpacing: '-0.02em', lineHeight: 1 }}>
                       {totalForecastLots}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>lots actifs</div>
                   </div>
                   <div style={{ width: 1, background: 'var(--border)' }} />
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Fraunces, serif', color: '#0369a1', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-sans)', color: '#0369a1', letterSpacing: '-0.02em', lineHeight: 1 }}>
                       {totalForecastHa > 0 ? totalForecastHa.toLocaleString('fr-FR',{maximumFractionDigits:1}) : '—'}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>ha plantés</div>
                   </div>
                   <div style={{ width: 1, background: 'var(--border)' }} />
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'Fraunces, serif', color: accent, letterSpacing: '-0.02em', lineHeight: 1 }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-sans)', color: accent, letterSpacing: '-0.02em', lineHeight: 1 }}>
                       {totalForecastKg > 0 ? `~${(totalForecastKg/1000).toFixed(1)}t` : '—'}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>production estimée</div>
@@ -1563,7 +2050,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                               {f.ha > 0 && ` · ${f.ha.toLocaleString('fr-FR',{maximumFractionDigits:1})} ha`}
                             </span>
                           </div>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: genClr, fontFamily: 'DM Mono, monospace' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: genClr, fontFamily: 'var(--font-mono)' }}>
                             {f.expectedKg > 0 ? `~${f.expectedKg.toLocaleString('fr-FR',{maximumFractionDigits:0})} kg` : 'données manquantes'}
                           </span>
                         </div>
@@ -1617,14 +2104,14 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: accent, fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: accent, fontFamily: 'var(--font-sans)', letterSpacing: '-0.02em', lineHeight: 1 }}>
                     {loading ? '…' : stats.varietiesCount}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>variétés</div>
                 </div>
                 <div style={{ width: 1, height: 32, background: 'var(--border)' }} />
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 22, fontWeight: 800, color: accent, fontFamily: 'Fraunces, serif', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  <div style={{ fontSize: 22, fontWeight: 800, color: accent, fontFamily: 'var(--font-sans)', letterSpacing: '-0.02em', lineHeight: 1 }}>
                     {loading ? '…' : stats.ordersCount}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>commandes</div>
@@ -1644,22 +2131,25 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       )}
 
       {/* ══════════════════════════════════════════════════════
-          CARTE AGRO-ÉCOLOGIQUE — visible par tous les rôles
-          Données filtrées selon le périmètre du rôle connecté
+          CARTE AGRO-ÉCOLOGIQUE — rétractable
       ══════════════════════════════════════════════════════ */}
       <div style={{
-        background: '#fff', borderRadius: 16,
+        background: '#fff', borderRadius: 14,
         border: '1px solid var(--border)',
         overflow: 'hidden',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+        boxShadow: '0 1px 6px rgba(0,0,0,0.04)',
         marginBottom: 20,
       }}>
-        {/* En-tête section */}
-        <div style={{
-          padding: '14px 24px', borderBottom: '1px solid var(--border)',
-          background: 'linear-gradient(135deg, #f0fdf4 0%, #fff 80%)',
-          display: 'flex', alignItems: 'center', gap: 12,
-        }}>
+        {/* En-tête cliquable */}
+        <div
+          onClick={() => setMapExpanded(v => !v)}
+          style={{
+            padding: '14px 24px',
+            borderBottom: mapExpanded ? '1px solid var(--border)' : 'none',
+            background: '#fafafa',
+            display: 'flex', alignItems: 'center', gap: 12,
+            cursor: 'pointer', userSelect: 'none',
+          }}>
           <span style={{
             fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase',
             letterSpacing: '0.12em', color: D.green, background: D.greenSoft,
@@ -1671,12 +2161,24 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
           <span style={{ fontFamily: D.body, fontSize: 12, color: D.muted }}>
             — zones agro-écologiques &amp; sites ISRA
           </span>
+          <span style={{
+            marginLeft: 'auto', fontFamily: D.body, fontSize: 12,
+            color: D.muted, display: 'flex', alignItems: 'center', gap: 5,
+          }}>
+            {mapExpanded ? 'Réduire' : 'Afficher la carte'}
+            <span style={{
+              fontSize: 10, display: 'inline-block',
+              transform: mapExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 0.2s ease',
+            }}>▼</span>
+          </span>
         </div>
 
-        {/* Composant carte */}
-        <div style={{ padding: '16px 20px 20px' }}>
-          <MapSemences roleKey={roleKey} />
-        </div>
+        {mapExpanded && (
+          <div style={{ padding: '16px 20px 20px' }}>
+            <MapSemences roleKey={roleKey} />
+          </div>
+        )}
       </div>
 
       <style>{`

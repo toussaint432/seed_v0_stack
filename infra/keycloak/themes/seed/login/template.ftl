@@ -32,6 +32,28 @@
     <!-- Grain texture overlay -->
     <div class="seed-grain" aria-hidden="true"></div>
 
+    <!-- Illustration botanique — coupe anatomique de graine -->
+    <svg class="seed-botanical" viewBox="0 0 400 560" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <ellipse cx="200" cy="260" rx="140" ry="220" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="1.5"/>
+      <ellipse cx="200" cy="270" rx="92" ry="148" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="1.2"/>
+      <ellipse cx="200" cy="310" rx="44" ry="68" fill="none" stroke="rgba(255,255,255,0.10)" stroke-width="1"/>
+      <path d="M200 378 L200 468" stroke="rgba(255,255,255,0.09)" stroke-width="1.2" stroke-linecap="round"/>
+      <path d="M200 400 L176 426" stroke="rgba(255,255,255,0.07)" stroke-width="1" stroke-linecap="round"/>
+      <path d="M200 420 L224 446" stroke="rgba(255,255,255,0.07)" stroke-width="1" stroke-linecap="round"/>
+      <path d="M200 148 Q172 194 170 272" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+      <path d="M200 148 Q228 194 230 272" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+      <path d="M108 130 Q90 260 116 384" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+      <path d="M292 130 Q310 260 284 384" fill="none" stroke="rgba(255,255,255,0.04)" stroke-width="1"/>
+      <ellipse cx="200" cy="230" rx="18" ry="28" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="0.8"/>
+      <g transform="translate(58,98) rotate(-30,40,65)">
+        <ellipse cx="40" cy="65" rx="28" ry="46" fill="none" stroke="rgba(255,255,255,0.09)" stroke-width="1"/>
+        <ellipse cx="40" cy="68" rx="18" ry="30" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="0.8"/>
+      </g>
+      <g transform="translate(296,392) rotate(20,25,40)">
+        <ellipse cx="25" cy="40" rx="20" ry="32" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="0.8"/>
+      </g>
+    </svg>
+
     <div class="seed-brand-inner">
 
       <!-- Logo -->
@@ -57,66 +79,6 @@
           et la certification des semences agricoles du Sénégal.
         </p>
       </div>
-
-      <!-- Pipeline -->
-      <div class="seed-pipeline">
-        <div class="seed-pipeline-label">
-          <span class="seed-pipeline-label-line"></span>
-          Traçabilité générationnelle
-        </div>
-        <div class="seed-pipeline-track">
-          <div class="seed-gen-wrap">
-            <span class="seed-gen seed-gen-g0">G0</span>
-            <span class="seed-gen-sub">Pré-base</span>
-          </div>
-          <span class="seed-pipeline-arrow">→</span>
-          <div class="seed-gen-wrap">
-            <span class="seed-gen seed-gen-g1">G1</span>
-            <span class="seed-gen-sub">Base</span>
-          </div>
-          <span class="seed-pipeline-arrow">→</span>
-          <div class="seed-gen-wrap">
-            <span class="seed-gen seed-gen-g2">G2</span>
-            <span class="seed-gen-sub">R1</span>
-          </div>
-          <span class="seed-pipeline-arrow">→</span>
-          <div class="seed-gen-wrap">
-            <span class="seed-gen seed-gen-g3">G3</span>
-            <span class="seed-gen-sub">R1</span>
-          </div>
-          <span class="seed-pipeline-arrow">→</span>
-          <div class="seed-gen-wrap">
-            <span class="seed-gen seed-gen-g4">G4</span>
-            <span class="seed-gen-sub">C1</span>
-          </div>
-          <span class="seed-pipeline-arrow">→</span>
-          <div class="seed-gen-wrap">
-            <span class="seed-gen seed-gen-r1">R1</span>
-            <span class="seed-gen-sub">Cert.</span>
-          </div>
-          <span class="seed-pipeline-arrow">→</span>
-          <div class="seed-gen-wrap seed-gen-wrap--final">
-            <span class="seed-gen seed-gen-r2">R2</span>
-            <span class="seed-gen-sub">Commercial</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Features -->
-      <ul class="seed-features">
-        <li class="seed-feature-item">
-          <span class="seed-feature-icon">◆</span>
-          <span>Certification variétale multi-génération</span>
-        </li>
-        <li class="seed-feature-item">
-          <span class="seed-feature-icon">◆</span>
-          <span>Contrôle qualité et traçabilité des lots</span>
-        </li>
-        <li class="seed-feature-item">
-          <span class="seed-feature-icon">◆</span>
-          <span>Gestion des acteurs de la chaîne semencière</span>
-        </li>
-      </ul>
 
       <!-- Stats -->
       <div class="seed-brand-stats">
@@ -157,6 +119,19 @@
       </svg>
       Accueil
     </a>
+
+    <!-- Sélecteur de langue FR / EN -->
+    <#if locale?? && locale.supported?has_content && locale.supported?size gt 1>
+    <div class="seed-lang-switcher">
+      <#list locale.supported as sup>
+      <a href="${sup.url}"
+         class="seed-lang-btn<#if locale.currentLanguageTag == sup.languageTag> seed-lang-btn--active</#if>"
+         title="${sup.label}">
+        ${sup.languageTag?upper_case}
+      </a>
+      </#list>
+    </div>
+    </#if>
 
     <!-- Logo Sen Jiwu en haut du panneau droit -->
     <div class="seed-panel-logo">
@@ -240,6 +215,40 @@
     <script src="${script}" type="text/javascript"></script>
   </#list>
 </#if>
+
+<script>
+(function () {
+  var pwd = document.getElementById('password');
+  if (!pwd) return;
+
+  var parent = pwd.parentElement;
+  if (!parent) return;
+
+  /* Évite la double injection si Keycloak a déjà un toggle */
+  if (parent.querySelector('[data-pw-toggle]')) return;
+
+  parent.style.position = 'relative';
+
+  var SVG_EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var SVG_EYE_OFF = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+  var btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'seed-pw-toggle';
+  btn.setAttribute('data-pw-toggle', '');
+  btn.setAttribute('aria-label', 'Afficher le mot de passe');
+  btn.innerHTML = SVG_EYE;
+  parent.appendChild(btn);
+
+  btn.addEventListener('click', function () {
+    var visible = pwd.type === 'text';
+    pwd.type = visible ? 'password' : 'text';
+    btn.innerHTML = visible ? SVG_EYE : SVG_EYE_OFF;
+    btn.setAttribute('aria-label', visible ? 'Afficher le mot de passe' : 'Masquer le mot de passe');
+    pwd.focus();
+  });
+})();
+</script>
 
 </body>
 </html>

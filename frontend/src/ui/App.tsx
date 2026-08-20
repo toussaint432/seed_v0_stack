@@ -615,10 +615,10 @@ export function App() {
             <Route path="/dashboard"      element={<Dashboard      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/varieties"      element={<Varieties      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/lots"           element={<Lots           roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
-            <Route path="/stocks"         element={<Stocks         roleKey={user.roleKey} />} />
+            <Route path="/stocks"         element={<Stocks         roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/orders"         element={<Orders         roleKey={user.roleKey} />} />
             <Route path="/certifications" element={<Certifications roleKey={user.roleKey} />} />
-            <Route path="/transfers"      element={<Transfers      roleKey={user.roleKey} />} />
+            <Route path="/transfers"      element={<Transfers      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/campagnes"      element={<Campagnes      roleKey={user.roleKey} />} />
             <Route path="/sites"          element={<Sites          roleKey={user.roleKey} />} />
             <Route path="/mes-sites"      element={<MesSites       roleKey={user.roleKey} />} />

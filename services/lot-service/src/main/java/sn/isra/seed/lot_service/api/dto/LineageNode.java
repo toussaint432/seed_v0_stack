@@ -5,7 +5,7 @@ import java.math.BigDecimal;
 
 /**
  * Nœud de l'arbre généalogique — retourné par GET /api/lots/{id}/lineage
- * Inclut les informations de traçabilité acteur (Phase 1)
+ * Inclut les informations de traçabilité acteur complètes.
  */
 public record LineageNode(
     Long lotId,
@@ -18,13 +18,13 @@ public record LineageNode(
     BigDecimal tauxGermination,
     BigDecimal puretePhysique,
     String statutLot,
-    // Phase 1 : traçabilité acteur
     String responsableNom,
     String responsableRole,
     Long idOrgProducteur,
-    String usernameCreateur
+    String usernameCreateur,
+    String nomOrganisation
 ) {
-    public static LineageNode from(LotSemencier lot) {
+    public static LineageNode from(LotSemencier lot, String nomOrganisation) {
         return new LineageNode(
             lot.getId(),
             lot.getCodeLot(),
@@ -39,7 +39,12 @@ public record LineageNode(
             lot.getResponsableNom(),
             lot.getResponsableRole(),
             lot.getIdOrgProducteur(),
-            lot.getUsernameCreateur()
+            lot.getUsernameCreateur(),
+            nomOrganisation
         );
+    }
+
+    public static LineageNode from(LotSemencier lot) {
+        return from(lot, null);
     }
 }

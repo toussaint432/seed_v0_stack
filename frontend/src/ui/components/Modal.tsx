@@ -65,7 +65,7 @@ export function FormInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
     <input {...props} style={{
       width: '100%', height: 36, padding: '0 11px',
       border: '1px solid var(--border-strong)', borderRadius: 6,
-      fontSize: 13, fontFamily: 'Outfit, sans-serif', color: 'var(--text-primary)',
+      fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)',
       background: 'white', outline: 'none', boxSizing: 'border-box',
       ...props.style,
     }}
@@ -80,7 +80,7 @@ export function FormSelect({ children, ...props }: React.SelectHTMLAttributes<HT
     <select {...props} style={{
       width: '100%', height: 36, padding: '0 11px',
       border: '1px solid var(--border-strong)', borderRadius: 6,
-      fontSize: 13, fontFamily: 'Outfit, sans-serif', color: 'var(--text-primary)',
+      fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)',
       background: 'white', outline: 'none', cursor: 'pointer', boxSizing: 'border-box',
       ...props.style,
     }}>

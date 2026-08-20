@@ -7,6 +7,7 @@ import {
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, extractList } from '../../lib/normalizers'
+import { downloadCsv, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
@@ -14,7 +15,7 @@ import { keycloak } from '../../lib/keycloak'
 import { generateTransferDoc, generateNumero, TransferDocData, LotPdfData, PartiePdf } from '../../lib/pdf/generateTransferDoc'
 import { generateFacture, FactureData, FactureResult } from '../../lib/pdf/generateFacture'
 
-interface Props { roleKey: string }
+interface Props { roleKey: string; userSpecialisation?: string | null }
 const PAGE_SIZE = 10
 
 import { ROLE_LABELS_LONG as ROLE_LABELS } from '../../lib/constants'
@@ -53,7 +54,7 @@ function fmtDatetime(value?: string | null): string {
   } catch { return value }
 }
 
-export function Transfers({ roleKey }: Props) {
+export function Transfers({ roleKey, userSpecialisation }: Props) {
   const [transfers, setTransfers] = useState<any[]>([])
   const [lots, setLots] = useState<any[]>([])
   const [sites, setSites] = useState<any[]>([])
@@ -134,6 +135,11 @@ export function Transfers({ roleKey }: Props) {
     const matchDir = !isUpsemcl || filterDir === 'tous'
       || (filterDir === 'recus' && t.roleDestinataire === 'seed-upsemcl')
       || (filterDir === 'emis'  && t.roleEmetteur    === 'seed-upsemcl')
+    if (roleKey === 'seed-selector' && userSpecialisation) {
+      const lot = lots.find((l: any) => l.id === (t.idLot ?? t.lot?.id))
+      const ce: string | undefined = lot?.codeEspece ?? lot?.variete?.espece?.codeEspece
+      if (ce && ce.toUpperCase() !== userSpecialisation.toUpperCase()) return false
+    }
     return matchSearch && matchStatus && matchDir
   })
 
@@ -325,7 +331,7 @@ export function Transfers({ roleKey }: Props) {
             {recus.map((t: any) => (
               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: '#fff', border: '1px solid #fde68a', borderRadius: 8 }}>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: 13.5, fontFamily: 'DM Mono, monospace' }}>{t.codeTransfert}</div>
+                  <div style={{ fontWeight: 700, fontSize: 13.5, fontFamily: 'var(--font-mono)' }}>{t.codeTransfert}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
                     De <strong>{t.usernameEmetteur}</strong> ({t.roleEmetteur}) · Lot #{t.idLot} · {t.generationTransferee}
                     {t.quantite && <> · {Number(t.quantite).toLocaleString('fr-FR')} kg</>}
@@ -375,6 +381,28 @@ export function Transfers({ roleKey }: Props) {
             Transferts <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{filtered.length}</span>
           </span>
           <div style={{ display: 'flex', gap: 8 }}>
+            {filtered.length > 0 && (
+              <button
+                className="btn btn-secondary"
+                style={{ gap: 5, fontSize: 12 }}
+                onClick={() => downloadCsv(
+                  `transferts-${new Date().toISOString().slice(0, 10)}`,
+                  ['Code transfert', 'Code lot', 'Génération', 'Émetteur', 'Organisation source', 'Destinataire', 'Organisation destination', 'Quantité', 'Statut', 'Date initiation'],
+                  filtered.map((t: any) => [
+                    t.codeTransfert ?? '',
+                    getLotLabel(t.idLot),
+                    t.generationTransferee ?? '',
+                    t.usernameEmetteur ?? t.organisationSource ?? '',
+                    t.organisationSource ?? '',
+                    t.usernameDestinataire ?? t.organisationDestination ?? '',
+                    t.organisationDestination ?? '',
+                    Number(t.quantiteTransferee ?? t.quantite) || 0,
+                    t.statut ?? t.statutTransfert ?? '',
+                    formatDateForExport(t.createdAt),
+                  ])
+                )}
+              ><Download size={13} /> CSV</button>
+            )}
             {canCreate && <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={13} /> Nouveau transfert</button>}
             <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
           </div>
@@ -385,7 +413,7 @@ export function Transfers({ roleKey }: Props) {
             <label className="filter-label">Recherche</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34 }}>
               <Search size={13} color="var(--text-muted)" />
-              <input placeholder="Code transfert, lot…" value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1) }} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'Outfit, sans-serif', width: 200 }} />
+              <input placeholder="Code transfert, lot…" value={search} onChange={e => { setSearch(e.target.value); setCurrentPage(1) }} style={{ border: 'none', background: 'none', outline: 'none', fontSize: 13, fontFamily: 'var(--font-sans)', width: 200 }} />
               {search && <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={13} /></button>}
             </div>
           </div>
@@ -674,7 +702,7 @@ export function Transfers({ roleKey }: Props) {
                 onChange={e => setMotifRefus(e.target.value)}
                 placeholder="Indiquer la raison du refus…"
                 required
-                style={{ width: '100%', minHeight: 80, padding: '9px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
+                style={{ width: '100%', minHeight: 80, padding: '9px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }}
               />
             </Field>
             <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer le refus" submitClassName="btn-danger" />
@@ -737,7 +765,7 @@ export function Transfers({ roleKey }: Props) {
               </Field>
             </FormRow>
             <Field label="Observations">
-              <textarea value={form.observations} onChange={e => setForm(f => ({ ...f, observations: e.target.value }))} placeholder="Notes…" style={{ width: '100%', minHeight: 70, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'Outfit, sans-serif', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+              <textarea value={form.observations} onChange={e => setForm(f => ({ ...f, observations: e.target.value }))} placeholder="Notes…" style={{ width: '100%', minHeight: 70, padding: '8px 11px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
             </Field>
             <FormActions onCancel={() => setShowForm(false)} loading={saving} submitLabel="Créer le transfert" />
           </form>

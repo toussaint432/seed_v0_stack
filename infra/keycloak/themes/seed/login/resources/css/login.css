@@ -1,10 +1,10 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   Sen Jiwu — Thème Keycloak "seed" v2
-   Design system: Bricolage Grotesque / Manrope / JetBrains Mono
+   Sen Jiwu — Thème Keycloak "seed" v3 — Direction A : Germination
+   Design system: Plus Jakarta Sans / JetBrains Mono
    Palette: vert #00693e · or #e8b04b · encre #131814
    ═══════════════════════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Manrope:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 /* ── Tokens ─────────────────────────────────────────────────────────────── */
 :root {
@@ -20,8 +20,8 @@
   --paper-2:      #f3f1ea;
   --line:         #e2dfd3;
   --muted:        #6e6f6a;
-  --display:      'Bricolage Grotesque', system-ui, sans-serif;
-  --body:         'Manrope', system-ui, sans-serif;
+  --display:      'Plus Jakarta Sans', system-ui, sans-serif;
+  --body:         'Plus Jakarta Sans', system-ui, sans-serif;
   --mono:         'JetBrains Mono', ui-monospace, monospace;
 }
 
@@ -202,7 +202,7 @@ body {
   letter-spacing: -0.025em;
   color: #fff;
   display: block;
-  font-variation-settings: "wdth" 100;
+  font-weight: 700;
 }
 
 .seed-logo-text small {
@@ -251,7 +251,7 @@ body {
   letter-spacing: -0.03em;
   color: #fff;
   margin-bottom: 16px;
-  font-variation-settings: "wdth" 100;
+  font-weight: 700;
 }
 
 .seed-brand-title em {
@@ -442,7 +442,7 @@ body {
   letter-spacing: -0.04em;
   color: #fff;
   line-height: 1;
-  font-variation-settings: "wdth" 100;
+  font-weight: 700;
 }
 
 .seed-brand-stat-l {
@@ -483,6 +483,47 @@ body {
   position: relative;
   overflow: hidden;
   gap: 32px;
+}
+
+/* ── Sélecteur de langue ── */
+.seed-lang-switcher {
+  position: absolute;
+  top: 20px;
+  left: 24px;
+  z-index: 10;
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.seed-lang-btn {
+  font-family: var(--mono) !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.09em !important;
+  padding: 5px 11px !important;
+  border-radius: 8px !important;
+  border: 1.5px solid var(--line) !important;
+  background: var(--paper-2) !important;
+  color: var(--muted) !important;
+  text-decoration: none !important;
+  transition: all 0.18s !important;
+  line-height: 1 !important;
+}
+
+.seed-lang-btn--active {
+  background: var(--green) !important;
+  color: #fff !important;
+  border-color: var(--green) !important;
+  box-shadow: 0 2px 8px rgba(0,105,62,0.22) !important;
+}
+
+.seed-lang-btn:hover:not(.seed-lang-btn--active) {
+  border-color: var(--green) !important;
+  color: var(--green) !important;
+  background: var(--green-soft) !important;
+  text-decoration: none !important;
 }
 
 /* ── Bouton retour accueil ── */
@@ -565,7 +606,7 @@ body {
   font-size: 18px;
   letter-spacing: -0.025em;
   color: var(--ink);
-  font-variation-settings: "wdth" 100;
+  font-weight: 700;
   line-height: 1;
 }
 
@@ -711,7 +752,7 @@ body {
   letter-spacing: -0.025em;
   color: var(--ink);
   line-height: 1.2;
-  font-variation-settings: "wdth" 100;
+  font-weight: 700;
 }
 
 /* ── Formulaire interne ── */
@@ -860,15 +901,36 @@ input[type="password"]:focus,
   box-shadow: 0 0 0 4px rgba(0,105,62,0.08) !important;
 }
 
+/* Contrôle de saisie pleine largeur */
+.pf-v5-c-form__group-control,
+.pf-c-form__group-control {
+  width: 100% !important;
+}
+
 /* Input group (password show/hide) */
 .pf-v5-c-input-group,
 .pf-c-input-group {
   display: flex !important;
+  width: 100% !important;
   border: 1.5px solid var(--line) !important;
   border-radius: 12px !important;
   overflow: hidden !important;
   background: var(--paper) !important;
   transition: border-color 0.2s, box-shadow 0.2s !important;
+}
+
+/* Item "fill" (PF5) — prend tout l'espace restant */
+.pf-v5-c-input-group__item.pf-m-fill,
+.pf-c-input-group__item.pf-m-fill {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: flex !important;
+}
+
+.pf-v5-c-input-group__item,
+.pf-c-input-group__item {
+  display: flex !important;
+  align-items: center !important;
 }
 
 .pf-v5-c-input-group:focus-within,
@@ -884,6 +946,10 @@ input[type="password"]:focus,
   border-radius: 0 !important;
   box-shadow: none !important;
   background: transparent !important;
+  /* Le champ doit occuper tout l'espace restant dans le flex container */
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  width: auto !important;
 }
 
 .pf-v5-c-button.pf-m-control,
@@ -1059,6 +1125,84 @@ a:hover { color: var(--green-deep) !important; text-decoration: underline !impor
   color: var(--muted) !important;
   margin-top: 16px;
   font-weight: 500;
+}
+
+/* ── Illustration botanique (coupe de graine) ── */
+.seed-botanical {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -48%);
+  width: min(360px, 80%);
+  height: auto;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ── Lien "Mot de passe oublié ?" ── */
+#kc-form-options {
+  display: flex !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  margin: 4px 0 14px !important;
+}
+
+#kc-form-options a,
+.kc-form-options a {
+  font-family: var(--body) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  color: var(--green) !important;
+  text-decoration: none !important;
+  transition: color 0.18s !important;
+  letter-spacing: 0 !important;
+}
+
+#kc-form-options a:hover {
+  color: var(--green-deep) !important;
+  text-decoration: underline !important;
+}
+
+/* Checkbox "Rester connecté" */
+#kc-form-options .checkbox {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  font-size: 13px !important;
+  color: var(--muted) !important;
+}
+
+/* ── Toggle mot de passe ── */
+#password { padding-right: 46px !important; }
+
+.seed-pw-toggle {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 5px;
+  cursor: pointer;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: color 0.18s, background 0.18s;
+  z-index: 2;
+  line-height: 0;
+}
+.seed-pw-toggle:hover {
+  color: var(--green);
+  background: var(--green-soft);
+}
+.seed-pw-toggle svg {
+  width: 17px;
+  height: 17px;
+  display: block;
+  pointer-events: none;
+  flex-shrink: 0;
 }
 
 /* ── OTP ── */

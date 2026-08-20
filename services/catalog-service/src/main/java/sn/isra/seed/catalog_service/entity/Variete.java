@@ -87,6 +87,36 @@ public class Variete {
     @Column(name = "fiche_varietale_path", length = 500)
     private String ficheVarietalePath;
 
+    // ── Catalogue officiel ISRA/CNRA ─────────────────────
+
+    @Min(value = 1900)
+    @Max(value = 2100)
+    @Column(name = "annee_homologation")
+    private Integer anneeHomologation;
+
+    @Size(max = 100)
+    @Column(name = "nature_genetique", length = 100)
+    private String natureGenetique;
+
+    @Size(max = 100)
+    @Column(name = "numero_selection", length = 100)
+    private String numeroSelection;
+
+    @Column(name = "vocation_culturale", columnDefinition = "TEXT")
+    private String vocationCulturale;
+
+    @Size(max = 50)
+    @Column(name = "photosensibilite", length = 50)
+    private String photosensibilite;
+
+    @Size(max = 200)
+    @Column(name = "synonyme", length = 200)
+    private String synonyme;
+
+    @Size(max = 500)
+    @Column(name = "itineraire_tech_path", length = 500)
+    private String itineraireTechPath;
+
     // ── Soft-delete traçable ──────────────────────────────
     @Column(name = "commentaire_archivage", columnDefinition = "TEXT")
     private String commentaireArchivage;

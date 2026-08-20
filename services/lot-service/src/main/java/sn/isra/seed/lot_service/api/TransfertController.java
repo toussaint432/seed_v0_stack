@@ -78,8 +78,9 @@ public class TransfertController {
         t.setStatut(StatutTransfert.ACCEPTE);
         t.setDateAcceptation(LocalDate.now());
 
-        // 2. Mise à jour statut lot si épuisé (transfert partiel : statut inchangé)
-        lotRepo.findById(t.getIdLot()).ifPresent(lot -> {
+        // 2. Mise à jour statut lot source si épuisé (transfert partiel : statut inchangé)
+        Long sourceLotId = t.getIdLot();
+        lotRepo.findById(sourceLotId).ifPresent(lot -> {
             StatutLot ancienStatut = lot.getStatutLot();
             if (lot.getQuantiteNette() == null || lot.getQuantiteNette().compareTo(BigDecimal.ZERO) <= 0) {
                 lot.setStatutLot(StatutLot.TRANSFERE);
@@ -91,9 +92,29 @@ public class TransfertController {
             }
         });
 
+        // 3. Si ce transfert provient d'une commande (order-service), créer un lot REC
+        //    pour que le multiplicateur possède son propre lot (idOrgProducteur = lui-même)
+        //    et non le lot UPSemCL source dans "Mes Lots".
+        stockCreditRepo.findCommandeByTransfert(t.getCodeTransfert()).ifPresent(info -> {
+            try {
+                String codeLot = "REC-" + info.commandeId() + "-L" + info.ligneId();
+                Long newLotId = stockCreditRepo.createReceptionLot(
+                    sourceLotId, codeLot,
+                    info.idOrgAcheteur(), info.usernameAcheteur(),
+                    t.getQuantite(), "kg"
+                );
+                t.setIdLot(newLotId);
+                log.info("Lot REC {} (id={}) créé pour commande #{} — transfert {} redirigé",
+                    codeLot, newLotId, info.commandeId(), t.getCodeTransfert());
+            } catch (Exception e) {
+                log.error("Impossible de créer le lot REC pour transfert {} : {}",
+                    t.getCodeTransfert(), e.getMessage());
+            }
+        });
+
         TransfertLot saved = transfertRepo.save(t);
 
-        // 3. Résoudre le site de stockage du destinataire
+        // 4. Résoudre le site de stockage du destinataire
         String siteCode = (body != null) ? (String) body.get("siteCode") : null;
         if ((siteCode == null || siteCode.isBlank()) && saved.getUsernameDestinataire() != null) {
             siteCode = stockCreditRepo
@@ -102,7 +123,7 @@ public class TransfertController {
                 .orElse(null);
         }
 
-        // 4. Crédit direct du stock (synchrone, atomique, sans Kafka)
+        // 5. Crédit stock pour le lot REC (si commande) ou le lot source (sinon)
         if (siteCode != null && !siteCode.isBlank() && saved.getQuantite() != null) {
             boolean ok = stockCreditRepo.crediterSite(saved.getIdLot(), siteCode, saved.getQuantite());
             if (ok) {
@@ -117,7 +138,7 @@ public class TransfertController {
                      saved.getCodeTransfert(), saved.getUsernameDestinataire());
         }
 
-        // 5. Passer la commande associée à LIVREE
+        // 6. Passer la commande associée à LIVREE
         stockCreditRepo.marquerCommandeLivree(saved.getCodeTransfert());
 
         return ResponseEntity.<Object>ok(saved);
