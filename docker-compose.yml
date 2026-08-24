@@ -1,6 +1,7 @@
 services:
   postgres:
-    image: postgres:16
+    # postgres:16-alpine : UID postgres=70 (vs 999 Debian) — recréer seed_pgdata si migration depuis postgres:16
+    image: postgres:16-alpine
     container_name: seed-postgres
     restart: unless-stopped
     environment:
@@ -74,6 +75,13 @@ services:
     # heap 512m + metaspace 200m + natif ~300m = ~1012m < 1400m ✓
     mem_limit: 1400m
     restart: unless-stopped
+    healthcheck:
+      # /health/ready : 200 quand Keycloak est prêt, 503 sinon (port management 9000)
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
 
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
@@ -211,7 +219,7 @@ services:
       postgres:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
     environment:
@@ -235,7 +243,7 @@ services:
       # CORS : autorise 127.0.0.1 ET localhost (équivalents TCP mais origines HTTP différentes)
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
       UPLOADS_DIR: "/app/uploads"
-      SWAGGER_ENABLED: "true"
+      SWAGGER_ENABLED: "false"
     volumes:
       - ./data/uploads:/app/uploads
     healthcheck:
@@ -258,7 +266,7 @@ services:
       postgres:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
     environment:
@@ -272,7 +280,7 @@ services:
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
       UPLOADS_DIR: "/app/uploads"
-      SWAGGER_ENABLED: "true"
+      SWAGGER_ENABLED: "false"
     volumes:
       - ./data/uploads:/app/uploads
     healthcheck:
@@ -295,7 +303,7 @@ services:
       postgres:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_healthy
     environment:
@@ -308,7 +316,7 @@ services:
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
-      SWAGGER_ENABLED: "true"
+      SWAGGER_ENABLED: "false"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s
@@ -329,7 +337,7 @@ services:
       postgres:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_healthy
     environment:
@@ -342,7 +350,7 @@ services:
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
       CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
-      SWAGGER_ENABLED: "true"
+      SWAGGER_ENABLED: "false"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
       interval: 30s
@@ -359,7 +367,7 @@ services:
     restart: unless-stopped
     depends_on:
       keycloak:
-        condition: service_started
+        condition: service_healthy
       catalog-service:
         condition: service_healthy
       lot-service:
