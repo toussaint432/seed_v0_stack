@@ -15,6 +15,30 @@
 
 ---
 
+## Objectifs du projet
+
+### Objectif général
+
+Concevoir et déployer un **système d'information semencier** pour l'ISRA/CNRA Bambey permettant de digitaliser, centraliser et sécuriser la gestion de la chaîne de certification semencière au Sénégal — de la variété génétique pure (G0) à la semence commerciale distribuée (R2) — en garantissant la traçabilité, la conformité et l'accessibilité pour tous les acteurs de la filière.
+
+### Objectifs spécifiques et état de couverture
+
+| # | Objectif spécifique | État | Notes |
+|---|---|---|---|
+| **OS1** | Numériser le référentiel variétal ISRA (espèces, variétés, zones agro-écologiques) | ✅ Complet | Catalogue public, carte Leaflet ZAE, archivage traçable |
+| **OS2** | Assurer la traçabilité générationnelle des lots semenciers (G0→R2, lineage) | ✅ Complet | Lot parent→enfant, lot REC automatique à livraison |
+| **OS3** | Gérer les stocks par acteur avec isolation stricte des données | ✅ Complet | RBAC username/organisation, inventaire + mouvements |
+| **OS4** | Automatiser le workflow de commandes et de transferts entre acteurs | ✅ Complet | Passation → allocation → livraison → réception |
+| **OS5** | Sécuriser l'accès par rôle métier via authentification centralisée | ✅ Complet | Keycloak 25, OAuth2 PKCE, Spring Security RBAC |
+| **OS6** | Produire des documents officiels traçables (certificats, fiches, bons) | ✅ Complet | Génération PDF iText/PDFBox, upload fiches techniques |
+| **OS7** | Déployer une architecture scalable, monitorée et maintenable | 🔄 En cours | Docker opérationnel, Phase 3 et déploiement ISRA à finaliser |
+| **OS8** | Garantir des performances acceptables pour les utilisateurs | 🔄 Partiel | JVM tuning + monitoring en place, tests de charge à réaliser |
+| **OS9** | Assurer la scalabilité du système face à la croissance des données | 🔄 Partiel | Architecture prête (microservices + Kafka), orchestration à prévoir |
+| **OS10** | Déployer sur infrastructure ISRA (serveur réel, accès multi-sites) | 🔲 À venir | Architecture prête, config réseau/TLS à finaliser |
+| **OS11** | Fournir un guide d'utilisation par rôle pour les utilisateurs finaux | 🔲 À venir | Comptes de démo disponibles, guide utilisateur à rédiger |
+
+---
+
 ## Présentation
 
 **Sen Jiwu** est une application web professionnelle dédiée à la gestion de la **chaîne de certification semencière** au Sénégal. Elle couvre l'intégralité du cycle de vie des semences — des variétés génétiques pures (G0) jusqu'aux semences commerciales distribuées (R2) — en assurant la traçabilité générationnelle, la gestion des stocks, la certification et la distribution entre acteurs.
@@ -628,6 +652,26 @@ triggers {
 - [ ] Keycloak : `start-dev` → `start` avec TLS activé (mode production)
 - [ ] Jenkins : `pollSCM` → webhooks GitHub (avec serveur public ou tunnel sécurisé)
 
+### À venir (Performance & Scalabilité — OS8 / OS9)
+- [ ] Tests de charge formels avec k6 ou JMeter sur les endpoints critiques (< 200ms objectif)
+- [ ] Pagination serveur sur les listes volumineuses (lots, stocks, commandes)
+- [ ] Cache applicatif Spring Cache + Redis pour le référentiel variétal (données stables)
+- [ ] PostgreSQL réplication primary/replica (scalabilité lecture en production)
+- [ ] Kafka multi-broker 3 nœuds + replication factor 3 (haute disponibilité)
+
+### À venir (Déploiement ISRA — OS10)
+- [ ] Configuration reverse proxy Nginx/Traefik avec TLS (Let's Encrypt ou certificat ISRA)
+- [ ] Migration ports `127.0.0.1:*` → exposition contrôlée via reverse proxy uniquement
+- [ ] Déploiement sur serveur physique ISRA/CNRA Bambey (Ubuntu 22.04, 8 Go RAM min)
+- [ ] Sauvegarde automatique PostgreSQL (cron + stockage externe)
+- [ ] Monitoring en conditions réelles + ajustement des seuils d'alerte Alertmanager
+
+### À venir (Formation & Documentation — OS11)
+- [ ] Guide utilisateur par rôle en PDF (sélectionneur, UPSemCL, multiplicateur, quotataire, admin)
+- [ ] Manuel administrateur Keycloak (gestion des comptes, attribution des rôles)
+- [ ] Session de formation utilisateurs finaux ISRA/CNRA
+- [ ] Vidéos de démonstration pour la soutenance et les investisseurs
+
 ---
 
 ## ⚠️ Rappels avant mise en production
@@ -666,6 +710,169 @@ docker exec seed-postgres pg_dump -U seed seed > backup_$(date +%Y%m%d).sql
 # Restauration
 docker exec -i seed-postgres psql -U seed seed < backup_YYYYMMDD.sql
 ```
+
+---
+
+## Scalabilité (OS9)
+
+### Architecture conçue pour la montée en charge
+
+L'architecture microservices de Sen Jiwu est **intrinsèquement scalable** : chaque service est indépendant et peut être répliqué sans modifier les autres.
+
+```
+┌──────────────────────────────────────────────────────────┐
+│  catalog-service  ×1        → docker compose up --scale  │
+│  lot-service      ×1           catalog-service=3         │
+│  stock-service    ×1           (load balancer requis)    │
+│  order-service    ×1                                     │
+└──────────────────────────────────────────────────────────┘
+```
+
+**Ce qui est déjà en place :**
+- **Microservices indépendants** : chaque service possède son propre schéma PostgreSQL et peut être redémarré/mis à l'échelle sans impacter les autres
+- **Kafka comme bus d'événements** : les opérations asynchrones (lot REC, transferts, notifications) sont découplées — Kafka absorbe les pics de charge sans bloquer les APIs REST
+- **`mem_limit` par container** : chaque service est limité en mémoire pour éviter qu'un service monopolise les ressources de l'hôte
+- **JVM G1GC** : collecteur garbage adapté aux applications longue durée avec SLA de latence (MaxGCPauseMillis=20-50ms)
+
+**Évolutions prévues (production) :**
+
+| Besoin | Solution recommandée |
+|---|---|
+| Réplication d'instances | Docker Swarm (simple) ou Kubernetes (complet) |
+| Load balancing | Nginx upstream / Traefik |
+| Cache distribué | Redis (sessions, résultats fréquents) |
+| Base de données scalable | PostgreSQL réplication (primary + replica) |
+| Kafka multi-broker | Passage de 1 à 3 brokers Kafka (réplication factor 3) |
+
+> **Justification architecturale** : le choix des microservices vs monolithe était délibéré. Un monolithe aurait été plus simple à développer mais impossible à scaler partiellement — on ne peut pas scaler uniquement le module "commandes" si c'est lui qui reçoit le plus de trafic.
+
+---
+
+## Performance (OS8)
+
+### Optimisations en place
+
+**JVM (tous les services Java) :**
+
+| Paramètre | Valeur | Effet |
+|---|---|---|
+| `-Xms` | 48–64 MB | Démarrage rapide, pas d'allocation mémoire inutile |
+| `-Xmx` | 192–256 MB | Plafond mémoire par service (évite OOM) |
+| `XX:+UseG1GC` | activé | Garbage collector low-latency |
+| `XX:MaxGCPauseMillis` | 20–50 ms | SLA de pause GC explicite |
+| `XX:TieredStopAtLevel=1` | activé | Compilation JIT réduite au niveau C1 (startup plus rapide) |
+| `XX:MaxMetaspaceSize` | 128–200 MB | Plafond Metaspace explicite (évite leak mémoire) |
+
+**Kafka :**
+- Les opérations lourdes (création de lot REC, événements de stock) passent par Kafka en asynchrone — le client REST reçoit une réponse immédiate sans attendre la propagation
+- Rétention des messages : 24h (suffisant pour re-traitement en cas d'échec)
+
+**Monitoring de performance :**
+- **Prometheus + Grafana** : métriques JVM (heap, GC, threads), latence HTTP (blackbox-exporter)
+- **Kafka UI** : lag des consumer groups, throughput des topics
+- **`/actuator/health`** : healthcheck sur chaque service (utilisé par Docker et le Smoke Test Jenkins)
+
+### Objectifs quantitatifs (à mesurer)
+
+| Endpoint | Objectif cible | Outil de mesure |
+|---|---|---|
+| `GET /varietes` | < 200 ms | Grafana / blackbox-exporter |
+| `POST /lots` | < 500 ms | Grafana / JMeter |
+| `GET /stocks` | < 300 ms | Grafana / blackbox-exporter |
+| Auth Keycloak (PKCE) | < 800 ms | Grafana |
+
+**Axes d'amélioration identifiés :**
+- Pagination serveur sur les listes volumineuses (actuellement chargement total)
+- Cache applicatif (Spring Cache + Redis) pour le référentiel variétal (données stables)
+- Tests de charge formels avec [k6](https://k6.io) ou JMeter (à réaliser avant déploiement ISRA)
+
+---
+
+## Déploiement sur serveur ISRA (OS10)
+
+### Architecture cible
+
+```
+Internet / LAN ISRA
+        │
+        ▼
+  ┌──────────────┐
+  │  Nginx/Traefik│  ← Reverse proxy + TLS (Let's Encrypt ou cert ISRA)
+  │  :443 / :80  │
+  └──────┬───────┘
+         │
+         ├── /             → Frontend (nginx:alpine :5173)
+         ├── /auth         → Keycloak (:18080)
+         ├── /api/catalog  → catalog-service (:18081)
+         ├── /api/lot      → lot-service (:18082)
+         ├── /api/stock    → stock-service (:18083)
+         └── /api/order    → order-service (:18084)
+```
+
+### Prérequis serveur ISRA
+
+| Composant | Minimum | Recommandé |
+|---|---|---|
+| CPU | 4 cœurs | 8 cœurs |
+| RAM | 8 Go | 16 Go |
+| Disque | 50 Go SSD | 100 Go SSD |
+| OS | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+| Docker Engine | 26+ | 26+ |
+| Docker Compose | v2+ | v2+ |
+
+### Étapes de mise en production
+
+```
+Étape 1 — Phase 3 Docker        USER non-root, réseaux explicites, nginx:alpine
+Étape 2 — Keycloak production   start-dev → start, TLS activé, realm exporté
+Étape 3 — Secrets               .env sécurisé, mots de passe forts, SMTP validé
+Étape 4 — Reverse proxy         Nginx ou Traefik avec certificat TLS
+Étape 5 — Ports réseau          127.0.0.1:* → 0.0.0.0:* (ou via reverse proxy uniquement)
+Étape 6 — Sauvegarde auto       cron pg_dump + stockage externe (Nextcloud ISRA ou S3)
+Étape 7 — Tests de charge       k6 ou JMeter sur les endpoints critiques
+Étape 8 — Formation             Guide utilisateur par rôle + session de formation CNRA
+```
+
+### Changements docker-compose pour serveur
+
+```yaml
+# Remplacer les bindings loopback par 0.0.0.0 (ou supprimer le préfixe)
+# Avant (dev local uniquement) :
+ports:
+  - "127.0.0.1:18081:8080"
+
+# Après (serveur, derrière reverse proxy) :
+ports:
+  - "18081:8080"   # ou ne pas exposer et laisser Nginx accéder via réseau Docker
+```
+
+---
+
+## Formation et guide utilisateur (OS11)
+
+### Documentation disponible
+
+| Document | Audience | État |
+|---|---|---|
+| README technique (ce fichier) | Développeurs, administrateurs système | ✅ Complet |
+| Comptes de démo configurés | Formateurs, jury de soutenance | ✅ Disponible |
+| Guide utilisateur par rôle | Utilisateurs finaux ISRA/CNRA | 🔲 À rédiger |
+| Manuel administrateur Keycloak | Administrateur ISRA | 🔲 À rédiger |
+| Vidéos de démonstration | Investisseurs, jury | 🔲 À envisager |
+
+### Guide utilisateur — contenu prévu par rôle
+
+| Rôle | Workflows à documenter |
+|---|---|
+| **Sélectionneur** | Créer une variété, créer un lot G0/G1, initier un transfert, consulter les analytiques |
+| **UPSemCL** | Recevoir un transfert, créer lots G2/G3, gérer le stock UPSemCL, passer une commande |
+| **Multiplicateur** | Gérer mes sites, créer lots R1/R2, suivre mon stock, passer une commande G3 |
+| **Quotataire** | Consulter le catalogue, passer une commande R2, suivre mon panier |
+| **Admin** | Gérer les utilisateurs Keycloak, superviser la plateforme, consulter les analytiques |
+
+### Format recommandé
+
+Un guide par rôle au format **PDF** ou **page web statique**, organisé par workflows avec captures d'écran annotées. La plateforme étant destinée au personnel ISRA/CNRA, le guide doit être rédigé en **français** avec le vocabulaire métier semencier (G0, R2, UPSemCL, ZAE, etc.).
 
 ---
 
