@@ -54,6 +54,22 @@ public class Programme {
     @Column(nullable = false, length = 30)
     private StatutProgramme statut = StatutProgramme.PLANIFIE;
 
+    @Size(max = 120)
+    @Column(name = "multiplicateur", length = 120)
+    private String multiplicateur;
+
+    @Size(max = 20)
+    @Column(name = "campagne", length = 20)
+    private String campagne;
+
+    @Size(max = 80)
+    @Column(name = "username_createur", updatable = false, length = 80)
+    private String usernameCreateur;
+
+    @Size(max = 40)
+    @Column(name = "role_createur", updatable = false, length = 40)
+    private String roleCreateur;
+
     @Column(columnDefinition = "TEXT")
     private String observations;
 

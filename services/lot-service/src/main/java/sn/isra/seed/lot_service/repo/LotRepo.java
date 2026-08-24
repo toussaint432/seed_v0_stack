@@ -162,8 +162,45 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         """)
     List<LotSemencier> findAllCertifiables();
 
+    /**
+     * Catalogue G1 visible par l'UPSemCL.
+     * Retourne tous les lots G1 DISPONIBLES avec quantité > 0 produits par les sélectionneurs.
+     */
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration = 'G1'
+          AND l.statutLot = :statut
+          AND l.quantiteNette > 0
+          AND l.responsableRole = 'seed-selector'
+        ORDER BY l.codeEspece ASC NULLS LAST, l.dateProduction DESC, l.createdAt DESC
+        """)
+    List<LotSemencier> findCatalogueG1(@Param("statut") StatutLot statut);
+
+    /**
+     * Lots G1/G2/G3 de l'UPSemCL : lots dont l'org est productrice (y compris REC créés à l'acceptation).
+     * Remplace findAll() non filtré utilisé jusqu'ici pour seed-upsemcl.
+     */
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration IN ('G1','G2','G3')
+          AND l.idOrgProducteur = :orgId
+        ORDER BY l.generation.ordreGeneration ASC, l.createdAt DESC
+        """)
+    Page<LotSemencier> findLotsUpsemcl(@Param("orgId") Long orgId, Pageable pageable);
+
     /** Débite la quantité nette du lot parent lors de la création d'un lot enfant. */
     @Modifying
     @Query("UPDATE LotSemencier l SET l.quantiteNette = l.quantiteNette - :qte WHERE l.id = :id")
     int debitQuantiteNette(@Param("id") Long id, @Param("qte") BigDecimal qte);
+
+    /** Agrégats par génération — sans pagination — pour les cartes pipeline du frontend. */
+    @Query("""
+        SELECT l.generation.codeGeneration,
+               COUNT(l),
+               SUM(COALESCE(l.quantiteNette, 0))
+        FROM LotSemencier l
+        GROUP BY l.generation.codeGeneration
+        ORDER BY l.generation.codeGeneration
+        """)
+    List<Object[]> statsParGeneration();
 }

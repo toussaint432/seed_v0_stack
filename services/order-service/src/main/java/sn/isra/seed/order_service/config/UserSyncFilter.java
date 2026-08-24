@@ -60,14 +60,19 @@ public class UserSyncFilter extends OncePerRequestFilter {
                 Jwt jwt = (Jwt) jwtAuth.getPrincipal();
                 String username = jwt.getClaimAsString("preferred_username");
 
-                if (username != null && !membreRepo.existsByKeycloakUsername(username)) {
+                if (username != null) {
                     String role = extractSeedRole(jwt);
-                    Organisation org = findDefaultOrg(role);
-                    if (org != null) {
-                        autoRegister(username, role, jwt, org);
-                        log.info("[UserSync] '{}' → rôle='{}' org='{}'",
-                                 username, role, org.getNomOrganisation());
-                    }
+                    membreRepo.findByKeycloakUsername(username).ifPresentOrElse(
+                        m -> syncNomIfChanged(m, jwt),
+                        () -> {
+                            Organisation org = findDefaultOrg(role);
+                            if (org != null) {
+                                autoRegister(username, role, jwt, org);
+                                log.info("[UserSync] '{}' → rôle='{}' org='{}'",
+                                         username, role, org.getNomOrganisation());
+                            }
+                        }
+                    );
                 }
             }
         } catch (Exception e) {
@@ -95,6 +100,18 @@ public class UserSyncFilter extends OncePerRequestFilter {
         if (!orgs.isEmpty()) return orgs.get(0);
         List<Organisation> all = orgRepo.findAll();
         return all.isEmpty() ? null : all.get(0);
+    }
+
+    private void syncNomIfChanged(MembreOrganisation m, Jwt jwt) {
+        String firstName = jwt.getClaimAsString("given_name");
+        String lastName  = jwt.getClaimAsString("family_name");
+        if (firstName == null && lastName == null) return;
+        String nomJwt = ((firstName != null ? firstName : "") + " " + (lastName != null ? lastName : "")).trim();
+        if (!nomJwt.isEmpty() && !nomJwt.equals(m.getNomComplet())) {
+            m.setNomComplet(nomJwt);
+            membreRepo.save(m);
+            log.info("[UserSync] nom_complet mis à jour pour '{}' : '{}'", m.getKeycloakUsername(), nomJwt);
+        }
     }
 
     private void autoRegister(String username, String role, Jwt jwt, Organisation org) {

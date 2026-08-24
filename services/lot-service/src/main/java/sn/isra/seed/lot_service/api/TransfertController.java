@@ -37,6 +37,8 @@ public class TransfertController {
     @GetMapping
     public List<TransfertLot> mesTransferts(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
+        if ("seed-upsemcl".equals(extractRole(jwt)))
+            return transfertRepo.findByRoleParticipant("seed-upsemcl");
         return transfertRepo.findByParticipant(username);
     }
 
@@ -44,6 +46,8 @@ public class TransfertController {
     @GetMapping("/recus")
     public List<TransfertLot> transfertsRecus(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
+        if ("seed-upsemcl".equals(extractRole(jwt)))
+            return transfertRepo.findPendingForRole("seed-upsemcl");
         return transfertRepo.findPendingForDestinataire(username);
     }
 
@@ -92,10 +96,9 @@ public class TransfertController {
             }
         });
 
-        // 3. Si ce transfert provient d'une commande (order-service), créer un lot REC
-        //    pour que le multiplicateur possède son propre lot (idOrgProducteur = lui-même)
-        //    et non le lot UPSemCL source dans "Mes Lots".
-        stockCreditRepo.findCommandeByTransfert(t.getCodeTransfert()).ifPresent(info -> {
+        // 3a. Transfert lié à une commande (UPSemCL → Multiplicateur) : lot REC pour le multiplicateur
+        var commandeOpt = stockCreditRepo.findCommandeByTransfert(t.getCodeTransfert());
+        commandeOpt.ifPresent(info -> {
             try {
                 String codeLot = "REC-" + info.commandeId() + "-L" + info.ligneId();
                 Long newLotId = stockCreditRepo.createReceptionLot(
@@ -111,6 +114,27 @@ public class TransfertController {
                     t.getCodeTransfert(), e.getMessage());
             }
         });
+
+        // 3b. Transfert sélectionneur → UPSemCL (sans commande) : lot REC pour l'UPSemCL
+        if (commandeOpt.isEmpty() && "seed-selector".equals(t.getRoleEmetteur())) {
+            try {
+                Long orgId = stockCreditRepo.findOrgIdByUsername(username).orElse(null);
+                if (orgId != null) {
+                    String codeLot = "REC-G1-" + t.getCodeTransfert();
+                    Long newLotId = stockCreditRepo.createReceptionLot(
+                        sourceLotId, codeLot, orgId, username, t.getQuantite(), "kg"
+                    );
+                    t.setIdLot(newLotId);
+                    log.info("Lot REC {} (id={}) créé pour UPSemCL org={} — transfert G1 {}",
+                        codeLot, newLotId, orgId, t.getCodeTransfert());
+                } else {
+                    log.warn("Org UPSemCL introuvable pour {} — lot REC non créé (stock seulement)", username);
+                }
+            } catch (Exception e) {
+                log.error("Impossible de créer le lot REC G1 pour transfert {} : {}",
+                    t.getCodeTransfert(), e.getMessage());
+            }
+        }
 
         TransfertLot saved = transfertRepo.save(t);
 
@@ -142,6 +166,16 @@ public class TransfertController {
         stockCreditRepo.marquerCommandeLivree(saved.getCodeTransfert());
 
         return ResponseEntity.<Object>ok(saved);
+    }
+
+    private String extractRole(Jwt jwt) {
+        if (jwt == null) return "";
+        try {
+            @SuppressWarnings("unchecked")
+            var roles = (java.util.List<String>) jwt.getClaimAsMap("realm_access").get("roles");
+            if (roles == null) return "";
+            return roles.stream().filter(r -> r.startsWith("seed-")).findFirst().orElse("");
+        } catch (Exception e) { return ""; }
     }
 
     /* ── PUT /api/transferts/{id}/refuser ──────────────────────── */

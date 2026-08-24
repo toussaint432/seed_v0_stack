@@ -13,6 +13,7 @@ import org.springframework.web.server.ResponseStatusException;
 import sn.isra.seed.common.util.JwtHelper;
 import sn.isra.seed.lot_service.api.dto.CreateChildLotRequest;
 import sn.isra.seed.lot_service.api.dto.LineageNode;
+import sn.isra.seed.lot_service.api.dto.LotGenStatsDto;
 import sn.isra.seed.lot_service.api.dto.LotSemencierDto;
 import sn.isra.seed.lot_service.api.mapper.LotMapper;
 import sn.isra.seed.lot_service.entity.LotSemencier;
@@ -129,9 +130,25 @@ public class LotController {
                 : ResponseEntity.ok(chain);
     }
 
+    @GetMapping("/stats")
+    public List<LotGenStatsDto> stats() {
+        return lotRepo.statsParGeneration().stream()
+            .map(row -> new LotGenStatsDto(
+                (String) row[0],
+                ((Number) row[1]).longValue(),
+                ((Number) row[2]).doubleValue()
+            ))
+            .toList();
+    }
+
     @GetMapping("/catalogue-g3")
     public List<LotSemencierDto> catalogueG3() {
         return lotMapper.toDtoList(lotRepo.findCatalogueG3(StatutLot.DISPONIBLE));
+    }
+
+    @GetMapping("/catalogue-g1")
+    public List<LotSemencierDto> catalogueG1() {
+        return lotMapper.toDtoList(lotRepo.findCatalogueG1(StatutLot.DISPONIBLE));
     }
 
     @GetMapping("/mes-lots")

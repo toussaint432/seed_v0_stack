@@ -50,6 +50,11 @@ public class StockService {
             if (orgId == null) return Page.empty(pageable);
             return stockRepo.findByOrganisation(orgId, pageable);
         }
+        if (jwt != null && JwtHelper.hasRole(jwt, "seed-upsemcl")) {
+            Long orgId = resolveOrgId(jwt);
+            if (orgId == null) return Page.empty(pageable);
+            return stockRepo.findByOrganisation(orgId, pageable);
+        }
         if (site == null || site.isBlank()) return stockRepo.findAll(pageable);
         return stockRepo.findBySite_CodeSite(site, pageable);
     }
@@ -60,6 +65,10 @@ public class StockService {
         List<StockAgregeView> views;
 
         if (jwt != null && JwtHelper.hasRole(jwt, "seed-multiplicator")) {
+            Long orgId = resolveOrgId(jwt);
+            if (orgId == null) return List.of();
+            views = stockRepo.findAgregeByOrganisation(orgId);
+        } else if (jwt != null && JwtHelper.hasRole(jwt, "seed-upsemcl")) {
             Long orgId = resolveOrgId(jwt);
             if (orgId == null) return List.of();
             views = stockRepo.findAgregeByOrganisation(orgId);

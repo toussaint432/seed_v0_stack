@@ -69,6 +69,11 @@ public class LotService {
             String specialisation = raw != null ? raw.toUpperCase() : null;
             return lotRepo.findForSelector(username, specialisation, pageable);
         }
+        if (roles.contains("seed-upsemcl")) {
+            Long orgId = resolveOrgId(jwt);
+            if (orgId == null) return Page.empty(pageable);
+            return lotRepo.findLotsUpsemcl(orgId, pageable);
+        }
         if (roles.contains("seed-multiplicator")) {
             String username = JwtHelper.getUsername(jwt);
             if (username == null) return Page.empty(pageable);
@@ -213,16 +218,23 @@ public class LotService {
                 "Le code lot '" + req.codeLot() + "' existe déjà — ajoutez un suffixe unique (ex : -02, -03…).");
         }
 
-        if (req.quantiteSemenceSrcKg() != null
-                && req.quantiteSemenceSrcKg().compareTo(BigDecimal.ZERO) > 0) {
-            lotRepo.debitQuantiteNette(parent.getId(), req.quantiteSemenceSrcKg());
-        }
-
-        producer.lotCreated(om.writeValueAsString(saved));
         List<String> childRoles = JwtHelper.extractRoles(jwt);
         String childUsername = JwtHelper.getUsername(jwt);
         String childFixedSite = resolveFixedSite(childRoles, childUsername);
-        publishStockSync(saved, childFixedSite != null ? childFixedSite : req.siteCode());
+        String effectiveSite = childFixedSite != null ? childFixedSite : req.siteCode();
+
+        if (req.quantiteSemenceSrcKg() != null
+                && req.quantiteSemenceSrcKg().compareTo(BigDecimal.ZERO) > 0) {
+            lotRepo.debitQuantiteNette(parent.getId(), req.quantiteSemenceSrcKg());
+            if (effectiveSite != null) {
+                boolean ok = stockCreditRepo.debiterSite(parent.getId(), effectiveSite, req.quantiteSemenceSrcKg());
+                if (ok) log.info("Stock débité parent : lot={} site={} qte={} kg", parent.getId(), effectiveSite, req.quantiteSemenceSrcKg());
+                else    log.warn("Échec débit stock parent lot={} site={}", parent.getId(), effectiveSite);
+            }
+        }
+
+        producer.lotCreated(om.writeValueAsString(saved));
+        publishStockSync(saved, effectiveSite);
         return saved;
     }
 
@@ -298,6 +310,13 @@ public class LotService {
             ? StatutLot.TRANSFERE : ancienStatut;
         lot.setStatutLot(nouveauStatut);
         lotRepo.save(lot);
+
+        String siteEmetteur = resolveFixedSite(roles, usernameEmetteur);
+        if (siteEmetteur != null) {
+            boolean ok = stockCreditRepo.debiterSite(id, siteEmetteur, quantiteTransfert);
+            if (ok) log.info("Stock débité émetteur : lot={} site={} qte={} kg (transfert {})", id, siteEmetteur, quantiteTransfert, saved.getCodeTransfert());
+            else    log.warn("Échec débit stock émetteur lot={} site={} (transfert {})", id, siteEmetteur, saved.getCodeTransfert());
+        }
 
         historiqueRepo.save(HistoriqueStatutLot.of(
             id, ancienStatut, nouveauStatut, usernameEmetteur,

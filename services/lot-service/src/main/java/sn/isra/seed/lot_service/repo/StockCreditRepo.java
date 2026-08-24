@@ -51,6 +51,26 @@ public class StockCreditRepo {
     }
 
     /**
+     * Déduit la quantité du stock d'un lot dans un site identifié par son code.
+     * Plancher à 0 pour éviter les valeurs négatives.
+     */
+    public boolean debiterSite(Long idLot, String codeSite, BigDecimal quantite) {
+        try {
+            int rows = jdbc.update("""
+                UPDATE stock
+                SET quantite_disponible = GREATEST(0, quantite_disponible - ?),
+                    updated_at          = NOW()
+                WHERE id_lot  = ?
+                  AND id_site = (SELECT id FROM site WHERE code_site = ? LIMIT 1)
+                """, quantite, idLot, codeSite);
+            return rows > 0;
+        } catch (Exception e) {
+            log.error("Échec débit stock lot={} site={} qte={} : {}", idLot, codeSite, quantite, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Résout le code du site principal d'une organisation (le plus ancien par id).
      */
     public Optional<String> findPrimarySiteByOrgId(Long idOrg) {

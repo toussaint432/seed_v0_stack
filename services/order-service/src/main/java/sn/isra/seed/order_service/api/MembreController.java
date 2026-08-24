@@ -238,6 +238,20 @@ public class MembreController {
                 }
                 return ResponseEntity.status(putResp.statusCode()).body(Map.of("errorMessage", errMsg));
             }
+
+            // Sync immédiat membre_organisation.nom_complet après succès Keycloak
+            String currentUsername = jwt.getClaimAsString("preferred_username");
+            membreRepo.findByKeycloakUsername(currentUsername).ifPresent(m -> {
+                String fn = body.firstName() != null ? body.firstName().trim() : "";
+                String ln = body.lastName()  != null ? body.lastName().trim()  : "";
+                String nouveau = (fn + " " + ln).trim();
+                if (!nouveau.isEmpty()) {
+                    m.setNomComplet(nouveau);
+                    membreRepo.save(m);
+                    log.info("[keycloak-profil] nom_complet mis à jour en base pour '{}'", currentUsername);
+                }
+            });
+
             return ResponseEntity.noContent().build();
         } catch (Exception e) {
             log.error("[keycloak-profil] Erreur : {}", e.getMessage());
