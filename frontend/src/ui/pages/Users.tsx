@@ -7,7 +7,7 @@ import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
-import { downloadCsv } from '../../lib/exportUtils'
+import { downloadXlsx } from '../../lib/exportUtils'
 
 interface Props { roleKey: string }
 
@@ -432,24 +432,37 @@ export function Users({ roleKey }: Props) {
                 <button
                   className="btn btn-secondary"
                   style={{ gap: 5, fontSize: 12 }}
-                  onClick={() => downloadCsv(
-                    `utilisateurs-${new Date().toISOString().slice(0, 10)}`,
-                    ['Prénom', 'Nom', 'Username', 'Email', 'Rôle plateforme', 'Statut'],
-                    filtered.map(u => {
-                      const roles        = userRoles[u.id] ?? []
-                      const platformRole = getPlatformRole(roles)
+                  onClick={() => {
+                    const date = new Date().toISOString().slice(0, 10)
+
+                    const userRows = filtered.map(u => {
+                      const roles = userRoles[u.id] ?? []
+                      const role  = getPlatformRole(roles)
                       return [
-                        u.firstName ?? '',
-                        u.lastName  ?? '',
-                        u.username  ?? '',
-                        u.email     ?? '',
-                        platformRole ? getRoleLabel(platformRole) : '',
+                        `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim(),
+                        u.username ?? '', u.email ?? '',
+                        role ? getRoleLabel(role) : '',
                         u.enabled ? 'Actif' : 'Inactif',
                       ]
                     })
-                  )}
+
+                    const roleMap: Record<string, { actifs: number; inactifs: number }> = {}
+                    filtered.forEach(u => {
+                      const role = getRoleLabel(getPlatformRole(userRoles[u.id] ?? []) ?? '') || 'Sans rôle'
+                      if (!roleMap[role]) roleMap[role] = { actifs: 0, inactifs: 0 }
+                      u.enabled ? roleMap[role].actifs++ : roleMap[role].inactifs++
+                    })
+                    const roleRows = Object.entries(roleMap)
+                      .sort(([, a], [, b]) => (b.actifs + b.inactifs) - (a.actifs + a.inactifs))
+                      .map(([r, e]) => [r, e.actifs, e.inactifs, e.actifs + e.inactifs])
+
+                    downloadXlsx(`senjiw-utilisateurs-${date}`, [
+                      { name: 'Utilisateurs', headers: ['Nom complet', 'Username', 'Email', 'Rôle plateforme', 'Statut'], rows: userRows },
+                      { name: 'Par rôle',     headers: ['Rôle', 'Actifs', 'Inactifs', 'Total'], rows: roleRows },
+                    ])
+                  }}
                 >
-                  <Download size={13} /> CSV
+                  <Download size={13} /> Export .xls
                 </button>
               )}
               <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={13} /> Nouvel utilisateur</button>

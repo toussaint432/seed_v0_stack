@@ -7,7 +7,7 @@ import {
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeVariete, extractList } from '../../lib/normalizers'
-import { downloadCsv, formatDateForExport } from '../../lib/exportUtils'
+import { downloadXlsx, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
@@ -54,35 +54,62 @@ const GEN_LABELS: Record<number, string> = {
   1: 'G0 — Pré-base', 2: 'G1 — Base', 3: 'G2', 4: 'G3', 5: 'G4', 6: 'R1', 7: 'R2 — Certifiée',
 }
 
-const CSV_HEADERS_ORDERS = ['Code commande', 'Client', 'Fournisseur', 'Statut', 'Variété', 'Génération', 'Qté demandée', 'Qté accordée', 'Unité', 'Date']
+function buildOrderXlsSheets(orders: any[], orgs: any[], varieties: any[]) {
+  const orgMap = Object.fromEntries(orgs.map((o: any) => [o.id, o.nomOrganisation ?? `#${o.id}`]))
+  const varMap = Object.fromEntries(varieties.map((v: any) => [v.id, v.nomVariete ?? '']))
+  const toKg = (qty: number, unite?: string) => unite === 't' ? qty * 1000 : qty
 
-function buildOrderCsvRows(
-  orders: any[],
-  orgs: any[],
-  varieties: any[],
-): (string | number | null | undefined)[][] {
-  const orgMap  = Object.fromEntries(orgs.map((o: any) => [o.id, o.nomOrganisation ?? `#${o.id}`]))
-  const varMap  = Object.fromEntries(varieties.map((v: any) => [v.id, v.nomVariete ?? '']))
-  const rows: (string | number | null | undefined)[][] = []
+  const commandeRows = orders.map(o => {
+    const lignes: any[] = Array.isArray(o.lignes) ? o.lignes : []
+    const kgD = lignes.reduce((s, l) => s + toKg(Number(l.quantiteDemandee) || 0, l.unite), 0)
+    const hasA = lignes.some(l => l.quantiteProposee != null)
+    const kgA = hasA ? lignes.reduce((s, l) => l.quantiteProposee != null ? s + toKg(Number(l.quantiteProposee), l.unite) : s, 0) : null
+    return [
+      o.codeCommande ?? '', o.client ?? '', orgMap[o.idOrganisationFournisseur] ?? '',
+      STATUS_CFG[o.statut]?.label ?? o.statut ?? '', formatDateForExport(o.createdAt),
+      lignes.length, Math.round(kgD), parseFloat((kgD / 1000).toFixed(3)),
+      kgA !== null ? Math.round(kgA) : '', kgA !== null ? parseFloat((kgA / 1000).toFixed(3)) : '',
+    ]
+  })
+
+  const ligneRows: (string | number)[][] = []
   for (const o of orders) {
-    const fournisseur = orgMap[o.idOrganisationFournisseur] ?? o.idOrganisationFournisseur ?? ''
+    const fournisseur = orgMap[o.idOrganisationFournisseur] ?? ''
     const lignes: any[] = Array.isArray(o.lignes) ? o.lignes : []
     if (lignes.length === 0) {
-      rows.push([o.codeCommande, o.client ?? '', fournisseur, o.statut, '', '', '', '', 'kg', formatDateForExport(o.createdAt)])
+      ligneRows.push([o.codeCommande ?? '', STATUS_CFG[o.statut]?.label ?? o.statut ?? '', '', '', '', '', '', '', fournisseur])
     } else {
       for (const l of lignes) {
-        rows.push([
-          o.codeCommande, o.client ?? '', fournisseur, o.statut,
+        const kgD = toKg(Number(l.quantiteDemandee) || 0, l.unite)
+        const kgA = l.quantiteProposee != null ? toKg(Number(l.quantiteProposee), l.unite) : null
+        ligneRows.push([
+          o.codeCommande ?? '', STATUS_CFG[o.statut]?.label ?? o.statut ?? '',
           varMap[l.idVariete] ?? '', GEN_LABELS[l.idGeneration] ?? `G${l.idGeneration}`,
-          Number(l.quantiteDemandee) || 0,
-          l.quantiteProposee != null ? Number(l.quantiteProposee) : '',
-          l.unite ?? 'kg',
-          formatDateForExport(o.createdAt),
+          Math.round(kgD), parseFloat((kgD / 1000).toFixed(3)),
+          kgA !== null ? Math.round(kgA) : '', kgA !== null ? parseFloat((kgA / 1000).toFixed(3)) : '',
+          fournisseur,
         ])
       }
     }
   }
-  return rows
+
+  const statutMap: Record<string, { nb: number; kg: number }> = {}
+  for (const o of orders) {
+    const s = STATUS_CFG[o.statut]?.label ?? o.statut ?? 'Inconnu'
+    if (!statutMap[s]) statutMap[s] = { nb: 0, kg: 0 }
+    statutMap[s].nb++
+    const lignes: any[] = Array.isArray(o.lignes) ? o.lignes : []
+    statutMap[s].kg += lignes.reduce((sum, l) => sum + toKg(Number(l.quantiteDemandee) || 0, l.unite), 0)
+  }
+  const statutRows = Object.entries(statutMap)
+    .sort(([, a], [, b]) => b.nb - a.nb)
+    .map(([s, e]) => [s, e.nb, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3))])
+
+  return [
+    { name: 'Commandes',    headers: ['Code commande', 'Client', 'Fournisseur', 'Statut', 'Date', 'Nb lignes', 'Total demandé (kg)', 'Total demandé (t)', 'Total accordé (kg)', 'Total accordé (t)'], rows: commandeRows },
+    { name: 'Lignes détail', headers: ['Code commande', 'Statut', 'Variété', 'Génération', 'Qté demandée (kg)', 'Qté demandée (t)', 'Qté accordée (kg)', 'Qté accordée (t)', 'Fournisseur'], rows: ligneRows },
+    { name: 'Par statut',   headers: ['Statut', 'Nb commandes', 'Volume demandé (kg)', 'Volume demandé (t)'], rows: statutRows },
+  ]
 }
 
 /** Formate un Instant ISO en "dd/MM/yyyy à HH:mm:ss" pour la piste d'audit. */
@@ -786,12 +813,8 @@ function VueQuotataire({ setToast }: { setToast: any }) {
               <button
                 className="btn btn-secondary"
                 style={{ gap: 5, fontSize: 12 }}
-                onClick={() => downloadCsv(
-                  `commandes-${new Date().toISOString().slice(0, 10)}`,
-                  CSV_HEADERS_ORDERS,
-                  buildOrderCsvRows(displayed, orgs, varieties),
-                )}
-              ><Download size={13} /> CSV</button>
+                onClick={() => downloadXlsx(`senjiw-commandes-${new Date().toISOString().slice(0, 10)}`, buildOrderXlsSheets(displayed, orgs, varieties))}
+              ><Download size={13} /> Export .xls</button>
             )}
             <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={13} /> Nouvelle commande</button>
             <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
@@ -1034,12 +1057,8 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
               <button
                 className="btn btn-secondary"
                 style={{ gap: 5, fontSize: 12, height: 32 }}
-                onClick={() => downloadCsv(
-                  `commandes-${onglet}-${new Date().toISOString().slice(0, 10)}`,
-                  CSV_HEADERS_ORDERS,
-                  buildOrderCsvRows(displayed, orgs, varieties),
-                )}
-              ><Download size={13} /> CSV</button>
+                onClick={() => downloadXlsx(`senjiw-commandes-${onglet}-${new Date().toISOString().slice(0, 10)}`, buildOrderXlsSheets(displayed, orgs, varieties))}
+              ><Download size={13} /> Export .xls</button>
             )}
             {onglet === 'demandes' && (
               <button className="btn btn-primary" style={{ fontSize: 12, height: 32, display: 'flex', alignItems: 'center', gap: 6 }} onClick={() => setShowForm(true)}>
@@ -1870,12 +1889,8 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
               <button
                 className="btn btn-secondary"
                 style={{ gap: 5, fontSize: 12 }}
-                onClick={() => downloadCsv(
-                  `commandes-reçues-${new Date().toISOString().slice(0, 10)}`,
-                  CSV_HEADERS_ORDERS,
-                  buildOrderCsvRows(displayed, orgs, varieties),
-                )}
-              ><Download size={13} /> CSV</button>
+                onClick={() => downloadXlsx(`senjiw-commandes-recues-${new Date().toISOString().slice(0, 10)}`, buildOrderXlsSheets(displayed, orgs, varieties))}
+              ><Download size={13} /> Export .xls</button>
             )}
             <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
           </div>
@@ -2005,12 +2020,8 @@ function VueAdmin({ setToast }: { setToast: any }) {
               <button
                 className="btn btn-secondary"
                 style={{ gap: 5, fontSize: 12 }}
-                onClick={() => downloadCsv(
-                  `toutes-commandes-${new Date().toISOString().slice(0, 10)}`,
-                  CSV_HEADERS_ORDERS,
-                  buildOrderCsvRows(displayed, orgs, varieties),
-                )}
-              ><Download size={13} /> CSV</button>
+                onClick={() => downloadXlsx(`senjiw-commandes-admin-${new Date().toISOString().slice(0, 10)}`, buildOrderXlsSheets(displayed, orgs, varieties))}
+              ><Download size={13} /> Export .xls</button>
             )}
             <button className="btn btn-secondary" onClick={() => setShowAlloc(true)}><Settings2 size={13} /> Allouer</button>
             <button className="btn btn-secondary btn-icon" onClick={fetchOrders}><RefreshCw size={13} /></button>

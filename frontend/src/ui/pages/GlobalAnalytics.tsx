@@ -8,6 +8,7 @@ import type { LucideIcon } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
+import { fmtT } from '../../lib/fmt'
 
 /* ═══════════════════════════════════════════════════════════════
    TYPES
@@ -69,7 +70,7 @@ const REFRESH_MS = 30_000
 /* ═══════════════════════════════════════════════════════════════
    BarChart professionnel — axes + grille + tooltip + labels
 ═══════════════════════════════════════════════════════════════ */
-function BarChart({ data, yLabel = 'Quantité demandée (kg)' }: { data: BarDatum[]; yLabel?: string }) {
+function BarChart({ data, yLabel = 'Quantité demandée (t)' }: { data: BarDatum[]; yLabel?: string }) {
   const [hovered, setHovered] = useState<number | null>(null)
   if (data.length === 0) return null
 
@@ -139,7 +140,7 @@ function BarChart({ data, yLabel = 'Quantité demandée (kg)' }: { data: BarDatu
                 fontSize={isHov ? 10 : 9} fontWeight={700} fill={d.color}
                 fontFamily="Plus Jakarta Sans, system-ui, sans-serif"
                 style={{ transition: 'font-size 0.1s' }}>
-                {d.value > 9999 ? `${(d.value/1000).toFixed(1)}k` : d.value.toLocaleString('fr-FR')} kg
+                {fmtT(d.value)}
               </text>
             )}
 
@@ -730,7 +731,7 @@ export function GlobalAnalytics({ roleKey }: Props) {
               Top {filteredStockBarData.length} variétés — stock disponible (kg)
               {hasStockFilter && <span style={{ fontWeight: 400, color: 'var(--text-muted)', marginLeft: 6 }}>(filtre actif)</span>}
             </div>
-            <BarChart data={filteredStockBarData} yLabel="Stock disponible (kg)" />
+            <BarChart data={filteredStockBarData} yLabel="Stock disponible (t)" />
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10,
               paddingTop: 8, borderTop: '1px solid var(--border)' }}>
               {[...new Set(filteredStockBarData.map(b => b.gen))].map(gen => (

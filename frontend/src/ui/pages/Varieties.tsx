@@ -9,7 +9,7 @@ import {
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeVariete, extractList } from '../../lib/normalizers'
-import { downloadCsv } from '../../lib/exportUtils'
+import { downloadXlsx } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
@@ -1046,15 +1046,44 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               {filtered.length > 0 && (
                 <button
-                  onClick={() => downloadCsv(
-                    `varietes-${selectedSpecies?.codeEspece ?? 'catalogue'}-${new Date().toISOString().slice(0,10)}`,
-                    ['Code', 'Nom variété', 'Espèce', 'Statut', 'Origine', 'Type grain', 'Cycle min (j)', 'Cycle max (j)', 'Rendement min (t/ha)', 'Rendement max (t/ha)', 'Année création', 'Année homologation', 'Sélectionneur', 'Nature génétique', 'Vocation culturale'],
-                    filtered.map(v => [v.codeVariete, v.nomVariete, v.espece?.nomCommun ?? v.espece?.codeEspece ?? '', v.statutVariete ?? '', v.origine ?? '', v.typeGrain ?? '', v.cycleMin ?? '', v.cycleMax ?? '', v.rendementMin ?? '', v.rendementMax ?? '', v.anneeCreation ?? '', v.anneeHomologation ?? '', v.selectionneurPrincipal ?? '', v.natureGenetique ?? '', v.vocationCulturale ?? ''])
-                  )}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '4px 10px', height: 30, borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', whiteSpace: 'nowrap' as const }}
-                  title="Télécharger la liste des variétés en CSV"
+                  className="btn btn-secondary"
+                  style={{ gap: 5, fontSize: 12, height: 30 }}
+                  onClick={() => {
+                    const date = new Date().toISOString().slice(0, 10)
+                    const slug = selectedSpecies?.codeEspece ?? 'catalogue'
+
+                    const catalogueRows = filtered.map(v => [
+                      v.codeVariete ?? '', v.nomVariete ?? '',
+                      v.espece?.nomCommun ?? v.espece?.codeEspece ?? '',
+                      v.statutVariete ?? '', v.origine ?? '', v.typeGrain ?? '',
+                      v.cycleMin ?? '', v.cycleMax ?? '',
+                      v.rendementMin ?? '', v.rendementMax ?? '',
+                      v.anneeCreation ?? '', v.anneeHomologation ?? '',
+                      v.selectionneurPrincipal ?? '', v.natureGenetique ?? '', v.vocationCulturale ?? '',
+                    ])
+
+                    const especeMap: Record<string, { nom: string; nb: number; cycleMin: number[]; cycleMax: number[]; rendMin: number[]; rendMax: number[] }> = {}
+                    filtered.forEach(v => {
+                      const code = v.espece?.codeEspece ?? 'Inconnu'
+                      if (!especeMap[code]) especeMap[code] = { nom: v.espece?.nomCommun ?? code, nb: 0, cycleMin: [], cycleMax: [], rendMin: [], rendMax: [] }
+                      especeMap[code].nb++
+                      if (v.cycleMin)      especeMap[code].cycleMin.push(Number(v.cycleMin))
+                      if (v.cycleMax)      especeMap[code].cycleMax.push(Number(v.cycleMax))
+                      if (v.rendementMin)  especeMap[code].rendMin.push(Number(v.rendementMin))
+                      if (v.rendementMax)  especeMap[code].rendMax.push(Number(v.rendementMax))
+                    })
+                    const avg = (arr: number[]) => arr.length ? parseFloat((arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1)) : ''
+                    const especeRows = Object.values(especeMap)
+                      .sort((a, b) => b.nb - a.nb)
+                      .map(e => [e.nom, e.nb, avg(e.cycleMin), avg(e.cycleMax), avg(e.rendMin), avg(e.rendMax)])
+
+                    downloadXlsx(`senjiw-varietes-${slug}-${date}`, [
+                      { name: 'Catalogue',  headers: ['Code', 'Nom variété', 'Espèce', 'Statut', 'Origine', 'Type grain', 'Cycle min (j)', 'Cycle max (j)', 'Rendement min (t/ha)', 'Rendement max (t/ha)', 'Année création', 'Année homologation', 'Sélectionneur', 'Nature génétique', 'Vocation culturale'], rows: catalogueRows },
+                      { name: 'Par espèce', headers: ['Espèce', 'Nb variétés', 'Cycle min moy. (j)', 'Cycle max moy. (j)', 'Rendement min moy. (t/ha)', 'Rendement max moy. (t/ha)'], rows: especeRows },
+                    ])
+                  }}
                 >
-                  ⬇ CSV
+                  <Download size={13} /> Export .xls
                 </button>
               )}
               {canCreateVariete && (

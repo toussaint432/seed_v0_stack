@@ -3,16 +3,19 @@ import { TrendingUp, AlertTriangle, RefreshCw, BarChart2, Activity, Database } f
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
+import { fmtT } from '../../lib/fmt'
 
 interface Props {
   userSpecialisation?: string | null
 }
 
-interface VarietyDemand {
+interface ProdVariete {
   codeVariete: string
   nomVariete:  string
-  codeEspece:  string
-  count:       number
+  g0Kg:        number
+  g1Kg:        number
+  total:       number
+  nbLots:      number
 }
 
 interface MonthlyPoint {
@@ -46,89 +49,234 @@ const GEN_LABEL: Record<string, string> = {
 
 const REFRESH_INTERVAL = 30_000
 
-/* ── Mini BarChart SVG ── */
-function BarChart({ data, height = 120 }: { data: { label: string; value: number; color: string }[]; height?: number }) {
-  const max = Math.max(...data.map(d => d.value), 1)
-  const barW = 100 / data.length
+/* ── Barres horizontales bicolores G0/G1 ── */
+function ProdHBarChart({ data }: { data: ProdVariete[] }) {
+  const max = Math.max(...data.map(d => d.total), 1)
+  const [hovered, setHovered] = useState<number | null>(null)
   return (
-    <svg width="100%" height={height} style={{ overflow: 'visible' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       {data.map((d, i) => {
-        const barH = (d.value / max) * (height - 24)
-        const x = i * barW + barW * 0.15
-        const w = barW * 0.7
-        const y = height - 20 - barH
+        const pctG0 = (d.g0Kg / max) * 100
+        const pctG1 = (d.g1Kg / max) * 100
+        const isHov = hovered === i
         return (
-          <g key={d.label}>
-            <rect
-              x={`${x}%`} y={y} width={`${w}%`} height={barH}
-              rx={3} fill={d.color} opacity={0.85}
-            />
-            <text
-              x={`${i * barW + barW / 2}%`} y={height - 4}
-              textAnchor="middle" fontSize={9} fill="var(--text-muted)"
-              style={{ fontFamily: 'var(--font-sans)' }}
-            >
-              {d.label.length > 8 ? d.label.slice(0, 8) + '…' : d.label}
-            </text>
-            <text
-              x={`${i * barW + barW / 2}%`} y={y - 3}
-              textAnchor="middle" fontSize={9} fontWeight={700} fill={d.color}
-              style={{ fontFamily: 'var(--font-sans)' }}
-            >
-              {d.value}
-            </text>
-          </g>
+          <div
+            key={d.codeVariete}
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              borderRadius: 4, padding: '3px 6px',
+              background: isHov ? 'var(--surface-hover, #f1f5f9)' : 'transparent',
+              transition: 'background 0.15s',
+            }}
+          >
+            <div style={{ width: 88, flexShrink: 0 }}>
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                title={d.nomVariete}>
+                {d.nomVariete}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                {d.codeVariete}
+              </div>
+            </div>
+            <div style={{ flex: 1, display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden',
+              background: 'var(--border)', gap: 1 }}>
+              {d.g0Kg > 0 && (
+                <div style={{ width: `${pctG0}%`, background: '#1d4ed8', borderRadius: '5px 0 0 5px',
+                  transition: 'width 0.4s ease', minWidth: 2 }} title={`G0 : ${fmtT(d.g0Kg)}`} />
+              )}
+              {d.g1Kg > 0 && (
+                <div style={{ width: `${pctG1}%`, background: '#15803d',
+                  borderRadius: d.g0Kg > 0 ? '0 5px 5px 0' : 5,
+                  transition: 'width 0.4s ease', minWidth: 2 }} title={`G1 : ${fmtT(d.g1Kg)}`} />
+              )}
+            </div>
+            <div style={{ width: 72, textAlign: 'right', flexShrink: 0 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                color: 'var(--text-primary)' }}>
+                {fmtT(d.total)}
+              </span>
+            </div>
+            <div style={{ width: 28, textAlign: 'right', flexShrink: 0,
+              fontSize: 10.5, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}
+              title="Lots actifs">
+              {d.nbLots}L
+            </div>
+          </div>
         )
       })}
-    </svg>
+      {data.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+          Aucune production G0/G1
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 12, marginTop: 4, paddingLeft: 96 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: '#1d4ed8' }} />
+          <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>G0 — Génétique</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div style={{ width: 10, height: 10, borderRadius: 2, background: '#15803d' }} />
+          <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>G1 — Pré-base</span>
+        </div>
+      </div>
+    </div>
   )
 }
 
-/* ── Mini LineChart SVG ── */
-function LineChart({ data, height = 100, color = '#0369a1' }: { data: MonthlyPoint[]; height?: number; color?: string }) {
+/* ── Orders Chart — barres mensuelles + ligne de tendance ── */
+function OrdersChart({ data, color = '#0369a1' }: { data: MonthlyPoint[]; color?: string }) {
+  const [hov, setHov] = useState<number | null>(null)
   if (data.length === 0) return null
-  const max = Math.max(...data.map(d => d.count), 1)
-  const W = 300
-  const padX = 8
-  const padY = 12
-  const innerW = W - padX * 2
-  const innerH = height - padY * 2
 
-  const pts = data.map((d, i) => ({
-    x: padX + (i / Math.max(data.length - 1, 1)) * innerW,
-    y: padY + (1 - d.count / max) * innerH,
-    ...d,
+  const total = data.reduce((s, d) => s + d.count, 0)
+  const max   = Math.max(...data.map(d => d.count), 1)
+
+  const half      = Math.floor(data.length / 2)
+  const firstHalf = data.slice(0, half).reduce((s, d) => s + d.count, 0)
+  const secHalf   = data.slice(half).reduce((s, d)  => s + d.count, 0)
+  const trendPct  = firstHalf === 0 ? null : Math.round(((secHalf - firstHalf) / firstHalf) * 100)
+
+  const lastActiveIdx = data.reduce((best, d, i) => d.count > 0 ? i : best, -1)
+
+  const W = 400; const H = 150
+  const PT = 22; const PB = 28; const PL = 28; const PR = 10
+  const iW = W - PL - PR; const iH = H - PT - PB
+  const TICKS = 3
+  const niceMax = max <= 3 ? max + 1 : Math.ceil(max / Math.pow(10, Math.floor(Math.log10(max)))) * Math.pow(10, Math.floor(Math.log10(max)))
+  const bW = iW / data.length
+
+  /* Régression linéaire pour droite de tendance */
+  const n = data.length
+  const sumX  = data.reduce((s, _, i) => s + i, 0)
+  const sumY  = data.reduce((s, d) => s + d.count, 0)
+  const sumXY = data.reduce((s, d, i) => s + i * d.count, 0)
+  const sumX2 = data.reduce((s, _, i) => s + i * i, 0)
+  const denom = n * sumX2 - sumX * sumX || 1
+  const slope = (n * sumXY - sumX * sumY) / denom
+  const inter = (sumY - slope * sumX) / n
+  const trendLine = data.map((_, i) => ({
+    x: PL + (i / Math.max(n - 1, 1)) * iW,
+    y: Math.max(PT, Math.min(PT + iH, PT + iH - ((slope * i + inter) / niceMax) * iH)),
   }))
 
-  const polyline = pts.map(p => `${p.x},${p.y}`).join(' ')
-  const areaBottom = `${pts[pts.length - 1].x},${padY + innerH} ${pts[0].x},${padY + innerH}`
-  const areaPath = `${polyline} ${areaBottom}`
-
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${height}`} style={{ overflow: 'visible' }}>
-      <defs>
-        <linearGradient id="lcGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity={0.18} />
-          <stop offset="100%" stopColor={color} stopOpacity={0.01} />
-        </linearGradient>
-      </defs>
-      <polygon points={areaPath} fill="url(#lcGrad)" />
-      <polyline points={polyline} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-      {pts.map((p, i) => (
-        <g key={i}>
-          <circle cx={p.x} cy={p.y} r={3} fill={color} />
-          <text x={p.x} y={padY + innerH + 11} textAnchor="middle" fontSize={8}
-            fill="var(--text-muted)" style={{ fontFamily: 'var(--font-sans)' }}>
-            {p.month}
-          </text>
-        </g>
-      ))}
-    </svg>
+    <div>
+      {/* Résumé */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
+          {total} commande{total !== 1 ? 's' : ''}
+        </span>
+        <span style={{ color: 'var(--border)' }}>·</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>6 derniers mois</span>
+        {trendPct !== null && (
+          <>
+            <span style={{ color: 'var(--border)' }}>·</span>
+            <span style={{
+              fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+              background: trendPct > 0 ? '#f0fdf4' : trendPct < 0 ? '#fef2f2' : '#f1f5f9',
+              color: trendPct > 0 ? '#15803d' : trendPct < 0 ? '#dc2626' : '#6b7280',
+              border: `1px solid ${trendPct > 0 ? '#bbf7d0' : trendPct < 0 ? '#fecaca' : '#e2e8f0'}`,
+            }}>
+              {trendPct > 0 ? '+' : ''}{trendPct}% tendance
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* SVG */}
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', display: 'block' }}>
+        <defs>
+          <linearGradient id="ocBarG" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={color} stopOpacity={0.9} />
+            <stop offset="100%" stopColor={color} stopOpacity={0.45} />
+          </linearGradient>
+        </defs>
+
+        {/* Grille Y */}
+        {Array.from({ length: TICKS + 1 }, (_, t) => {
+          const y = PT + (t / TICKS) * iH
+          const v = Math.round(niceMax * (1 - t / TICKS))
+          return (
+            <g key={t}>
+              <line x1={PL} y1={y} x2={W - PR} y2={y}
+                stroke="var(--border)" strokeWidth={t === TICKS ? 1.5 : 0.6}
+                strokeDasharray={t === TICKS ? '0' : '3,4'} />
+              <text x={PL - 4} y={y + 4} textAnchor="end" fontSize={8}
+                fill="var(--text-muted)" fontFamily="var(--font-sans)">{v}</text>
+            </g>
+          )
+        })}
+
+        {/* Barres */}
+        {data.map((d, i) => {
+          const bh    = Math.max((d.count / niceMax) * iH, d.count > 0 ? 3 : 0)
+          const x     = PL + i * bW + bW * 0.18
+          const bw    = bW * 0.64
+          const y     = PT + iH - bh
+          const isHov = hov === i
+          const isLast = i === lastActiveIdx
+          return (
+            <g key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)} style={{ cursor: 'default' }}>
+              {/* Zone hover */}
+              {isHov && <rect x={x - 2} y={PT} width={bw + 4} height={iH} rx={3} fill={color} opacity={0.07} />}
+
+              {/* Barre */}
+              <rect x={x} y={y} width={bw} height={Math.max(bh, 2)} rx={4}
+                fill={isHov || isLast ? color : 'url(#ocBarG)'}
+                opacity={d.count === 0 ? 0.14 : isHov ? 1 : 0.82}
+                style={{ transition: 'opacity 0.15s' }} />
+
+              {/* Valeur au-dessus */}
+              {d.count > 0 && (
+                <text x={x + bw / 2} y={y - 5} textAnchor="middle"
+                  fontSize={isHov ? 10 : 9} fontWeight={700} fill={color}
+                  fontFamily="var(--font-sans)" style={{ transition: 'font-size 0.1s' }}>
+                  {d.count}
+                </text>
+              )}
+
+              {/* Label mois */}
+              <text x={x + bw / 2} y={H - PB + 12} textAnchor="middle" fontSize={9}
+                fontWeight={isHov || isLast ? 700 : 400}
+                fill={isHov || isLast ? color : 'var(--text-muted)'}
+                fontFamily="var(--font-sans)">
+                {d.month}
+              </text>
+
+              {/* Tooltip */}
+              {isHov && (
+                <g>
+                  <rect x={x + bw / 2 - 40} y={y - 38} width={80} height={28} rx={5}
+                    fill="var(--text-primary)" opacity={0.93} />
+                  <text x={x + bw / 2} y={y - 24} textAnchor="middle" fontSize={9.5}
+                    fontWeight={700} fill="#fff" fontFamily="var(--font-sans)">{d.month}</text>
+                  <text x={x + bw / 2} y={y - 13} textAnchor="middle" fontSize={9}
+                    fontWeight={600} fill={color} fontFamily="var(--font-sans)">
+                    {d.count} commande{d.count !== 1 ? 's' : ''}
+                  </text>
+                </g>
+              )}
+            </g>
+          )
+        })}
+
+        {/* Droite de tendance */}
+        {total > 0 && trendLine.length >= 2 && (
+          <polyline
+            points={trendLine.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}
+            fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="5,3"
+            strokeLinecap="round" opacity={0.35} />
+        )}
+      </svg>
+    </div>
   )
 }
 
 export function SelectorAnalytics({ userSpecialisation }: Props) {
-  const [demands,    setDemands]    = useState<VarietyDemand[]>([])
+  const [prodByVariete, setProdByVariete] = useState<ProdVariete[]>([])
   const [monthly,    setMonthly]    = useState<MonthlyPoint[]>([])
   const [alerts,     setAlerts]     = useState<StockAlert[]>([])
   const [lots,        setLots]        = useState<any[]>([])
@@ -158,30 +306,37 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
       setRawStocks(stocks)
       setRawVarieties(varieties)
 
-      /* ── Variétés les plus demandées ── */
-      const demandMap: Record<string, number> = {}
-      orders.forEach((o: any) => {
-        const key = o.codeVariete || o.variete?.codeVariete || o.idVariete
-        if (key) demandMap[key] = (demandMap[key] || 0) + 1
-      })
-
-      // Filtre par spécialisation si définie
+      /* ── Production G0/G1 par variété ── */
       const specFilter = userSpecialisation?.toUpperCase()
-      const relevantVarieties: any[] = specFilter
-        ? varieties.filter((v: any) => v.espece?.codeEspece?.toUpperCase() === specFilter)
-        : varieties
-
-      const topDemands: VarietyDemand[] = relevantVarieties
-        .map((v: any) => ({
-          codeVariete: v.codeVariete,
-          nomVariete:  v.nomVariete,
-          codeEspece:  v.espece?.codeEspece ?? '',
-          count:       demandMap[v.codeVariete] || 0,
-        }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 6)
-
-      setDemands(topDemands)
+      const varMap: Record<number, any> = Object.fromEntries(varieties.map((v: any) => [v.id, v]))
+      const prodMap: Record<string, ProdVariete> = {}
+      lotsData.forEach((l: any) => {
+        const gen = l.generation?.codeGeneration ?? l.codeGeneration ?? ''
+        if (gen !== 'G0' && gen !== 'G1') return
+        const variety = varMap[l.idVariete ?? l.varieteId ?? -1] ?? l.variete ?? {}
+        const cv = variety.codeVariete ?? l.codeVariete
+        if (!cv) return
+        if (specFilter) {
+          const esp = (variety.espece?.codeEspece ?? '').toUpperCase()
+          if (esp && esp !== specFilter) return
+        }
+        const activeStatuts = ['DISPONIBLE','EN_PRODUCTION','CERTIFIE','EN_COURS_CERT','SOUCHE']
+        const statut = (l.statut ?? '').toUpperCase()
+        if (!activeStatuts.includes(statut)) return
+        if (!prodMap[cv]) prodMap[cv] = {
+          codeVariete: cv,
+          nomVariete: variety.nomVariete ?? cv,
+          g0Kg: 0, g1Kg: 0, total: 0, nbLots: 0,
+        }
+        const qty = parseFloat(l.quantiteNette) || 0
+        if (gen === 'G0') prodMap[cv].g0Kg += qty
+        else              prodMap[cv].g1Kg += qty
+        prodMap[cv].total += qty
+        prodMap[cv].nbLots++
+      })
+      setProdByVariete(
+        Object.values(prodMap).sort((a, b) => b.total - a.total).slice(0, 8)
+      )
 
       /* ── Évolution mensuelle des commandes (6 derniers mois) ── */
       const now   = new Date()
@@ -281,12 +436,6 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
     else { setStkSortCol(col); setStkSortAsc(false) }
   }
 
-  const barData = demands.map((d, i) => ({
-    label: d.codeVariete,
-    value: d.count,
-    color: ['#0369a1','#0f766e','#15803d','#7c3aed','#b45309','#dc2626'][i % 6],
-  }))
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
 
@@ -317,23 +466,24 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
 
-        {/* ── BarChart — demandes ── */}
+        {/* ── Production G0/G1 par variété ── */}
         <div className="card">
           <div className="card-header">
             <span className="card-title">
               <span className="card-title-icon"><BarChart2 size={15} /></span>
-              Variétés les plus demandées
+              Production G0 → G1 par variété
             </span>
+            {!loading && (
+              <span className="badge badge-blue" style={{ fontSize: 11 }}>
+                {prodByVariete.length} variétés
+              </span>
+            )}
           </div>
           <div className="card-body" style={{ padding: '16px' }}>
             {loading ? (
               <div className="skeleton" style={{ height: 140, borderRadius: 6 }} />
-            ) : demands.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-                Aucune donnée disponible
-              </div>
             ) : (
-              <BarChart data={barData} height={130} />
+              <ProdHBarChart data={prodByVariete} />
             )}
           </div>
         </div>
@@ -354,7 +504,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
                 Aucune commande sur la période
               </div>
             ) : (
-              <LineChart data={monthly} height={120} color="#0369a1" />
+              <OrdersChart data={monthly} color="#0369a1" />
             )}
           </div>
         </div>

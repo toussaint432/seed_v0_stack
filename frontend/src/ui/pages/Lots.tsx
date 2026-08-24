@@ -1,10 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX, Shield } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX, Shield, MessageCircle, Users } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
-import { downloadCsv, formatDateForExport } from '../../lib/exportUtils'
+import { fmtT } from '../../lib/fmt'
+import { downloadXlsx, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { generateTransferDoc, generateNumero, type TransferDocData, type LotPdfData, type PartiePdf } from '../../lib/pdf/generateTransferDoc'
 
@@ -382,23 +383,30 @@ function CertificatLotModal({ lot, canManage, onClose, onUpdate }: {
    ══════════════════════════════════════════════════════════════ */
 interface HorizDatum { label: string; gens: Record<string, number> }
 
-function MesLotsHorizChart({ data, gens }: { data: HorizDatum[]; gens: string[] }) {
+function MesLotsHorizChart({ data, gens, title, onVarClick }: {
+  data: HorizDatum[]
+  gens: string[]
+  title?: string
+  onVarClick?: (varName: string) => void
+}) {
   const [tip, setTip] = useState<{ label: string; gens: Record<string,number>; x: number; y: number } | null>(null)
 
   if (data.length === 0) return null
 
   const maxTotal = Math.max(...data.map(d => gens.reduce((s, g) => s + (d.gens[g] ?? 0), 0)), 1)
-  const fmtK = (v: number) => v >= 1_000_000 ? (v/1_000_000).toFixed(1)+'M' : v >= 1_000 ? (v/1_000).toFixed(0)+'k' : String(v)
-  const ROW_H = 36, LABEL_W = 120, BAR_W = 420, PAD = 16, H = data.length * ROW_H + PAD * 2
+  const fmtK = (v: number) => fmtT(v)
+  const ROW_H = 36, LABEL_W = 140, BAR_W = 420, PAD = 16, H = data.length * ROW_H + PAD * 2
   const W = LABEL_W + BAR_W + 80
 
   return (
     <div style={{ padding: '14px 20px 10px', borderBottom: '1px solid var(--border)', position: 'relative' }}
       onMouseLeave={() => setTip(null)}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>
-        Production par variété
-      </div>
-      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', maxHeight: 200, overflow: 'visible' }}>
+      {title && (
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 10 }}>
+          {title}
+        </div>
+      )}
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', display: 'block', overflow: 'visible' }}>
         <defs>
           {gens.map(g => (
             <linearGradient key={g} id={`hz-${g}`} x1="0" y1="0" x2="1" y2="0">
@@ -423,7 +431,8 @@ function MesLotsHorizChart({ data, gens }: { data: HorizDatum[]; gens: string[] 
                 const svgX = pct * W
                 setTip({ label: d.label, gens: d.gens, x: svgX, y: y0 })
               }}
-              style={{ cursor: 'pointer' }}>
+              onClick={() => onVarClick?.(d.label)}
+              style={{ cursor: onVarClick ? 'pointer' : 'default' }}>
               {/* Hover strip */}
               <rect x={0} y={y0} width={W} height={ROW_H - 2} rx={4} fill={isHov ? 'var(--surface-2)' : 'transparent'} />
               {/* Variety label */}
@@ -453,7 +462,7 @@ function MesLotsHorizChart({ data, gens }: { data: HorizDatum[]; gens: string[] 
               <text x={LABEL_W + 8 + (total / maxTotal) * BAR_W + 6} y={y0 + ROW_H / 2 + 4}
                 fontSize={9.5} fill="var(--text-muted)" fontWeight={600}
                 opacity={tip && !isHov ? 0.3 : 1}>
-                {fmtK(total)} kg
+                {fmtK(total)}
               </text>
             </g>
           )
@@ -488,15 +497,279 @@ function MesLotsHorizChart({ data, gens }: { data: HorizDatum[]; gens: string[] 
               <div style={{ width: 8, height: 8, borderRadius: 2, background: GEN_HEX[g] ?? '#6b7280', flexShrink: 0 }} />
               <span style={{ flex: 1, color: 'var(--text-muted)' }}>{g}</span>
               <span style={{ fontWeight: 600, color: 'var(--text-primary)', paddingLeft: 8 }}>
-                {(tip.gens[g] ?? 0).toLocaleString('fr-FR')} kg
+                {fmtT(tip.gens[g] ?? 0)}
               </span>
             </div>
           ))}
           <div style={{ borderTop: '1px solid var(--border)', marginTop: 5, paddingTop: 4, fontWeight: 700, fontSize: 11, display: 'flex', justifyContent: 'space-between', color: 'var(--text-primary)' }}>
             <span>Total</span>
-            <span>{gens.reduce((s, g) => s + (tip.gens[g] ?? 0), 0).toLocaleString('fr-FR')} kg</span>
+            <span>{fmtT(gens.reduce((s, g) => s + (tip.gens[g] ?? 0), 0))}</span>
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════
+   CATALOGUE G1 — Lots sélectionneurs visibles par UPSemCL
+   ══════════════════════════════════════════════════════════════ */
+function CatalogueG1UPSemCL({ setToast }: { setToast: (t: { msg: string; type: 'success'|'error' }) => void }) {
+  const [lots, setLots]           = useState<any[]>([])
+  const [varieties, setVarieties] = useState<any[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [filterEspece, setFilterEspece] = useState('')
+  const [search, setSearch]       = useState('')
+  const [contacting, setContacting] = useState<number | null>(null)
+  const [collapsed, setCollapsed] = useState(false)
+  const [sentMap, setSentMap]     = useState<Record<number, boolean>>({})
+
+  useEffect(() => {
+    Promise.all([
+      api.get(endpoints.lotsCatalogueG1),
+      api.get(endpoints.varieties),
+    ]).then(([lotsRes, varRes]) => {
+      setLots(extractList(lotsRes.data))
+      setVarieties(extractList(varRes.data))
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [])
+
+  const varietyMap: Record<number, any> = Object.fromEntries(varieties.map(v => [v.id, v]))
+
+  const especesDisponibles = [...new Set(
+    lots.map(l => (varietyMap[l.idVariete]?.espece?.nomCommun || varietyMap[l.idVariete]?.espece?.codeEspece || '') as string).filter(Boolean)
+  )].sort()
+
+  const lotsFiltered = lots.filter(l => {
+    const esp = varietyMap[l.idVariete]?.espece?.nomCommun || varietyMap[l.idVariete]?.espece?.codeEspece || ''
+    if (filterEspece && esp !== filterEspece) return false
+    if (search) {
+      const s = search.toLowerCase()
+      const nom = varietyMap[l.idVariete]?.nomVariete ?? ''
+      if (!l.codeLot?.toLowerCase().includes(s) && !nom.toLowerCase().includes(s) && !l.usernameCreateur?.toLowerCase().includes(s)) return false
+    }
+    return true
+  })
+
+  const totalKg = lotsFiltered.reduce((s, l) => s + (Number(l.quantiteNette) || 0), 0)
+
+  async function contacter(lot: any) {
+    if (contacting === lot.id) return
+    if (!lot.usernameCreateur) {
+      setToast({ msg: 'Impossible de contacter ce sélectionneur : identifiant introuvable sur ce lot.', type: 'error' })
+      return
+    }
+    setContacting(lot.id)
+    try {
+      const convRes = await api.post(endpoints.chatConversations, { destinataireUsername: lot.usernameCreateur })
+      const convId  = convRes.data.id
+      const v      = varietyMap[lot.idVariete]
+      const varNom = v?.nomVariete ?? '—'
+      const qte    = Number(lot.quantiteNette).toLocaleString('fr-FR')
+      const msg    = `Bonjour, votre lot G1 ${lot.codeLot} (variété : ${varNom}, ${qte} ${lot.unite || 'kg'}) est disponible. Merci de procéder au transfert vers l'UPSemCL dès que possible.`
+      await api.post(endpoints.chatMessages(convId), { type: 'TEXT', contenu: msg })
+      setSentMap(prev => ({ ...prev, [lot.id]: true }))
+      const affichage = lot.responsableNom?.trim() || lot.usernameCreateur
+      setToast({ msg: `Message envoyé à ${affichage}`, type: 'success' })
+    } catch (err: any) {
+      const status = err?.response?.status
+      const detail = err?.response?.data?.message
+      const msg = status === 403
+        ? `Canal non autorisé avec ${lot.usernameCreateur}`
+        : status === 404
+        ? `${lot.usernameCreateur} n'est pas encore enregistré comme membre de la plateforme`
+        : detail || 'Erreur lors de la prise de contact'
+      setToast({ msg, type: 'error' })
+    } finally { setContacting(null) }
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 16, overflow: 'hidden' }}>
+      <div className="card-header" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => setCollapsed(c => !c)}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span className="card-title">
+            <span className="card-title-icon"><Users size={15} /></span>
+            Lots G1 disponibles — Sélectionneurs
+          </span>
+          {!loading && (
+            <span style={{
+              background: lotsFiltered.length > 0 ? 'var(--green-50,#f0fdf4)' : 'var(--surface-2)',
+              color: lotsFiltered.length > 0 ? 'var(--green-700,#15803d)' : 'var(--text-muted)',
+              border: `1px solid ${lotsFiltered.length > 0 ? '#86efac' : 'var(--border)'}`,
+              borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700,
+            }}>
+              {lotsFiltered.length} lot{lotsFiltered.length !== 1 ? 's' : ''}
+            </span>
+          )}
+          {collapsed && totalKg > 0 && (
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>· {fmtT(totalKg)}</span>
+          )}
+        </div>
+        <ChevronRight size={14} style={{ color: 'var(--text-muted)', transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .2s', flexShrink: 0 }} />
+      </div>
+
+      {!collapsed && (
+        <>
+          {/* Bandeau contexte métier */}
+          <div style={{ padding: '9px 20px', background: '#fffbeb', borderBottom: '1px solid #fef3c7', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <Bell size={13} style={{ color: '#d97706', flexShrink: 0, marginTop: 1 }} />
+            <span style={{ fontSize: 12, color: '#92400e', lineHeight: 1.45 }}>
+              Les sélectionneurs sont tenus de transférer leurs G1 vers l'UPSemCL sans attendre.
+              Utilisez <strong>Contacter</strong> pour les relancer en cas de besoin.
+            </span>
+          </div>
+
+          {/* Filtres espèce */}
+          {especesDisponibles.length > 1 && (
+            <div style={{ display: 'flex', gap: 6, padding: '8px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0 }}>Espèce</span>
+              {(['', ...especesDisponibles] as string[]).map(esp => {
+                const active = filterEspece === esp
+                return (
+                  <button key={esp || '__all'} onClick={() => setFilterEspece(esp)}
+                    style={{
+                      padding: '3px 10px', borderRadius: 20, fontSize: 11.5, cursor: 'pointer',
+                      border: `1.5px solid ${active ? 'var(--green-600,#16a34a)' : 'var(--border)'}`,
+                      background: active ? 'var(--green-50,#f0fdf4)' : 'var(--surface)',
+                      color: active ? 'var(--green-700,#15803d)' : 'var(--text-muted)',
+                      fontWeight: active ? 700 : 400, transition: 'all 0.12s',
+                    }}>
+                    {esp || 'Toutes'}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          {/* Barre de recherche */}
+          <div style={{ padding: '9px 20px', borderBottom: '1px solid var(--border)', display: 'flex', gap: 8, alignItems: 'center', background: 'var(--surface)' }}>
+            <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              value={search} onChange={e => setSearch(e.target.value)}
+              placeholder="Rechercher par code lot, variété ou sélectionneur…"
+              style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 13, color: 'var(--text-primary)' }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--text-muted)', display: 'flex' }}>
+                <X size={13} />
+              </button>
+            )}
+          </div>
+
+          {/* Contenu */}
+          {loading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '36px 0' }}>
+              <RefreshCw size={22} style={{ color: 'var(--green-600)', animation: 'spin 0.9s linear infinite' }} />
+            </div>
+          ) : lotsFiltered.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '44px 24px', color: 'var(--text-muted)' }}>
+              <Package size={36} style={{ marginBottom: 14, opacity: 0.25 }} />
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>
+                {lots.length === 0 ? 'Aucun lot G1 disponible chez les sélectionneurs' : 'Aucun résultat pour ces filtres'}
+              </div>
+              <div style={{ fontSize: 12 }}>
+                {lots.length === 0 ? 'Les sélectionneurs n\'ont pas encore de lots G1 DISPONIBLES.' : 'Modifiez la recherche ou le filtre espèce.'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-2)', borderBottom: '2px solid var(--border)' }}>
+                    {['Sélectionneur', 'Espèce', 'Variété', 'Code lot', 'Quantité', 'Campagne', 'Date prod', ''].map(h => (
+                      <th key={h} style={{ padding: '8px 14px', textAlign: h === 'Quantité' ? 'right' : 'left', fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {lotsFiltered.map((lot, i) => {
+                    const v    = varietyMap[lot.idVariete]
+                    const esp  = v?.espece?.nomCommun || v?.espece?.codeEspece || '—'
+                    const busy     = contacting === lot.id
+                    const sent     = sentMap[lot.id]
+                    const hasUser  = !!lot.usernameCreateur
+                    const nomAff   = lot.usernameCreateur || lot.responsableNom?.trim() || '—'
+                    const subAff   = lot.usernameCreateur && lot.responsableNom?.trim() && lot.responsableNom.trim() !== lot.usernameCreateur
+                                       ? lot.responsableNom.trim() : null
+                    const initiale = (nomAff[0] ?? '?').toUpperCase()
+                    return (
+                      <tr key={lot.id}
+                        style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--surface-2)', transition: 'background .12s' }}
+                        onMouseEnter={e => (e.currentTarget.style.background = 'var(--green-50,#f0fdf4)')}
+                        onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? 'transparent' : 'var(--surface-2)')}
+                      >
+                        {/* Sélectionneur */}
+                        <td style={{ padding: '10px 14px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ width: 30, height: 30, borderRadius: '50%', background: hasUser ? 'var(--green-50,#f0fdf4)' : 'var(--surface-3)', border: `2px solid ${hasUser ? 'var(--green-200,#bbf7d0)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: hasUser ? 'var(--green-700,#15803d)' : 'var(--text-muted)', flexShrink: 0 }}>
+                              {initiale}
+                            </div>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140 }}>{nomAff}</div>
+                              {subAff && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{subAff}</div>}
+                            </div>
+                          </div>
+                        </td>
+                        {/* Espèce */}
+                        <td style={{ padding: '10px 14px' }}>
+                          <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{esp}</span>
+                        </td>
+                        {/* Variété */}
+                        <td style={{ padding: '10px 14px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                          {v?.nomVariete ?? '—'}
+                          {v?.codeVariete && <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 5 }}>({v.codeVariete})</span>}
+                        </td>
+                        {/* Code lot */}
+                        <td style={{ padding: '10px 14px' }}>
+                          <span style={{ fontFamily: 'monospace', fontSize: 11.5, background: 'var(--surface-2)', padding: '2px 7px', borderRadius: 4, color: 'var(--text-primary)' }}>{lot.codeLot}</span>
+                        </td>
+                        {/* Quantité */}
+                        <td style={{ padding: '10px 14px', textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {Number(lot.quantiteNette).toLocaleString('fr-FR')}
+                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 3 }}>{lot.unite || 'kg'}</span>
+                        </td>
+                        {/* Campagne */}
+                        <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>{lot.campagne ?? '—'}</td>
+                        {/* Date prod */}
+                        <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', fontSize: 12 }}>{lot.dateProduction ?? '—'}</td>
+                        {/* Action */}
+                        <td style={{ padding: '10px 14px', textAlign: 'right' }}>
+                          {sent ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--green-700,#15803d)', fontWeight: 600 }}>
+                              <Check size={13} /> Envoyé
+                            </span>
+                          ) : !hasUser ? (
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }} title="Identifiant sélectionneur non disponible sur ce lot">
+                              Non identifié
+                            </span>
+                          ) : (
+                            <button
+                              className="btn btn-primary"
+                              style={{ fontSize: 11.5, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 5 }}
+                              onClick={() => contacter(lot)}
+                              disabled={busy}
+                              title={`Envoyer un message à ${nomAff}`}
+                            >
+                              {busy
+                                ? <RefreshCw size={11} style={{ animation: 'spin 0.9s linear infinite' }} />
+                                : <MessageCircle size={11} />
+                              }
+                              {busy ? 'Envoi…' : 'Contacter'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              <div style={{ padding: '10px 20px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, color: 'var(--text-muted)' }}>
+                <span>{lotsFiltered.length} lot{lotsFiltered.length !== 1 ? 's' : ''} affiché{lotsFiltered.length !== 1 ? 's' : ''}</span>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Total : {fmtT(totalKg)}</span>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   )
@@ -910,21 +1183,33 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                 <button
                   className="btn btn-secondary"
                   style={{ gap: 5, fontSize: 12 }}
-                  onClick={() => downloadCsv(
-                    `catalogue-g3-${new Date().toISOString().slice(0, 10)}`,
-                    ['Code lot', 'Variété', 'Code variété', 'Génération', 'Date production', 'Quantité (kg)', 'Unité', 'Germination (%)', 'Pureté (%)', 'Statut'],
-                    catFiltered.map(l => {
+                  onClick={() => {
+                    const date = new Date().toISOString().slice(0, 10)
+                    const lotsRows = catFiltered.map(l => {
                       const v = varietyMap[l.idVariete]
-                      return [
-                        l.codeLot ?? '', v?.nomVariete ?? '', v?.codeVariete ?? '',
-                        'G3', formatDateForExport(l.dateProduction),
-                        Number(l.quantiteNette) || 0, l.unite ?? 'kg',
-                        l.tauxGermination ?? '', l.puretePhysique ?? '', l.statutLot ?? '',
-                      ]
+                      const kg = Number(l.quantiteNette) || 0
+                      return [l.codeLot ?? '', v?.nomVariete ?? '', v?.codeVariete ?? '', 'G3', formatDateForExport(l.dateProduction), kg, parseFloat((kg / 1000).toFixed(3)), l.tauxGermination ?? '', l.puretePhysique ?? '', l.statutLot ?? '']
                     })
-                  )}
+                    const totalKg = catFiltered.reduce((s, l) => s + (Number(l.quantiteNette) || 0), 0)
+                    lotsRows.push(['TOTAL', '', '', '', '', Math.round(totalKg), parseFloat((totalKg / 1000).toFixed(3)), '', '', ''])
+
+                    const varMap2: Record<string, { nom: string; code: string; nb: number; kg: number; germ: number[]; purete: number[] }> = {}
+                    catFiltered.forEach(l => {
+                      const v = varietyMap[l.idVariete]; const code = v?.codeVariete ?? String(l.idVariete)
+                      if (!varMap2[code]) varMap2[code] = { nom: v?.nomVariete ?? '', code, nb: 0, kg: 0, germ: [], purete: [] }
+                      varMap2[code].nb++; varMap2[code].kg += Number(l.quantiteNette) || 0
+                      if (l.tauxGermination != null) varMap2[code].germ.push(Number(l.tauxGermination))
+                      if (l.puretePhysique  != null) varMap2[code].purete.push(Number(l.puretePhysique))
+                    })
+                    const varRows = Object.values(varMap2).sort((a, b) => b.kg - a.kg).map(e => [e.nom, e.code, e.nb, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3)), e.germ.length ? parseFloat((e.germ.reduce((a, b) => a + b, 0) / e.germ.length).toFixed(1)) : '', e.purete.length ? parseFloat((e.purete.reduce((a, b) => a + b, 0) / e.purete.length).toFixed(1)) : ''])
+
+                    downloadXlsx(`senjiw-catalogue-g3-${date}`, [
+                      { name: 'Catalogue G3', headers: ['Code lot', 'Variété', 'Code variété', 'Génération', 'Date production', 'Quantité (kg)', 'Quantité (t)', 'Germination (%)', 'Pureté (%)', 'Statut'], rows: lotsRows },
+                      { name: 'Par variété',  headers: ['Variété', 'Code variété', 'Nb lots', 'Total (kg)', 'Total (t)', 'Germination moy. (%)', 'Pureté moy. (%)'], rows: varRows },
+                    ])
+                  }}
                 >
-                  <Download size={13} /> CSV
+                  <Download size={13} /> Export .xls
                 </button>
               )}
               <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
@@ -1040,22 +1325,39 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                   <button
                     className="btn btn-secondary"
                     style={{ height: 32, fontSize: 12, gap: 5 }}
-                    onClick={() => downloadCsv(
-                      `mes-lots-${new Date().toISOString().slice(0, 10)}`,
-                      ['Code lot', 'Variété', 'Génération', 'Campagne', 'Date production', 'Quantité (kg)', 'Unité', 'Germination (%)', 'Pureté (%)', 'Statut', 'Site'],
-                      mesLotsFiltered.map((l: any) => {
-                        const v = varietyMap[l.idVariete]
-                        return [
-                          l.codeLot ?? '', v?.nomVariete ?? '', l.generation?.codeGeneration ?? '',
-                          l.campagne ?? '', formatDateForExport(l.dateProduction),
-                          Number(l.quantiteNette) || 0, l.unite ?? 'kg',
-                          l.tauxGermination ?? '', l.puretePhysique ?? '',
-                          l.statutLot ?? '', l.site?.codeSite ?? '',
-                        ]
+                    onClick={() => {
+                      const date = new Date().toISOString().slice(0, 10)
+                      const lotsRows = mesLotsFiltered.map((l: any) => {
+                        const v = varietyMap[l.idVariete]; const kg = Number(l.quantiteNette) || 0
+                        return [l.codeLot ?? '', v?.nomVariete ?? '', l.generation?.codeGeneration ?? '', l.campagne ?? '', formatDateForExport(l.dateProduction), kg, parseFloat((kg / 1000).toFixed(3)), l.tauxGermination ?? '', l.puretePhysique ?? '', l.statutLot ?? '', l.site?.codeSite ?? '']
                       })
-                    )}
+                      const totalKg = mesLotsFiltered.reduce((s: number, l: any) => s + (Number(l.quantiteNette) || 0), 0)
+                      lotsRows.push(['TOTAL', '', '', '', '', Math.round(totalKg), parseFloat((totalKg / 1000).toFixed(3)), '', '', '', ''])
+
+                      const genMap: Record<string, { nb: number; kg: number }> = {}
+                      mesLotsFiltered.forEach((l: any) => {
+                        const g = l.generation?.codeGeneration ?? '?'
+                        if (!genMap[g]) genMap[g] = { nb: 0, kg: 0 }
+                        genMap[g].nb++; genMap[g].kg += Number(l.quantiteNette) || 0
+                      })
+                      const genRows = Object.entries(genMap).sort(([a], [b]) => a.localeCompare(b)).map(([g, e]) => [g, e.nb, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3))])
+
+                      const siteMap: Record<string, { nb: number; kg: number }> = {}
+                      mesLotsFiltered.forEach((l: any) => {
+                        const s = l.site?.codeSite ?? 'Non défini'
+                        if (!siteMap[s]) siteMap[s] = { nb: 0, kg: 0 }
+                        siteMap[s].nb++; siteMap[s].kg += Number(l.quantiteNette) || 0
+                      })
+                      const siteRows = Object.entries(siteMap).sort(([, a], [, b]) => b.kg - a.kg).map(([s, e]) => [s, e.nb, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3))])
+
+                      downloadXlsx(`senjiw-mes-lots-${date}`, [
+                        { name: 'Mes lots',       headers: ['Code lot', 'Variété', 'Génération', 'Campagne', 'Date production', 'Quantité (kg)', 'Quantité (t)', 'Germination (%)', 'Pureté (%)', 'Statut', 'Site'], rows: lotsRows },
+                        { name: 'Par génération', headers: ['Génération', 'Nb lots', 'Total (kg)', 'Total (t)'], rows: genRows },
+                        { name: 'Par site',       headers: ['Site', 'Nb lots', 'Total (kg)', 'Total (t)'], rows: siteRows },
+                      ])
+                    }}
                   >
-                    <Download size={13} /> CSV
+                    <Download size={13} /> Export .xls
                   </button>
                 )}
                 <button className="btn btn-primary" style={{ height: 32, fontSize: 12 }} onClick={() => { setNewLotForm(MULT_NEW_FORM_INIT); setShowNewLot(true) }}><Plus size={13} /> Nouveau lot</button>
@@ -1220,7 +1522,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                   }, 0)
                   const allUpsemcl = lotsGen.every(l => isExternalLot(l))
                   const hex      = GEN_HEX[gen] ?? '#6b7280'
-                  const fmtQty   = (v: number) => v >= 1000 ? (v/1000).toFixed(0)+'k' : String(v)
+                  const fmtQty   = (v: number) => fmtT(v)
                   return (
                     <div key={gen} onClick={() => setFilterGenMes(filterGenMes === gen ? '' : gen)}
                       style={{
@@ -1235,11 +1537,11 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                         <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 2 }}>{lotsGen.length} lot{lotsGen.length>1?'s':''}</span>
                       </div>
                       <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                        {fmtQty(prodKg)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{allUpsemcl ? 'kg reçus' : 'kg prod.'}</span>
+                        {fmtQty(prodKg)} <span style={{ fontSize: 11, fontWeight: 400, color: 'var(--text-muted)' }}>{allUpsemcl ? 'reçus' : 'prod.'}</span>
                       </div>
                       {stockKg > 0 && !allUpsemcl && (
                         <div style={{ marginTop: 4, fontSize: 11, color: 'var(--green-700)', fontWeight: 600 }}>
-                          {fmtQty(stockKg)} kg stock
+                          {fmtQty(stockKg)} stock
                         </div>
                       )}
                       {/* mini progress bar */}
@@ -1698,6 +2000,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [varieties, setVarieties] = useState<any[]>([])
   const [generation, setGeneration] = useState('')
   const [loading, setLoading] = useState(true)
+  const [lotStatsApi, setLotStatsApi] = useState<Record<string, { count: number; totalKg: number }>>({})
+  const [statsLoading, setStatsLoading] = useState(true)
   const [toast, setToast] = useState<{ msg: string; type: 'success'|'error' } | null>(null)
   const [lineageChain, setLineageChain] = useState<any[] | null>(null)
   const [lineageLotCode, setLineageLotCode] = useState('')
@@ -1753,6 +2057,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const canManageCert = ['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey)
   const [selectedLot,    setSelectedLot]    = useState<any | null>(null)
   const [chartCollapsed, setChartCollapsed] = useState(false)
+  const [filterEspece,   setFilterEspece]   = useState('')
 
   async function fetchLots() {
     setLoading(true)
@@ -1771,6 +2076,20 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
   }, [generation])
 
+  useEffect(() => {
+    setStatsLoading(true)
+    api.get(endpoints.lotsStats)
+      .then(r => {
+        const map: Record<string, { count: number; totalKg: number }> = {}
+        ;(Array.isArray(r.data) ? r.data : []).forEach((s: any) => {
+          map[s.codeGeneration] = { count: Number(s.nbLots ?? 0), totalKg: Number(s.totalKg ?? 0) }
+        })
+        setLotStatsApi(map)
+      })
+      .catch(() => setLotStatsApi({}))
+      .finally(() => setStatsLoading(false))
+  }, [])
+
   // Filtre client-side supplémentaire par spécialisation pour seed-selector
   // (double sécurité : le backend filtre déjà via findForSelector)
   const displayLots = (roleKey === 'seed-selector' && userSpecialisation)
@@ -1785,29 +2104,47 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     const g = l.generation?.codeGeneration || 'N/A'; acc[g] = (acc[g] || 0) + 1; return acc
   }, {})
 
-  interface GenStat { count: number; totalKg: number }
-  const genStats: Record<string, GenStat> = displayLots.reduce((acc: Record<string, GenStat>, l) => {
-    const g = l.generation?.codeGeneration || 'N/A'
-    if (!acc[g]) acc[g] = { count: 0, totalKg: 0 }
-    acc[g].count++; acc[g].totalKg += Number(l.quantiteNette || 0)
-    return acc
-  }, {})
-  const totalKg = displayLots.reduce((s, l) => s + Number(l.quantiteNette || 0), 0)
-  const fmtKg = (v: number) => v >= 1_000_000 ? (v/1_000_000).toFixed(1)+'M kg' : v >= 1_000 ? (v/1_000).toFixed(0)+'k kg' : v+' kg'
-  const activeGens = allowedGens.filter(g => genStats[g])
+  const fmtKg = (v: number) => fmtT(v)
+  const genStats = lotStatsApi
+  const totalKg = Object.values(lotStatsApi).reduce((s, g) => s + g.totalKg, 0)
+  const activeGens = allowedGens.filter(g => lotStatsApi[g] && lotStatsApi[g].count > 0)
 
   const varietyMap: Record<number, { codeVariete: string; nomVariete: string }> =
     Object.fromEntries(varieties.map(v => [v.id, v]))
 
-  const chartHorizData: HorizDatum[] = Object.values(
-    displayLots.reduce((acc: Record<string, HorizDatum>, l) => {
-      const vName = (varietyMap[l.idVariete] as any)?.nomVariete ?? 'Inconnue'
-      const gen   = l.generation?.codeGeneration ?? 'N/A'
-      if (!acc[vName]) acc[vName] = { label: vName, gens: {} }
-      acc[vName].gens[gen] = (acc[vName].gens[gen] ?? 0) + Number(l.quantiteNette || 0)
-      return acc
-    }, {})
+  const especeByVarieteId: Record<number, string> = Object.fromEntries(
+    varieties.map(v => [v.id, (v as any).espece?.nomCommun || (v as any).espece?.codeEspece || ''])
   )
+  const especesDisponibles = [...new Set(
+    displayLots.map(l => especeByVarieteId[l.idVariete]).filter(Boolean)
+  )].sort() as string[]
+
+  const chartHorizData: HorizDatum[] = Object.values(
+    displayLots
+      .filter(l => {
+        if (filterEspece && especeByVarieteId[l.idVariete] !== filterEspece) return false
+        if (genFilter    && l.generation?.codeGeneration !== genFilter)        return false
+        return true
+      })
+      .reduce((acc: Record<string, HorizDatum>, l) => {
+        const vName = (varietyMap[l.idVariete] as any)?.nomVariete ?? 'Inconnue'
+        const gen   = l.generation?.codeGeneration ?? 'N/A'
+        if (!acc[vName]) acc[vName] = { label: vName, gens: {} }
+        acc[vName].gens[gen] = (acc[vName].gens[gen] ?? 0) + Number(l.quantiteNette || 0)
+        return acc
+      }, {})
+  ).sort((a, b) => {
+    const tA = activeGens.reduce((s, g) => s + (a.gens[g] ?? 0), 0)
+    const tB = activeGens.reduce((s, g) => s + (b.gens[g] ?? 0), 0)
+    return tB - tA
+  })
+  const chartActiveGens = activeGens.filter(g => chartHorizData.some(d => (d.gens[g] ?? 0) > 0))
+  const chartTotalKg    = chartHorizData.reduce((s, d) => s + Object.values(d.gens).reduce((a, b) => a + b, 0), 0)
+  const chartTitle      = roleKey === 'seed-upsemcl'
+    ? 'Lots G1→G3 par variété'
+    : roleKey === 'seed-admin'
+    ? 'Répartition des volumes par variété'
+    : 'Production par variété'
 
   const displayLotsFiltered = displayLots.filter(l => {
     const matchGen = !genFilter || l.generation?.codeGeneration === genFilter
@@ -2040,7 +2377,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-              {loading ? <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>…</span> : displayLots.length}
+              {statsLoading ? <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>…</span> : Object.values(lotStatsApi).reduce((s, g) => s + g.count, 0)}
             </div>
             <div style={{ fontSize: 11, color: !genFilter ? 'var(--green-700,#15803d)' : 'var(--text-muted)', fontWeight: !genFilter ? 700 : 500 }}>
               Total lots
@@ -2106,11 +2443,51 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             style={{ cursor: 'pointer', userSelect: 'none' }}
             onClick={() => setChartCollapsed(c => !c)}
           >
-            <span className="card-title"><span className="card-title-icon"><Layers size={15} /></span>Production par variété</span>
-            <ChevronRight size={14} style={{ color: 'var(--text-muted)', transform: chartCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .2s' }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+              <span className="card-title"><span className="card-title-icon"><Layers size={15} /></span>{chartTitle}</span>
+              {chartCollapsed && (
+                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400, whiteSpace: 'nowrap' }}>
+                  {chartHorizData.length} variété{chartHorizData.length > 1 ? 's' : ''} · {fmtKg(chartTotalKg)}
+                </span>
+              )}
+            </div>
+            <ChevronRight size={14} style={{ color: 'var(--text-muted)', transform: chartCollapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .2s', flexShrink: 0 }} />
           </div>
-          {!chartCollapsed && <MesLotsHorizChart data={chartHorizData} gens={activeGens} />}
+          {!chartCollapsed && especesDisponibles.length > 1 && (
+            <div style={{ display: 'flex', gap: 6, padding: '8px 20px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0 }}>Espèce</span>
+              {(['', ...especesDisponibles] as string[]).map(esp => {
+                const active = filterEspece === esp
+                return (
+                  <button
+                    key={esp || '__all'}
+                    onClick={e => { e.stopPropagation(); setFilterEspece(esp) }}
+                    style={{
+                      padding: '3px 10px', borderRadius: 20, fontSize: 11.5, cursor: 'pointer',
+                      border: `1.5px solid ${active ? 'var(--green-600,#16a34a)' : 'var(--border)'}`,
+                      background: active ? 'var(--green-50,#f0fdf4)' : 'var(--surface)',
+                      color: active ? 'var(--green-700,#15803d)' : 'var(--text-muted)',
+                      fontWeight: active ? 700 : 400, transition: 'all 0.12s',
+                    }}
+                  >
+                    {esp || 'Toutes'}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {!chartCollapsed && (
+            <MesLotsHorizChart
+              data={chartHorizData}
+              gens={chartActiveGens}
+              onVarClick={name => { setSearch(name); setChartCollapsed(false) }}
+            />
+          )}
         </div>
+      )}
+
+      {roleKey === 'seed-upsemcl' && (
+        <CatalogueG1UPSemCL setToast={setToast} />
       )}
 
       <div className="card">
@@ -2121,23 +2498,39 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               <button
                 className="btn btn-secondary"
                 style={{ gap: 5, fontSize: 12 }}
-                onClick={() => downloadCsv(
-                  `lots-${generation || 'tous'}-${new Date().toISOString().slice(0, 10)}`,
-                  ['Code lot', 'Variété', 'Code variété', 'Génération', 'Campagne', 'Date production', 'Quantité (kg)', 'Unité', 'Germination (%)', 'Pureté (%)', 'Statut', 'Site'],
-                  displayLotsFiltered.map(l => {
-                    const v = varietyMap[l.idVariete]
-                    return [
-                      l.codeLot ?? '', v?.nomVariete ?? '', v?.codeVariete ?? '',
-                      l.generation?.codeGeneration ?? '', l.campagne ?? '',
-                      formatDateForExport(l.dateProduction),
-                      Number(l.quantiteNette) || 0, l.unite ?? 'kg',
-                      l.tauxGermination ?? '', l.puretePhysique ?? '',
-                      l.statutLot ?? '', l.site?.codeSite ?? '',
-                    ]
+                onClick={() => {
+                  const date = new Date().toISOString().slice(0, 10)
+                  const lotsRows = displayLotsFiltered.map(l => {
+                    const v = varietyMap[l.idVariete]; const kg = Number(l.quantiteNette) || 0
+                    return [l.codeLot ?? '', v?.nomVariete ?? '', v?.codeVariete ?? '', l.generation?.codeGeneration ?? '', l.campagne ?? '', formatDateForExport(l.dateProduction), kg, parseFloat((kg / 1000).toFixed(3)), l.tauxGermination ?? '', l.puretePhysique ?? '', l.statutLot ?? '', l.site?.codeSite ?? '']
                   })
-                )}
+                  const totalKg = displayLotsFiltered.reduce((s, l) => s + (Number(l.quantiteNette) || 0), 0)
+                  lotsRows.push(['TOTAL', '', '', '', '', '', Math.round(totalKg), parseFloat((totalKg / 1000).toFixed(3)), '', '', '', ''])
+
+                  const genMap: Record<string, { nb: number; kg: number }> = {}
+                  displayLotsFiltered.forEach(l => {
+                    const g = l.generation?.codeGeneration ?? '?'
+                    if (!genMap[g]) genMap[g] = { nb: 0, kg: 0 }
+                    genMap[g].nb++; genMap[g].kg += Number(l.quantiteNette) || 0
+                  })
+                  const genRows = Object.entries(genMap).sort(([a], [b]) => a.localeCompare(b)).map(([g, e]) => [g, e.nb, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3))])
+
+                  const varAgg: Record<string, { nom: string; code: string; nb: number; kg: number }> = {}
+                  displayLotsFiltered.forEach(l => {
+                    const v = varietyMap[l.idVariete]; const code = v?.codeVariete ?? String(l.idVariete)
+                    if (!varAgg[code]) varAgg[code] = { nom: v?.nomVariete ?? '', code, nb: 0, kg: 0 }
+                    varAgg[code].nb++; varAgg[code].kg += Number(l.quantiteNette) || 0
+                  })
+                  const varRows = Object.values(varAgg).sort((a, b) => b.kg - a.kg).map(e => [e.nom, e.code, e.nb, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3))])
+
+                  downloadXlsx(`senjiw-lots-${generation || 'tous'}-${date}`, [
+                    { name: 'Lots',           headers: ['Code lot', 'Variété', 'Code variété', 'Génération', 'Campagne', 'Date production', 'Quantité (kg)', 'Quantité (t)', 'Germination (%)', 'Pureté (%)', 'Statut', 'Site'], rows: lotsRows },
+                    { name: 'Par génération', headers: ['Génération', 'Nb lots', 'Total (kg)', 'Total (t)'], rows: genRows },
+                    { name: 'Par variété',    headers: ['Variété', 'Code variété', 'Nb lots', 'Total (kg)', 'Total (t)'], rows: varRows },
+                  ])
+                }}
               >
-                <Download size={13} /> CSV
+                <Download size={13} /> Export .xls
               </button>
             )}
             {canCreate && <button className="btn btn-primary" onClick={() => setShowNewLot(true)}><Plus size={13} /> Nouveau lot</button>}
@@ -2182,8 +2575,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             })}
           </div>
           {/* Effacer filtres */}
-          {(search || genFilter || generation) && (
-            <button className="btn btn-ghost" style={{ fontSize: 12, height: 28 }} onClick={() => { setSearch(''); setGenFilter(''); setGeneration('') }}>
+          {(search || genFilter || generation || filterEspece) && (
+            <button className="btn btn-ghost" style={{ fontSize: 12, height: 28 }} onClick={() => { setSearch(''); setGenFilter(''); setGeneration(''); setFilterEspece('') }}>
               <X size={11} /> Effacer
             </button>
           )}

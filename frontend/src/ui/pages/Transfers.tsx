@@ -7,7 +7,7 @@ import {
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, extractList } from '../../lib/normalizers'
-import { downloadCsv, formatDateForExport } from '../../lib/exportUtils'
+import { downloadXlsx, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
@@ -385,23 +385,39 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
               <button
                 className="btn btn-secondary"
                 style={{ gap: 5, fontSize: 12 }}
-                onClick={() => downloadCsv(
-                  `transferts-${new Date().toISOString().slice(0, 10)}`,
-                  ['Code transfert', 'Code lot', 'Génération', 'Émetteur', 'Organisation source', 'Destinataire', 'Organisation destination', 'Quantité', 'Statut', 'Date initiation'],
-                  filtered.map((t: any) => [
-                    t.codeTransfert ?? '',
-                    getLotLabel(t.idLot),
-                    t.generationTransferee ?? '',
-                    t.usernameEmetteur ?? t.organisationSource ?? '',
-                    t.organisationSource ?? '',
-                    t.usernameDestinataire ?? t.organisationDestination ?? '',
-                    t.organisationDestination ?? '',
-                    Number(t.quantiteTransferee ?? t.quantite) || 0,
-                    t.statut ?? t.statutTransfert ?? '',
-                    formatDateForExport(t.createdAt),
+                onClick={() => {
+                  const date = new Date().toISOString().slice(0, 10)
+
+                  const transfertRows = filtered.map((t: any) => {
+                    const lot = lots.find((l: any) => l.id === (t.idLot ?? t.lot?.id))
+                    const variete = lot?.variete?.nomVariete ?? lot?.nomVariete ?? ''
+                    const kg = Number(t.quantiteTransferee ?? t.quantite) || 0
+                    return [
+                      t.codeTransfert ?? '', getLotLabel(t.idLot), variete,
+                      t.generationTransferee ?? '', t.usernameEmetteur ?? t.organisationSource ?? '',
+                      t.organisationSource ?? '', t.usernameDestinataire ?? t.organisationDestination ?? '',
+                      t.organisationDestination ?? '', Math.round(kg), parseFloat((kg / 1000).toFixed(3)),
+                      t.statut ?? t.statutTransfert ?? '', formatDateForExport(t.createdAt),
+                    ]
+                  })
+
+                  const statutMap: Record<string, { nb: number; kg: number }> = {}
+                  filtered.forEach((t: any) => {
+                    const s = t.statut ?? t.statutTransfert ?? 'Inconnu'
+                    if (!statutMap[s]) statutMap[s] = { nb: 0, kg: 0 }
+                    statutMap[s].nb++
+                    statutMap[s].kg += Number(t.quantiteTransferee ?? t.quantite) || 0
+                  })
+                  const statutRows = Object.entries(statutMap)
+                    .sort(([, a], [, b]) => b.nb - a.nb)
+                    .map(([s, e]) => [s, e.nb, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3))])
+
+                  downloadXlsx(`senjiw-transferts-${date}`, [
+                    { name: 'Transferts', headers: ['Code transfert', 'Code lot', 'Variété', 'Génération', 'Émetteur', 'Organisation source', 'Destinataire', 'Organisation destination', 'Quantité (kg)', 'Quantité (t)', 'Statut', 'Date initiation'], rows: transfertRows },
+                    { name: 'Par statut', headers: ['Statut', 'Nb transferts', 'Volume (kg)', 'Volume (t)'], rows: statutRows },
                   ])
-                )}
-              ><Download size={13} /> CSV</button>
+                }}
+              ><Download size={13} /> Export .xls</button>
             )}
             {canCreate && <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={13} /> Nouveau transfert</button>}
             <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>

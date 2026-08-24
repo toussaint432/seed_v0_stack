@@ -65,7 +65,9 @@ export const endpoints = {
   especeHistorique:       (id: number) => `${CATALOG}/species/${id}/historique`,
 
   // ── Lot Service — Multiplicateur (isolation par org) ──
+  lotsStats:       `${LOT}/lots/stats`,
   lotsCatalogueG3: `${LOT}/lots/catalogue-g3`,
+  lotsCatalogueG1: `${LOT}/lots/catalogue-g1`,
   lotsMesLots:     `${LOT}/lots/mes-lots`,
 
   // ── Lot Service — Transferts de lots (Phase 2bis) ──

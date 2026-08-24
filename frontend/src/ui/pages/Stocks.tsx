@@ -8,7 +8,8 @@ import {
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, extractList } from '../../lib/normalizers'
-import { downloadCsv, formatDateForExport } from '../../lib/exportUtils'
+import { fmtT } from '../../lib/fmt'
+import { downloadXlsx, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { keycloak } from '../../lib/keycloak'
 import {
@@ -74,10 +75,7 @@ interface ChartTip {
   total: number
 }
 
-const fmtK = (v: number) =>
-  v >= 1_000_000 ? (v / 1_000_000).toFixed(1) + 'M'
-  : v >= 1_000   ? (v / 1_000).toFixed(0) + 'k'
-  : String(v)
+const fmtK = (v: number) => fmtT(v)
 
 function ChartTooltip({ tip }: { tip: ChartTip }) {
   return (
@@ -102,7 +100,7 @@ function ChartTooltip({ tip }: { tip: ChartTip }) {
           <div style={{ width: 8, height: 8, borderRadius: 2, background: e.color, flexShrink: 0 }} />
           <span style={{ flex: 1, color: 'var(--text-muted)' }}>{e.gen}</span>
           <span style={{ fontWeight: 600, color: 'var(--text-primary)', paddingLeft: 12 }}>
-            {e.value.toLocaleString('fr-FR')} kg
+            {fmtT(e.value)}
           </span>
         </div>
       ))}
@@ -113,7 +111,7 @@ function ChartTooltip({ tip }: { tip: ChartTip }) {
           fontWeight: 700, color: 'var(--text-primary)', fontSize: 11,
         }}>
           <span>Total</span>
-          <span>{tip.total.toLocaleString('fr-FR')} kg</span>
+          <span>{fmtT(tip.total)}</span>
         </div>
       )}
     </div>
@@ -165,7 +163,7 @@ function StockBarChart({ data }: { data: BarDatum[] }) {
         })}
 
         <text x={11} y={PT + chartH / 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle"
-          transform={`rotate(-90, 11, ${PT + chartH / 2})`}>kg</text>
+          transform={`rotate(-90, 11, ${PT + chartH / 2})`}>t</text>
 
         {data.map((d, i) => {
           const cx     = PL + i * step + step / 2
@@ -258,7 +256,7 @@ function MultiGenBarChart({ data, gens }: { data: MultiGenBarDatum[]; gens: stri
         })}
 
         <text x={11} y={PT + chartH / 2} fontSize={9} fill="var(--text-muted)" textAnchor="middle"
-          transform={`rotate(-90, 11, ${PT + chartH / 2})`}>kg</text>
+          transform={`rotate(-90, 11, ${PT + chartH / 2})`}>t</text>
 
         {data.map((d, i) => {
           const groupCX = PL + i * groupW + groupW / 2
@@ -830,8 +828,8 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
         <div className="stat-card">
           <div className="stat-icon gold"><Package size={18} /></div>
           <div className="stat-body">
-            <div className="stat-value">{loading ? '…' : totalQty.toLocaleString('fr-FR')}</div>
-            <div className="stat-label">Quantité totale (kg)</div>
+            <div className="stat-value">{loading ? '…' : fmtT(totalQty)}</div>
+            <div className="stat-label">Quantité totale (t)</div>
           </div>
         </div>
         <div className="stat-card">
@@ -886,7 +884,7 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
                       <span key={g}>
                         {idx > 0 && <span style={{ margin: '0 4px' }}>·</span>}
                         <span style={{ fontWeight: 700, color: GEN_COLOR[g] ?? '#6b7280' }}>
-                          {g} : {Math.round(total).toLocaleString('fr-FR')} kg
+                          {g} : {fmtT(total)}
                         </span>
                       </span>
                     )
@@ -977,17 +975,44 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
               <button
                 className="btn btn-secondary"
                 style={{ gap: 5 }}
-                onClick={() => downloadCsv(
-                  `stock-${new Date().toISOString().slice(0, 10)}`,
-                  ['Génération', 'Espèce', 'Variété', 'Code variété', 'Site', 'Quantité totale', 'Unité', 'Nb lots'],
-                  stocks.map((st: any) => [
-                    st.codeGeneration ?? '', st.nomEspece ?? '', st.nomVariete ?? '',
-                    st.codeVariete ?? '', st.codeSite ?? '',
-                    parseFloat(st.quantiteTotale) || 0, st.unite ?? 'kg', st.nbLots ?? '',
+                onClick={() => {
+                  const date = new Date().toISOString().slice(0, 10)
+
+                  const inventaireRows = stocks.map((st: any) => {
+                    const kg = parseFloat(st.quantiteTotale) || 0
+                    return [st.codeGeneration ?? '', st.nomEspece ?? '', st.nomVariete ?? '', st.codeVariete ?? '', st.codeSite ?? '', Math.round(kg), parseFloat((kg / 1000).toFixed(3)), Number(st.nbLots) || 0]
+                  })
+                  const totalKg = stocks.reduce((s: number, st: any) => s + (parseFloat(st.quantiteTotale) || 0), 0)
+                  const totalLotsCnt = stocks.reduce((s: number, st: any) => s + (Number(st.nbLots) || 0), 0)
+                  inventaireRows.push(['TOTAL', '', '', '', '', Math.round(totalKg), parseFloat((totalKg / 1000).toFixed(3)), totalLotsCnt])
+
+                  const mvtRows = movements.map((m: any) => {
+                    const lot = lotMap[m.idLot]
+                    const variete = lot ? varMap[lot.idVariete] : null
+                    const kg = parseFloat(m.quantite) || 0
+                    return [formatDateForExport(m.createdAt), MVT_STYLE[m.typeMouvement]?.label ?? m.typeMouvement ?? '', lot?.codeLot ?? String(m.idLot), variete?.nomVariete ?? '', m.siteSource?.codeSite ?? '', m.siteDestination?.codeSite ?? '', Math.round(kg), parseFloat((kg / 1000).toFixed(3)), m.referenceOperation ?? '', m.usernameOperateur ?? '']
+                  })
+
+                  const especeMap: Record<string, { nom: string; varietes: Set<string>; kg: number; lots: number }> = {}
+                  agregeStocks.forEach((st: any) => {
+                    const code = st.codeEspece ?? st.nomEspece ?? 'Inconnu'
+                    if (!especeMap[code]) especeMap[code] = { nom: st.nomEspece ?? code, varietes: new Set(), kg: 0, lots: 0 }
+                    especeMap[code].varietes.add(st.codeVariete ?? st.nomVariete ?? '')
+                    especeMap[code].kg += parseFloat(st.quantiteTotale) || 0
+                    especeMap[code].lots += Number(st.nbLots) || 0
+                  })
+                  const especeRows = Object.values(especeMap)
+                    .sort((a, b) => b.kg - a.kg)
+                    .map(e => [e.nom, e.varietes.size, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3)), e.lots])
+
+                  downloadXlsx(`senjiw-stock-${date}`, [
+                    { name: 'Inventaire', headers: ['Génération', 'Espèce', 'Variété', 'Code variété', 'Site', 'Quantité (kg)', 'Quantité (t)', 'Nb lots'], rows: inventaireRows },
+                    { name: 'Mouvements', headers: ['Date', 'Type', 'Code lot', 'Variété', 'Site source', 'Site destination', 'Quantité (kg)', 'Quantité (t)', 'Référence', 'Opérateur'], rows: mvtRows },
+                    { name: 'Par espèce',  headers: ['Espèce', 'Nb variétés en stock', 'Stock total (kg)', 'Stock total (t)', 'Nb lots'], rows: especeRows },
                   ])
-                )}
+                }}
               >
-                <Download size={13} /> CSV
+                <Download size={13} /> Export .xls
               </button>
             )}
             <button
@@ -1276,34 +1301,6 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
                     onClick={() => setHistoryLotId(null)}
                   >Voir tout</button>
                 </div>
-              )}
-              {filteredMvts.length > 0 && (
-                <button
-                  className="btn btn-secondary"
-                  style={{ gap: 5, fontSize: 12 }}
-                  onClick={() => downloadCsv(
-                    `mouvements-stock-${new Date().toISOString().slice(0, 10)}`,
-                    ['Date', 'Type', 'Code lot', 'Variété', 'Site source', 'Site destination', 'Quantité', 'Unité', 'Référence', 'Opérateur'],
-                    filteredMvts.map((m: any) => {
-                      const lot     = lotMap[m.idLot]
-                      const variete = lot ? varMap[lot.idVariete] : null
-                      return [
-                        formatDateForExport(m.createdAt),
-                        m.typeMouvement ?? '',
-                        lot?.codeLot ?? String(m.idLot),
-                        variete?.nomVariete ?? '',
-                        m.siteSource?.codeSite ?? '',
-                        m.siteDestination?.codeSite ?? '',
-                        parseFloat(m.quantite) || 0,
-                        m.unite ?? 'kg',
-                        m.referenceOperation ?? '',
-                        m.usernameOperateur ?? '',
-                      ]
-                    })
-                  )}
-                >
-                  <Download size={13} /> CSV
-                </button>
               )}
               <button className="btn btn-ghost btn-icon" onClick={() => setShowHistory(false)}><X size={13} /></button>
             </div>

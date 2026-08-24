@@ -4,7 +4,7 @@ import {
   Package, ShoppingCart, Leaf,
   RefreshCw, Plus, Database, ArrowRight,
   Search, Filter, X, TrendingUp,
-  Navigation, MapPin, Clock,
+  Navigation, MapPin, Clock, Download,
 } from 'lucide-react'
 import { api }             from '../../lib/api'
 import { endpoints }       from '../../lib/endpoints'
@@ -13,18 +13,19 @@ import { SelectorAnalytics } from './SelectorAnalytics'
 import { PendingDeliveries } from '../components/PendingDeliveries'
 import { MapSemences }     from '../components/MapSemences'
 import { TD as D }         from '../../lib/tokens'
-import { downloadCsv, downloadXlsx, formatDateForExport, type XlsxSheet } from '../../lib/exportUtils'
+import { downloadXlsx, formatDateForExport, type XlsxSheet } from '../../lib/exportUtils'
 import { GEN_CHART_COLORS } from '../../lib/constants'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
 
+interface GenStat { nbLots: number; totalKg: number }
 interface Stats {
   lotsCount:       number
   stockTotal:      number
   ordersCount:     number
   varietiesCount:  number
   ordersPending:   number
-  genCounts:       Record<string, number>
+  genStats:        Record<string, GenStat>
   recentLots:      any[]
 }
 interface BarDatum  { label: string; value: number; color: string; gen: string }
@@ -164,13 +165,15 @@ function KpiCard({ index, label, value, sub, accent, delay, suffix }: {
   )
 }
 
+import { fmtT, fmtTCentre, fmtKgTable } from '../../lib/fmt'
+
 /* ────────────────── Donut Chart ────────────────── */
 function DonutChart({ data }: { data: { label: string; value: number; color: string; gen: string }[] }) {
   const [hov, setHov] = useState<number | null>(null)
   const total = data.reduce((s, d) => s + d.value, 0)
   if (total === 0) return null
 
-  const R = 54; const ri = 36; const cx = 66; const cy = 66
+  const R = 62; const ri = 42; const cx = 76; const cy = 76
   let angle = -Math.PI / 2
 
   const arcs = data.map((d) => {
@@ -188,8 +191,8 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
   const active = hov !== null ? arcs[hov] : null
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-      <svg width={132} height={132} style={{ flexShrink: 0, overflow: 'visible' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      <svg width={152} height={152} style={{ flexShrink: 0, overflow: 'visible' }}>
         {arcs.map((arc, i) => (
           <path key={i} d={arc.path}
             fill={arc.color}
@@ -199,24 +202,29 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
             onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}
           />
         ))}
-        <text x={cx} y={cy - 7} textAnchor="middle" fontSize={20} fontWeight={700} fontFamily={D.display} fill={active ? active.color : D.ink}>
-          {active ? active.value : total}
+        <text x={cx} y={cy - 6} textAnchor="middle" fontSize={14} fontWeight={700} fontFamily={D.display} fill={active ? active.color : D.ink}>
+          {fmtTCentre(active ? active.value : total)}
         </text>
-        <text x={cx} y={cy + 11} textAnchor="middle" fontSize={9} fontFamily={D.mono} fill={D.muted}>
-          {active ? active.gen : 'LOTS'}
+        <text x={cx} y={cy + 10} textAnchor="middle" fontSize={8} fontFamily={D.mono} fill={D.muted}>
+          {active ? active.gen : 'Production'}
+        </text>
+        <text x={cx} y={cy + 20} textAnchor="middle" fontSize={8} fontFamily={D.mono} fill={D.muted}>
+          {active ? '' : 'totale'}
         </text>
       </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5, flex: 1, minWidth: 0 }}>
         {arcs.map((arc, i) => (
           <div key={i} style={{
             display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer',
-            opacity: hov === null ? 1 : hov === i ? 1 : 0.35,
+            opacity: hov === null ? 1 : hov === i ? 1 : 0.3,
             transition: 'opacity 0.15s',
           }} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)}>
             <span style={{ width: 7, height: 7, borderRadius: 2, background: arc.color, flexShrink: 0 }} />
-            <span style={{ fontFamily: D.mono, fontSize: 9.5, fontWeight: 500, color: D.muted, flex: 1, letterSpacing: '0.04em' }}>{arc.gen}</span>
-            <span style={{ fontFamily: D.mono, fontSize: 11, fontWeight: 700, color: arc.color }}>{arc.value}</span>
-            <span style={{ fontFamily: D.mono, fontSize: 9, color: D.muted, width: 28, textAlign: 'right' }}>{arc.pct}%</span>
+            <span style={{ fontFamily: D.mono, fontSize: 9.5, fontWeight: 700, color: arc.color, width: 20, flexShrink: 0 }}>{arc.gen}</span>
+            <span style={{ fontFamily: D.mono, fontSize: 9.5, fontWeight: 500, color: D.ink, flex: 1, letterSpacing: '0.01em' }}>
+              {fmtT(arc.value)}
+            </span>
+            <span style={{ fontFamily: D.mono, fontSize: 9, color: D.muted, width: 30, textAlign: 'right', flexShrink: 0 }}>{arc.pct}%</span>
           </div>
         ))}
       </div>
@@ -225,7 +233,7 @@ function DonutChart({ data }: { data: { label: string; value: number; color: str
 }
 
 /* ────────────────── BarChart SVG ────────────────── */
-function BarChart({ data, yLabel = 'Stock disponible (kg)' }: { data: BarDatum[]; yLabel?: string }) {
+function BarChart({ data, yLabel = 'Stock disponible (t)' }: { data: BarDatum[]; yLabel?: string }) {
   const [hovered, setHovered] = useState<number | null>(null)
   if (data.length === 0) return null
 
@@ -263,7 +271,7 @@ function BarChart({ data, yLabel = 'Stock disponible (kg)' }: { data: BarDatum[]
               strokeDasharray={t === TICKS ? '0' : '3,4'} />
             <text x={PAD_L - 6} y={y + 4} textAnchor="end"
               fontSize={9} fill="var(--text-muted)" fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
-              {v > 999 ? `${(v / 1000).toFixed(0)}k` : v}
+              {fmtT(v)}
             </text>
           </g>
         )
@@ -288,7 +296,7 @@ function BarChart({ data, yLabel = 'Stock disponible (kg)' }: { data: BarDatum[]
               <text x={x + bw / 2} y={y - 5} textAnchor="middle"
                 fontSize={isHov ? 10 : 9} fontWeight={700} fill={d.color} fontFamily="Plus Jakarta Sans, system-ui, sans-serif"
                 style={{ transition: 'font-size 0.1s' }}>
-                {d.value > 9999 ? `${(d.value / 1000).toFixed(1)}k` : d.value.toLocaleString('fr-FR')} kg
+                {fmtT(d.value)}
               </text>
             )}
             <text x={x + bw / 2} y={PAD_T + innerH + 14} textAnchor="middle"
@@ -307,7 +315,7 @@ function BarChart({ data, yLabel = 'Stock disponible (kg)' }: { data: BarDatum[]
                   {d.label}
                 </text>
                 <text x={x + bw / 2} y={y - 16} textAnchor="middle" fontSize={9} fill={d.color} fontWeight={600} fontFamily="Plus Jakarta Sans, system-ui, sans-serif">
-                  {d.value.toLocaleString('fr-FR')} kg · {GEN_LABEL[d.gen] ?? d.gen}
+                  {fmtT(d.value)} · {GEN_LABEL[d.gen] ?? d.gen}
                 </text>
               </g>
             )}
@@ -369,7 +377,7 @@ function HBarChart({ data }: { data: BarDatum[] }) {
               color: isHov ? d.color : 'var(--text-secondary)',
               transition: 'color 0.15s',
             }}>
-              {d.value >= 1000 ? `${(d.value / 1000).toFixed(1)}k` : d.value.toLocaleString('fr-FR')} kg
+              {fmtT(d.value)}
             </div>
           </div>
         )
@@ -497,7 +505,7 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
                   </div>
                 </div>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: '#16a34a', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-                  {row.stockKg >= 1000 ? `${(row.stockKg / 1000).toFixed(1)} t` : `${Math.round(row.stockKg)} kg`}
+                  {fmtT(row.stockKg)}
                 </div>
               </div>
             ))}
@@ -561,7 +569,7 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
                     </div>
                   )}
                   <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>
-                    {org.stockKg >= 1000 ? `${(org.stockKg / 1000).toFixed(1)} t` : `${Math.round(org.stockKg)} kg`}
+                    {fmtT(org.stockKg)}
                   </div>
                 </div>
               </div>
@@ -628,12 +636,13 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const navigate = useNavigate()
   const [stats, setStats] = useState<Stats>({
     lotsCount: 0, stockTotal: 0, ordersCount: 0, varietiesCount: 0,
-    ordersPending: 0, genCounts: {}, recentLots: [],
+    ordersPending: 0, genStats: {}, recentLots: [],
   })
   const [rawLots,      setRawLots]      = useState<any[]>([])
   const [rawStocks,    setRawStocks]    = useState<any[]>([])
   const [rawVarieties, setRawVarieties] = useState<any[]>([])
   const [rawOrders,    setRawOrders]    = useState<any[]>([])
+  const [rawAgrege,    setRawAgrege]    = useState<any[]>([])
   const [varMap,       setVarMap]       = useState<Record<number, string>>({})
   const [loading,      setLoading]      = useState(true)
   const [refreshing,   setRefreshing]   = useState(false)
@@ -645,7 +654,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   /* Stock filters */
   const [filterEspece,   setFilterEspece]   = useState('')
   const [filterVariete,  setFilterVariete]  = useState('')
-  const [filterGenStock, setFilterGenStock] = useState('')
+  const [filterGens, setFilterGens] = useState<string[]>(() => ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2'])
   const [stockSortCol,   setStockSortCol]   = useState<StockSortKey>('stockKg')
   const [stockSortAsc,   setStockSortAsc]   = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -659,24 +668,32 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   async function fetchAll(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
     const isMulti   = roleKey === 'seed-multiplicator'
+    const isSel     = roleKey === 'seed-selector'
     const lotsUrl   = isMulti ? endpoints.lotsMesLots    : endpoints.lots
     const stocksUrl = isMulti ? endpoints.stockMonStock  : endpoints.stocks
     const ordersUrl = isMulti ? endpoints.ordersATraiter : endpoints.orders
 
     const results = await Promise.allSettled([
       api.get(lotsUrl), api.get(stocksUrl), api.get(ordersUrl), api.get(endpoints.varieties),
+      api.get(endpoints.stocksAgrege), api.get(endpoints.lotsStats),
     ])
 
     const lots      = extractList(results[0].status === 'fulfilled' ? results[0].value.data : []).map(normalizeLot)
     const stocks    = extractList(results[1].status === 'fulfilled' ? results[1].value.data : []).map(normalizeStock)
     const orders    = extractList(results[2].status === 'fulfilled' ? results[2].value.data : [])
     const varieties = extractList(results[3].status === 'fulfilled' ? results[3].value.data : []).map(normalizeVariete)
+    const agrege    = results[4].status === 'fulfilled' && results[4].value
+      ? extractList(results[4].value.data)
+      : []
 
-    const genCounts = lots.reduce((acc: Record<string, number>, l: any) => {
-      const g = l.generation?.codeGeneration || 'N/A'
-      acc[g] = (acc[g] || 0) + 1
-      return acc
-    }, {})
+    const rawStats = results[5].status === 'fulfilled'
+      ? (Array.isArray(results[5].value.data) ? results[5].value.data : [])
+      : []
+    const genStats: Record<string, GenStat> = {}
+    rawStats.forEach((s: any) => {
+      genStats[s.codeGeneration] = { nbLots: Number(s.nbLots ?? 0), totalKg: Number(s.totalKg ?? 0) }
+    })
+    const lotsCount = Object.values(genStats).reduce((s, g) => s + g.nbLots, 0)
 
     const stockTotal    = stocks.reduce((s: number, x: any) => s + (parseFloat(x.quantiteDisponible) || 0), 0)
     const ordersPending = orders.filter((o: any) => o.statut === 'SOUMISE').length
@@ -690,7 +707,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     setRawStocks(stocks)
     setRawVarieties(varieties)
     setRawOrders(orders)
-    setStats({ lotsCount: lots.length, stockTotal, ordersCount: orders.length, varietiesCount: varieties.length, ordersPending, genCounts, recentLots })
+    setRawAgrege(agrege)
+    setStats({ lotsCount, stockTotal, ordersCount: orders.length, varietiesCount: varieties.length, ordersPending, genStats, recentLots })
     setLoading(false)
     setRefreshing(false)
   }
@@ -701,9 +719,19 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [roleKey])
 
+  useEffect(() => {
+    setFilterGens(ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2'])
+  }, [roleKey])
+
   const role     = ROLE_CFG[roleKey] || { color: '#16a34a', label: 'Tableau de bord' }
   const accent   = role.color
   const greeting = GREETINGS[roleKey] || { title: 'Tableau de bord', sub: "Vue d'ensemble" }
+
+  const pipelineTitle = roleKey === 'seed-selector'      ? 'Production prébase · G0 → G1'
+    : roleKey === 'seed-upsemcl'       ? 'Multiplication base · G1 → G3'
+    : roleKey === 'seed-multiplicator' ? 'Multiplication commerciale · G3 → R2'
+    : roleKey === 'seed-quotataire'    ? 'Semences commerciales · R2'
+    : 'Chaîne semencière · G0 → R2'
 
   const HERO_CFG: Record<string, { border: string; tagBg: string; tagColor: string; tagBorder: string }> = {
     'seed-admin':         { border: '#6d28d9', tagBg: '#f5f3ff', tagColor: '#5b21b6', tagBorder: '#ddd6fe' },
@@ -713,22 +741,56 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     'seed-quotataire':    { border: '#b45309', tagBg: '#fffbeb', tagColor: '#92400e', tagBorder: '#fde68a' },
   }
   const heroCfg = HERO_CFG[roleKey] ?? { border: accent, tagBg: '#f8faf8', tagColor: accent, tagBorder: '#e3e8e3' }
-  const maxGen   = Math.max(1, ...Object.values(stats.genCounts))
+  const maxGenKg    = Math.max(1, ...Object.values(stats.genStats).map(g => g.totalKg))
+  const maxGenCount = Math.max(1, ...Object.values(stats.genStats).map(g => g.nbLots))
 
   const isQuotaire   = roleKey === 'seed-quotataire'
   const showStats    = !isQuotaire
   const showPipeline = ['seed-admin', 'seed-selector', 'seed-upsemcl'].includes(roleKey)
   const showLots     = !isQuotaire
   const showOrders   = isQuotaire || ['seed-admin', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
-  const showStock    = !isQuotaire
+  const showStock    = ['seed-admin', 'seed-upsemcl'].includes(roleKey)
+
+  const isSelector = roleKey === 'seed-selector'
+  const specUp     = userSpecialisation?.toUpperCase()
+
+  const displayStockTotal = useMemo(() => {
+    if (!isSelector || !specUp) return Math.round(stats.stockTotal)
+    // stocksAgrege a codeEspece directement + quantiteTotale — pas de pagination problématique
+    return Math.round(rawAgrege
+      .filter((s: any) => (s.codeEspece ?? '').toUpperCase() === specUp)
+      .reduce((sum: number, s: any) => sum + (parseFloat(s.quantiteTotale) || 0), 0))
+  }, [isSelector, specUp, rawAgrege, stats.stockTotal])
+
+  const displayVarietiesCount = useMemo(() => {
+    if (!isSelector || !specUp) return stats.varietiesCount
+    const activeStatuts = ['DISPONIBLE','EN_PRODUCTION','CERTIFIE','EN_COURS_CERT','SOUCHE']
+    const varIds = new Set<number>()
+    rawLots.forEach((l: any) => {
+      const statut = (l.statut ?? l.statutLot ?? '').toUpperCase()
+      if (!activeStatuts.includes(statut)) return
+      const varId = Number(l.idVariete ?? l.varieteId)
+      if (varId) varIds.add(varId)
+    })
+    return varIds.size
+  }, [isSelector, specUp, rawLots, stats.varietiesCount])
 
   /* Items KPI selon le rôle */
   const kpiItems = [
     ...(showStats ? [
-      { label: 'Total lots',       value: stats.lotsCount,              sub: 'tous statuts',          accent, delay: 0,   suffix: undefined },
-      { label: 'Stock total',      value: Math.round(stats.stockTotal), sub: undefined,               accent, delay: 80,  suffix: 'kg' },
+      { label: 'Total lots',
+        value: stats.lotsCount,
+        sub: 'tous statuts',
+        accent, delay: 0, suffix: undefined },
+      { label: isSelector && specUp ? `Stock ${specUp}` : 'Stock total',
+        value: Math.round(displayStockTotal / 1000),
+        sub: isSelector && specUp ? 'votre spécialisation' : undefined,
+        accent, delay: 80, suffix: 't' },
     ] : []),
-    { label: 'Variétés actives',   value: stats.varietiesCount,         sub: 'espèces enregistrées',  accent, delay: showStats ? 160 : 0,  suffix: undefined },
+    { label: isSelector && specUp ? `Variétés ${specUp}` : 'Variétés actives',
+      value: displayVarietiesCount,
+      sub: isSelector && specUp ? 'de votre espèce' : 'espèces enregistrées',
+      accent, delay: showStats ? 160 : 0, suffix: undefined },
     ...(showOrders ? [
       { label: roleKey === 'seed-multiplicator' ? 'Cmdes reçues' : 'Commandes',
         value: stats.ordersCount, sub: `${stats.ordersPending} en attente`, accent, delay: showStats ? 240 : 80, suffix: undefined },
@@ -741,31 +803,22 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const lotMap: Record<number, any>     = Object.fromEntries(rawLots.map((l: any) => [l.id, l]))
 
   const stockRowMap: Record<string, StockRow> = {}
-  rawStocks.forEach((st: any) => {
-    const lotObj      = st.lot ?? lotMap[st.idLot ?? st.lotId] ?? {}
-    const gen         = lotObj.generation?.codeGeneration ?? st.generation ?? '?'
+  rawAgrege.forEach((s: any) => {
+    const gen = s.codeGeneration ?? '?'
     if (!allowedStockGens.includes(gen)) return
-    let variety: any  = lotObj.variete ?? varietyMap[lotObj.idVariete ?? lotObj.varieteId ?? -1] ?? {}
-    if (!variety.codeVariete) variety = varietyMap[st.idVariete ?? -1] ?? st.variete ?? {}
-    if (!variety.codeVariete) return
-    const codeVariete = variety.codeVariete
-    const nomVariete  = variety.nomVariete ?? codeVariete
-    const esp         = variety.espece ?? {}
-    const codeEspece  = esp.codeEspece ?? '?'
-    const nomEspece   = esp.nomEspece  ?? codeEspece
+    const codeVariete = s.codeVariete ?? '?'
+    if (codeVariete === '?') return
     const key = `${codeVariete}|${gen}`
-    if (!stockRowMap[key]) stockRowMap[key] = { codeEspece, nomEspece, codeVariete, nomVariete, generation: gen, stockKg: 0, nbLots: 0, demandKg: 0 }
-    stockRowMap[key].stockKg += parseFloat(st.quantiteDisponible) || 0
-  })
-  rawLots.forEach((l: any) => {
-    const gen         = l.generation?.codeGeneration ?? '?'
-    if (!allowedStockGens.includes(gen)) return
-    const variety     = varietyMap[l.idVariete ?? l.varieteId ?? -1] ?? l.variete ?? {}
-    const codeVariete = variety.codeVariete ?? l.codeVariete
-    if (!codeVariete) return
-    const key    = `${codeVariete}|${gen}`
-    const active = ['DISPONIBLE','EN_PRODUCTION','CERTIFIE','EN_COURS_CERT','SOUCHE']
-    if (stockRowMap[key] && active.includes((l.statut ?? '').toUpperCase())) stockRowMap[key].nbLots++
+    if (!stockRowMap[key]) stockRowMap[key] = {
+      codeEspece:  s.codeEspece  ?? '?',
+      nomEspece:   s.nomEspece   ?? s.codeEspece ?? '?',
+      codeVariete,
+      nomVariete:  s.nomVariete  ?? codeVariete,
+      generation:  gen,
+      stockKg: 0, nbLots: 0, demandKg: 0,
+    }
+    stockRowMap[key].stockKg += parseFloat(s.quantiteTotale) || 0
+    stockRowMap[key].nbLots  += Number(s.nbLots) || 0
   })
 
   const stockRows: StockRow[] = Object.values(stockRowMap).sort((a, b) => {
@@ -787,18 +840,19 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const especeOptions = Object.keys(especeMap).sort()
 
   const filteredStockRows = stockRows.filter(r =>
-    (!filterEspece   || r.codeEspece === filterEspece) &&
-    (!filterGenStock || r.generation === filterGenStock) &&
-    (!filterVariete  || r.codeVariete.toLowerCase().includes(filterVariete.toLowerCase())
-                     || r.nomVariete.toLowerCase().includes(filterVariete.toLowerCase()))
+    (!filterEspece  || r.codeEspece === filterEspece) &&
+    filterGens.includes(r.generation) &&
+    (!filterVariete || r.codeVariete.toLowerCase().includes(filterVariete.toLowerCase())
+                    || r.nomVariete.toLowerCase().includes(filterVariete.toLowerCase()))
   )
   const filteredStockBarData: BarDatum[] = [...filteredStockRows]
-    .sort((a, b) => b.stockKg - a.stockKg).slice(0, 10)
+    .sort((a, b) => b.stockKg - a.stockKg)
     .map(r => ({ label: r.codeVariete, value: Math.round(r.stockKg), color: GEN_COLOR[r.generation] ?? '#6b7280', gen: r.generation }))
 
   const stockTotalAll      = stockRows.reduce((s, r) => s + r.stockKg, 0)
   const stockTotalFiltered = filteredStockRows.reduce((s, r) => s + r.stockKg, 0)
-  const hasStockFilter     = !!(filterEspece || filterVariete || filterGenStock)
+  const stockMaxKg         = Math.max(1, ...filteredStockRows.map(r => r.stockKg))
+  const hasStockFilter     = !!(filterEspece || filterVariete || filterGens.length < allowedStockGens.length)
 
   /* ── Couverture stock / demande par espèce ── */
   const especeCovMap: Record<string, { nom: string; stockKg: number; demandKg: number }> = {}
@@ -867,11 +921,11 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const hasAnyAlerts = criticalCov > 0 || warningCov > 0 || lotsACertifierCount > 0 || stats.ordersPending > 0
 
   /* ── Demande annuelle par variété (UPSemCL · Sélectionneurs · Multiplicateurs) ── */
-  const showDemandWidget = ['seed-upsemcl', 'seed-selector', 'seed-multiplicator'].includes(roleKey)
+  const showDemandWidget = ['seed-upsemcl', 'seed-selector', 'seed-multiplicator', 'seed-admin'].includes(roleKey)
   const DEMAND_DAYS: Record<string, number> = { '1m': 30, '3m': 90, '6m': 180, '1a': 365 }
   const demandCutoff = Date.now() - (DEMAND_DAYS[demandPeriod] ?? 90) * 86_400_000
 
-  type DemandEntry = { nomVariete: string; codeEspece: string; g3kg: number; r2kg: number }
+  type DemandEntry = { nomVariete: string; codeEspece: string; g3kg: number; r2kg: number; g3Orders: Set<number>; r2Orders: Set<number> }
   const demandMap: Record<string, DemandEntry> = {}
 
   if (showDemandWidget) {
@@ -891,19 +945,37 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         if (!demandMap[key]) demandMap[key] = {
           nomVariete: variety.nomVariete ?? key,
           codeEspece: variety.espece?.codeEspece ?? '?',
-          g3kg: 0, r2kg: 0,
+          g3kg: 0, r2kg: 0, g3Orders: new Set(), r2Orders: new Set(),
         }
-        if (isG3type) demandMap[key].g3kg += qty
-        else          demandMap[key].r2kg += qty
+        if (isG3type) { demandMap[key].g3kg += qty; demandMap[key].g3Orders.add(o.id ?? 0) }
+        else          { demandMap[key].r2kg += qty; demandMap[key].r2Orders.add(o.id ?? 0) }
       })
     })
   }
 
+  // Stock G3 disponible par variété — signal de couverture pour UPSemCL et Admin
+  const stockG3ByVariete: Record<string, number> = {}
+  rawAgrege.forEach((s: any) => {
+    if (!['G1','G2','G3'].includes(s.codeGeneration ?? '')) return
+    const codeVar = s.codeVariete ?? ''
+    if (codeVar) stockG3ByVariete[codeVar] = (stockG3ByVariete[codeVar] ?? 0) + (parseFloat(s.quantiteTotale) || 0)
+  })
+
   const demandEntries = Object.entries(demandMap)
-    .map(([code, d]) => ({ code, ...d, total: d.g3kg + d.r2kg }))
+    .map(([code, d]) => ({
+      code,
+      nomVariete: d.nomVariete,
+      codeEspece: d.codeEspece,
+      g3kg: d.g3kg,
+      r2kg: d.r2kg,
+      total: d.g3kg + d.r2kg,
+      g3OrderCount: d.g3Orders.size,
+      r2OrderCount: d.r2Orders.size,
+      stockG3: stockG3ByVariete[code] ?? 0,
+    }))
     .filter(d => demandGen === 'G3' ? d.g3kg > 0 : demandGen === 'R2' ? d.r2kg > 0 : d.total > 0)
     .sort((a, b) => demandGen === 'G3' ? b.g3kg - a.g3kg : demandGen === 'R2' ? b.r2kg - a.r2kg : b.total - a.total)
-    .slice(0, 6)
+    .slice(0, roleKey === 'seed-admin' ? 10 : 6)
 
   const demandMax     = Math.max(...demandEntries.map(d => demandGen === 'G3' ? d.g3kg : demandGen === 'R2' ? d.r2kg : d.total), 1)
   const demandTotalKg = demandEntries.reduce((s, d) => s + (demandGen === 'G3' ? d.g3kg : demandGen === 'R2' ? d.r2kg : d.total), 0)
@@ -983,7 +1055,25 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             {roleKey === 'seed-admin' && !loading && (
               <button
                 onClick={() => {
+                  const today = new Date().toISOString().slice(0, 10)
+                  const totalStockKg = stockRows.reduce((s, r) => s + r.stockKg, 0)
+
                   const sheets: XlsxSheet[] = [
+                    {
+                      name: 'Synthèse',
+                      headers: ['Indicateur', 'Valeur'],
+                      rows: [
+                        ['Date export',             today],
+                        ['Nb variétés au catalogue', rawVarieties.length],
+                        ['Nb lots',                  rawLots.length],
+                        ['Stock total (kg)',          Math.round(totalStockKg)],
+                        ['Stock total (t)',           parseFloat((totalStockKg / 1000).toFixed(3))],
+                        ['Demande totale (kg)',       demandEntries.length > 0 ? Math.round(demandTotalKg) : '—'],
+                        ['Demande totale (t)',        demandEntries.length > 0 ? parseFloat((demandTotalKg / 1000).toFixed(3)) : '—'],
+                        ['Nb commandes',             rawOrders.length],
+                        ['Commandes actives',        rawOrders.filter((o: any) => !['ANNULEE','REJETEE','LIVREE'].includes(o.statut ?? '')).length],
+                      ],
+                    },
                     {
                       name: 'Variétés',
                       headers: ['Code', 'Nom variété', 'Espèce', 'Origine', 'Statut', 'Cycle min (j)', 'Cycle max (j)', 'Rendement min (t/ha)', 'Rendement max (t/ha)', 'Année création', 'Année homologation', 'Sélectionneur', 'Nature génétique', 'Vocation'],
@@ -991,21 +1081,35 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                     },
                     {
                       name: 'Lots',
-                      headers: ['Code lot', 'Variété', 'Génération', 'Campagne', 'Quantité nette (kg)', 'Taux germination (%)', 'Pureté physique (%)', 'Superficie (ha)', 'Statut', 'Créé le', 'Responsable'],
-                      rows: rawLots.map((l: any) => [l.codeLot, l.variete?.nomVariete ?? l.nomVariete ?? '', l.generation?.codeGeneration ?? '', l.campagne ?? '', l.quantiteNette ?? '', l.tauxGermination ?? '', l.puretePhysique ?? '', l.superficieHa ?? '', l.statutLot ?? l.statut ?? '', formatDateForExport(l.createdAt), l.responsableNom ?? '']),
+                      headers: ['Code lot', 'Variété', 'Génération', 'Campagne', 'Quantité nette (kg)', 'Quantité nette (t)', 'Germination (%)', 'Pureté (%)', 'Superficie (ha)', 'Statut', 'Créé le', 'Responsable'],
+                      rows: rawLots.map((l: any) => {
+                        const kg = Number(l.quantiteNette) || 0
+                        return [l.codeLot, l.variete?.nomVariete ?? l.nomVariete ?? '', l.generation?.codeGeneration ?? '', l.campagne ?? '', kg, parseFloat((kg / 1000).toFixed(3)), l.tauxGermination ?? '', l.puretePhysique ?? '', l.superficieHa ?? '', l.statutLot ?? l.statut ?? '', formatDateForExport(l.createdAt), l.responsableNom ?? '']
+                      }),
                     },
                     {
                       name: 'Stock disponible',
-                      headers: ['Espèce', 'Code espèce', 'Variété', 'Code variété', 'Génération', 'Stock (kg)', 'Nb lots', 'Demande (kg)'],
-                      rows: stockRows.map(r => [r.nomEspece, r.codeEspece, r.nomVariete, r.codeVariete, r.generation, Math.round(r.stockKg), r.nbLots, Math.round(r.demandKg)]),
+                      headers: ['Espèce', 'Code espèce', 'Variété', 'Code variété', 'Génération', 'Stock (kg)', 'Stock (t)', 'Nb lots', 'Demande (kg)', 'Demande (t)'],
+                      rows: stockRows.map(r => [r.nomEspece, r.codeEspece, r.nomVariete, r.codeVariete, r.generation, Math.round(r.stockKg), parseFloat((r.stockKg / 1000).toFixed(3)), r.nbLots, Math.round(r.demandKg), parseFloat((r.demandKg / 1000).toFixed(3))]),
                     },
+                    ...(demandEntries.length > 0 ? [{
+                      name: 'Demande variétés',
+                      headers: ['Rang', 'Code variété', 'Variété', 'Espèce', 'G3 — Mult. (kg)', 'G3 — Mult. (t)', 'R2 — Quot. (kg)', 'R2 — Quot. (t)', 'Total (kg)', 'Total (t)', 'Part (%)'],
+                      rows: demandEntries.map((d, i) => [
+                        i + 1, d.code, d.nomVariete, d.codeEspece,
+                        Math.round(d.g3kg), parseFloat((d.g3kg / 1000).toFixed(3)),
+                        Math.round(d.r2kg), parseFloat((d.r2kg / 1000).toFixed(3)),
+                        Math.round(d.total), parseFloat((d.total / 1000).toFixed(3)),
+                        demandTotalKg > 0 ? Math.round((d.total / demandTotalKg) * 100) : 0,
+                      ]),
+                    }] : []),
                     {
                       name: 'Commandes',
                       headers: ['Code commande', 'Client', 'Statut', 'Acheteur (username)', 'Date création', 'Observations'],
                       rows: rawOrders.map((o: any) => [o.codeCommande ?? '', o.client ?? '', o.statut ?? '', o.usernameAcheteur ?? '', formatDateForExport(o.createdAt), o.observations ?? '']),
                     },
                   ]
-                  downloadXlsx(`senjiw-export-complet-${new Date().toISOString().slice(0,10)}`, sheets)
+                  downloadXlsx(`senjiw-dashboard-admin-${today}`, sheets)
                 }}
                 style={{
                   background: accent, border: `1px solid ${accent}`,
@@ -1015,7 +1119,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                 }}
                 title="Exporter toutes les données en Excel multi-feuilles"
               >
-                ⬇ Export complet .xls
+                <Download size={12} /> Export complet .xls
               </button>
             )}
           </div>
@@ -1126,22 +1230,24 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, marginBottom: 20, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
           <div style={{ padding: '14px 24px', borderBottom: `1px solid ${D.line}`, display: 'flex', alignItems: 'center', gap: 12, background: D.paper2 }}>
             <span style={{ fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', color: D.green, background: D.greenSoft, padding: '3px 10px', borderRadius: 999 }}>Pipeline</span>
-            <span style={{ fontFamily: D.display, fontSize: 15, fontWeight: 600, color: D.ink }}>Générations — campagne en cours</span>
+            <span style={{ fontFamily: D.display, fontSize: 15, fontWeight: 600, color: D.ink }}>{pipelineTitle}</span>
             {!loading && (
               <span style={{ marginLeft: 'auto', fontFamily: D.mono, fontSize: 10, fontWeight: 500, color: D.muted, background: D.paper2, border: `1px solid ${D.line}`, borderRadius: 999, padding: '3px 12px' }}>
-                {stats.lotsCount} lots
+                {stats.lotsCount.toLocaleString('fr-FR')} lots
               </span>
             )}
           </div>
-          <div style={{ padding: '24px 28px', display: 'grid', gridTemplateColumns: '1fr 200px', gap: 32, alignItems: 'center' }}>
+          <div style={{ padding: '24px 28px', display: 'grid', gridTemplateColumns: '1fr 300px', gap: 32, alignItems: 'center' }}>
 
             {/* ── Flow générationnel ── */}
             <div style={{ display: 'flex', alignItems: 'center' }}>
-              {['G0','G1','G2','G3','G4','R1','R2'].map((g, idx, arr) => {
-                const cfg    = GEN_CFG[g]
-                const count  = loading ? 0 : (stats.genCounts[g] || 0)
-                const active = count > 0
-                const pct    = Math.round((count / maxGen) * 100)
+              {(ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2']).map((g, idx, arr) => {
+                const cfg     = GEN_CFG[g]
+                const stat    = loading ? null : (stats.genStats[g] ?? { nbLots: 0, totalKg: 0 })
+                const count   = stat?.nbLots ?? 0
+                const kgTotal = stat?.totalKg ?? 0
+                const active  = count > 0
+                const pct     = Math.round((count / maxGenCount) * 100)
                 return (
                   <div key={g} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
                     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
@@ -1168,11 +1274,16 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                               <div style={{ fontFamily: D.mono, fontSize: 9, color: D.muted, marginTop: 2 }}>
                                 lot{count !== 1 ? 's' : ''}
                               </div>
+                              {kgTotal > 0 && (
+                                <div style={{ fontFamily: D.mono, fontSize: 9, color: active ? cfg.color : D.muted, marginTop: 3, fontWeight: 600 }}>
+                                  {fmtT(kgTotal)}
+                                </div>
+                              )}
                             </>
                         }
                       </div>
 
-                      {/* Barre */}
+                      {/* Barre — proportionnelle au tonnage */}
                       <div style={{ width: '70%', height: 3, background: D.line, borderRadius: 99, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: loading ? '0%' : `${pct}%`, background: cfg.color, borderRadius: 99, transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)' }} />
                       </div>
@@ -1196,9 +1307,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             {/* ── Donut distribution ── */}
             {!loading && (
               <DonutChart data={
-                ['G0','G1','G2','G3','G4','R1','R2']
-                  .filter(g => (stats.genCounts[g] || 0) > 0)
-                  .map(g => ({ label: GEN_LABEL[g] ?? g, value: stats.genCounts[g], color: GEN_COLOR[g], gen: g }))
+                (ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2'])
+                  .filter(g => (stats.genStats[g]?.nbLots ?? 0) > 0)
+                  .map(g => ({ label: GEN_LABEL[g] ?? g, value: stats.genStats[g]?.totalKg ?? 0, color: GEN_COLOR[g], gen: g }))
               } />
             )}
           </div>
@@ -1220,23 +1331,20 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   {stats.recentLots.length} derniers lots
                 </span>
                 <button
-                  onClick={() => downloadCsv(
-                    `lots-recents-${new Date().toISOString().slice(0,10)}`,
-                    ['Code lot', 'Variété', 'Espèce', 'Génération', 'Quantité (kg)', 'Unité', 'Statut'],
-                    stats.recentLots.map((l: any) => [
-                      l.codeLot ?? '',
-                      l.variete?.nomVariete ?? varMap[l.idVariete] ?? '',
-                      l.variete?.espece?.nomEspece ?? l.espece?.nomEspece ?? '',
-                      l.generation?.codeGeneration ?? '',
-                      l.quantiteNette ?? l.quantite ?? '',
-                      l.unite ?? 'kg',
-                      l.statutLot ?? l.statut ?? '',
+                  onClick={() => {
+                    const date = new Date().toISOString().slice(0, 10)
+                    const rows = stats.recentLots.map((l: any) => {
+                      const kg = Number(l.quantiteNette ?? l.quantite) || 0
+                      return [l.codeLot ?? '', l.variete?.nomVariete ?? varMap[l.idVariete] ?? '', l.variete?.espece?.nomEspece ?? l.espece?.nomEspece ?? '', l.generation?.codeGeneration ?? '', kg, parseFloat((kg / 1000).toFixed(3)), l.statutLot ?? l.statut ?? '']
+                    })
+                    downloadXlsx(`senjiw-lots-recents-${date}`, [
+                      { name: 'Lots récents', headers: ['Code lot', 'Variété', 'Espèce', 'Génération', 'Quantité (kg)', 'Quantité (t)', 'Statut'], rows },
                     ])
-                  )}
+                  }}
                   style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', whiteSpace: 'nowrap' as const }}
-                  title="Télécharger en CSV"
+                  title="Exporter en Excel"
                 >
-                  ⬇ CSV
+                  <Download size={11} /> Export .xls
                 </button>
               </>
             )}
@@ -1359,6 +1467,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                 Espèces &amp; Variétés &nbsp;·&nbsp; Scope&nbsp;
                 <span style={{ fontWeight: 600, color: accent }}>{allowedStockGens.join(' · ')}</span>
+                &nbsp;·&nbsp; graphique en t &nbsp;·&nbsp; tableau en kg
               </div>
             </div>
 
@@ -1427,23 +1536,34 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                 )}
               </div>
 
-              {/* Filtre génération */}
+              {/* Filtre générations — chips multi-sélection */}
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 6, height: 32,
-                background: filterGenStock ? `${GEN_COLOR[filterGenStock] ?? accent}0e` : 'var(--surface-2)',
-                border: `1px solid ${filterGenStock ? (GEN_COLOR[filterGenStock] ?? accent) + '40' : 'var(--border)'}`,
-                borderRadius: 8, padding: '0 10px',
+                display: 'flex', alignItems: 'center', gap: 5, height: 32,
+                background: filterGens.length ? `${accent}08` : 'var(--surface-2)',
+                border: `1px solid ${filterGens.length ? accent + '40' : 'var(--border)'}`,
+                borderRadius: 8, padding: '0 8px',
               }}>
-                <Filter size={11} color={filterGenStock ? (GEN_COLOR[filterGenStock] ?? accent) : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
-                <select value={filterGenStock}
-                  onChange={e => setFilterGenStock(e.target.value)}
-                  style={{ border: 'none', background: 'none', fontSize: 12, color: filterGenStock ? (GEN_COLOR[filterGenStock] ?? accent) : 'var(--text-primary)', outline: 'none', cursor: 'pointer', fontWeight: filterGenStock ? 700 : 400 }}>
-                  <option value="">Toutes générations</option>
-                  {allowedStockGens.map(g => <option key={g} value={g}>{g} — {GEN_LABEL[g]}</option>)}
-                </select>
-                {filterGenStock && (
-                  <button onClick={() => setFilterGenStock('')}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: GEN_COLOR[filterGenStock] ?? accent, padding: 0, display: 'flex', flexShrink: 0 }}>
+                <Filter size={11} color={filterGens.length ? accent : 'var(--text-muted)'} style={{ flexShrink: 0 }} />
+                {allowedStockGens.map(g => {
+                  const active = filterGens.includes(g)
+                  const col = GEN_COLOR[g] ?? accent
+                  return (
+                    <button key={g} title={GEN_LABEL[g] ?? g}
+                      onClick={() => setFilterGens(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g])}
+                      style={{
+                        fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '2px 7px',
+                        background: active ? col + '22' : 'transparent',
+                        color: active ? col : 'var(--text-muted)',
+                        border: `1px solid ${active ? col + '55' : 'transparent'}`,
+                        cursor: 'pointer',
+                      }}>
+                      {g}
+                    </button>
+                  )
+                })}
+                {filterGens.length < allowedStockGens.length && (
+                  <button onClick={() => setFilterGens(allowedStockGens)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: accent, padding: 0, display: 'flex', flexShrink: 0 }}>
                     <X size={11} />
                   </button>
                 )}
@@ -1452,7 +1572,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               {/* Effacer tout */}
               {hasStockFilter && (
                 <button
-                  onClick={() => { setFilterEspece(''); setFilterVariete(''); setFilterGenStock('') }}
+                  onClick={() => { setFilterEspece(''); setFilterVariete(''); setFilterGens(allowedStockGens) }}
                   style={{
                     fontSize: 11.5, fontWeight: 700, color: '#dc2626',
                     background: '#fef2f2', border: '1px solid #fecaca',
@@ -1463,18 +1583,20 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                 </button>
               )}
 
-              {/* Export CSV stock */}
+              {/* Export stock */}
               {!loading && filteredStockRows.length > 0 && (
                 <button
-                  onClick={() => downloadCsv(
-                    `stock-disponible-${new Date().toISOString().slice(0,10)}`,
-                    ['Espèce', 'Code espèce', 'Variété', 'Code variété', 'Génération', 'Stock (kg)', 'Nb lots', 'Demande (kg)'],
-                    filteredStockRows.map(r => [r.nomEspece, r.codeEspece, r.nomVariete, r.codeVariete, r.generation, Math.round(r.stockKg), r.nbLots, Math.round(r.demandKg)])
-                  )}
+                  onClick={() => {
+                    const date = new Date().toISOString().slice(0, 10)
+                    const rows = filteredStockRows.map(r => [r.nomEspece, r.codeEspece, r.nomVariete, r.codeVariete, r.generation, Math.round(r.stockKg), parseFloat((r.stockKg / 1000).toFixed(3)), r.nbLots, Math.round(r.demandKg), parseFloat((r.demandKg / 1000).toFixed(3))])
+                    downloadXlsx(`senjiw-stock-disponible-${date}`, [
+                      { name: 'Stock disponible', headers: ['Espèce', 'Code espèce', 'Variété', 'Code variété', 'Génération', 'Stock (kg)', 'Stock (t)', 'Nb lots', 'Demande (kg)', 'Demande (t)'], rows },
+                    ])
+                  }}
                   style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '5px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', height: 32, whiteSpace: 'nowrap' as const }}
-                  title="Télécharger le stock filtré en CSV"
+                  title="Exporter le stock filtré en Excel"
                 >
-                  ⬇ CSV
+                  <Download size={11} /> Export .xls
                 </button>
               )}
             </div>
@@ -1498,9 +1620,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   <span style={{ width: 1, height: 14, background: 'var(--border)', flexShrink: 0 }} />
                   <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
                     <span style={{ fontWeight: 700, color: accent, fontFamily: 'var(--font-mono)' }}>
-                      {(hasStockFilter ? stockTotalFiltered : stockTotalAll).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}
+                      {fmtT(hasStockFilter ? stockTotalFiltered : stockTotalAll)}
                     </span>
-                    <span style={{ marginLeft: 3 }}>kg{hasStockFilter ? ' filtrés' : ' au total'}</span>
+                    <span style={{ marginLeft: 3 }}>{hasStockFilter ? 'filtrés' : 'au total'}</span>
                   </span>
                   <span style={{ width: 1, height: 14, background: 'var(--border)', flexShrink: 0 }} />
                   <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
@@ -1532,9 +1654,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 12 }}>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-secondary)' }}>
-                  Top {filteredStockBarData.length} variétés
+                  Stock par variété · génération
                 </span>
-                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>— stock disponible (kg)</span>
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>— {filteredStockBarData.length} entrées affichées (t)</span>
                 {hasStockFilter && (
                   <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)', background: 'var(--surface-3)', borderRadius: 99, padding: '1px 8px', border: '1px solid var(--border)', marginLeft: 4 }}>
                     filtres actifs
@@ -1571,7 +1693,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   { col: 'nomEspece'  as StockSortKey, label: 'Espèce' },
                   { col: 'nomVariete' as StockSortKey, label: 'Variété' },
                   { col: 'generation' as StockSortKey, label: 'Gén.' },
-                  { col: 'stockKg'    as StockSortKey, label: 'Stock disponible' },
+                  { col: 'stockKg'    as StockSortKey, label: 'Stock disponible (kg)' },
                   { col: 'nbLots'     as StockSortKey, label: 'Lots actifs' },
                   { col: 'demandKg'   as StockSortKey, label: 'Demande (kg)' },
                 ] as { col: StockSortKey; label: string }[]).map(({ col, label }) => (
@@ -1664,25 +1786,34 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                       </td>
 
                       {/* Stock disponible */}
-                      <td style={{ padding: '12px 22px' }}>
-                        <span style={{
-                          fontWeight: 800, fontSize: 14, fontVariantNumeric: 'tabular-nums',
-                          fontFamily: 'var(--font-mono)', letterSpacing: '-0.01em',
-                          color: isCrit ? '#dc2626' : isLow ? '#92660a' : 'var(--text-primary)',
-                        }}>
-                          {r.stockKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })}
-                        </span>
-                        <span style={{ color: 'var(--text-muted)', marginLeft: 4, fontSize: 11 }}>kg</span>
-                        {(isCrit || isLow) && (
+                      <td style={{ padding: '10px 22px', minWidth: 160 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
                           <span style={{
-                            marginLeft: 7, fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '2px 7px',
-                            background: isCrit ? '#fef2f2' : '#fffbeb',
-                            color: isCrit ? '#dc2626' : '#92660a',
-                            border: `1px solid ${isCrit ? '#fecaca' : '#fde68a'}`,
+                            fontWeight: 800, fontSize: 14, fontVariantNumeric: 'tabular-nums',
+                            fontFamily: 'var(--font-mono)', letterSpacing: '-0.01em',
+                            color: isCrit ? '#dc2626' : isLow ? '#92660a' : 'var(--text-primary)',
                           }}>
-                            {isCrit ? '⚠ Critique' : '⚠ Bas'}
+                            {fmtKgTable(r.stockKg)}
                           </span>
-                        )}
+                          {(isCrit || isLow) && (
+                            <span style={{
+                              marginLeft: 4, fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '2px 7px',
+                              background: isCrit ? '#fef2f2' : '#fffbeb',
+                              color: isCrit ? '#dc2626' : '#92660a',
+                              border: `1px solid ${isCrit ? '#fecaca' : '#fde68a'}`,
+                            }}>
+                              {isCrit ? '⚠ Critique' : '⚠ Bas'}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ height: 4, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
+                          <div style={{
+                            height: '100%', borderRadius: 99,
+                            width: `${Math.min(100, (r.stockKg / stockMaxKg) * 100)}%`,
+                            background: isCrit ? '#dc2626' : isLow ? '#d97706' : (GEN_COLOR[r.generation] ?? accent),
+                            transition: 'width 0.4s ease',
+                          }} />
+                        </div>
                       </td>
 
                       {/* Lots actifs */}
@@ -1703,7 +1834,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                             fontFamily: 'var(--font-mono)',
                             color: r.demandKg > r.stockKg ? '#dc2626' : 'var(--text-secondary)',
                           }}>
-                            {r.demandKg.toLocaleString('fr-FR', { maximumFractionDigits: 0 })} kg
+                            {fmtKgTable(r.demandKg)}
                           </span>
                         ) : (
                           <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>
@@ -1737,15 +1868,27 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 7 }}>
-                Demande variétés
+                {roleKey === 'seed-upsemcl'
+                  ? 'Pilotage production & distribution · G3 & R2'
+                  : roleKey === 'seed-selector'
+                  ? 'Demande sur vos variétés'
+                  : roleKey === 'seed-multiplicator'
+                  ? 'Variétés demandées par vos acheteurs'
+                  : 'Analyse de la demande · toute la filière'}
                 {roleKey === 'seed-selector' && userSpecialisation && (
                   <span style={{ fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-mono)', color: accent, background: `${accent}12`, padding: '1px 6px', borderRadius: 4 }}>{userSpecialisation}</span>
                 )}
-                {roleKey === 'seed-multiplicator' && (
-                  <span style={{ fontSize: 10, fontWeight: 600, fontFamily: 'var(--font-mono)', color: '#2563eb', background: '#eff6ff', padding: '1px 6px', borderRadius: 4 }}>R2 — vos acheteurs</span>
-                )}
               </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Top variétés par quantité commandée · {demandEntries.length > 0 ? `${demandTotalKg >= 1000 ? (demandTotalKg/1000).toFixed(1)+'k' : demandTotalKg.toLocaleString('fr-FR')} kg total` : 'aucune commande'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                {roleKey === 'seed-upsemcl'
+                  ? 'G3 commandés par les multiplicateurs · R2 commandés par les quotataires'
+                  : roleKey === 'seed-admin'
+                  ? 'Consolidation nationale — G3 distribués par l\'UPSemCL · R2 par les multiplicateurs'
+                  : roleKey === 'seed-multiplicator'
+                  ? 'R2 commandés par vos quotataires'
+                  : 'Commandes reçues sur votre spécialisation'}
+                {demandEntries.length > 0 && <span style={{ marginLeft: 6 }}>· <strong>{fmtT(demandTotalKg)}</strong> total</span>}
+              </div>
             </div>
 
             {/* Filtre période */}
@@ -1764,22 +1907,26 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               ))}
             </div>
 
-            {/* Export CSV demande */}
+            {/* Export demande variétés */}
             {!loading && demandEntries.length > 0 && (
               <button
-                onClick={() => downloadCsv(
-                  `demande-varietes-${demandPeriod}-${new Date().toISOString().slice(0,10)}`,
-                  ['Rang', 'Code variété', 'Variété', 'Code espèce', 'G3 — Mult. (kg)', 'R2 — Quot. (kg)', 'Total (kg)', 'Part (%)'],
-                  demandEntries.map((d, i) => [
+                onClick={() => {
+                  const date = new Date().toISOString().slice(0, 10)
+                  const rows = demandEntries.map((d, i) => [
                     i + 1, d.code, d.nomVariete, d.codeEspece,
-                    Math.round(d.g3kg), Math.round(d.r2kg), Math.round(d.total),
+                    Math.round(d.g3kg), parseFloat((d.g3kg / 1000).toFixed(3)),
+                    Math.round(d.r2kg), parseFloat((d.r2kg / 1000).toFixed(3)),
+                    Math.round(d.total), parseFloat((d.total / 1000).toFixed(3)),
                     demandTotalKg > 0 ? Math.round((d.total / demandTotalKg) * 100) : 0,
                   ])
-                )}
+                  downloadXlsx(`senjiw-demande-varietes-${demandPeriod}-${date}`, [
+                    { name: 'Demande variétés', headers: ['Rang', 'Code variété', 'Variété', 'Espèce', 'G3 — Mult. (kg)', 'G3 — Mult. (t)', 'R2 — Quot. (kg)', 'R2 — Quot. (t)', 'Total (kg)', 'Total (t)', 'Part (%)'], rows },
+                  ])
+                }}
                 style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', whiteSpace: 'nowrap' as const }}
-                title="Télécharger en CSV"
+                title="Exporter en Excel"
               >
-                ⬇ CSV
+                <Download size={11} /> Export .xls
               </button>
             )}
 
@@ -1787,7 +1934,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             {roleKey !== 'seed-multiplicator' && (
               <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 8, padding: 3 }}>
                 {(['all','G3','R2'] as const).map(v => {
-                  const label = v === 'all' ? 'Tout' : v === 'G3' ? 'G3 Mult.' : 'R2 Quot.'
+                  const label = v === 'all' ? 'Vue complète' : v === 'G3' ? 'G3 → Mult.' : 'R2 → Quot.'
                   const clr   = v === 'G3' ? GEN_COLOR.G3 : v === 'R2' ? GEN_COLOR.R2 : accent
                   return (
                     <button key={v} onClick={() => setDemandGen(v)} style={{
@@ -1815,8 +1962,12 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             ) : demandEntries.length === 0 ? (
               <div style={{ textAlign: 'center' as const, padding: '28px 0', color: 'var(--text-muted)' }}>
                 <div style={{ fontSize: 20, marginBottom: 8 }}>📭</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Aucune commande sur cette période</div>
-                <div style={{ fontSize: 11.5, marginTop: 4 }}>Élargissez la fenêtre temporelle ou changez le filtre</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Aucune commande enregistrée sur cette période</div>
+                <div style={{ fontSize: 11.5, marginTop: 4 }}>
+                  {(roleKey === 'seed-upsemcl' || roleKey === 'seed-admin')
+                    ? 'Élargissez la fenêtre temporelle ou vérifiez que les commandes ont été saisies par les multiplicateurs et les quotataires'
+                    : 'Élargissez la fenêtre temporelle ou changez le filtre de génération'}
+                </div>
               </div>
             ) : (
               <>
@@ -1830,13 +1981,31 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                     const activePct  = demandMax > 0 ? (activeQty / demandMax) * 100 : 0
                     const sharePct   = demandTotalKg > 0 ? Math.round((activeQty / demandTotalKg) * 100) : 0
                     const showSeg    = roleKey !== 'seed-multiplicator' && demandGen === 'all'
+                    // Badge couverture G3 (stock UPSemCL vs demande)
+                    const showCovBadge = d.g3kg > 0 && (roleKey === 'seed-upsemcl' || roleKey === 'seed-admin') && demandGen !== 'R2'
+                    const covRatio   = d.g3kg > 0 ? d.stockG3 / d.g3kg : null
+                    const covColor   = covRatio === null ? 'var(--text-muted)' : covRatio >= 1 ? '#16a34a' : covRatio >= 0.5 ? '#d97706' : '#dc2626'
+                    const covLabel   = covRatio === null ? '' : covRatio >= 1 ? 'Couvert' : covRatio >= 0.5 ? 'Partiel' : 'Critique'
+                    const covBg      = covRatio === null ? '' : covRatio >= 1 ? '#f0fdf4' : covRatio >= 0.5 ? '#fffbeb' : '#fef2f2'
+                    // Compteur de commandes
+                    const cmdCount   = roleKey === 'seed-multiplicator' ? d.r2OrderCount
+                                      : demandGen === 'R2' ? d.r2OrderCount : d.g3OrderCount
                     return (
-                      <div key={d.code} style={{ display: 'grid', gridTemplateColumns: '160px 1fr 96px', alignItems: 'center', gap: 10 }}>
-                        {/* Label variété + espèce */}
+                      <div key={d.code} style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 120px', alignItems: 'center', gap: 10 }}>
+                        {/* Label variété + espèce + badge couverture */}
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                           <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', flexShrink: 0, minWidth: 14, textAlign: 'right' as const }}>{i + 1}</span>
-                          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, flex: 1 }}>{d.nomVariete}</span>
-                          <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>{d.codeEspece}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{d.nomVariete}</span>
+                              <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>{d.codeEspece}</span>
+                            </div>
+                            {showCovBadge && covLabel && (
+                              <span style={{ display: 'inline-block', marginTop: 2, fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: covBg, color: covColor, border: `1px solid ${covColor}30` }}>
+                                ● {covLabel}
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {/* Barre */}
                         <div style={{ position: 'relative', height: 6, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
@@ -1849,12 +2018,19 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                             <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${activePct}%`, background: (roleKey === 'seed-multiplicator' || demandGen === 'R2') ? GEN_COLOR.R2 : demandGen === 'G3' ? GEN_COLOR.G3 : accent, borderRadius: 99, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1)' }} />
                           )}
                         </div>
-                        {/* Quantité + part */}
-                        <div style={{ textAlign: 'right' as const, lineHeight: 1.2 }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                            {activeQty >= 1000 ? `${(activeQty / 1000).toFixed(1)}k` : activeQty.toLocaleString('fr-FR')} kg
-                          </span>
-                          <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{sharePct}%</span>
+                        {/* Quantité + part + nb commandes */}
+                        <div style={{ textAlign: 'right' as const, lineHeight: 1.3 }}>
+                          <div>
+                            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                              {fmtT(activeQty)}
+                            </span>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>{sharePct}%</span>
+                          </div>
+                          {cmdCount > 0 && (
+                            <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 1 }}>
+                              {cmdCount} commande{cmdCount > 1 ? 's' : ''}
+                            </div>
+                          )}
                         </div>
                       </div>
                     )
@@ -1868,13 +2044,13 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                       {demandG3Total > 0 && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-muted)' }}>
                           <span style={{ width: 8, height: 8, borderRadius: 2, background: GEN_COLOR.G3, display: 'inline-block', flexShrink: 0 }} />
-                          G3 — Multiplicateurs · <strong style={{ color: GEN_COLOR.G3 }}>{demandG3Total >= 1000 ? `${(demandG3Total/1000).toFixed(1)}k` : demandG3Total.toLocaleString('fr-FR')} kg</strong>
+                          G3 → Multiplicateurs · <strong style={{ color: GEN_COLOR.G3 }}>{fmtT(demandG3Total)}</strong>
                         </span>
                       )}
                       {demandR2Total > 0 && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-muted)' }}>
                           <span style={{ width: 8, height: 8, borderRadius: 2, background: GEN_COLOR.R2, display: 'inline-block', flexShrink: 0 }} />
-                          R2 — Quotataires · <strong style={{ color: GEN_COLOR.R2 }}>{demandR2Total >= 1000 ? `${(demandR2Total/1000).toFixed(1)}k` : demandR2Total.toLocaleString('fr-FR')} kg</strong>
+                          R2 → Quotataires · <strong style={{ color: GEN_COLOR.R2 }}>{fmtT(demandR2Total)}</strong>
                         </span>
                       )}
                     </>
@@ -1884,7 +2060,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                     </span>
                   )}
                   <span style={{ marginLeft: 'auto', color: 'var(--text-muted)' }}>
-                    Total · <strong style={{ color: 'var(--text-primary)' }}>{demandTotalKg >= 1000 ? `${(demandTotalKg/1000).toFixed(1)}k` : demandTotalKg.toLocaleString('fr-FR')} kg</strong>
+                    Total · <strong style={{ color: 'var(--text-primary)' }}>{fmtT(demandTotalKg)}</strong>
                   </span>
                 </div>
               </>
@@ -1962,12 +2138,12 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                           <div style={{
                             position: 'absolute', top: 0, left: `${demandPct}%`, width: 2, height: 7,
                             background: '#374151', borderRadius: 1, transform: 'translateX(-50%)',
-                          }} title={`Demande : ${c.demandKg.toLocaleString('fr-FR',{maximumFractionDigits:0})} kg`} />
+                          }} title={`Demande : ${fmtT(c.demandKg)}`} />
                         )}
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
-                        <span>Stock&nbsp;<span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{c.stockKg.toLocaleString('fr-FR',{maximumFractionDigits:0})}</span> kg</span>
-                        {c.demandKg > 0 && <span>Demande&nbsp;<span style={{ fontWeight: 700, color: clr, fontFamily: 'var(--font-mono)' }}>{c.demandKg.toLocaleString('fr-FR',{maximumFractionDigits:0})}</span> kg</span>}
+                        <span>Stock&nbsp;<span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{fmtT(c.stockKg)}</span></span>
+                        {c.demandKg > 0 && <span>Demande&nbsp;<span style={{ fontWeight: 700, color: clr, fontFamily: 'var(--font-mono)' }}>{fmtT(c.demandKg)}</span></span>}
                       </div>
                     </div>
                   )
@@ -2026,7 +2202,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   <div style={{ width: 1, background: 'var(--border)' }} />
                   <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-sans)', color: accent, letterSpacing: '-0.02em', lineHeight: 1 }}>
-                      {totalForecastKg > 0 ? `~${(totalForecastKg/1000).toFixed(1)}t` : '—'}
+                      {totalForecastKg > 0 ? `~${fmtT(totalForecastKg)}` : '—'}
                     </div>
                     <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>production estimée</div>
                   </div>
@@ -2051,7 +2227,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                             </span>
                           </div>
                           <span style={{ fontSize: 12, fontWeight: 700, color: genClr, fontFamily: 'var(--font-mono)' }}>
-                            {f.expectedKg > 0 ? `~${f.expectedKg.toLocaleString('fr-FR',{maximumFractionDigits:0})} kg` : 'données manquantes'}
+                            {f.expectedKg > 0 ? `~${fmtT(f.expectedKg)}` : 'données manquantes'}
                           </span>
                         </div>
                         {f.expectedKg > 0 && (
