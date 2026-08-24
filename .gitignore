@@ -26,3 +26,6 @@ Thumbs.db
 # Docker
 *.pid
 design-b-innovation-sahel.html
+
+# Uploads utilisateurs — fichiers binaires gérés hors git
+data/uploads/
