@@ -584,7 +584,7 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
       {detail && (
         <Modal
           title={`Commande — ${detail.codeCommande}`}
-          subtitle={`${detail.usernameAcheteur || '—'} · ${fmtDatetime(detail.createdAt)}`}
+          subtitle={`${membresMap[detail.usernameAcheteur]?.nomComplet || detail.usernameAcheteur || '—'} · ${fmtDatetime(detail.createdAt)}`}
           onClose={() => setDetail(null)} size="md"
         >
           <StatusPipeline statut={detail.statut} />
@@ -925,6 +925,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
   const [showForm,      setShowForm]      = useState(false)
   const [formSaving,    setFormSaving]    = useState(false)
   const [voirPropModal, setVoirPropModal] = useState<any | null>(null)
+  const [membresMap,    setMembresMap]    = useState<Record<string, any>>({})
   const [form, setForm] = useState({
     observations: '',
     lignes: [{ idVariete: '', quantite: '', unite: 'kg' }],
@@ -938,13 +939,27 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
       api.get(endpoints.varieties),
       api.get(endpoints.organisations),
     ])
-    setRecues(rRes.status === 'fulfilled' ? extractList(rRes.value.data) : [])
+    const recuesData   = rRes.status === 'fulfilled' ? extractList(rRes.value.data) : []
+    const demandesData = dRes.status === 'fulfilled' ? extractList(dRes.value.data) : []
+    setRecues(recuesData)
     setLoadingR(false)
-    setDemandes(dRes.status === 'fulfilled' ? extractList(dRes.value.data) : [])
+    setDemandes(demandesData)
     setLoadingD(false)
     if (varRes.status === 'fulfilled') setVarieties(extractList(varRes.value.data).map(normalizeVariete))
     if (orgRes.status === 'fulfilled')
       setOrgs(orgRes.value.data.filter((o: any) => o.typeOrganisation?.toUpperCase().includes('UPSEMCL') && o.active !== false))
+
+    /* Résolution des noms réels — usernames uniques dans les commandes */
+    const usernames = new Set<string>()
+    ;[...recuesData, ...demandesData].forEach((o: any) => {
+      if (o.usernameAcheteur) usernames.add(o.usernameAcheteur)
+    })
+    const entries = await Promise.allSettled(
+      [...usernames].map(u => api.get(endpoints.membreByUsername(u)).then(r => [u, r.data] as [string, any]))
+    )
+    const map: Record<string, any> = {}
+    entries.forEach(r => { if (r.status === 'fulfilled') { const [u, m] = r.value; map[u] = m } })
+    setMembresMap(map)
   }
   useEffect(() => { fetchAll() }, [])
 
