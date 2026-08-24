@@ -22,12 +22,9 @@ RUN --mount=type=cache,target=/root/.m2 \
     -Dmaven.wagon.http.retryHandler.count=3 \
     -Dmaven.wagon.http.retryHandler.requestSentRetryEnabled=true
 
-RUN ls -lah target && \
-    JAR="$(ls -1 target/*.jar | grep -v 'original' | head -n 1)" && \
-    echo "Using jar: $JAR" && \
-    cp "$JAR" /app/app.jar
+RUN cp $(ls target/*.jar | grep -v original | head -1) /app/app.jar
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 COPY --from=build /app/app.jar /app/app.jar
 EXPOSE 8080

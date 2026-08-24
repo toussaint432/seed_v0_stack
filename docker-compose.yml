@@ -19,7 +19,7 @@ services:
       retries: 20
 
   pgadmin:
-    image: dpage/pgadmin4
+    image: dpage/pgadmin4@sha256:2f4ce946ddf8360680d7eff4eaba1d91859eb6b4003e6623bad5c63a322c2f4d
     container_name: seed-pgadmin
     restart: unless-stopped
     depends_on:
@@ -155,7 +155,7 @@ services:
     stop_grace_period: 30s
 
   kafka-jmx-exporter:
-    image: sscaling/jmx-prometheus-exporter
+    image: sscaling/jmx-prometheus-exporter:0.12.0
     container_name: seed-kafka-jmx
     environment:
       CONFIG_YML: "/etc/jmx_exporter/config.yml"
@@ -168,8 +168,9 @@ services:
     restart: unless-stopped
 
   kafka-exporter:
-    image: danielqsj/kafka-exporter:latest
+    image: danielqsj/kafka-exporter@sha256:a51b280b55a763deaa1bc5024310bc2954995d9160014d7445055dac6a090868
     container_name: seed-kafka-exporter
+    restart: unless-stopped
     command:
       - "--kafka.server=kafka:29092"
       - "--kafka.version=3.1.0"
@@ -182,7 +183,7 @@ services:
     mem_limit: 64m
 
   kafka-ui:
-    image: provectuslabs/kafka-ui:latest
+    image: provectuslabs/kafka-ui@sha256:8f2ff02d64b0a7a2b71b6b3b3148b85f66d00ec20ad40c30bdcd415d46d31818
     container_name: seed-kafka-ui
     depends_on:
       - kafka
@@ -203,6 +204,7 @@ services:
     build:
       context: ./services
       dockerfile: catalog-service/Dockerfile
+    image: seed-catalog:1.0.0
     container_name: seed-catalog
     restart: unless-stopped
     depends_on:
@@ -231,7 +233,7 @@ services:
       SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE: "35MB"
       SPRING_SERVLET_MULTIPART_FILE_SIZE_THRESHOLD: "2MB"
       # CORS : autorise 127.0.0.1 ET localhost (équivalents TCP mais origines HTTP différentes)
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
       UPLOADS_DIR: "/app/uploads"
       SWAGGER_ENABLED: "true"
     volumes:
@@ -249,6 +251,7 @@ services:
     build:
       context: ./services
       dockerfile: lot-service/Dockerfile
+    image: seed-lot:1.0.0
     container_name: seed-lot
     restart: unless-stopped
     depends_on:
@@ -267,7 +270,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
       UPLOADS_DIR: "/app/uploads"
       SWAGGER_ENABLED: "true"
     volumes:
@@ -285,6 +288,7 @@ services:
     build:
       context: ./services
       dockerfile: stock-service/Dockerfile
+    image: seed-stock:1.0.0
     container_name: seed-stock
     restart: unless-stopped
     depends_on:
@@ -303,7 +307,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
       SWAGGER_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
@@ -318,6 +322,7 @@ services:
     build:
       context: ./services
       dockerfile: order-service/Dockerfile
+    image: seed-order:1.0.0
     container_name: seed-order
     restart: unless-stopped
     depends_on:
@@ -336,7 +341,7 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/seed-v0/protocol/openid-connect/certs
       JAVA_TOOL_OPTIONS: "-Xms48m -Xmx192m -XX:MaxMetaspaceSize=160m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
       SPRING_KAFKA_LISTENER_MISSING_TOPICS_FATAL: "false"
-      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000"
+      CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
       SWAGGER_ENABLED: "true"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health | grep -q UP || exit 1"]
@@ -349,6 +354,7 @@ services:
 
   frontend:
     build: ./frontend
+    image: seed-frontend:1.0.0
     container_name: seed-frontend
     restart: unless-stopped
     depends_on:
