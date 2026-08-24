@@ -588,6 +588,19 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
           onClose={() => setDetail(null)} size="md"
         >
           <StatusPipeline statut={detail.statut} />
+          {detail.statut === 'REJETEE' && (
+            <div style={{
+              background: '#fef2f2', border: '1px solid #fca5a5', borderLeft: '4px solid #dc2626',
+              borderRadius: 6, padding: '10px 14px', marginBottom: 12,
+            }}>
+              <div style={{ fontWeight: 700, color: '#dc2626', fontSize: 12, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>
+                Commande rejetée
+              </div>
+              <div style={{ fontSize: 13, color: '#7f1d1d' }}>
+                {detail.observations || 'Aucun motif renseigné.'}
+              </div>
+            </div>
+          )}
           <div style={{ display: 'grid', gap: 8, fontSize: 13, marginBottom: 16 }}>
             {([
               ['Client',          detail.client || '—'],
