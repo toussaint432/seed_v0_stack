@@ -94,6 +94,7 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
   const [filterDir, setFilterDir] = useState<'tous'|'recus'|'emis'>('tous')
 
   const [recus, setRecus] = useState<any[]>([])
+  const [membresMap, setMembresMap] = useState<Record<string, any>>({})
   const [refusModal, setRefusModal] = useState<any>(null)
   const [motifRefus, setMotifRefus] = useState('')
   // État modale facture
@@ -115,11 +116,27 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
       api.get(endpoints.sites),
       needsMesSites ? api.get(endpoints.sitesMesSites) : Promise.resolve({ data: [] }),
     ])
-    setTransfers(tRes.status === 'fulfilled' ? tRes.value.data : [])
+    const allTransferts = tRes.status === 'fulfilled' ? tRes.value.data : []
+    const allRecus      = rRes.status === 'fulfilled' ? rRes.value.data : []
+    setTransfers(allTransferts)
     setLots(extractList(lRes.status === 'fulfilled' ? lRes.value.data : null).map(normalizeLot))
-    setRecus(rRes.status === 'fulfilled' ? rRes.value.data : [])
+    setRecus(allRecus)
     setSites(sRes.status === 'fulfilled' ? sRes.value.data : [])
     setMesSites(msRes.status === 'fulfilled' ? msRes.value.data : [])
+
+    /* Résolution des noms réels — batch sur les usernames uniques */
+    const usernames = new Set<string>()
+    ;[...allTransferts, ...allRecus].forEach((t: any) => {
+      if (t.usernameEmetteur)     usernames.add(t.usernameEmetteur)
+      if (t.usernameDestinataire) usernames.add(t.usernameDestinataire)
+    })
+    const entries = await Promise.allSettled(
+      [...usernames].map(u => api.get(endpoints.membreByUsername(u)).then(r => [u, r.data] as [string, any]))
+    )
+    const map: Record<string, any> = {}
+    entries.forEach(r => { if (r.status === 'fulfilled') { const [u, m] = r.value; map[u] = m } })
+    setMembresMap(map)
+
     setLoading(false)
   }
 
@@ -199,6 +216,14 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
     } finally { setSaving(false) }
   }
 
+  function resolveNom(username: string | undefined): string {
+    if (!username) return '—'
+    const m = membresMap[username]
+    if (!m) return username
+    const org = m.organisation?.nomOrganisation || ''
+    return org ? `${m.nomComplet || username} (${org})` : (m.nomComplet || username)
+  }
+
   function getLotLabel(idLot: number): string {
     const lot = lots.find((l: any) => l.id === idLot)
     return lot ? lot.codeLot : `#${idLot}`
@@ -214,16 +239,19 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
     const emetteurRoleKey = t.roleEmetteur || guessRoleFromGen(gen, 'emetteur')
     const destRoleKey     = t.roleDestinataire || guessRoleFromGen(gen, 'dest')
 
+    const memV = t.usernameEmetteur     ? membresMap[t.usernameEmetteur]     : null
+    const memA = t.usernameDestinataire ? membresMap[t.usernameDestinataire] : null
+
     const data: FactureData = {
       transfertId:      t.id,
       codeTransfert:    t.codeTransfert,
       vendeurUsername:  t.usernameEmetteur || currentUser,
-      vendeurNom:       t.usernameEmetteur || currentUser,
-      vendeurRole:      ROLE_LABELS[emetteurRoleKey] || emetteurRoleKey,
+      vendeurNom:       memV?.nomComplet || t.usernameEmetteur || currentUser,
+      vendeurRole:      memV?.organisation?.nomOrganisation || ROLE_LABELS[emetteurRoleKey] || emetteurRoleKey,
       vendeurAdresse:   'ISRA/CNRA — Bambey, Sénégal',
       acheteurUsername: t.usernameDestinataire || '—',
-      acheteurNom:      t.usernameDestinataire || '—',
-      acheteurRole:     ROLE_LABELS[destRoleKey] || destRoleKey,
+      acheteurNom:      memA?.nomComplet || t.usernameDestinataire || '—',
+      acheteurRole:     memA?.organisation?.nomOrganisation || ROLE_LABELS[destRoleKey] || destRoleKey,
       codeLot:          lot?.codeLot || `LOT-${t.idLot}`,
       nomVariete:       lot?.variete?.nomVariete || lot?.nomVariete || 'N/D',
       nomEspece:        lot?.variete?.espece?.nomEspece || lot?.espece?.nomEspece || 'Semence',
@@ -271,18 +299,21 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
       lotParentCode:    lot?.lotParent?.codeLot,
     }
 
+    const memExp  = t.usernameEmetteur     ? membresMap[t.usernameEmetteur]     : null
+    const memDest = t.usernameDestinataire ? membresMap[t.usernameDestinataire] : null
+
     const expediteur: PartiePdf = {
       username:  t.usernameEmetteur || '—',
-      nom:       t.usernameEmetteur || '—',
+      nom:       memExp?.nomComplet || t.usernameEmetteur || '—',
       roleKey:   emetteurRoleKey,
-      roleLabel: ROLE_LABELS[emetteurRoleKey] || emetteurRoleKey,
+      roleLabel: memExp?.organisation?.nomOrganisation || ROLE_LABELS[emetteurRoleKey] || emetteurRoleKey,
     }
 
     const destinataire: PartiePdf = {
       username:  t.usernameDestinataire || '—',
-      nom:       t.usernameDestinataire || '—',
+      nom:       memDest?.nomComplet || t.usernameDestinataire || '—',
       roleKey:   destRoleKey,
-      roleLabel: ROLE_LABELS[destRoleKey] || destRoleKey,
+      roleLabel: memDest?.organisation?.nomOrganisation || ROLE_LABELS[destRoleKey] || destRoleKey,
     }
 
     const docData: TransferDocData = {
@@ -495,10 +526,10 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
                         >{lotLabel}</span>
                       </td>
                       {/* Émetteur → Destinataire */}
-                      <td style={{ fontSize: 12.5 }}>
-                        <span style={{ fontWeight: 600 }}>{t.usernameEmetteur || t.organisationSource || '—'}</span>
+                      <td style={{ fontSize: 12 }}>
+                        <span style={{ fontWeight: 600 }}>{resolveNom(t.usernameEmetteur) || t.organisationSource || '—'}</span>
                         <span style={{ color: 'var(--text-muted)', margin: '0 5px', fontWeight: 400 }}>→</span>
-                        <span style={{ fontWeight: 600 }}>{t.usernameDestinataire || t.organisationDestination || '—'}</span>
+                        <span style={{ fontWeight: 600 }}>{resolveNom(t.usernameDestinataire) || t.organisationDestination || '—'}</span>
                       </td>
                       {/* Génération */}
                       <td><span className="badge badge-generation">{t.generationTransferee || '—'}</span></td>
