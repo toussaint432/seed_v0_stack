@@ -5,6 +5,7 @@ import sn.isra.seed.lot_service.repo.CampagneRepo;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -30,11 +31,13 @@ public class CampagneController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasAuthority('ROLE_seed-admin')")
     @PostMapping
     public Campagne create(@Valid @RequestBody Campagne campagne) {
         return campagneRepo.save(campagne);
     }
 
+    @PreAuthorize("hasAuthority('ROLE_seed-admin')")
     @PutMapping("/{id}")
     public ResponseEntity<Campagne> update(@PathVariable Long id, @Valid @RequestBody Campagne body) {
         return campagneRepo.findById(id).map(c -> {
@@ -48,6 +51,7 @@ public class CampagneController {
         }).orElse(ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasAuthority('ROLE_seed-admin')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         if (!campagneRepo.existsById(id)) return ResponseEntity.notFound().build();

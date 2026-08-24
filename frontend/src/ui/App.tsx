@@ -91,6 +91,7 @@ function getNavSections(roleKey: string): NavSection[] {
       return [
         { section: 'Général',        items: [dashboard] },
         { section: 'Recherche',      items: [varieties, { ...lots, label: 'Lots G0/G1' }] },
+        { section: 'Production',     items: [programs] },
         { section: 'Gestion',        items: [stocks, transfers, orders] },
         { section: 'Communication',  items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
@@ -176,6 +177,7 @@ export function App() {
   const [unread,    setUnread]    = useState(0)
   const unreadTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const [theme,     setTheme]     = useState<'system' | 'light' | 'dark'>(() => (localStorage.getItem('seed-theme') as any) || 'system')
+  const [sessionWarning, setSessionWarning] = useState(false)
   const [notifOpen, setNotifOpen] = useState(false)
   const [cmdOpen,   setCmdOpen]   = useState(false)
   const [cmdQuery,  setCmdQuery]  = useState('')
@@ -242,6 +244,20 @@ export function App() {
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [cmdOpen, notifOpen])
+
+  // Surveillance expiration session — avertissement 2 min avant
+  useEffect(() => {
+    if (!ready || !keycloak.authenticated) return
+    const check = () => {
+      const exp = (keycloak.tokenParsed as any)?.exp
+      if (!exp) return
+      const remaining = exp - Math.floor(Date.now() / 1000)
+      setSessionWarning(remaining > 0 && remaining <= 120)
+    }
+    check()
+    const t = setInterval(check, 20_000)
+    return () => clearInterval(t)
+  }, [ready])
 
   // Polling badge non-lus (toutes les 30s, démarré après login authentifié uniquement)
   useEffect(() => {
@@ -331,6 +347,20 @@ export function App() {
 
   return (
     <>
+    {sessionWarning && (
+      <div className="session-warning-banner">
+        <span>Votre session expire dans moins de 2 minutes.</span>
+        <button
+          onClick={async () => {
+            try { await keycloak.updateToken(300); setSessionWarning(false) }
+            catch { window.location.href = window.location.origin }
+          }}
+        >
+          Renouveler
+        </button>
+        <button className="session-warning-close" onClick={() => setSessionWarning(false)}>✕</button>
+      </div>
+    )}
     <div className="layout">
 
       {/* ── Sidebar ── */}
@@ -622,7 +652,7 @@ export function App() {
             <Route path="/campagnes"      element={<Campagnes      roleKey={user.roleKey} />} />
             <Route path="/sites"          element={<Sites          roleKey={user.roleKey} />} />
             <Route path="/mes-sites"      element={<MesSites       roleKey={user.roleKey} />} />
-            <Route path="/programs"       element={<Programs       roleKey={user.roleKey} />} />
+            <Route path="/programs"       element={<Programs       roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/profile"        element={<Profile        roleKey={user.roleKey} />} />
             <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
             <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />

@@ -10,6 +10,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
@@ -56,6 +57,7 @@ public class StockController {
     return ResponseEntity.ok(stockMapper.toDtoList(stockRepo.findByOrganisation(orgId)));
   }
 
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl')")
   @PostMapping("/stocks")
   public StockDto upsert(@Valid @RequestBody UpsertStockRequest req) throws Exception {
     return stockMapper.toDto(stockService.upsert(req));
@@ -67,6 +69,7 @@ public class StockController {
     return mouvementRepo.findAllByOrderByCreatedAtDesc();
   }
 
+  @PreAuthorize("hasAuthority('ROLE_seed-admin')")
   @PutMapping("/stocks/{id}")
   public ResponseEntity<StockDto> updateStock(@PathVariable Long id,
                                                @Valid @RequestBody UpsertStockRequest req) throws Exception {
@@ -78,6 +81,7 @@ public class StockController {
     return ResponseEntity.ok(stockMapper.toDto(stockRepo.save(stock)));
   }
 
+  @PreAuthorize("hasAuthority('ROLE_seed-admin')")
   @Transactional
   @DeleteMapping("/stocks/{id}")
   public ResponseEntity<Void> deleteStock(@PathVariable Long id) {
@@ -87,6 +91,7 @@ public class StockController {
     return ResponseEntity.noContent().build();
   }
 
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl')")
   @PostMapping("/movements")
   public MouvementStock move(@Valid @RequestBody MovementRequest req) throws Exception {
     return stockService.move(req);

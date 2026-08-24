@@ -240,10 +240,21 @@ public class ChatController {
     @GetMapping("/files/{filename}")
     public ResponseEntity<InputStreamResource> serveFile(
             @PathVariable String filename,
-            @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader
+            @RequestHeader(value = HttpHeaders.RANGE, required = false) String rangeHeader,
+            @AuthenticationPrincipal Jwt jwt
     ) throws IOException {
+        if (jwt == null) return ResponseEntity.status(401).build();
         if (filename.contains("..") || filename.contains("/"))
             return ResponseEntity.badRequest().build();
+
+        String me = username(jwt);
+        String role = roleOf(me);
+        if (!"seed-admin".equals(role)) {
+            Message msg = msgRepo.findByUrlMedia("/api/chat/files/" + filename).orElse(null);
+            if (msg == null) return ResponseEntity.status(403).build();
+            Conversation conv = convRepo.findById(msg.getIdConversation()).orElse(null);
+            if (conv == null || !estParticipant(conv, me)) return ResponseEntity.status(403).build();
+        }
 
         Path filePath = UPLOAD_DIR.resolve(filename);
         if (!Files.exists(filePath)) return ResponseEntity.notFound().build();

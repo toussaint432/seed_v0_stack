@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.List;
+import java.util.Optional;
 
 public interface MessageRepo extends JpaRepository<Message, Long> {
 
@@ -19,6 +20,8 @@ public interface MessageRepo extends JpaRepository<Message, Long> {
 
     @Query("SELECT COUNT(m) FROM Message m WHERE m.lu = false AND m.expediteur <> :username AND m.idConversation IN (SELECT c.id FROM Conversation c WHERE c.participant1 = :username OR c.participant2 = :username)")
     Long countTotalUnread(@Param("username") String username);
+
+    Optional<Message> findByUrlMedia(String urlMedia);
 
     @Modifying
     @Query("UPDATE Message m SET m.lu = true WHERE m.idConversation = :convId AND m.expediteur <> :username AND m.lu = false")

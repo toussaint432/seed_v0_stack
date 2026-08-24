@@ -2,6 +2,7 @@ services:
   postgres:
     image: postgres:16
     container_name: seed-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: seed
       POSTGRES_USER: seed
@@ -77,6 +78,7 @@ services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     container_name: seed-zookeeper
+    restart: unless-stopped
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -136,7 +138,7 @@ services:
       KAFKA_JMX_HOSTNAME: kafka
       # ── JVM — G1GC, limité pour dev sur M1 ────────────────────────────
       # Heap réduit + mem_limit augmenté pour laisser de la place au natif/mmap
-      KAFKA_HEAP_OPTS: "-Xms64m -Xmx256m"
+      KAFKA_HEAP_OPTS: "-Xms128m -Xmx384m"
       KAFKA_JVM_PERFORMANCE_OPTS: >-
         -XX:+UseG1GC
         -XX:MaxGCPauseMillis=20
@@ -147,8 +149,9 @@ services:
       # Session ZK réduite pour accélérer la récupération après crash
       KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 8000
       KAFKA_ZOOKEEPER_CONNECTION_TIMEOUT_MS: 8000
-    # 256m heap + ~150m métaspace/natif/mmap = ~406m < 512m ✓
-    mem_limit: 512m
+    # 384m heap + ~200m métaspace/natif/mmap = ~584m < 768m ✓
+    mem_limit: 768m
+    restart: unless-stopped
     stop_grace_period: 30s
 
   kafka-jmx-exporter:
