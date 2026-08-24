@@ -977,8 +977,8 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
   async function refuser(e: React.FormEvent) {
     e.preventDefault(); if (!refusModal) return; setSaving(true)
     try {
-      await api.put(endpoints.orderStatut(refusModal.id), { statut: 'ANNULEE', observations: motif })
-      setToast({ msg: `Commande ${refusModal.code} annulée`, type: 'success' })
+      await api.put(endpoints.orderStatut(refusModal.id), { statut: 'REJETEE', observations: motif })
+      setToast({ msg: `Commande ${refusModal.code} rejetée`, type: 'success' })
       setRefusModal(null); setMotif(''); fetchAll()
     } catch { setToast({ msg: 'Erreur', type: 'error' }) }
     finally { setSaving(false) }

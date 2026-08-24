@@ -102,8 +102,7 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
   const [factureTva, setFactureTva] = useState('0')
   const [factureConditions, setFactureConditions] = useState('')
 
-  // Rôles éligibles à générer/voir les factures de cession
-  const canFacture = ['seed-selector', 'seed-upsemcl', 'seed-admin', 'seed-multiplicator'].includes(roleKey)
+  const canCreateFacture = ['seed-selector', 'seed-upsemcl', 'seed-admin'].includes(roleKey)
 
   async function fetchAll() {
     setLoading(true)
@@ -558,11 +557,11 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
                               onClick={() => downloadDoc(t, 'ACCUSE_RECEPTION')}
                             ><ClipboardCheck size={12} /></button>
                           )}
-                          {canFacture && isActif && (
+                          {canCreateFacture && isActif && (
                             <button
                               className="btn btn-ghost"
                               style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#b45309' }}
-                              title="Générer / Voir la Facture"
+                              title="Créer la Facture"
                               onClick={() => { setFactureModal(t); setFacturePrix(''); setFactureTva('0') }}
                             ><Receipt size={12} /></button>
                           )}
