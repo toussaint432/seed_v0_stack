@@ -6,11 +6,12 @@
 > *« Sen Jiwu » signifie « Votre semence » en wolof.*
 
 [![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%2B%20TypeScript-61DAFB?style=flat-square&logo=react)](https://react.dev)
-[![Backend](https://img.shields.io/badge/Backend-Spring%20Boot%203.5%20%2F%20Java%2021-6DB33F?style=flat-square&logo=springboot)](https://spring.io)
+[![Backend](https://img.shields.io/badge/Backend-Spring%20Boot%203.3%20%2F%20Java%2021-6DB33F?style=flat-square&logo=springboot)](https://spring.io)
 [![Auth](https://img.shields.io/badge/Auth-Keycloak%2025%20OAuth2--PKCE-4D4D4D?style=flat-square&logo=keycloak)](https://www.keycloak.org)
-[![DB](https://img.shields.io/badge/Database-PostgreSQL%2016-336791?style=flat-square&logo=postgresql)](https://postgresql.org)
+[![DB](https://img.shields.io/badge/Database-PostgreSQL%2016--alpine-336791?style=flat-square&logo=postgresql)](https://postgresql.org)
 [![Broker](https://img.shields.io/badge/Broker-Apache%20Kafka%207.6-231F20?style=flat-square&logo=apachekafka)](https://kafka.apache.org)
 [![Deploy](https://img.shields.io/badge/Deploy-Docker%20Compose-2496ED?style=flat-square&logo=docker)](https://docs.docker.com/compose)
+[![CI](https://img.shields.io/badge/CI%2FCD-Jenkins%20Pipeline-D24939?style=flat-square&logo=jenkins)](https://www.jenkins.io)
 
 ---
 
@@ -50,7 +51,7 @@
                            │ HTTPS
                            ▼
 ┌──────────────────────────────────────────────────────────────────────┐
-│              Frontend React/TS — Nginx (Docker)  :5173               │
+│              Frontend React/TS — Vite (Docker)  :5173                │
 │      Keycloak PKCE · Vite · Leaflet · Lucide React · CSS custom      │
 └────┬──────────────┬──────────────┬──────────────┬────────────────────┘
      │ OAuth2/OIDC  │ REST + JWT   │ REST + JWT   │ REST + JWT   │ REST + JWT
@@ -68,8 +69,8 @@
                               ┌─────────────┴─────────────┐
                               │                           │
                     ┌─────────▼──────────┐   ┌───────────▼──────────┐
-                    │   PostgreSQL 16    │   │    Apache Kafka       │
-                    │   base « seed »    │   │   Bus d'événements   │
+                    │  PostgreSQL 16     │   │    Apache Kafka       │
+                    │  alpine edition    │   │   Bus d'événements   │
                     │     :15432         │   │      :19092           │
                     │                   │   └──────────────────────┘
                     │  Schema per Svc   │
@@ -104,17 +105,166 @@ Les migrations Flyway sont gérées exclusivement par `catalog-service` ; la tab
 | Couche | Technologie | Version |
 |---|---|---|
 | Frontend | React + TypeScript | 18 / TS 5 |
-| Build & Serveur | Vite + Nginx (Alpine) | 5.x |
+| Build dev / Conteneur | Vite (dev) — nginx:alpine prévu Phase 3 | 5.x |
 | Cartographie | Leaflet.js | 1.9 |
-| Backend | Spring Boot + Java | 3.5 / Java 21 |
-| Sécurité API | Spring Security, OAuth2/OIDC | — |
-| Base de données | PostgreSQL | 16 |
-| Migrations DB | Flyway | — |
+| Backend | Spring Boot + Java | 3.3 / Java 21 |
+| Sécurité API | Spring Security, OAuth2/OIDC, RBAC | — |
+| Base de données | PostgreSQL (Alpine) | 16-alpine |
+| Migrations DB | Flyway (auto au démarrage) | — |
 | Authentification | Keycloak | 25.0.4 |
 | Messagerie async | Apache Kafka + ZooKeeper | cp-kafka 7.6.1 |
-| Conteneurisation | Docker + Docker Compose | Engine 26 / v2 |
+| Conteneurisation | Docker + Docker Compose | Engine 26 / Compose v2 |
 | Génération PDF | iText / PDFBox (Spring) | — |
 | Monitoring | Prometheus + Grafana + Alertmanager | 2.52 / 10.4.3 |
+| CI/CD | Jenkins (Pipeline-as-Code, Jenkinsfile) | — |
+
+---
+
+## Stratégie Docker & optimisations (Phase 1)
+
+### Multi-stage builds
+
+Chaque service Java utilise un **build en deux étapes** :
+
+```
+Étape 1 — Maven build  :  maven:3.9.8-eclipse-temurin-21
+           ↓ compilation + packaging → app.jar
+Étape 2 — Runtime      :  eclipse-temurin:21-jre-alpine
+           ↓ COPY app.jar uniquement (~60 MB vs ~600 MB)
+```
+
+**Gain** : l'image de production ne contient ni Maven, ni le JDK, ni les sources. Seul le JAR compilé et le JRE sont embarqués. Les outils de build n'ont aucune raison d'être présents dans une image de production — c'est un principe de moindre surface d'attaque (OWASP A05:2021 — Security Misconfiguration).
+
+### Choix Alpine vs Distroless
+
+| Option | Taille | Shell | Outils de diagnostic |
+|---|---|---|---|
+| `eclipse-temurin:21-jre` (Debian) | ~280 MB | ✅ | ✅ |
+| `eclipse-temurin:21-jre-alpine` ✅ | ~130 MB | ✅ | ✅ |
+| `gcr.io/distroless/java21` | ~85 MB | ❌ | ❌ |
+
+**Choix retenu : Alpine.** En contexte institutionnel ISRA/CNRA, la capacité de `docker exec` dans un conteneur pour diagnostiquer un problème en production est opérationnellement nécessaire. Distroless supprime le shell — ce gain de ~45 MB supplémentaires n'est pas justifié face à la perte de capacité opérationnelle. Alpine conserve le shell tout en réduisant l'image de ~150 MB par service Java (×4 services = **~600 MB** gagnés).
+
+### Image tagging — Semantic Versioning
+
+Toutes les images applicatives suivent le [Semantic Versioning](https://semver.org) :
+
+```yaml
+image: seed-catalog:1.0.0
+image: seed-lot:1.0.0
+image: seed-stock:1.0.0
+image: seed-order:1.0.0
+image: seed-frontend:1.0.0
+```
+
+**Justification** : un tag `:latest` est **mutable** — il peut pointer vers une image différente après un re-push. Un tag `1.0.0` est une promesse de stabilité. En production, un déploiement doit être reproductible et auditables : `seed-catalog:1.0.0` identifie de manière non ambiguë la version déployée dans les logs et l'historique Grafana.
+
+### SHA256 digest pinning — images tierces
+
+Pour les images publiées sans tag de version stable (`:latest` implicite), le digest SHA256 est utilisé :
+
+```yaml
+image: provectuslabs/kafka-ui@sha256:8f2ff02d64b0a7a2b71b6b3b3148b85f66d00ec20ad40c30bdcd415d46d31818
+image: dpage/pgadmin4@sha256:2f4ce946ddf8360680d7eff4eaba1d91859eb6b4003e6623bad5c63a322c2f4d
+image: danielqsj/kafka-exporter@sha256:a51b280b55a763deaa1bc5024310bc2954995d9160014d7445055dac6a090868
+```
+
+Un tag peut être réécrit par le mainteneur de l'image (**mutable**). Un SHA256 est cryptographiquement immuable — c'est la forme de pinning la plus rigoureuse. Elle protège contre les attaques de type supply-chain (image substituée) et garantit que `docker compose up` déploie exactement l'image testée, sans surprise.
+
+### Builds déterministes — `npm ci`
+
+```dockerfile
+RUN npm ci     # ← lit package-lock.json, échec si lock désynchronisé
+# vs npm install qui régénère le lock et peut introduire des versions différentes
+```
+
+Conformément au [12-Factor App §IV — Dependencies](https://12factor.net/dependencies), les dépendances doivent être déclarées explicitement et isolées. `npm ci` garantit que le build de CI produit exactement le même bundle que le développeur local.
+
+### `.dockerignore`
+
+Le fichier `frontend/.dockerignore` exclut du contexte Docker :
+
+```
+node_modules/   ← évite d'envoyer des centaines de MB inutiles au daemon
+dist/           ← artefact généré, non source
+.git/           ← historique git non nécessaire dans l'image
+.env*           ← secrets ne doivent jamais entrer dans une image
+*.log
+```
+
+Sans `.dockerignore`, `COPY . .` enverrait l'intégralité du répertoire au Docker daemon — incluant potentiellement des fichiers sensibles.
+
+### CORS — origines autorisées
+
+```yaml
+CORS_ALLOWED_ORIGINS: "http://localhost:5173,http://127.0.0.1:5173"
+```
+
+`localhost` et `127.0.0.1` sont **deux origines HTTP distinctes** même si elles résolvent au même hôte. Les deux sont nécessaires selon le navigateur utilisé. `localhost:3000` (React CRA legacy) a été retiré : ne pas conserver d'origines autorisées non utilisées est une bonne pratique de sécurité (principe de moindre privilège).
+
+---
+
+## Sécurité infrastructure (Phase 2)
+
+### `postgres:16-alpine` — migration depuis `postgres:16`
+
+```
+postgres:16 (Debian)  → UID postgres = 999
+postgres:16-alpine    → UID postgres = 70
+```
+
+Le répertoire de données PostgreSQL (`/var/lib/postgresql/data`) est chown'd avec l'UID de l'image d'origine. Si le volume `seed_pgdata` existe depuis `postgres:16`, la migration vers `postgres:16-alpine` nécessite de le recréer :
+
+```bash
+# ⚠️ Cette commande supprime toutes les données locales
+docker compose down
+docker volume rm seed_v0_stack_seed_pgdata
+docker compose up -d
+```
+
+> **En production** : effectuer un `pg_dump` complet avant migration, puis `pg_restore` après recréation du volume. Ne jamais recréer un volume de production sans sauvegarde préalable.
+
+### Keycloak healthcheck — `/health/ready:9000`
+
+Keycloak 25 expose deux ports distincts :
+- `:8080` — port applicatif (authentification, OIDC, console admin)
+- `:9000` — port management (health, métriques Micrometer) — **non exposé publiquement**
+
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "curl -sf http://localhost:9000/health/ready || exit 1"]
+  interval: 10s
+  timeout: 5s
+  retries: 12
+  start_period: 60s
+```
+
+`/health/ready` retourne HTTP 200 quand Keycloak est opérationnel (base de données connectée, realm chargé), HTTP 503 pendant l'initialisation. Avec `start_period: 60s` + 12 tentatives × 10s, le système attend jusqu'à **3 minutes** avant de déclarer le service non disponible.
+
+**Impact sur le démarrage** : tous les microservices et le frontend utilisent désormais `condition: service_healthy` au lieu de `condition: service_started`. Cela garantit qu'aucun service ne démarre avant que Keycloak puisse valider les tokens JWT — supprimant les erreurs 401 en boucle au démarrage de la stack.
+
+### Swagger désactivé par défaut
+
+```yaml
+SWAGGER_ENABLED: "false"   # catalog-service, lot-service, stock-service, order-service
+```
+
+**Justification** : Swagger UI expose l'intégralité de la surface API — routes, paramètres, modèles de données — publiquement. En environnement Dockerisé (staging/production), cette information n'est utile qu'au développeur. L'exposer augmente inutilement la surface d'attaque (OWASP A01:2021 — Broken Access Control).
+
+**Activer Swagger pour le développement :**
+
+```yaml
+# Option A — dans docker-compose.yml (temporaire)
+SWAGGER_ENABLED: "true"
+
+# Option B — lancer le service hors Docker (recommandé)
+docker compose up -d postgres keycloak kafka zookeeper
+cd services/catalog-service && mvn spring-boot:run
+# → http://localhost:18081/swagger-ui.html
+# → http://localhost:18082/swagger-ui.html
+# → http://localhost:18083/swagger-ui.html
+# → http://localhost:18084/swagger-ui.html
+```
 
 ---
 
@@ -134,11 +284,17 @@ cd seed_v0_stack
 docker compose up -d --build
 ```
 
-Le démarrage complet prend **2–3 minutes**. Attendre que tous les containers soient `healthy` :
+**Temps de démarrage** : 3–4 minutes au premier lancement (Keycloak healthcheck actif — la stack attend que Keycloak soit réellement opérationnel avant de démarrer les microservices). Les démarrages suivants sont plus rapides (~90 secondes).
 
 ```bash
+# Vérifier que tous les containers sont healthy
 docker compose ps
+
+# Suivre les logs d'un service
+docker compose logs -f catalog-service
 ```
+
+> **Si le volume `seed_pgdata` existait avant la migration vers `postgres:16-alpine`** : voir la section [Sécurité infrastructure](#sécurité-infrastructure-phase-2) — le volume doit être recréé.
 
 ### Accès aux services
 
@@ -210,7 +366,10 @@ Chaque lot conserve une référence vers son **lot parent**, permettant une tra�
 
 ```
 seed_v0_stack/
+├── Jenkinsfile                     # Pipeline CI/CD déclaratif (Pipeline-as-Code)
 ├── frontend/
+│   ├── .dockerignore               # Exclut node_modules, .git, .env du contexte Docker
+│   ├── Dockerfile                  # node:20-alpine + npm ci (build déterministe)
 │   └── src/
 │       ├── lib/
 │       │   ├── api.ts              # Client Axios + intercepteurs JWT
@@ -242,13 +401,16 @@ seed_v0_stack/
 │               └── Profile.tsx             # Profil utilisateur connecté
 │
 ├── services/
+│   ├── seed-common/                # Bibliothèque partagée — installée avant les services
 │   ├── catalog-service/            # :18081 — Référentiel variétal
+│   │   ├── Dockerfile              # Multi-stage Maven → eclipse-temurin:21-jre-alpine
 │   │   └── api/
 │   │       ├── CatalogController   # Espèces, variétés, archivage traçable, historique
 │   │       ├── DocumentController  # Génération PDF fiches variétales & itinéraires
 │   │       └── ZoneController      # Zones agro-écologiques (ZAE) + cartographie
 │   │
 │   ├── lot-service/                # :18082 — Cycle de vie des lots
+│   │   ├── Dockerfile              # Multi-stage Maven → eclipse-temurin:21-jre-alpine
 │   │   └── api/
 │   │       ├── LotController           # CRUD lots, création enfant, isolation par rôle
 │   │       ├── LotDocumentController   # Génération PDF certificat de lot
@@ -260,6 +422,7 @@ seed_v0_stack/
 │   │       └── ProgrammeController     # Programmes de multiplication
 │   │
 │   ├── stock-service/              # :18083 — Stocks & sites
+│   │   ├── Dockerfile              # Multi-stage Maven → eclipse-temurin:21-jre-alpine
 │   │   └── api/
 │   │       ├── StockController     # Inventaire + mouvements (IN/OUT/TRANSFER)
 │   │       ├── SiteController      # Sites de stockage et production
@@ -267,6 +430,7 @@ seed_v0_stack/
 │   │       └── TransfertController # Transferts physiques inter-sites
 │   │
 │   └── order-service/              # :18084 — Commandes & livraisons
+│       ├── Dockerfile              # Multi-stage Maven → eclipse-temurin:21-jre-alpine
 │       └── api/
 │           ├── OrderController         # Commandes, allocation, workflow livraison
 │           ├── OrganisationController  # Organisations de la filière
@@ -288,7 +452,7 @@ seed_v0_stack/
 └── README.md
 ```
 
-**Migrations Flyway** : 45 migrations versionnées (V1 → V45 + V11.1), appliquées automatiquement par `catalog-service` au démarrage. La table `flyway_schema_history` est maintenue dans le schéma `public`.
+**Migrations Flyway** : versionnées (V1 → V64+), appliquées automatiquement par `catalog-service` au démarrage. La table `flyway_schema_history` est maintenue dans le schéma `public`.
 
 ---
 
@@ -298,11 +462,14 @@ seed_v0_stack/
 # 1. Démarrer uniquement l'infrastructure
 docker compose up -d postgres keycloak kafka zookeeper
 
-# 2. Lancer un microservice (exemple)
+# 2. Construire seed-common (requis avant tout service)
+cd services/seed-common && mvn -B install -DskipTests -q
+
+# 3. Lancer un microservice (exemple)
 cd services/catalog-service
 ./mvnw spring-boot:run
 
-# 3. Lancer le frontend en mode dev
+# 4. Lancer le frontend en mode dev
 cd frontend
 npm install
 npm run dev   # http://localhost:5173
@@ -321,6 +488,86 @@ docker compose up -d catalog-service
 docker compose build frontend && docker compose up -d frontend
 ```
 
+### Documentation API (Swagger)
+
+Swagger UI est **désactivé par défaut** dans tous les containers Docker (`SWAGGER_ENABLED: false`) — voir section [Sécurité infrastructure](#sécurité-infrastructure-phase-2).
+
+Pour l'activer en développement, deux options :
+
+```bash
+# Option A — flip temporaire dans docker-compose.yml
+# SWAGGER_ENABLED: "true"   (sous l'environnement du service concerné)
+docker compose up -d catalog-service
+
+# Option B — sans Docker (recommandé, Swagger activé par défaut hors container)
+docker compose up -d postgres keycloak kafka zookeeper
+cd services/catalog-service && mvn spring-boot:run
+```
+
+| Service | URL Swagger (quand activé) |
+|---|---|
+| catalog-service | http://localhost:18081/swagger-ui.html |
+| lot-service | http://localhost:18082/swagger-ui.html |
+| stock-service | http://localhost:18083/swagger-ui.html |
+| order-service | http://localhost:18084/swagger-ui.html |
+
+---
+
+## Pipeline CI/CD — Jenkins
+
+Le fichier `Jenkinsfile` à la racine du projet définit le pipeline de manière déclarative (**Pipeline-as-Code**) : le pipeline est versionné dans Git, auditable, et reproductible sur n'importe quel serveur Jenkins.
+
+### Prérequis Jenkins
+
+- JDK 21 installé et configuré dans Jenkins sous le nom `jdk21` *(Jenkins → Manage → Tools → JDK)*
+- Docker Engine accessible depuis l'agent Jenkins (`/var/run/docker.sock` monté)
+- Node.js disponible sur l'agent (pour `npm ci`)
+
+### Stages du pipeline
+
+```
+Checkout
+    │
+    ▼
+Install seed-common          ← séquentiel (dépendance Maven locale)
+    │
+    ▼
+Build Backend ─────────────────────────────────────────┐
+    │   catalog-service (parallel)                      │
+    │   lot-service     (parallel)                      │ mvn -B -DskipTests package
+    │   stock-service   (parallel)                      │
+    │   order-service   (parallel)  ────────────────────┘
+    │
+    ▼
+Build Frontend               ← npm ci && npm run build
+    │
+    ▼
+Docker Build                 ← docker compose build --parallel
+    │
+    ▼
+Deploy                       ← docker compose up -d
+    │
+    ▼
+Smoke Test                   ← curl /actuator/health sur :18081-18084
+```
+
+**Pourquoi `seed-common` est séquentiel ?** Les 4 services en dépendent comme module Maven local (non publié sur Maven Central). Il doit être installé dans `~/.m2` avant que les builds parallèles ne démarrent — sinon chaque service échoue sur `Could not resolve dependency: sn.isra.seed:seed-common`.
+
+**Pourquoi `npm ci` et non `npm install` ?** `npm ci` échoue si `package-lock.json` est désynchronisé, garantissant que le build de CI est identique au build local (12-Factor App §IV).
+
+### Déclenchement du pipeline
+
+En développement local, Jenkins peut interroger GitHub par **polling** (pas besoin de Ngrok) :
+
+```groovy
+// À ajouter dans le Jenkinsfile si polling activé
+triggers {
+  pollSCM('H/5 * * * *')   // toutes les 5 minutes
+}
+```
+
+> En production sur un serveur public, les **webhooks GitHub** sont à privilégier pour une réaction immédiate au push (plus économe et réactif que le polling).
+
 ---
 
 ## Rôles et navigation
@@ -337,7 +584,7 @@ docker compose build frontend && docker compose up -d frontend
 
 ## Roadmap
 
-### Réalisé (V1.0)
+### Réalisé (V1.0 — Fonctionnel)
 - [x] Authentification OAuth2 PKCE via Keycloak 25, navigation conditionnelle par rôle
 - [x] Catalogue public avec cartographie Leaflet des zones agro-écologiques (sans auth)
 - [x] Référentiel variétal ISRA avec archivage traçable (commentaire, auteur, historique)
@@ -353,17 +600,72 @@ docker compose build frontend && docker compose up -d frontend
 - [x] Messagerie interne entre acteurs
 - [x] Tableaux de bord analytiques (global + sélectionneur)
 - [x] Monitoring : Prometheus, Grafana, Alertmanager, Kafka UI
-- [x] 45 migrations Flyway — schéma base de données entièrement versionné (V1 → V45)
+- [x] 64+ migrations Flyway — schéma base de données entièrement versionné
 - [x] Schema per Service — 6 schémas PostgreSQL distincts (catalog, lot, stock, orders, shared, geo)
-- [x] Triggers DB auto-synchronisation `code_espece` et `campagne ↔ id_campagne` sur `lot_semencier`
-- [x] Montée de version Spring Boot 3.3 → 3.5
 
-### En cours / V1.1
-- [ ] Notifications email/SMS sur événements critiques (livraison, certification)
-- [ ] Workflow de validation multi-étapes pour les certifications officielles
-- [ ] Pagination serveur sur les listes volumineuses
-- [ ] Application mobile (React Native)
-- [ ] Déploiement cloud (serveur ISRA / VPS)
+### Réalisé (DevOps — Phase 1)
+- [x] Multi-stage builds Docker pour les 4 services Java (Maven → eclipse-temurin:21-jre-alpine)
+- [x] Images Alpine : -150 MB par service Java (~600 MB total)
+- [x] Alpine vs Distroless : choix documenté et justifié (shell conservé, contexte institutionnel)
+- [x] SemVer 1.0.0 sur les 5 images applicatives (`seed-catalog`, `seed-lot`, `seed-stock`, `seed-order`, `seed-frontend`)
+- [x] SHA256 digest pinning sur les images tierces sans tag stable (kafka-ui, pgadmin, kafka-exporter)
+- [x] `npm ci` pour builds frontend déterministes (12-Factor App §IV)
+- [x] `frontend/.dockerignore` (exclut node_modules, .git, .env)
+- [x] CORS : retrait de `localhost:3000` (origine obsolète, principe de moindre privilège)
+- [x] `kafka-exporter` : ajout `restart: unless-stopped` (continuité observabilité)
+
+### Réalisé (DevOps — Phase 2)
+- [x] `postgres:16` → `postgres:16-alpine` (-185 MB, même comportement fonctionnel)
+- [x] Keycloak healthcheck sur `/health/ready:9000` (port management dédié)
+- [x] Cascade `service_healthy` : tous les services attendent Keycloak opérationnel
+- [x] `SWAGGER_ENABLED: false` sur les 4 microservices (surface d'attaque réduite)
+- [x] Jenkinsfile corrigé : `jdk21`, stage `seed-common` séquentiel, Deploy, Smoke Test fonctionnel
+
+### À venir (Phase 3 — Durcissement production)
+- [ ] `USER nonroot` dans tous les Dockerfiles (principe de moindre privilège, CIS Docker Benchmark)
+- [ ] Réseaux Docker explicites (`seed-backend`, `seed-monitoring`) — isolation réseau inter-services
+- [ ] Frontend : `nginx:alpine` + `npm run build` statique (remplace le serveur Vite de développement)
+- [ ] Keycloak : `start-dev` → `start` avec TLS activé (mode production)
+- [ ] Jenkins : `pollSCM` → webhooks GitHub (avec serveur public ou tunnel sécurisé)
+
+---
+
+## ⚠️ Rappels avant mise en production
+
+Ces points sont documentés ici pour ne pas être oubliés lors du passage en production. Ils sont intentionnellement différés en développement.
+
+### Secrets et variables d'environnement
+
+| Variable | Statut actuel | Action requise |
+|---|---|---|
+| `POSTGRES_PASSWORD` | Valeur par défaut `seed` dans `.env` | Générer un mot de passe fort, stocker dans un secret manager |
+| `KEYCLOAK_ADMIN_PASSWORD` | Valeur par défaut `admin` | Changer impérativement en production |
+| `GRAFANA_PASSWORD` | Valeur par défaut `admin` | Changer impérativement en production |
+| `SMTP_PASSWORD` | App password Gmail dans `.env` | Ne jamais committer — utiliser un secret Docker ou un vault |
+| `PGADMIN_DEFAULT_PASSWORD` | Valeur par défaut `admin` | Changer avant exposition publique |
+
+> Le fichier `.env` est dans `.gitignore`. **Ne jamais le committer.**
+
+### Infrastructure
+
+| Point | Statut actuel | Action requise |
+|---|---|---|
+| Keycloak mode | `start-dev` (base H2 en mémoire pour les sessions) | Passer en `start` avec TLS et base PostgreSQL persistante |
+| Frontend serveur | Vite dev server | Remplacer par `nginx:alpine` + build statique (`npm run build`) |
+| TLS / HTTPS | Absent | Reverse proxy (Nginx/Traefik) avec certificat Let's Encrypt |
+| Exposition ports | `127.0.0.1:*` (loopback uniquement) | En production, ne jamais exposer les ports directement — tout passer par le reverse proxy |
+| Avatar utilisateur | Stocké en base64 dans `localStorage` | Implémenter `POST /membres/mon-profil/avatar` côté serveur |
+| Réseaux Docker | Réseau par défaut (partagé) | Segmenter : `seed-backend`, `seed-monitoring`, `seed-db` |
+
+### Sauvegardes
+
+```bash
+# Sauvegarde PostgreSQL (à automatiser via cron)
+docker exec seed-postgres pg_dump -U seed seed > backup_$(date +%Y%m%d).sql
+
+# Restauration
+docker exec -i seed-postgres psql -U seed seed < backup_YYYYMMDD.sql
+```
 
 ---
 
