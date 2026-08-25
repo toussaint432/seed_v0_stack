@@ -288,6 +288,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
         AND s.quantite_disponible > 0
         AND ls.statut_lot = 'DISPONIBLE'
         AND o.active = true
+        AND o.type_organisation = 'MULTIPLICATEUR'
         AND (:codeEspece IS NULL OR e.code_espece = :codeEspece)
         AND (:idZone IS NULL OR vz.id_zone IS NOT NULL)
       ORDER BY
@@ -352,6 +353,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
             AND s.quantite_disponible > 0
             AND ls.statut_lot = 'DISPONIBLE'
             AND o.active = true
+            AND o.type_organisation = 'MULTIPLICATEUR'
             /* Au moins une source de coordonnées disponible */
             AND (si.latitude IS NOT NULL OR o.latitude IS NOT NULL)
             AND (:idVariete IS NULL OR v.id = CAST(:idVariete AS BIGINT))
