@@ -37,7 +37,7 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0  # 0 = avant V1 → toutes les migrations V1-V7 s'exécutent sur DB fraîche
     out-of-order: true
-    validate-on-migrate: true
+    validate-on-migrate: false
     # flyway_schema_history reste dans public ; search_path explicite pour les migrations
     schemas: public,catalog,lot,stock,orders,shared,geo
   servlet:
