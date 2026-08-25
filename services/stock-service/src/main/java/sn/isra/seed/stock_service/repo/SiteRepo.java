@@ -17,6 +17,8 @@ public interface SiteRepo extends JpaRepository<Site, Long> {
 
   Optional<Site> findByCodeSiteAndIdMembre(String codeSite, Long idMembre);
 
+  Optional<Site> findByCodeSiteAndIdOrganisation(String codeSite, Long idOrganisation);
+
   boolean existsByCodeSite(String codeSite);
 
   /**

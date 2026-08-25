@@ -130,7 +130,12 @@ public class SiteController {
             return ResponseEntity.status(403).body(Map.of("message", "Accès non autorisé"));
 
         Long membreId = membreIdOpt.get();
-        return siteRepo.findByCodeSiteAndIdMembre(code, membreId).map(s -> {
+        var siteOpt = siteRepo.findByCodeSiteAndIdMembre(code, membreId);
+        if (siteOpt.isEmpty()) {
+            var orgId = membreRepo.findOrgIdByUsername(username);
+            if (orgId.isPresent()) siteOpt = siteRepo.findByCodeSiteAndIdOrganisation(code, orgId.get());
+        }
+        return siteOpt.map(s -> {
             String nom = getString(body, "nomSite");
             if (nom != null && !nom.isBlank()) s.setNomSite(nom.trim());
             if (body.containsKey("typeSite"))    s.setTypeSite(parseType(body.get("typeSite").toString()));
