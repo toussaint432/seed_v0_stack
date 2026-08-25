@@ -69,6 +69,7 @@ class CatalogueControllerTest {
         @Override public Double getLatitude()            { return 14.7; }
         @Override public Double getLongitude()           { return -16.4; }
         @Override public String getNiveauAdaptation()    { return "OPTIMAL"; }
+        @Override public String getNomComplet()           { return null; }
     }
 
     /** Implémentation de test pour CatalogueProximiteItem (étend CatalogueItem + distanceKm). */
