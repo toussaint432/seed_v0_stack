@@ -391,15 +391,11 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
           {sites.map((site) => {
             const isSelected  = selectedSite?.siteId === site.siteId
             const icon        = createMultiplicateurIcon(site.nomComplet || site.orgNom, site.stockTotal, maxStock, isSelected)
-            const topLot      = site.lots.slice().sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)[0]
-            const inCart      = topLot ? cart.find(c => c.varieteId === topLot.varieteId) : null
-            const isAdded     = topLot ? addedIds.has(topLot.varieteId) : false
             const uniqueVar   = new Set(site.lots.map(l => l.varieteId)).size
             const travelHours = site.distanceKm != null ? Math.round(site.distanceKm / 50) : null
-            const topVarietes = site.lots
+            const allVarietes = site.lots
               .slice().sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)
               .filter((l, i, arr) => arr.findIndex(x => x.varieteId === l.varieteId) === i)
-              .slice(0, 3)
 
             return (
               <Marker
@@ -449,9 +445,9 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                       </div>
                     )}
 
-                    {/* ── Stock + variétés ── */}
-                    <div style={{ padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+                    {/* ── Variétés — formulaire par variété ── */}
+                    <div style={{ borderBottom: '1px solid #e5e7eb' }}>
+                      <div style={{ padding: '9px 14px 6px', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <Package size={11} style={{ color: '#16a34a', flexShrink: 0 }} />
                         <span style={{ fontSize: 12, fontWeight: 700, color: '#15803d' }}>
                           {site.stockTotal.toLocaleString('fr-FR')} kg disponibles
@@ -460,61 +456,51 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                           {uniqueVar} variété{uniqueVar > 1 ? 's' : ''}
                         </span>
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                        {topVarietes.map(l => (
-                          <div key={l.lotId} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 7px', background: '#f9fafb', borderRadius: 5, fontSize: 11 }}>
-                            <span style={{ flex: 1, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nomVariete}</span>
-                            <span style={{ background: '#dcfce7', color: '#15803d', padding: '1px 5px', borderRadius: 3, fontWeight: 700, fontSize: 10, flexShrink: 0 }}>{l.generation}</span>
-                            {l.tauxGermination > 0 && (
-                              <span style={{ color: '#d97706', fontSize: 10, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>☆{l.tauxGermination}%</span>
-                            )}
-                            <span style={{ color: '#16a34a', fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{l.quantiteDisponible.toLocaleString('fr-FR')} kg</span>
-                          </div>
-                        ))}
+                      <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 260, overflowY: 'auto' }}>
+                        {allVarietes.map(l => {
+                          const inCartV  = cart.find(c => c.varieteId === l.varieteId)
+                          const isAddedV = addedIds.has(l.varieteId)
+                          return (
+                            <div key={l.varieteId} style={{ background: inCartV ? '#f0fdf4' : '#f9fafb', borderRadius: 7, padding: '7px 8px', border: `1px solid ${inCartV ? '#bbf7d0' : '#e5e7eb'}` }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5 }}>
+                                <span style={{ flex: 1, fontWeight: 600, fontSize: 11, color: '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nomVariete}</span>
+                                <span style={{ background: '#dcfce7', color: '#15803d', padding: '1px 5px', borderRadius: 3, fontWeight: 700, fontSize: 10, flexShrink: 0 }}>{l.generation}</span>
+                                {l.tauxGermination > 0 && (
+                                  <span style={{ color: '#d97706', fontSize: 10, flexShrink: 0 }}>☆{l.tauxGermination}%</span>
+                                )}
+                                <span style={{ color: '#16a34a', fontWeight: 700, fontSize: 10, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{l.quantiteDisponible.toLocaleString('fr-FR')} kg</span>
+                              </div>
+                              {inCartV && (
+                                <div style={{ fontSize: 10, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, marginBottom: 4 }}>
+                                  <CheckCircle2 size={9} /> {inCartV.quantite.toLocaleString('fr-FR')} kg dans le panier
+                                </div>
+                              )}
+                              <div style={{ display: 'flex', gap: 4 }}>
+                                <input
+                                  type="number" min="1" placeholder="Qté (kg)"
+                                  value={qtyInputs[l.varieteId] ?? ''}
+                                  onChange={e => setQtyInputs(prev => ({ ...prev, [l.varieteId]: e.target.value }))}
+                                  style={{ flex: 1, height: 27, borderRadius: 5, border: '1px solid #d1d5db', padding: '0 6px', fontSize: 10.5 }}
+                                />
+                                <button
+                                  onClick={() => handleAdd(l)}
+                                  style={{ height: 27, padding: '0 9px', borderRadius: 5, border: 'none', cursor: 'pointer', background: isAddedV ? '#15803d' : '#16a34a', color: '#fff', fontWeight: 700, fontSize: 10, display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0, transition: 'background 0.15s' }}>
+                                  {isAddedV ? <><CheckCircle2 size={9} /> Ajouté!</> : <><ShoppingCart size={9} /> Ajouter</>}
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
                     </div>
 
                     {/* ── Actions ── */}
-                    <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      {/* Panier pour la variété principale */}
-                      {topLot && (
-                        <div>
-                          {uniqueVar > 1 && !inCart && (
-                            <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              Stock principal : <strong style={{ color: '#374151' }}>{topLot.nomVariete}</strong>
-                            </div>
-                          )}
-                          {inCart && (
-                            <div style={{ fontSize: 10.5, color: '#15803d', fontWeight: 600, marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <CheckCircle2 size={10} /> {inCart.quantite.toLocaleString('fr-FR')} kg · {topLot.nomVariete}
-                            </div>
-                          )}
-                          <div style={{ display: 'flex', gap: 5 }}>
-                            <input type="number" min="1" placeholder="Quantité (kg)"
-                              value={qtyInputs[topLot.varieteId] ?? ''}
-                              onChange={e => setQtyInputs(prev => ({ ...prev, [topLot.varieteId]: e.target.value }))}
-                              style={{ flex: 1, height: 30, borderRadius: 6, border: '1px solid #d1d5db', padding: '0 7px', fontSize: 11 }} />
-                            <button onClick={() => handleAdd(topLot)}
-                              style={{ height: 30, padding: '0 10px', borderRadius: 6, border: 'none', cursor: 'pointer', background: isAdded ? '#15803d' : '#16a34a', color: '#fff', fontWeight: 700, fontSize: 10, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, transition: 'background 0.15s' }}>
-                              {isAdded ? <><CheckCircle2 size={10} /> Ajouté!</> : <><ShoppingCart size={10} /> Ajouter</>}
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                      {/* Envoyer un message */}
+                    <div style={{ padding: '10px 14px' }}>
                       <button onClick={() => handleContact(site.orgId)} disabled={contactingOrg === site.orgId}
                         style={{ width: '100%', height: 32, borderRadius: 7, border: 'none', cursor: contactingOrg === site.orgId ? 'wait' : 'pointer', background: contactingOrg === site.orgId ? '#9ca3af' : '#2563eb', color: '#fff', fontWeight: 700, fontSize: 11.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                         <MessageCircle size={12} />
                         {contactingOrg === site.orgId ? 'Connexion…' : 'Envoyer un message'}
                       </button>
-                      {/* Voir toutes les variétés */}
-                      {uniqueVar > 1 && (
-                        <button onClick={() => { setSelectedSite(site); setFlyTarget([site.lat, site.lng]) }}
-                          style={{ width: '100%', height: 28, borderRadius: 6, border: '1px solid #e5e7eb', background: '#f9fafb', fontSize: 11, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-                          <MapPin size={10} style={{ color: '#16a34a' }} />
-                          Voir toutes les variétés ({uniqueVar}) →
-                        </button>
-                      )}
                     </div>
                   </div>
                 </Popup>
