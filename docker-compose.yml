@@ -77,7 +77,7 @@ services:
     restart: unless-stopped
     healthcheck:
       # /health/ready : 200 quand Keycloak est prêt, 503 sinon (port management 9000)
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health/ready | grep -q '\"status\":\"UP\"' || exit 1"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/localhost/9000 && printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
       interval: 10s
       timeout: 5s
       retries: 12
