@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import {
   ArrowRightLeft, Plus, RefreshCw, Search, X, Eye,
-  CheckCircle2, Truck, Clock, FileText, Download, Receipt,
-  XCircle, ClipboardCheck
+  CheckCircle2, Truck, Clock, FileText, Receipt,
+  XCircle
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -275,7 +275,7 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
     setToast({ msg: `Facture ${result.filename} ouverte dans un nouvel onglet`, type: 'success' })
   }
 
-  function downloadDoc(t: any, type: 'BORDEREAU' | 'ACCUSE_RECEPTION') {
+  function downloadDoc(t: any, type: 'BORDEREAU') {
     const lot = lots.find((l: any) => l.id === (t.idLot ?? t.lot?.id))
     const jwt = keycloak.tokenParsed as Record<string, unknown>
     const currentUser = (jwt?.preferred_username as string) || ''
@@ -326,9 +326,6 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
       quantiteTransferee: Number(t.quantite ?? 0),
       dateDemande:        t.dateDemande || new Date().toISOString().split('T')[0],
       observations:       t.observations,
-      dateAcceptation:    type === 'ACCUSE_RECEPTION' ? (t.dateAcceptation || new Date().toISOString().split('T')[0]) : undefined,
-      nomReceptionnaire:  type === 'ACCUSE_RECEPTION' ? currentUser : undefined,
-      quantiteRecue:      type === 'ACCUSE_RECEPTION' ? Number(t.quantite ?? 0) : undefined,
     }
 
     const result = generateTransferDoc(docData)
@@ -581,12 +578,17 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
                             ><FileText size={12} /></button>
                           )}
                           {statut === 'ACCEPTE' && (
-                            <button
-                              className="btn btn-ghost"
-                              style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#0f766e' }}
-                              title="Accusé de Réception"
-                              onClick={() => downloadDoc(t, 'ACCUSE_RECEPTION')}
-                            ><ClipboardCheck size={12} /></button>
+                            <span
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 3,
+                                height: 26, padding: '0 8px', borderRadius: 5, fontSize: 11,
+                                fontWeight: 600, color: '#15803d',
+                                background: '#f0fdf4', border: '1px solid #bbf7d0',
+                              }}
+                              title="Réception confirmée par le destinataire"
+                            >
+                              <CheckCircle2 size={11} />Réception confirmée
+                            </span>
                           )}
                           {canCreateFacture && isActif && (
                             <button
@@ -627,16 +629,18 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
                 <span style={{ color: '#0369a1', fontWeight: 600, fontSize: 12.5 }}>Bordereau de Livraison</span>
               </button>
               {(showDetail.statut || showDetail.statutTransfert) === 'ACCEPTE' && (
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, minWidth: 140, justifyContent: 'center', gap: 8, border: '1.5px solid #bbf7d0', background: '#f0fdf4' }}
-                  onClick={() => downloadDoc(showDetail, 'ACCUSE_RECEPTION')}
+                <div
+                  style={{
+                    flex: 1, minWidth: 140, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    gap: 8, padding: '8px 14px', borderRadius: 8,
+                    border: '1.5px solid #bbf7d0', background: '#f0fdf4',
+                  }}
                 >
-                  <Download size={14} color="#15803d" />
-                  <span style={{ color: '#15803d', fontWeight: 600, fontSize: 12.5 }}>Accusé de Réception</span>
-                </button>
+                  <CheckCircle2 size={15} color="#15803d" />
+                  <span style={{ color: '#15803d', fontWeight: 600, fontSize: 12.5 }}>Réception confirmée</span>
+                </div>
               )}
-              {canFacture && ['EN_ATTENTE','ACCEPTE'].includes(showDetail.statut || showDetail.statutTransfert) && (
+              {canCreateFacture && ['EN_ATTENTE','ACCEPTE'].includes(showDetail.statut || showDetail.statutTransfert) && (
                 <button
                   className="btn btn-secondary"
                   style={{ flex: 1, minWidth: 140, justifyContent: 'center', gap: 8, border: '1.5px solid #fca5a5', background: '#fff5f5' }}
@@ -689,13 +693,32 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
           size="sm"
         >
           <form onSubmit={e => { e.preventDefault(); confirmerAcceptation() }}>
-            <Field
-              label="Site de réception du stock"
-              hint={mesSites.length === 0
-                ? 'Aucun site trouvé pour votre organisation. Créez un site dans « Mes Sites ».'
-                : 'Les semences seront créditées dans ce site. Le site principal est présélectionné.'}
-            >
-              {mesSites.length > 0 ? (
+            {mesSites.length === 0 ? (
+              <div style={{
+                padding: '12px 16px', borderRadius: 8,
+                background: '#fffbeb', border: '1px solid #fbbf24',
+                fontSize: 13, color: '#92400e', marginBottom: 16,
+              }}>
+                Aucun site enregistré. Rendez-vous dans <strong>Mes Sites</strong> pour enregistrer votre lieu de réception.
+              </div>
+            ) : mesSites.length === 1 ? (
+              <div style={{
+                padding: '12px 16px', borderRadius: 8,
+                background: '#f0fdf4', border: '1px solid #bbf7d0',
+                fontSize: 13, color: '#166534', marginBottom: 16,
+                display: 'flex', alignItems: 'center', gap: 8,
+              }}>
+                <span style={{ fontSize: 16 }}>✓</span>
+                <span>
+                  <strong>{Number(acceptModal.quantite || 0).toLocaleString('fr-FR')} kg</strong> seront crédités
+                  à <strong>{mesSites[0].nomSite}</strong>.
+                </span>
+              </div>
+            ) : (
+              <Field
+                label="Site de réception du stock"
+                hint="Les semences seront créditées dans ce site. Le site principal est présélectionné."
+              >
                 <FormSelect
                   value={acceptSiteCode}
                   onChange={v => setAcceptSiteCode(v)}
@@ -707,26 +730,7 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
                     })),
                   ]}
                 />
-              ) : (
-                <div style={{
-                  padding: '10px 14px', borderRadius: 8,
-                  background: '#fffbeb', border: '1px solid #fbbf24',
-                  fontSize: 12.5, color: '#92400e',
-                }}>
-                  Aucun site enregistré. Rendez-vous dans <strong>Mes Sites</strong> pour créer votre premier site de stockage.
-                </div>
-              )}
-            </Field>
-
-            {acceptSiteCode && (
-              <div style={{
-                padding: '10px 14px', borderRadius: 8,
-                background: '#f0fdf4', border: '1px solid #bbf7d0',
-                fontSize: 12.5, color: '#166534', marginBottom: 12,
-              }}>
-                ✓ <strong>{Number(acceptModal.quantite || 0).toLocaleString('fr-FR')} kg</strong> seront crédités
-                au site <strong>{mesSites.find((s: any) => s.codeSite === acceptSiteCode)?.nomSite ?? acceptSiteCode}</strong>.
-              </div>
+              </Field>
             )}
 
             <FormActions

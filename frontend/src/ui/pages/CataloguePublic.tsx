@@ -19,6 +19,7 @@ interface CatalogueItem {
   latitude: number; longitude: number
   niveauAdaptation: string | null
   distanceKm?: number
+  nomComplet?: string
 }
 
 interface ZoneAgro { id: number; code: string; nom: string }
@@ -97,6 +98,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
   const [cart,            setCart]            = useState<CartItem[]>([])
   const [qtyInputs,       setQtyInputs]       = useState<Record<number, string>>({})
   const [addedIds,        setAddedIds]        = useState<Set<number>>(new Set())
+  const [sortBy,          setSortBy]          = useState<'stock' | 'distance' | 'germination'>('stock')
   const [orderObs,        setOrderObs]        = useState('')
   const [submittingOrder, setSubmittingOrder] = useState(false)
   const [orderFeedback,   setOrderFeedback]   = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
@@ -342,6 +344,35 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     [varieteGroups, search]
   )
 
+  /* Map orgId → distance minimale depuis les données de proximité */
+  const distanceByOrgId = useMemo(() => {
+    const map = new Map<number, number>()
+    for (const item of proximiteItems) {
+      if (item.distanceKm != null) {
+        const ex = map.get(item.organisationId)
+        if (ex == null || item.distanceKm < ex) map.set(item.organisationId, item.distanceKm)
+      }
+    }
+    return map
+  }, [proximiteItems])
+
+  useEffect(() => {
+    setSortBy(geoMode ? 'distance' : 'stock')
+  }, [geoMode])
+
+  const sortedFilteredVarietes = useMemo(() => {
+    const vs = [...filteredVarietes]
+    if (sortBy === 'germination')
+      return vs.sort((a, b) => b.tauxGerminationMoyen - a.tauxGerminationMoyen)
+    if (sortBy === 'distance') {
+      return vs.sort((a, b) => {
+        const dMin = (v: VarieteGroup) => Math.min(...v.lots.map(l => distanceByOrgId.get(l.organisationId) ?? Infinity))
+        return dMin(a) - dMin(b)
+      })
+    }
+    return vs.sort((a, b) => b.stockTotal - a.stockTotal)
+  }, [filteredVarietes, sortBy, distanceByOrgId])
+
   const fournisseurs = useMemo(
     () => groupByOrg(geoMode ? proximiteItems : (selectedVariete?.lots ?? [])),
     [geoMode, proximiteItems, selectedVariete]
@@ -367,14 +398,14 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     <>
       {showFournisseurs && !showCart && (
         <div onClick={() => setShowFournisseurs(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 39 }} />
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.3)', zIndex: 1039 }} />
       )}
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 400,
         background: 'var(--surface)', boxShadow: '-6px 0 30px rgba(0,0,0,0.1)',
         transform: showFournisseurs ? 'translateX(0)' : 'translateX(100%)',
         transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
-        zIndex: 40, display: 'flex', flexDirection: 'column',
+        zIndex: 1040, display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ padding: '18px 20px 14px', borderBottom: '1px solid var(--border)', background: 'var(--green-50)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -473,14 +504,14 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     <>
       {showCart && (
         <div onClick={() => setShowCart(false)}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 49 }} />
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 1099 }} />
       )}
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 420,
         background: 'var(--surface)', boxShadow: '-8px 0 40px rgba(0,0,0,0.12)',
         transform: showCart ? 'translateX(0)' : 'translateX(100%)',
         transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
-        zIndex: 50, display: 'flex', flexDirection: 'column',
+        zIndex: 1100, display: 'flex', flexDirection: 'column',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 20px 16px', borderBottom: '1px solid var(--border)' }}>
           <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a', flexShrink: 0 }}>
@@ -782,7 +813,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
           )}
 
           {/* Empty */}
-          {selectedEspece && !loading && filteredVarietes.length === 0 && (
+          {selectedEspece && !loading && sortedFilteredVarietes.length === 0 && (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
               <Package size={44} style={{ opacity: 0.2, marginBottom: 14, display: 'block', margin: '0 auto 14px' }} />
               <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>Aucune variété disponible</p>
@@ -793,20 +824,51 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
             </div>
           )}
 
+          {/* Barre de tri */}
+          {selectedEspece && !loading && sortedFilteredVarietes.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
+                <strong style={{ color: 'var(--text-primary)' }}>{sortedFilteredVarietes.length} variété{sortedFilteredVarietes.length > 1 ? 's' : ''}</strong>
+                {selectedZone ? ` · ${selectedZone.nom}` : ' · Toutes zones'}
+                {geoMode && <span style={{ color: '#2563eb', marginLeft: 6, fontSize: 11 }}>📡 Proximité</span>}
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>Trier :</span>
+              {(['stock', 'distance', 'germination'] as const).map(s => {
+                const labels: Record<string, string> = { stock: 'Stock', distance: 'Distance', germination: 'Germination' }
+                const icons:  Record<string, string> = { stock: '📦', distance: '📍', germination: '⭐' }
+                const active   = sortBy === s
+                const disabled = s === 'distance' && !geoMode
+                return (
+                  <button key={s} onClick={() => !disabled && setSortBy(s)} disabled={disabled}
+                    style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11.5, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
+                      border: '1px solid', fontFamily: 'inherit',
+                      background:   active ? '#f0fdf4' : 'var(--surface)',
+                      color:        active ? '#15803d' : disabled ? 'var(--text-muted)' : 'var(--text-secondary)',
+                      borderColor:  active ? '#bbf7d0' : 'var(--border)',
+                      opacity:      disabled ? 0.5 : 1,
+                    }}>
+                    {icons[s]} {labels[s]}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
           {/* Variety cards grid */}
-          {selectedEspece && !loading && filteredVarietes.length > 0 && (
+          {selectedEspece && !loading && sortedFilteredVarietes.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-              {filteredVarietes.map(v => {
+              {sortedFilteredVarietes.map(v => {
                 const isAdded  = addedIds.has(v.varieteId)
                 const inCart   = cart.find(c => c.varieteId === v.varieteId)
                 const nCfg     = v.niveauAdaptation ? NIVEAU_CONFIG[v.niveauAdaptation] : null
                 const accent   = nCfg?.color ?? '#6b7280'
                 const stockTonnes = `${v.stockTotal.toLocaleString('fr-FR')} kg`
 
-                /* Fournisseur le plus proche pour cette variété */
-                const closestFournisseur = geoMode
-                  ? v.lots.filter(l => l.distanceKm != null).sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999))[0]
+                /* Fournisseur le plus proche via lookup dans les données de proximité */
+                const closestLot = geoMode
+                  ? [...v.lots].sort((a, b) => (distanceByOrgId.get(a.organisationId) ?? Infinity) - (distanceByOrgId.get(b.organisationId) ?? Infinity)).find(l => distanceByOrgId.has(l.organisationId)) ?? null
                   : null
+                const closestDist = closestLot ? distanceByOrgId.get(closestLot.organisationId) : null
 
                 return (
                   <div key={v.varieteId} style={{ background: 'var(--surface)', borderRadius: 14, border: inCart ? '2px solid #16a34a' : '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.15s, border-color 0.15s' }}>
@@ -853,16 +915,24 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
                       </div>
 
                       {/* Fournisseur le plus proche (mode géoloc) */}
-                      {closestFournisseur && (
-                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '6px 10px', fontSize: 11, color: '#1e40af', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Navigation size={11} style={{ color: '#2563eb', flexShrink: 0 }} />
-                          <span style={{ fontWeight: 600 }}>{closestFournisseur.nomOrganisation}</span>
-                          <span style={{ color: '#4b83d4' }}>·</span>
-                          <span>{Math.round(closestFournisseur.distanceKm ?? 0)} km</span>
-                          <span style={{ color: '#4b83d4' }}>·</span>
-                          <span>{closestFournisseur.region}</span>
-                        </div>
-                      )}
+                      {closestLot && closestDist != null && (() => {
+                        const km = Math.round(closestDist)
+                        const h  = Math.ceil(closestDist / 50)
+                        const isNear = km < 80
+                        const isMed  = km < 150
+                        const bg  = isNear ? '#f0fdf4' : isMed ? '#fffbeb' : '#f9fafb'
+                        const col = isNear ? '#15803d' : isMed ? '#b45309' : '#6b7280'
+                        const bdr = isNear ? '#bbf7d0' : isMed ? '#fde68a' : '#e5e7eb'
+                        return (
+                          <div style={{ background: bg, border: `1px solid ${bdr}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, color: col, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Navigation size={11} style={{ color: col, flexShrink: 0 }} />
+                            <span style={{ fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {closestLot.nomComplet || closestLot.nomOrganisation}
+                            </span>
+                            <span style={{ fontWeight: 700, flexShrink: 0 }}>{km} km · ~{h}h</span>
+                          </div>
+                        )
+                      })()}
 
                       {/* In-cart badge */}
                       {inCart && (

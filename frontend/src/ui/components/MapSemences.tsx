@@ -40,7 +40,7 @@ const ROLE_GENS: Record<string, string[]> = {
 import { GEN_CHART_COLORS as GEN_COLORS } from '../../lib/constants'
 
 /* ── Rayon de bulle proportionnel à √(stock/max) ── */
-function bubbleR(stock: number, max: number, min = 14, maxR = 58): number {
+function bubbleR(stock: number, max: number, min = 10, maxR = 42): number {
   if (!stock || !max) return 0
   return min + (maxR - min) * Math.sqrt(stock / max)
 }
@@ -143,8 +143,14 @@ function ZaePanel({ code, zones, agg, stocks }: {
       )}
 
       {!agg && (
-        <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 12 }}>
-          Aucun stock dans cette zone
+        <div style={{ padding: '14px 0 4px' }}>
+          <div style={{ textAlign: 'center', padding: '12px 10px', background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 10 }}>
+            <div style={{ fontSize: 20, marginBottom: 6 }}>🌱</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 3 }}>Aucun stock dans cette zone</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Consultez les zones adjacentes ou accédez au catalogue pour trouver des fournisseurs proches.
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -300,15 +306,17 @@ export function MapSemences({ roleKey }: Props) {
 
   /* ── Style GeoJSON polygones ZAE ── */
   const zaeStyle = useCallback((feature: any): PathOptions => {
-    const code  = feature?.properties?.code
-    const stock = stockByZae[code]?.total || 0
-    const ratio = Math.min(stock / maxZae, 1)
+    const code    = feature?.properties?.code
+    const stock   = stockByZae[code]?.total || 0
+    const hasStock = stock > 0
+    const ratio   = Math.min(stock / maxZae, 1)
     return {
       fillColor:   ZAE_COLORS[code] || '#6b7280',
-      fillOpacity: 0.07 + ratio * 0.30,
-      color:       ZAE_COLORS[code] || '#6b7280',
-      weight:      1.5,
-      dashArray:   '5 4',
+      fillOpacity: hasStock ? 0.10 + ratio * 0.28 : 0.03,
+      color:       hasStock ? ZAE_COLORS[code] || '#6b7280' : '#d1d5db',
+      weight:      hasStock ? 1.5 : 0.8,
+      dashArray:   hasStock ? undefined : '5 4',
+      opacity:     hasStock ? 0.85 : 0.4,
     }
   }, [stockByZae, maxZae])
 
@@ -406,7 +414,7 @@ export function MapSemences({ roleKey }: Props) {
       </div>
 
       {/* ── Carte + Panneau ── */}
-      <div style={{ display: 'flex', gap: 12, height: 440 }}>
+      <div style={{ display: 'flex', gap: 12, height: 480 }}>
 
         {/* Carte Leaflet */}
         <div style={{
@@ -422,9 +430,9 @@ export function MapSemences({ roleKey }: Props) {
           )}
 
           <MapContainer
-            center={[14.4, -14.5]}
-            zoom={6}
-            minZoom={5}
+            center={[14.5, -14.4]}
+            zoom={7}
+            minZoom={6}
             maxZoom={12}
             style={{ height: '100%', width: '100%' }}
             scrollWheelZoom

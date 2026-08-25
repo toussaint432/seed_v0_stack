@@ -386,6 +386,13 @@ function HBarChart({ data }: { data: BarDatum[] }) {
   )
 }
 
+/* ── Distance badge (vert/amber/gris selon km) ── */
+function distBadge(km: number) {
+  if (km < 80)  return { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
+  if (km < 150) return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' }
+  return { bg: '#f9fafb', color: '#6b7280', border: '#e5e7eb' }
+}
+
 /* ═══════════════════════════════════════════════════════════
    QUOTATAIRE HOME — Widgets dédiés
 ═══════════════════════════════════════════════════════════ */
@@ -501,7 +508,7 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
                     <div style={{ flex: 1, height: 4, background: '#f0f4f0', borderRadius: 99, overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${(row.stockKg / maxKg) * 100}%`, background: '#16a34a', borderRadius: 99, transition: 'width 0.7s ease' }} />
                     </div>
-                    <span style={{ fontSize: 10, color: D.muted, flexShrink: 0 }}>{row.nbVarietes}v · {row.nbOrgs}f</span>
+                    <span style={{ fontSize: 10, color: D.muted, flexShrink: 0 }}>{row.nbVarietes} var. · {row.nbOrgs} fourn.</span>
                   </div>
                 </div>
                 <div style={{ fontSize: 12.5, fontWeight: 700, color: '#16a34a', textAlign: 'right', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
@@ -559,15 +566,20 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, color: D.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{org.orgNom}</div>
                   <div style={{ fontSize: 10.5, color: D.muted, marginTop: 1 }}>
-                    <MapPin size={9} style={{ verticalAlign: 'middle', marginRight: 2 }} />{org.region} · {org.nbVarietes} var.
+                    <MapPin size={9} style={{ verticalAlign: 'middle', marginRight: 2 }} />{org.region} · {org.nbVarietes} variété{org.nbVarietes > 1 ? 's' : ''}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  {org.distanceKm != null && (
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', display: 'flex', alignItems: 'center', gap: 3, justifyContent: 'flex-end' }}>
-                      <Navigation size={9} /> {Math.round(org.distanceKm)} km
-                    </div>
-                  )}
+                  {org.distanceKm != null && (() => {
+                    const km = Math.round(org.distanceKm!)
+                    const dc = distBadge(km)
+                    const h  = Math.ceil(km / 50)
+                    return (
+                      <div style={{ fontSize: 11, fontWeight: 700, color: dc.color, background: dc.bg, border: `1px solid ${dc.border}`, padding: '1px 6px', borderRadius: 4, display: 'inline-flex', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                        <Navigation size={9} /> {km} km · ~{h}h
+                      </div>
+                    )
+                  })()}
                   <div style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>
                     {fmtT(org.stockKg)}
                   </div>
@@ -581,6 +593,20 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
       {/* ── Commandes récentes (pleine largeur) ── */}
       {rawOrders.length > 0 && (
         <div style={{ gridColumn: '1 / -1', background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+          {pendingCount > 0 && (
+            <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '9px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#f59e0b', color: '#fff', borderRadius: 4, padding: '1px 6px', flexShrink: 0 }}>
+                {pendingCount} en attente
+              </span>
+              <span style={{ fontSize: 11.5, color: '#92400e', flex: 1 }}>
+                {pendingCount === 1 ? 'Une commande nécessite votre suivi' : `${pendingCount} commandes nécessitent votre suivi`}
+              </span>
+              <button onClick={() => navigate('/orders')}
+                style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: 'transparent', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+                Voir <ArrowRight size={11} />
+              </button>
+            </div>
+          )}
           <div style={{ padding: '14px 20px 12px', borderBottom: `1px solid ${D.line}`, background: D.paper2, display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 28, height: 28, borderRadius: 7, background: `${accent}12`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <ShoppingCart size={13} />
@@ -588,7 +614,7 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13.5, fontWeight: 700, color: D.ink }}>Mes commandes</div>
               <div style={{ fontSize: 11, color: D.muted }}>
-                {pendingCount > 0 ? `${pendingCount} en cours · ` : ''}{rawOrders.length} commande{rawOrders.length > 1 ? 's' : ''} au total
+                {rawOrders.length} commande{rawOrders.length > 1 ? 's' : ''} au total
               </div>
             </div>
             <button onClick={() => navigate('/orders')}
@@ -647,7 +673,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const [loading,      setLoading]      = useState(true)
   const [refreshing,   setRefreshing]   = useState(false)
   const [heroVis,      setHeroVis]      = useState(false)
-  const [mapExpanded,  setMapExpanded]  = useState(false)
+  const [mapExpanded,  setMapExpanded]  = useState(true)
   const [demandPeriod, setDemandPeriod] = useState<'1m' | '3m' | '6m' | '1a'>('3m')
   const [demandGen,    setDemandGen]    = useState<'all' | 'G3' | 'R2'>('all')
 
@@ -789,7 +815,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     ] : []),
     { label: isSelector && specUp ? `Variétés ${specUp}` : 'Variétés actives',
       value: displayVarietiesCount,
-      sub: isSelector && specUp ? 'de votre espèce' : 'espèces enregistrées',
+      sub: isSelector && specUp ? 'de votre espèce' : 'variétés certifiées',
       accent, delay: showStats ? 160 : 0, suffix: undefined },
     ...(showOrders ? [
       { label: roleKey === 'seed-multiplicator' ? 'Cmdes reçues' : 'Commandes',

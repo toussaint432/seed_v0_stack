@@ -27,6 +27,7 @@ interface CatalogueItem {
   latitude: number; longitude: number
   niveauAdaptation: string | null
   distanceKm?: number
+  nomComplet?: string
 }
 interface CartItem {
   varieteId: number; nomVariete: string; codeVariete: string
@@ -40,6 +41,7 @@ interface SiteGroup {
   siteId: number; nomSite: string; region: string
   lat: number; lng: number
   orgId: number; orgNom: string
+  nomComplet?: string
   stockTotal: number; lots: CatalogueItem[]
   zaeCode: string | null
   distanceKm?: number
@@ -167,6 +169,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
           lng:        item.longitude,
           orgId:      item.organisationId,
           orgNom:     item.nomOrganisation,
+          nomComplet: item.nomComplet,
           stockTotal: item.quantiteDisponible,
           lots:       [item],
           zaeCode,
@@ -387,7 +390,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
           {/* ── Couche 4 : Multiplicateurs (icône personnage + popup enrichi) ── */}
           {sites.map((site) => {
             const isSelected  = selectedSite?.siteId === site.siteId
-            const icon        = createMultiplicateurIcon(site.orgNom, site.stockTotal, maxStock, isSelected)
+            const icon        = createMultiplicateurIcon(site.nomComplet || site.orgNom, site.stockTotal, maxStock, isSelected)
             const topLot      = site.lots.slice().sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)[0]
             const inCart      = topLot ? cart.find(c => c.varieteId === topLot.varieteId) : null
             const isAdded     = topLot ? addedIds.has(topLot.varieteId) : false
@@ -416,7 +419,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                     {/* ── En-tête ── */}
                     <div style={{ padding: '12px 14px 10px', background: isSelected ? '#eff6ff' : '#f0fdf4', borderBottom: '1px solid #e5e7eb' }}>
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, marginBottom: 4 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0d1f11', flex: 1, lineHeight: 1.3 }}>{site.orgNom}</div>
+                        <div style={{ fontSize: 13.5, fontWeight: 800, color: '#0d1f11', flex: 1, lineHeight: 1.3 }}>{site.nomComplet || site.orgNom}</div>
                         <span style={{ fontSize: 9, fontWeight: 700, background: isSelected ? '#dbeafe' : '#dcfce7', color: isSelected ? '#1d4ed8' : '#15803d', padding: '2px 6px', borderRadius: 4, border: `1px solid ${isSelected ? '#bfdbfe' : '#bbf7d0'}`, whiteSpace: 'nowrap', flexShrink: 0 }}>
                           Multiplicateur agréé
                         </span>
@@ -462,6 +465,9 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                           <div key={l.lotId} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 7px', background: '#f9fafb', borderRadius: 5, fontSize: 11 }}>
                             <span style={{ flex: 1, color: '#374151', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.nomVariete}</span>
                             <span style={{ background: '#dcfce7', color: '#15803d', padding: '1px 5px', borderRadius: 3, fontWeight: 700, fontSize: 10, flexShrink: 0 }}>{l.generation}</span>
+                            {l.tauxGermination > 0 && (
+                              <span style={{ color: '#d97706', fontSize: 10, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>☆{l.tauxGermination}%</span>
+                            )}
                             <span style={{ color: '#16a34a', fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{l.quantiteDisponible.toLocaleString('fr-FR')} kg</span>
                           </div>
                         ))}
@@ -473,6 +479,11 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                       {/* Panier pour la variété principale */}
                       {topLot && (
                         <div>
+                          {uniqueVar > 1 && !inCart && (
+                            <div style={{ fontSize: 10, color: '#6b7280', marginBottom: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              Stock principal : <strong style={{ color: '#374151' }}>{topLot.nomVariete}</strong>
+                            </div>
+                          )}
                           {inCart && (
                             <div style={{ fontSize: 10.5, color: '#15803d', fontWeight: 600, marginBottom: 5, display: 'flex', alignItems: 'center', gap: 4 }}>
                               <CheckCircle2 size={10} /> {inCart.quantite.toLocaleString('fr-FR')} kg · {topLot.nomVariete}
@@ -551,15 +562,20 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.3 }}>
-                    {selectedSite.nomSite}
+                    {selectedSite.nomComplet || selectedSite.nomSite}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
                     {selectedSite.orgNom}
-                    {selectedSite.distanceKm != null && (
-                      <span style={{ marginLeft: 6, background: '#eff6ff', color: '#1d4ed8', padding: '1px 6px', borderRadius: 4, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                        <Navigation size={9} /> {Math.round(selectedSite.distanceKm)} km
-                      </span>
-                    )}
+                    {selectedSite.distanceKm != null && (() => {
+                      const km = Math.round(selectedSite.distanceKm)
+                      const dc = distBadge(km)
+                      const h  = Math.ceil(km / 50)
+                      return (
+                        <span style={{ marginLeft: 6, background: dc.bg, color: dc.color, border: `1px solid ${dc.border}`, padding: '1px 7px', borderRadius: 4, fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                          <Navigation size={9} /> {km} km · ~{h}h
+                        </span>
+                      )
+                    })()}
                   </div>
                 </div>
                 <button
@@ -598,7 +614,9 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
                 {sites.length > 0
-                  ? `${sites.length} site${sites.length > 1 ? 's' : ''} · cliquez sur un marqueur`
+                  ? geoMode && !selectedEspece
+                    ? `${sites.length} site${sites.length > 1 ? 's' : ''} · triés par distance`
+                    : `${sites.length} site${sites.length > 1 ? 's' : ''} · cliquez sur un marqueur`
                   : selectedEspece
                     ? 'Aucun stock disponible pour cette espèce'
                     : geoMode
@@ -727,6 +745,12 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
   )
 }
 
+function distBadge(km: number) {
+  if (km < 80)  return { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
+  if (km < 150) return { bg: '#fffbeb', color: '#b45309', border: '#fde68a' }
+  return { bg: '#f9fafb', color: '#6b7280', border: '#e5e7eb' }
+}
+
 /* ── Carte de site (liste des fournisseurs) ── */
 function SiteCard({ site, isSelected, onClick }: { site: SiteGroup; isSelected: boolean; onClick: () => void }) {
   const uniqueVarietes = new Set(site.lots.map(l => l.varieteId)).size
@@ -743,7 +767,7 @@ function SiteCard({ site, isSelected, onClick }: { site: SiteGroup; isSelected: 
     >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 5 }}>
         <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.3 }}>{site.nomSite}</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.3 }}>{site.nomComplet || site.nomSite}</div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{site.orgNom}</div>
         </div>
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -760,11 +784,16 @@ function SiteCard({ site, isSelected, onClick }: { site: SiteGroup; isSelected: 
         <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
           · {uniqueVarietes} variété{uniqueVarietes > 1 ? 's' : ''}
         </span>
-        {site.distanceKm != null && (
-          <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', padding: '1px 6px', borderRadius: 4 }}>
-            <Navigation size={9} /> {Math.round(site.distanceKm)} km
-          </span>
-        )}
+        {site.distanceKm != null && (() => {
+          const km = Math.round(site.distanceKm)
+          const dc = distBadge(km)
+          const h  = Math.ceil(km / 50)
+          return (
+            <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, fontSize: 10.5, fontWeight: 700, color: dc.color, background: dc.bg, border: `1px solid ${dc.border}`, padding: '1px 7px', borderRadius: 4 }}>
+              <Navigation size={9} /> {km} km · ~{h}h
+            </span>
+          )
+        })()}
       </div>
     </div>
   )

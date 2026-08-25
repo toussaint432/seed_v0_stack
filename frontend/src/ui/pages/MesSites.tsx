@@ -1,22 +1,10 @@
 import React, { useEffect, useState } from 'react'
-import { MapPin, Plus, RefreshCw, Edit2, CheckCircle2, Star, Trash2 } from 'lucide-react'
+import { MapPin, Plus, RefreshCw, Edit2, CheckCircle2, Star, Trash2, Lock } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
-import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
+import { Modal, Field, FormInput, FormActions, Toast } from '../components/Modal'
 
 interface Props { roleKey: string }
-
-/* ── Coordonnées centroïdes par code ZAE (source : géographie Sénégal) ── */
-const ZAE_GPS: Record<string, { lat: number; lng: number; region: string }> = {
-  NAY: { lat: 14.80, lng: -17.10, region: 'Dakar / Thiès' },
-  BA:  { lat: 14.20, lng: -15.80, region: 'Diourbel / Kaolack / Fatick' },
-  ZSP: { lat: 15.60, lng: -15.00, region: 'Louga / Matam' },
-  VF:  { lat: 16.20, lng: -15.60, region: 'Saint-Louis' },
-  SO:  { lat: 13.80, lng: -13.50, region: 'Tambacounda / Kédougou' },
-  HC:  { lat: 12.90, lng: -14.80, region: 'Kolda' },
-  MC:  { lat: 12.70, lng: -15.60, region: 'Sédhiou' },
-  BC:  { lat: 12.50, lng: -16.30, region: 'Ziguinchor' },
-}
 
 /* ── 46 départements du Sénégal groupés par région ── */
 const DEPARTEMENTS: { region: string; depts: string[] }[] = [
@@ -36,37 +24,80 @@ const DEPARTEMENTS: { region: string; depts: string[] }[] = [
   { region: 'Ziguinchor',   depts: ['Bignona', 'Oussouye', 'Ziguinchor'] },
 ]
 
-const TYPES_SITE = [
-  { value: 'FERME',            label: 'Ferme de multiplication' },
-  { value: 'MAGASIN',          label: 'Magasin de stockage' },
-  { value: 'SILO',             label: 'Silo / Dépôt' },
-  { value: 'STATION_RECHERCHE',label: 'Station de recherche' },
-]
-
-const TYPE_LABELS: Record<string, string> = {
-  FERME:            'Ferme de multiplication',
-  MAGASIN:          'Magasin de stockage',
-  SILO:             'Silo / Dépôt',
-  STATION_RECHERCHE:'Station de recherche',
-  LABORATOIRE:      'Laboratoire',
+/* ── Localités par département avec coordonnées GPS et zone agro-écologique ── */
+type Localite = { nom: string; lat: number; lng: number; zone: string; region: string }
+const LOCALITES: Record<string, Localite[]> = {
+  'Dakar':        [{ nom: 'Dakar (Plateau)', lat: 14.6928, lng: -17.4467, zone: 'NAY', region: 'Dakar' }, { nom: 'Yoff', lat: 14.7572, lng: -17.4927, zone: 'NAY', region: 'Dakar' }, { nom: 'Ngor', lat: 14.7517, lng: -17.5127, zone: 'NAY', region: 'Dakar' }, { nom: 'Almadies', lat: 14.7417, lng: -17.5253, zone: 'NAY', region: 'Dakar' }],
+  'Guédiawaye':   [{ nom: 'Guédiawaye', lat: 14.7731, lng: -17.3967, zone: 'NAY', region: 'Dakar' }, { nom: 'Golf Sud', lat: 14.762, lng: -17.409, zone: 'NAY', region: 'Dakar' }],
+  'Keur Massar':  [{ nom: 'Keur Massar', lat: 14.7881, lng: -17.3147, zone: 'NAY', region: 'Dakar' }, { nom: 'Malika', lat: 14.788, lng: -17.285, zone: 'NAY', region: 'Dakar' }],
+  'Pikine':       [{ nom: 'Pikine', lat: 14.7506, lng: -17.3906, zone: 'NAY', region: 'Dakar' }, { nom: 'Thiaroye', lat: 14.738, lng: -17.387, zone: 'NAY', region: 'Dakar' }],
+  'Rufisque':     [{ nom: 'Rufisque', lat: 14.7186, lng: -17.2681, zone: 'NAY', region: 'Dakar' }, { nom: 'Bargny', lat: 14.698, lng: -17.233, zone: 'NAY', region: 'Dakar' }, { nom: 'Diamniadio', lat: 14.718, lng: -17.181, zone: 'NAY', region: 'Dakar' }],
+  'Bambey':       [{ nom: 'Bambey', lat: 14.7038, lng: -16.4572, zone: 'BA', region: 'Diourbel' }, { nom: 'Ndangalma', lat: 14.73, lng: -16.5, zone: 'BA', region: 'Diourbel' }, { nom: 'Lambaye', lat: 14.67, lng: -16.53, zone: 'BA', region: 'Diourbel' }, { nom: 'Baba Garage', lat: 14.68, lng: -16.42, zone: 'BA', region: 'Diourbel' }],
+  'Diourbel':     [{ nom: 'Diourbel', lat: 14.6554, lng: -16.2313, zone: 'BA', region: 'Diourbel' }, { nom: 'Touba', lat: 14.8503, lng: -15.8822, zone: 'BA', region: 'Diourbel' }, { nom: 'Ndoulo', lat: 14.65, lng: -16.4, zone: 'BA', region: 'Diourbel' }],
+  'Mbacké':       [{ nom: 'Mbacké', lat: 14.8003, lng: -15.9122, zone: 'BA', region: 'Diourbel' }, { nom: 'Touba Mosquée', lat: 14.8503, lng: -15.8822, zone: 'BA', region: 'Diourbel' }, { nom: 'Dara', lat: 15.35, lng: -15.48, zone: 'BA', region: 'Diourbel' }],
+  'Fatick':       [{ nom: 'Fatick', lat: 14.3393, lng: -16.4114, zone: 'BA', region: 'Fatick' }, { nom: 'Ndoss', lat: 14.32, lng: -16.52, zone: 'BA', region: 'Fatick' }],
+  'Foundiougne':  [{ nom: 'Foundiougne', lat: 14.1381, lng: -16.47, zone: 'BA', region: 'Fatick' }, { nom: 'Sokone', lat: 13.883, lng: -16.367, zone: 'BA', region: 'Fatick' }, { nom: 'Toubacouta', lat: 13.7, lng: -16.25, zone: 'BA', region: 'Fatick' }],
+  'Gossas':       [{ nom: 'Gossas', lat: 14.5, lng: -16.05, zone: 'BA', region: 'Fatick' }, { nom: 'Colobane', lat: 14.55, lng: -16.0, zone: 'BA', region: 'Fatick' }],
+  'Birkelane':    [{ nom: 'Birkelane', lat: 14.2, lng: -15.7, zone: 'BA', region: 'Kaffrine' }, { nom: 'Mbirkilane', lat: 14.21, lng: -15.72, zone: 'BA', region: 'Kaffrine' }],
+  'Kaffrine':     [{ nom: 'Kaffrine', lat: 14.1058, lng: -15.5508, zone: 'BA', region: 'Kaffrine' }, { nom: 'Nganda', lat: 14.17, lng: -15.38, zone: 'BA', region: 'Kaffrine' }],
+  'Koungheul':    [{ nom: 'Koungheul', lat: 13.9833, lng: -14.8, zone: 'BA', region: 'Kaffrine' }, { nom: 'Ida Mouride', lat: 14.0, lng: -14.75, zone: 'BA', region: 'Kaffrine' }],
+  'Malem Hodar':  [{ nom: 'Malem Hodar', lat: 14.1833, lng: -14.7833, zone: 'BA', region: 'Kaffrine' }],
+  'Guinguinéo':   [{ nom: 'Guinguinéo', lat: 14.2667, lng: -15.95, zone: 'BA', region: 'Kaolack' }, { nom: 'Mbadakhoun', lat: 14.28, lng: -16.0, zone: 'BA', region: 'Kaolack' }],
+  'Kaolack':      [{ nom: 'Kaolack', lat: 14.1507, lng: -16.075, zone: 'BA', region: 'Kaolack' }, { nom: 'Kahone', lat: 14.1, lng: -15.92, zone: 'BA', region: 'Kaolack' }, { nom: 'Passy', lat: 14.2, lng: -16.1, zone: 'BA', region: 'Kaolack' }],
+  'Nioro du Rip': [{ nom: 'Nioro du Rip', lat: 13.7437, lng: -15.7939, zone: 'BA', region: 'Kaolack' }, { nom: 'Paoskoto', lat: 13.8, lng: -15.7, zone: 'BA', region: 'Kaolack' }, { nom: 'Keur Ayib', lat: 13.7, lng: -15.9, zone: 'BA', region: 'Kaolack' }],
+  'Kédougou':     [{ nom: 'Kédougou', lat: 12.5561, lng: -12.1747, zone: 'SO', region: 'Kédougou' }, { nom: 'Bandafassi', lat: 12.55, lng: -12.25, zone: 'SO', region: 'Kédougou' }],
+  'Salémata':     [{ nom: 'Salémata', lat: 12.6331, lng: -12.8206, zone: 'SO', region: 'Kédougou' }],
+  'Saraya':       [{ nom: 'Saraya', lat: 12.8333, lng: -11.75, zone: 'SO', region: 'Kédougou' }, { nom: 'Kolia', lat: 12.8, lng: -11.9, zone: 'SO', region: 'Kédougou' }],
+  'Kolda':              [{ nom: 'Kolda', lat: 12.8946, lng: -14.9411, zone: 'HC', region: 'Kolda' }, { nom: 'Saré Yoro Bana', lat: 12.9, lng: -14.9, zone: 'HC', region: 'Kolda' }],
+  'Médina Yoro Foula':  [{ nom: 'Médina Yoro Foula', lat: 12.9383, lng: -13.9928, zone: 'HC', region: 'Kolda' }],
+  'Vélingara':          [{ nom: 'Vélingara', lat: 13.1514, lng: -14.1136, zone: 'HC', region: 'Kolda' }, { nom: 'Diaobé', lat: 13.2, lng: -14.25, zone: 'HC', region: 'Kolda' }],
+  'Kébémer':  [{ nom: 'Kébémer', lat: 15.3667, lng: -16.45, zone: 'ZSP', region: 'Louga' }, { nom: 'Darou Mousty', lat: 15.2, lng: -16.25, zone: 'ZSP', region: 'Louga' }],
+  'Linguère':  [{ nom: 'Linguère', lat: 15.3833, lng: -15.1167, zone: 'ZSP', region: 'Louga' }, { nom: 'Dahra', lat: 15.35, lng: -15.48, zone: 'ZSP', region: 'Louga' }, { nom: 'Yang Yang', lat: 15.38, lng: -15.08, zone: 'ZSP', region: 'Louga' }],
+  'Louga':     [{ nom: 'Louga', lat: 15.6167, lng: -16.2333, zone: 'ZSP', region: 'Louga' }, { nom: 'Sakal', lat: 15.5, lng: -16.4, zone: 'ZSP', region: 'Louga' }, { nom: 'Coki', lat: 15.48, lng: -16.05, zone: 'ZSP', region: 'Louga' }],
+  'Kanel':         [{ nom: 'Kanel', lat: 15.4929, lng: -13.1736, zone: 'VF', region: 'Matam' }],
+  'Matam':         [{ nom: 'Matam', lat: 15.6558, lng: -13.2558, zone: 'VF', region: 'Matam' }, { nom: 'Ourossogui', lat: 15.618, lng: -13.323, zone: 'VF', region: 'Matam' }],
+  'Ranérou Ferlo': [{ nom: 'Ranérou', lat: 15.3, lng: -13.9667, zone: 'ZSP', region: 'Matam' }],
+  'Dagana':      [{ nom: 'Richard-Toll', lat: 16.4622, lng: -15.7022, zone: 'VF', region: 'Saint-Louis' }, { nom: 'Dagana', lat: 16.5167, lng: -15.5, zone: 'VF', region: 'Saint-Louis' }, { nom: 'Rosso', lat: 16.5089, lng: -15.8167, zone: 'VF', region: 'Saint-Louis' }],
+  'Podor':       [{ nom: 'Podor', lat: 16.65, lng: -14.9667, zone: 'VF', region: 'Saint-Louis' }, { nom: 'Ndioum', lat: 16.517, lng: -14.65, zone: 'VF', region: 'Saint-Louis' }],
+  'Saint-Louis': [{ nom: 'Saint-Louis', lat: 16.0179, lng: -16.4896, zone: 'VF', region: 'Saint-Louis' }, { nom: 'Sor', lat: 16.02, lng: -16.47, zone: 'VF', region: 'Saint-Louis' }],
+  'Bounkiling':  [{ nom: 'Bounkiling', lat: 12.8333, lng: -15.7, zone: 'MC', region: 'Sédhiou' }],
+  'Goudomp':     [{ nom: 'Goudomp', lat: 12.5667, lng: -15.8, zone: 'MC', region: 'Sédhiou' }],
+  'Sédhiou':     [{ nom: 'Sédhiou', lat: 12.706, lng: -15.5572, zone: 'MC', region: 'Sédhiou' }, { nom: 'Marsassoum', lat: 12.83, lng: -15.98, zone: 'MC', region: 'Sédhiou' }],
+  'Bakel':        [{ nom: 'Bakel', lat: 14.9, lng: -12.4667, zone: 'SO', region: 'Tambacounda' }],
+  'Goudiry':      [{ nom: 'Goudiry', lat: 14.1833, lng: -12.7167, zone: 'SO', region: 'Tambacounda' }],
+  'Koumpentoum':  [{ nom: 'Koumpentoum', lat: 13.9833, lng: -14.5667, zone: 'SO', region: 'Tambacounda' }],
+  'Tambacounda':  [{ nom: 'Tambacounda', lat: 13.7707, lng: -13.6673, zone: 'SO', region: 'Tambacounda' }, { nom: 'Dialacoto', lat: 13.33, lng: -13.37, zone: 'SO', region: 'Tambacounda' }, { nom: 'Missirah', lat: 13.42, lng: -14.42, zone: 'SO', region: 'Tambacounda' }],
+  'Mbour':     [{ nom: 'Mbour', lat: 14.3691, lng: -16.9717, zone: 'NAY', region: 'Thiès' }, { nom: 'Saly', lat: 14.4558, lng: -17.0153, zone: 'NAY', region: 'Thiès' }, { nom: 'Joal-Fadiouth', lat: 14.163, lng: -16.845, zone: 'NAY', region: 'Thiès' }],
+  'Thiès':     [{ nom: 'Thiès', lat: 14.7877, lng: -16.9261, zone: 'NAY', region: 'Thiès' }, { nom: 'Pout', lat: 14.765, lng: -17.054, zone: 'NAY', region: 'Thiès' }, { nom: 'Fandène', lat: 14.7833, lng: -16.8667, zone: 'NAY', region: 'Thiès' }],
+  'Tivaouane': [{ nom: 'Tivaouane', lat: 14.9531, lng: -16.8169, zone: 'NAY', region: 'Thiès' }, { nom: 'Mékhé', lat: 15.11, lng: -16.61, zone: 'NAY', region: 'Thiès' }, { nom: 'Pire Goureye', lat: 15.07, lng: -16.73, zone: 'NAY', region: 'Thiès' }],
+  'Bignona':    [{ nom: 'Bignona', lat: 12.8108, lng: -16.2267, zone: 'BC', region: 'Ziguinchor' }, { nom: 'Diouloulou', lat: 13.15, lng: -16.4, zone: 'BC', region: 'Ziguinchor' }],
+  'Oussouye':   [{ nom: 'Oussouye', lat: 12.4883, lng: -16.5408, zone: 'BC', region: 'Ziguinchor' }],
+  'Ziguinchor': [{ nom: 'Ziguinchor', lat: 12.5675, lng: -16.2719, zone: 'BC', region: 'Ziguinchor' }, { nom: 'Niaguis', lat: 12.5, lng: -16.2, zone: 'BC', region: 'Ziguinchor' }],
 }
 
-const EMPTY_FORM = {
-  nomSite: '', typeSite: 'FERME', zoneCode: '',
-  departement: '', localite: '', region: '', latitude: '', longitude: '',
+const selectStyle: React.CSSProperties = {
+  width: '100%', padding: '0 12px', height: 36, borderRadius: 6,
+  border: '1px solid var(--border-strong)', background: 'var(--surface)',
+  fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text)', cursor: 'pointer',
 }
+
+const EMPTY_FORM = { nomSite: '', departement: '', localite: '' }
 
 export function MesSites({ roleKey }: Props) {
-  const [sites,    setSites]    = useState<any[]>([])
-  const [zones,    setZones]    = useState<any[]>([])
-  const [loading,  setLoading]  = useState(true)
-  const [toast,    setToast]    = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
+  const [sites,   setSites]   = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [toast,   setToast]   = useState<{ msg: string; type: 'success' | 'error' } | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [editCode, setEditCode] = useState<string | null>(null)
   const [saving,   setSaving]   = useState(false)
   const [form,     setForm]     = useState({ ...EMPTY_FORM })
 
-  const canManage = ['seed-multiplicator', 'seed-quotataire'].includes(roleKey)
+  // Lecture seule pour les rôles institutionnels
+  const isReadOnly = ['seed-selector', 'seed-upsemcl'].includes(roleKey)
+  const canEdit    = ['seed-multiplicator', 'seed-quotataire', 'seed-admin'].includes(roleKey)
+  const canCreate  = canEdit && !isReadOnly
+
+  const localitesForDept: Localite[] = form.departement ? (LOCALITES[form.departement] ?? []) : []
 
   async function fetchSites() {
     setLoading(true)
@@ -77,21 +108,10 @@ export function MesSites({ roleKey }: Props) {
     finally { setLoading(false) }
   }
 
-  useEffect(() => {
-    fetchSites()
-    api.get(endpoints.zones)
-      .then(r => setZones(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setZones([]))
-  }, [])
+  useEffect(() => { fetchSites() }, [])
 
-  function onZoneChange(code: string) {
-    const gps = ZAE_GPS[code]
-    setForm(f => ({
-      ...f, zoneCode: code,
-      region:    gps?.region ?? f.region,
-      latitude:  gps ? gps.lat.toString() : f.latitude,
-      longitude: gps ? gps.lng.toString() : f.longitude,
-    }))
+  function onDeptChange(dept: string) {
+    setForm(f => ({ ...f, departement: dept, localite: '' }))
   }
 
   function openCreate() {
@@ -102,34 +122,31 @@ export function MesSites({ roleKey }: Props) {
 
   function openEdit(s: any) {
     setEditCode(s.codeSite)
-    setForm({
-      nomSite:    s.nomSite    ?? '',
-      typeSite:   s.typeSite   ?? 'FERME',
-      zoneCode:   s.zoneCode   ?? '',
-      departement:s.departement ?? '',
-      localite:   s.localite   ?? '',
-      region:     s.region     ?? '',
-      latitude:   s.latitude   != null ? String(s.latitude)  : '',
-      longitude:  s.longitude  != null ? String(s.longitude) : '',
-    })
+    setForm({ nomSite: s.nomSite ?? '', departement: s.departement ?? '', localite: s.localite ?? '' })
     setShowForm(true)
   }
 
   async function submitForm(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.nomSite.trim()) return
+    if (!form.nomSite.trim() || !form.departement || !form.localite) return
     setSaving(true)
+
+    // Dériver GPS, ZAE, région depuis la table statique
+    const loc = (LOCALITES[form.departement] ?? []).find(l => l.nom === form.localite)
+    const typeSite = roleKey === 'seed-multiplicator' ? 'FERME' : 'MAGASIN'
+
+    const payload: Record<string, unknown> = {
+      nomSite:     form.nomSite.trim(),
+      typeSite,
+      departement: form.departement,
+      localite:    form.localite,
+      region:      loc?.region,
+      zoneCode:    loc?.zone,
+      latitude:    loc?.lat,
+      longitude:   loc?.lng,
+    }
+
     try {
-      const payload = {
-        nomSite:    form.nomSite.trim(),
-        typeSite:   form.typeSite,
-        zoneCode:   form.zoneCode    || undefined,
-        departement:form.departement || undefined,
-        localite:   form.localite    || undefined,
-        region:     form.region      || undefined,
-        latitude:   form.latitude    ? Number(form.latitude)  : undefined,
-        longitude:  form.longitude   ? Number(form.longitude) : undefined,
-      }
       if (editCode) {
         await api.put(endpoints.siteMesSitesByCode(editCode), payload)
         setToast({ msg: `Site "${form.nomSite}" mis à jour`, type: 'success' })
@@ -165,7 +182,12 @@ export function MesSites({ roleKey }: Props) {
     }
   }
 
-  const roleLabel = roleKey === 'seed-multiplicator' ? 'Multiplicateur' : 'Quotataire / OP'
+  const roleLabel = {
+    'seed-multiplicator': 'Multiplicateur',
+    'seed-quotataire':    'Quotataire / OP',
+    'seed-upsemcl':       'UPSemCL',
+    'seed-selector':      'Sélectionneur ISRA/CNRA',
+  }[roleKey] ?? 'votre rôle'
 
   return (
     <div>
@@ -191,14 +213,13 @@ export function MesSites({ roleKey }: Props) {
           <div className="stat-icon orange"><CheckCircle2 size={18} /></div>
           <div className="stat-body">
             <div className="stat-value">
-              {loading ? '…' : [...new Set(sites.map(s => s.region).filter(Boolean))].length}
+              {loading ? '…' : [...new Set(sites.map((s: any) => s.region).filter(Boolean))].length}
             </div>
             <div className="stat-label">Régions</div>
           </div>
         </div>
       </div>
 
-      {/* En-tête table */}
       <div className="card" style={{ marginTop: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -210,12 +231,21 @@ export function MesSites({ roleKey }: Props) {
                 borderRadius: 20, padding: '1px 10px', fontSize: 11, fontWeight: 700,
               }}>{sites.length} site{sites.length !== 1 ? 's' : ''}</span>
             )}
+            {isReadOnly && (
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                background: 'var(--surface-2)', color: 'var(--text-muted)',
+                borderRadius: 20, padding: '1px 10px', fontSize: 11, fontWeight: 600,
+              }}>
+                <Lock size={9} /> Lecture seule
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn-secondary" onClick={fetchSites} title="Rafraîchir">
               <RefreshCw size={13} />
             </button>
-            {canManage && (
+            {canCreate && sites.length === 0 && (
               <button className="btn-primary" onClick={openCreate}>
                 <Plus size={14} /> Nouveau site
               </button>
@@ -230,9 +260,11 @@ export function MesSites({ roleKey }: Props) {
             <div className="empty-icon"><MapPin size={24} /></div>
             <div className="empty-title">Aucun site enregistré</div>
             <div className="empty-sub">
-              En tant que {roleLabel}, créez votre premier site de stockage ou de multiplication.
+              {canCreate
+                ? `En tant que ${roleLabel}, enregistrez votre lieu de stockage ou de production.`
+                : `Aucun site n'est encore associé à votre compte.`}
             </div>
-            {canManage && (
+            {canCreate && (
               <button className="btn-primary" onClick={openCreate} style={{ marginTop: 16 }}>
                 <Plus size={14} /> Créer mon site
               </button>
@@ -240,9 +272,10 @@ export function MesSites({ roleKey }: Props) {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
-            {sites.map(s => (
+            {sites.map((s: any) => (
               <SiteCard
-                key={s.id} site={s} canManage={canManage} zones={zones}
+                key={s.id} site={s}
+                canEdit={canEdit && !isReadOnly}
                 onEdit={() => openEdit(s)}
                 onDelete={() => supprimerSite(s)}
                 onSetPrincipal={() => definirPrincipal(s)}
@@ -256,116 +289,78 @@ export function MesSites({ roleKey }: Props) {
       {/* ── Modal formulaire ── */}
       {showForm && (
         <Modal
-          title={editCode ? `Modifier — ${editCode}` : 'Nouveau site de stockage / production'}
-          subtitle={editCode
-            ? 'Mettez à jour les informations de votre site'
-            : 'Le code site sera généré automatiquement'}
+          title={editCode ? `Modifier mon site` : 'Nouveau site'}
+          subtitle={editCode ? 'Mettez à jour les informations de votre site' : 'Votre lieu de stockage ou de production'}
           onClose={() => setShowForm(false)}
         >
           <form onSubmit={submitForm}>
             <Field label="Nom du site" required>
               <FormInput
-                placeholder="Ex: Ferme Diallo — Kaolack"
+                placeholder={roleKey === 'seed-multiplicator' ? 'Ex: Ferme Diallo Moussa' : 'Ex: Dépôt OP Sine-Saloum'}
                 value={form.nomSite}
                 onChange={v => setForm(f => ({ ...f, nomSite: v }))}
                 required
               />
             </Field>
 
-            <FormRow>
-              <Field label="Type de site" required>
-                <FormSelect
-                  value={form.typeSite}
-                  onChange={v => setForm(f => ({ ...f, typeSite: v }))}
-                  options={TYPES_SITE}
-                />
-              </Field>
-              <Field label="Zone agro-écologique">
-                <FormSelect
-                  value={form.zoneCode}
-                  onChange={onZoneChange}
-                  options={[
-                    { value: '', label: '— Sélectionner une ZAE —' },
-                    ...zones.map(z => ({
-                      value: z.code,
-                      label: ZAE_GPS[z.code]
-                        ? `${z.nom} (${ZAE_GPS[z.code].region})`
-                        : z.nom,
-                    })),
-                  ]}
-                />
-              </Field>
-            </FormRow>
+            <Field label="Département" required>
+              <select
+                value={form.departement}
+                onChange={e => onDeptChange(e.target.value)}
+                required
+                style={selectStyle}
+              >
+                <option value="">— Sélectionner un département —</option>
+                {DEPARTEMENTS.map(g => (
+                  <optgroup key={g.region} label={g.region}>
+                    {g.depts.map(d => (
+                      <option key={d} value={d}>{d}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </Field>
 
-            <FormRow>
-              <Field label="Département">
-                <select
-                  value={form.departement}
-                  onChange={e => setForm(f => ({ ...f, departement: e.target.value }))}
-                  style={{
-                    width: '100%', padding: '0 12px', height: 36, borderRadius: 6,
-                    border: '1px solid var(--border-strong)', background: 'var(--surface)',
-                    fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <option value="">— Département —</option>
-                  {DEPARTEMENTS.map(g => (
-                    <optgroup key={g.region} label={g.region}>
-                      {g.depts.map(d => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Localité exacte">
-                <FormInput
-                  placeholder="Village, quartier…"
-                  value={form.localite}
-                  onChange={v => setForm(f => ({ ...f, localite: v }))}
-                />
-              </Field>
-            </FormRow>
+            <Field label="Localité / Ville" required>
+              <select
+                value={form.localite}
+                onChange={e => setForm(f => ({ ...f, localite: e.target.value }))}
+                required
+                disabled={!form.departement}
+                style={{ ...selectStyle, opacity: form.departement ? 1 : 0.5 }}
+              >
+                <option value="">
+                  {form.departement ? '— Sélectionner une localité —' : '— Choisir d\'abord un département —'}
+                </option>
+                {localitesForDept.map(l => (
+                  <option key={l.nom} value={l.nom}>{l.nom}</option>
+                ))}
+              </select>
+            </Field>
 
-            {form.zoneCode && (
-              <div style={{
-                background: 'var(--green-50)', border: '1px solid var(--green-200)',
-                borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-                fontSize: 12, color: 'var(--green-700)', display: 'flex', gap: 10,
-                alignItems: 'center',
-              }}>
-                <MapPin size={13} />
-                <span>
-                  Coordonnées GPS auto-remplies depuis la ZAE
-                  <strong> {zones.find(z => z.code === form.zoneCode)?.nom ?? form.zoneCode}</strong> :
-                  {' '}{form.latitude}, {form.longitude}
-                </span>
-              </div>
-            )}
-
-            <FormRow>
-              <Field label="Latitude GPS">
-                <FormInput
-                  placeholder="Ex: 14.7128"
-                  value={form.latitude}
-                  onChange={v => setForm(f => ({ ...f, latitude: v }))}
-                />
-              </Field>
-              <Field label="Longitude GPS">
-                <FormInput
-                  placeholder="Ex: -16.4596"
-                  value={form.longitude}
-                  onChange={v => setForm(f => ({ ...f, longitude: v }))}
-                />
-              </Field>
-            </FormRow>
+            {form.localite && (() => {
+              const loc = localitesForDept.find(l => l.nom === form.localite)
+              return loc ? (
+                <div style={{
+                  background: 'var(--green-50)', border: '1px solid var(--green-200)',
+                  borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+                  fontSize: 12, color: 'var(--green-700)', display: 'flex', gap: 10, alignItems: 'center',
+                }}>
+                  <MapPin size={13} />
+                  <span>
+                    Localisation enregistrée — <strong>{loc.region}</strong>,
+                    zone <strong>{loc.zone}</strong>. Coordonnées GPS auto-assignées.
+                  </span>
+                </div>
+              ) : null
+            })()}
 
             <FormActions>
-              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>
-                Annuler
-              </button>
-              <button type="submit" className="btn-primary" disabled={saving || !form.nomSite.trim()}>
+              <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
+              <button
+                type="submit" className="btn-primary"
+                disabled={saving || !form.nomSite.trim() || !form.departement || !form.localite}
+              >
                 {saving ? 'Enregistrement…' : editCode ? 'Mettre à jour' : 'Créer le site'}
               </button>
             </FormActions>
@@ -378,15 +373,11 @@ export function MesSites({ roleKey }: Props) {
 
 /* ── Card d'un site ── */
 function SiteCard({
-  site, canManage, zones, onEdit, onDelete, onSetPrincipal, isOnly,
+  site, canEdit, onEdit, onDelete, onSetPrincipal, isOnly,
 }: {
-  site: any; canManage: boolean; zones: any[]; isOnly: boolean;
+  site: any; canEdit: boolean; isOnly: boolean;
   onEdit: () => void; onDelete: () => void; onSetPrincipal: () => void;
 }) {
-  const typeLabel = TYPE_LABELS[site.typeSite] ?? site.typeSite
-  const hasGps    = site.latitude != null && site.longitude != null
-  const zoneLabel = site.zoneCode ? (zones.find(z => z.code === site.zoneCode)?.nom ?? site.zoneCode) : null
-
   return (
     <div style={{
       border: `1px solid ${site.estPrincipal ? 'var(--green-300)' : 'var(--border)'}`,
@@ -394,7 +385,6 @@ function SiteCard({
       display: 'flex', flexDirection: 'column', gap: 10,
       boxShadow: site.estPrincipal ? '0 0 0 2px var(--green-100)' : 'none',
     }}>
-      {/* En-tête */}
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, flexWrap: 'wrap' }}>
@@ -413,7 +403,7 @@ function SiteCard({
             {site.codeSite}
           </code>
         </div>
-        {canManage && (
+        {canEdit && (
           <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
             <button
               onClick={onEdit}
@@ -423,9 +413,7 @@ function SiteCard({
                 gap: 4, fontSize: 11, color: 'var(--text-muted)',
               }}
               title="Modifier ce site"
-            >
-              <Edit2 size={11} /> Modifier
-            </button>
+            ><Edit2 size={11} /> Modifier</button>
             {!site.estPrincipal && (
               <button
                 onClick={onSetPrincipal}
@@ -435,9 +423,7 @@ function SiteCard({
                   gap: 4, fontSize: 11, color: 'var(--green-700)',
                 }}
                 title="Définir comme site principal"
-              >
-                <Star size={11} />
-              </button>
+              ><Star size={11} /></button>
             )}
             {!isOnly && (
               <button
@@ -448,31 +434,22 @@ function SiteCard({
                   gap: 4, fontSize: 11, color: 'var(--red-600)',
                 }}
                 title="Supprimer ce site"
-              >
-                <Trash2 size={11} />
-              </button>
+              ><Trash2 size={11} /></button>
             )}
           </div>
         )}
       </div>
 
-      {/* Infos */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        <Chip color="blue">{typeLabel}</Chip>
-        {zoneLabel && <Chip color="green">{zoneLabel}</Chip>}
+        {site.typeSite && <Chip color="blue">{site.typeSite === 'FERME' ? 'Ferme de multiplication' : site.typeSite === 'MAGASIN' ? 'Magasin de stockage' : site.typeSite === 'STATION_RECHERCHE' ? 'Station de recherche' : site.typeSite}</Chip>}
+        {site.zoneCode && <Chip color="green">Zone {site.zoneCode}</Chip>}
         {site.departement && <Chip color="gray">{site.departement}</Chip>}
-        {site.region      && <Chip color="gray">{site.region}</Chip>}
+        {site.region      && site.region !== site.departement && <Chip color="gray">{site.region}</Chip>}
       </div>
 
       {site.localite && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
           <MapPin size={11} />{site.localite}
-        </div>
-      )}
-
-      {hasGps && (
-        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-          GPS : {Number(site.latitude).toFixed(4)}, {Number(site.longitude).toFixed(4)}
         </div>
       )}
     </div>
@@ -490,8 +467,6 @@ function Chip({ children, color }: { children: React.ReactNode; color: 'blue' | 
     <span style={{
       background: p.bg, color: p.fg, border: `1px solid ${p.border}`,
       borderRadius: 20, padding: '2px 9px', fontSize: 11, fontWeight: 600,
-    }}>
-      {children}
-    </span>
+    }}>{children}</span>
   )
 }
