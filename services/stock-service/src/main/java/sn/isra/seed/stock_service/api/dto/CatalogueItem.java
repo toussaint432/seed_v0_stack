@@ -22,4 +22,5 @@ public interface CatalogueItem {
     Double getLatitude();
     Double getLongitude();
     String getNiveauAdaptation();
+    String getNomComplet();
 }

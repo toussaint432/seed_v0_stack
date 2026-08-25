@@ -43,13 +43,20 @@ public class SiteController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    /* ── GET /api/sites/mes-sites — sites du membre connecté (isolation individuelle) ── */
+    /* ── GET /api/sites/mes-sites — sites du membre connecté ── */
     @GetMapping("/mes-sites")
     public ResponseEntity<?> mesSites(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
         var membreId = membreRepo.findMembreIdByUsername(username);
         if (membreId.isEmpty()) return ResponseEntity.ok(List.of());
-        return ResponseEntity.ok(siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId.get()));
+
+        List<Site> personal = siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId.get());
+        if (!personal.isEmpty()) return ResponseEntity.ok(personal);
+
+        // Fallback : sites de l'organisation (UPSemCL, sélectionneur — sites institutionnels)
+        var orgId = membreRepo.findOrgIdByUsername(username);
+        if (orgId.isEmpty()) return ResponseEntity.ok(List.of());
+        return ResponseEntity.ok(siteRepo.findByIdOrganisationOrderByEstPrincipalDescIdAsc(orgId.get()));
     }
 
     /**
@@ -71,10 +78,14 @@ public class SiteController {
         Long membreId = membreIdOpt.get();
         Long orgId    = orgIdOpt.orElse(null);
 
+        List<Site> existing = siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId);
+        if (!existing.isEmpty())
+            return ResponseEntity.status(409).body(Map.of("message",
+                "Vous avez déjà un site enregistré. Modifiez-le plutôt que d'en créer un nouveau."));
+
         // Code unique basé sur le username : SITE-{PREFIX}-{N:02d}
         String prefix = username.toUpperCase().replaceAll("[^A-Z0-9]", "");
         if (prefix.length() > 6) prefix = prefix.substring(0, 6);
-        List<Site> existing = siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId);
         String codeSite;
         int n = existing.size() + 1;
         do {

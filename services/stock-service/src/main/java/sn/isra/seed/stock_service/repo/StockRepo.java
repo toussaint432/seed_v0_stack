@@ -271,7 +271,8 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
           /* Coordonnées : site en priorité, fallback organisation */
           COALESCE(si.latitude,  o.latitude)  AS latitude,
           COALESCE(si.longitude, o.longitude) AS longitude,
-          vz.niveau_adaptation   AS niveauAdaptation
+          vz.niveau_adaptation   AS niveauAdaptation,
+          COALESCE(mo.nom_complet, o.nom_organisation) AS nomComplet
       FROM stock s
       JOIN lot_semencier ls   ON s.id_lot = ls.id
       JOIN generation_semence g ON ls.id_generation = g.id
@@ -279,6 +280,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
       JOIN espece e           ON v.id_espece = e.id
       JOIN site si            ON s.id_site = si.id
       JOIN organisation o     ON si.id_organisation = o.id
+      LEFT JOIN shared.membre_organisation mo ON mo.keycloak_username = ls.username_createur
       LEFT JOIN variete_zone vz
           ON v.id = vz.id_variete
           AND vz.id_zone = CAST(:idZone AS BIGINT)
@@ -330,6 +332,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
               COALESCE(si.latitude,  o.latitude)  AS latitude,
               COALESCE(si.longitude, o.longitude) AS longitude,
               NULL::text             AS niveauAdaptation,
+              COALESCE(mo.nom_complet, o.nom_organisation) AS nomComplet,
               6371.0 * acos(LEAST(1.0,
                   cos(radians(CAST(:lat AS double precision)))
                   * cos(radians(COALESCE(si.latitude,  o.latitude)::double precision))
@@ -344,6 +347,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
           JOIN espece e               ON v.id_espece = e.id
           JOIN site si                ON s.id_site = si.id
           JOIN organisation o         ON si.id_organisation = o.id
+          LEFT JOIN shared.membre_organisation mo ON mo.keycloak_username = ls.username_createur
           WHERE g.code_generation IN ('R1','R2')
             AND s.quantite_disponible > 0
             AND ls.statut_lot = 'DISPONIBLE'
