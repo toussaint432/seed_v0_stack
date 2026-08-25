@@ -298,7 +298,7 @@ export function MesSites({ roleKey }: Props) {
               <FormInput
                 placeholder={roleKey === 'seed-multiplicator' ? 'Ex: Ferme Diallo Moussa' : 'Ex: Dépôt OP Sine-Saloum'}
                 value={form.nomSite}
-                onChange={v => setForm(f => ({ ...f, nomSite: v }))}
+                onChange={e => setForm(f => ({ ...f, nomSite: (e as React.ChangeEvent<HTMLInputElement>).target.value }))}
                 required
               />
             </Field>
