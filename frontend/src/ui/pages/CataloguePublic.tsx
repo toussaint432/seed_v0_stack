@@ -499,8 +499,8 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     </>
   )
 
-  /* ── Cart drawer ── */
-  const CartDrawer = () => (
+  /* ── Contenu du cart drawer (inliné pour éviter la perte de focus) ── */
+  const cartDrawerJsx = (
     <>
       {showCart && (
         <div onClick={() => setShowCart(false)}
@@ -569,8 +569,8 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
         {cart.length > 0 && (
           <div style={{ padding: '16px 20px', borderTop: '1px solid var(--border)' }}>
             <textarea value={orderObs} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setOrderObs(e.target.value)}
-              placeholder="Observations (zone de livraison, urgence…)" rows={2}
-              style={{ width: '100%', borderRadius: 8, border: '1px solid var(--border)', padding: '8px 12px', fontSize: 12, marginBottom: 12, fontFamily: 'inherit', resize: 'none', color: 'var(--text-primary)', background: 'var(--surface-2)' }} />
+              placeholder="Observations (zone de livraison, urgence…)" rows={3}
+              style={{ width: '100%', boxSizing: 'border-box', borderRadius: 8, border: '1px solid var(--border)', padding: '8px 12px', fontSize: 12, marginBottom: 12, fontFamily: 'inherit', resize: 'vertical', color: 'var(--text-primary)', background: 'var(--surface-2)' }} />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <Package size={12} /> Total : <strong style={{ color: 'var(--text-primary)' }}>{totalCartKg.toLocaleString('fr-FR')} kg</strong>
@@ -980,7 +980,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
       )}
 
       <FournisseursDrawer />
-      <CartDrawer />
+      {cartDrawerJsx}
     </div>
   )
 }
