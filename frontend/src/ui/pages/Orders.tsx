@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   ShoppingCart, RefreshCw, Plus, Settings2, Clock, XCircle, PackageCheck,
   Search, X, ChevronLeft, ChevronRight, CheckCircle2, Ban, Eye, Building2,
@@ -729,6 +730,7 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUp
    VUE QUOTATAIRE
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueQuotataire({ setToast }: { setToast: any }) {
+  const navigate = useNavigate()
   const [orders,    setOrders]    = useState<any[]>([])
   const [orgs,      setOrgs]      = useState<any[]>([])
   const [varieties, setVarieties] = useState<any[]>([])
@@ -829,7 +831,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
                 onClick={() => downloadXlsx(`senjiw-commandes-${new Date().toISOString().slice(0, 10)}`, buildOrderXlsSheets(displayed, orgs, varieties))}
               ><Download size={13} /> Export .xls</button>
             )}
-            <button className="btn btn-primary" onClick={() => setShowForm(true)}><Plus size={13} /> Nouvelle commande</button>
+            <button className="btn btn-primary" onClick={() => navigate('/catalogue')}><Plus size={13} /> Nouvelle commande</button>
             <button className="btn btn-secondary btn-icon" onClick={fetchAll}><RefreshCw size={13} /></button>
           </div>
         </div>
