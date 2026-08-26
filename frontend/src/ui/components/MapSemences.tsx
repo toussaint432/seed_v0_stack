@@ -4,7 +4,8 @@
    Rôles   : admin · sélectionneur · upsemcl · multiplicateur · quotataire
    ═══════════════════════════════════════════════════════════════ */
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, Marker } from 'react-leaflet'
+import L from 'leaflet'
 import type { PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import { X, MapPin, Layers, Filter, RefreshCw } from 'lucide-react'
@@ -38,6 +39,41 @@ const ROLE_GENS: Record<string, string[]> = {
 }
 
 import { GEN_CHART_COLORS as GEN_COLORS } from '../../lib/constants'
+
+/* ── Éclaircissement hex pour le dégradé des icônes ── */
+function lightenHex(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const lr = Math.round(r + (255 - r) * 0.52)
+  const lg = Math.round(g + (255 - g) * 0.52)
+  const lb = Math.round(b + (255 - b) * 0.52)
+  return `#${lr.toString(16).padStart(2, '0')}${lg.toString(16).padStart(2, '0')}${lb.toString(16).padStart(2, '0')}`
+}
+
+/* ── Icône personnage site — même langage visuel que MapCatalogue ── */
+function createSiteIcon(nomSite: string, stockTotal: number, maxStock: number, zaeCode: string | null): L.DivIcon {
+  const hasStock = stockTotal > 0
+  const ratio    = hasStock ? Math.sqrt(Math.max(stockTotal, 1) / Math.max(maxStock, 1)) : 0
+  const cs       = hasStock ? Math.round(26 + 16 * ratio) : 18
+  const baseColor = zaeCode && ZAE_COLORS[zaeCode] ? ZAE_COLORS[zaeCode] : '#15803d'
+  const color     = hasStock ? baseColor : '#9ca3af'
+  const light     = hasStock ? lightenHex(baseColor) : '#d1d5db'
+  const ring      = hasStock ? baseColor + '55' : '#d1d5db55'
+  const name      = nomSite.length > 20 ? nomSite.slice(0, 18) + '…' : nomSite
+  const svgS      = Math.round(cs * 0.52)
+  const opacity   = hasStock ? 1 : 0.42
+  const html = `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;opacity:${opacity}">
+    <div style="width:${cs}px;height:${cs}px;border-radius:50%;background:radial-gradient(circle at 38% 32%,${light},${color});border:2.5px solid #fff;box-shadow:0 3px 10px ${color}44,0 0 0 2px ${ring},inset 0 1px 0 rgba(255,255,255,0.35);display:flex;align-items:center;justify-content:center;">
+      <svg width="${svgS}" height="${svgS}" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="7.5" r="3.5"/>
+        <path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
+      </svg>
+    </div>
+    ${hasStock ? `<div style="background:rgba(255,255,255,0.97);border:1.5px solid ${color}55;border-radius:5px;padding:2px 7px;font-size:9.5px;font-weight:700;white-space:nowrap;margin-top:3px;color:${color};box-shadow:0 1px 5px rgba(0,0,0,0.15);max-width:140px;overflow:hidden;text-overflow:ellipsis;">${name}</div>` : ''}
+  </div>`
+  return L.divIcon({ html, className: '', iconSize: [140, cs + (hasStock ? 28 : 4)], iconAnchor: [70, Math.round(cs / 2)] })
+}
 
 /* ── Rayon de bulle proportionnel à √(stock/max) ── */
 function bubbleR(stock: number, max: number, min = 10, maxR = 42): number {
@@ -471,45 +507,45 @@ export function MapSemences({ roleKey }: Props) {
                   pathOptions={{ fillColor: color, fillOpacity: 0.22, color, weight: 2, opacity: 0.6 }}
                   eventHandlers={{ click: () => setPanel({ type: 'zae', code }) }}
                 >
-                  <Tooltip
-                    permanent
-                    direction="center"
-                    offset={[0, 0]}
-                    opacity={1}
-                  >
-                    <div style={{ textAlign: 'center', lineHeight: 1.3 }}>
-                      <div style={{ fontWeight: 700, fontSize: 11, color }}>{code}</div>
-                      <div style={{ fontSize: 10, color: '#374151' }}>{fmtKg(stock)}</div>
+                  <Tooltip permanent direction="center" offset={[0, 0]} opacity={1}>
+                    <div style={{ textAlign: 'center', lineHeight: 1.35 }}>
+                      <div style={{ fontWeight: 700, fontSize: 11, color }}>{ZAE_DISPLAY[code] || code}</div>
+                      <div style={{ fontSize: 10, color: '#374151', fontWeight: 600 }}>{fmtKg(stock)}</div>
+                      <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>
+                        {agg?.sites.length || 0} site{(agg?.sites.length || 0) > 1 ? 's' : ''}
+                      </div>
                     </div>
                   </Tooltip>
                 </CircleMarker>
               )
             })}
 
-            {/* ── Couche 3 : Marqueurs de sites ── */}
+            {/* ── Couche 3 : Marqueurs de sites (icône personnage, cohérent avec MapCatalogue) ── */}
             {showSites && Object.entries(SITE_COORDS).map(([code, [lat, lng]]) => {
-              const data   = stockBySite[code]
-              const total  = data?.total || 0
-              const hasStock = total > 0
-              const radius = hasStock ? 7 + 14 * Math.sqrt(total / maxSite) : 5
-              const meta   = SITE_META[code]
-              const color  = hasStock ? '#166534' : '#9ca3af'
+              const data     = stockBySite[code]
+              const total    = data?.total || 0
+              const meta     = SITE_META[code]
+              const zaeCode  = SITE_TO_ZAE[code] || null
+              const icon     = createSiteIcon(meta?.nom || code, total, maxSite, zaeCode)
+              const zaeColor = zaeCode && ZAE_COLORS[zaeCode] ? ZAE_COLORS[zaeCode] : '#15803d'
               return (
-                <CircleMarker
+                <Marker
                   key={`site-${code}`}
-                  center={[lat, lng]}
-                  radius={radius}
-                  pathOptions={{ fillColor: color, fillOpacity: hasStock ? 0.88 : 0.35, color: '#fff', weight: 2 }}
+                  position={[lat, lng]}
+                  icon={icon}
                   eventHandlers={{ click: () => setPanel({ type: 'site', code }) }}
                 >
-                  <Tooltip direction="top" offset={[0, -radius]}>
+                  <Tooltip direction="top" offset={[0, -8]}>
                     <div style={{ lineHeight: 1.4 }}>
                       <div style={{ fontWeight: 700, fontSize: 12 }}>{meta?.nom || code}</div>
                       <div style={{ fontSize: 11, color: '#6b7280' }}>{meta?.type || ''} · {meta?.region || ''}</div>
-                      {hasStock && <div style={{ fontSize: 11, color: '#166534', fontWeight: 600 }}>{fmtKg(total)} disponibles</div>}
+                      {total > 0
+                        ? <div style={{ fontSize: 11, color: zaeColor, fontWeight: 600 }}>{fmtKg(total)} disponibles</div>
+                        : <div style={{ fontSize: 11, color: '#9ca3af' }}>Aucun stock</div>
+                      }
                     </div>
                   </Tooltip>
-                </CircleMarker>
+                </Marker>
               )
             })}
           </MapContainer>
@@ -558,13 +594,21 @@ export function MapSemences({ roleKey }: Props) {
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{code} — {name}</span>
           </div>
         ))}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#166534' }} />
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'radial-gradient(circle at 38% 32%,#4ade80,#15803d)', border: '2px solid #fff', boxShadow: '0 1px 4px #15803d44', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
+              </svg>
+            </div>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Site avec stock</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#9ca3af', opacity: 0.4 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#9ca3af', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.42 }}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
+              </svg>
+            </div>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Site sans stock</span>
           </div>
         </div>
