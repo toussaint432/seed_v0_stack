@@ -671,26 +671,39 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
         {/* ── Filtres zones dans le panneau ── */}
         {zones.length > 0 && !selectedSite && (
           <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', flexShrink: 0 }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-              Filtrer par zone ZAE
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', flex: 1 }}>
+                Filtrer par zone ZAE
+              </span>
+              {selectedZone && (
+                <button onClick={() => onSelectZone(null)}
+                  style={{ fontSize: 10, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: '1px 4px', fontFamily: 'inherit', textDecoration: 'underline' }}>
+                  Réinitialiser
+                </button>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
               {zones.map(z => {
                 const isActive = selectedZone?.id === z.id
-                const zCode = z.code
-                const hasSite = sites.some(s => s.zaeCode === zCode)
+                const hasSite = sites.some(s => s.zaeCode === z.code)
                 return (
                   <button
                     key={z.id}
-                    onClick={() => onSelectZone(isActive ? null : z)}
+                    onClick={() => hasSite ? onSelectZone(isActive ? null : z) : undefined}
+                    title={hasSite ? z.nom : `${z.nom} — aucun stock disponible`}
                     style={{
-                      padding: '3px 9px', borderRadius: 99, fontSize: 11, cursor: 'pointer', fontFamily: 'inherit',
-                      background: isActive ? '#16a34a' : hasSite ? 'var(--surface)' : 'var(--surface-3)',
+                      padding: '3px 9px', borderRadius: 99, fontSize: 11, fontFamily: 'inherit',
+                      cursor: hasSite ? 'pointer' : 'not-allowed',
+                      background: isActive ? '#16a34a' : 'var(--surface)',
                       color: isActive ? '#fff' : hasSite ? 'var(--text-primary)' : 'var(--text-muted)',
-                      border: isActive ? '1.5px solid #16a34a' : `1px solid ${hasSite ? 'var(--border)' : 'transparent'}`,
+                      border: '1px solid var(--border)',
                       fontWeight: isActive ? 700 : 400,
-                      opacity: hasSite ? 1 : 0.5,
+                      opacity: hasSite ? 1 : 0.38,
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
                     }}>
+                    {hasSite && !isActive && (
+                      <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16a34a', flexShrink: 0 }} />
+                    )}
                     {z.nom}
                   </button>
                 )

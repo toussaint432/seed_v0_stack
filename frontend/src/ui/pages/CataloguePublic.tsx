@@ -378,10 +378,13 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     [geoMode, proximiteItems, selectedVariete]
   )
 
-  /* Données carte : items de proximité (toutes espèces) ou catalogue filtré par espèce.
-     La recherche textuelle s'applique dans les deux cas pour filtrer sur la carte. */
+  /* Données carte : items de proximité filtrés par espèce sélectionnée (si applicable),
+     ou catalogue filtré par espèce en mode liste. Recherche textuelle dans les deux cas. */
   const catalogueForMap = useMemo<CatalogueItem[]>(() => {
-    const base = (geoMode && proximiteItems.length > 0) ? proximiteItems : catalogue
+    let base = (geoMode && proximiteItems.length > 0) ? proximiteItems : catalogue
+    if (geoMode && selectedEspece) {
+      base = base.filter(item => item.codeEspece === selectedEspece.codeEspece)
+    }
     if (!search.trim()) return base
     const s = search.toLowerCase()
     return base.filter(item =>
@@ -389,7 +392,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
       item.codeVariete.toLowerCase().includes(s) ||
       item.nomEspece.toLowerCase().includes(s)
     )
-  }, [geoMode, proximiteItems, catalogue, search])
+  }, [geoMode, proximiteItems, catalogue, search, selectedEspece])
 
   const totalCartKg = cart.reduce((s, i) => s + i.quantite, 0)
 
