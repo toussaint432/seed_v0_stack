@@ -1163,7 +1163,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             )}
             {isQuotaire && (
               <button className="btn btn-primary" style={{ background: accent, borderColor: accent, fontSize: 12, padding: '6px 12px' }}
-                onClick={() => navigate('/orders')}>
+                onClick={() => navigate('/catalogue')}>
                 <ShoppingCart size={12} /> Passer une commande
               </button>
             )}
