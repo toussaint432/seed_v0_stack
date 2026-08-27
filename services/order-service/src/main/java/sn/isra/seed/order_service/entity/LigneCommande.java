@@ -20,8 +20,12 @@ public class LigneCommande {
   @Column(name="id_variete", nullable=false)
   private Long idVariete;
 
-  @Column(name="id_generation")
+  @Column(name="id_generation", insertable=false, updatable=false)
   private Long idGeneration;
+
+  @ManyToOne(fetch=FetchType.EAGER)
+  @JoinColumn(name="id_generation")
+  private GenerationSemence generation;
 
   @Column(name="quantite_demandee", nullable=false)
   private BigDecimal quantiteDemandee;
