@@ -9,6 +9,7 @@ public record StockAgregeDto(
     Long       idSite,
     String     codeSite,
     String     nomSite,
+    String     zoneCode,
     String     codeGeneration,
     String     nomVariete,
     String     codeVariete,

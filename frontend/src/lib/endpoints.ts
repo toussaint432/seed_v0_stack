@@ -77,6 +77,7 @@ export const endpoints = {
   transfertRefuser:  (id: number) => `${LOT}/transferts/${id}/refuser`,
 
   // ── Stock Service (18083) ──
+  membresCarte: `${STOCK}/membres/carte`,
   stocks:       `${STOCK}/stocks`,
   stocksAgrege: `${STOCK}/stocks/agrege`,
   stockById:        (id: number) => `${STOCK}/stocks/${id}`,

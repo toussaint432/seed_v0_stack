@@ -206,7 +206,7 @@ public class StockService {
         }
         return new StockAgregeDto(
             v.getIdVariete(), v.getIdGeneration(), v.getIdSite(),
-            v.getCodeSite(), v.getNomSite(), v.getCodeGeneration(),
+            v.getCodeSite(), v.getNomSite(), v.getZoneCode(), v.getCodeGeneration(),
             v.getNomVariete(), v.getCodeVariete(), v.getNomEspece(), v.getCodeEspece(),
             v.getUnite(), v.getQuantiteTotale(), v.getNbLots(), v.getDerniereMaj(), v.getCreatedAt(), details
         );

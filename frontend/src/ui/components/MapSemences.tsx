@@ -4,11 +4,11 @@
    Rôles   : admin · sélectionneur · upsemcl · multiplicateur · quotataire
    ═══════════════════════════════════════════════════════════════ */
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, Marker } from 'react-leaflet'
+import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import type { PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { X, MapPin, Layers, Filter, RefreshCw } from 'lucide-react'
+import { X, MapPin, Layers, Filter, RefreshCw, Users } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import {
@@ -18,7 +18,7 @@ import {
 
 /* ── Types ── */
 interface StockRow {
-  codeSite: string; nomSite: string
+  codeSite: string; nomSite: string; zoneCode: string | null
   codeGeneration: string; codeEspece: string; nomEspece: string
   codeVariete: string; nomVariete: string
   quantiteTotale: number; nbLots: number
@@ -26,6 +26,18 @@ interface StockRow {
 
 interface SiteAgg { total: number; byGen: Record<string, number>; nomSite: string }
 interface ZaeAgg  { total: number; sites: string[]; nbLots: number }
+
+interface MembreCarte {
+  username: string
+  nomComplet: string
+  role: string
+  nomOrganisation: string
+  typeOrganisation: string
+  latitude: number
+  longitude: number
+  nomSite: string
+  zoneCode: string | null
+}
 
 interface Props { roleKey: string }
 
@@ -75,6 +87,39 @@ function createSiteIcon(nomSite: string, stockTotal: number, maxStock: number, z
   return L.divIcon({ html, className: '', iconSize: [140, cs + (hasStock ? 28 : 4)], iconAnchor: [70, Math.round(cs / 2)] })
 }
 
+/* ── Couleurs et labels par rôle Keycloak ── */
+const ROLE_COLORS: Record<string, string> = {
+  'seed-selector':      '#7c3aed',
+  'seed-upsemcl':       '#2563eb',
+  'seed-multiplicator': '#15803d',
+  'seed-quotataire':    '#d97706',
+}
+const ROLE_LABELS: Record<string, string> = {
+  'seed-selector':      'Sélectionneur',
+  'seed-upsemcl':       'UPSemCL',
+  'seed-multiplicator': 'Multiplicateur',
+  'seed-quotataire':    'Quotataire',
+}
+
+/* ── Icône utilisateur — personnage coloré par rôle ── */
+function createMembreIcon(nomComplet: string, role: string): L.DivIcon {
+  const color = ROLE_COLORS[role] || '#6b7280'
+  const light = lightenHex(color)
+  const cs    = 28
+  const svgS  = Math.round(cs * 0.52)
+  const label = nomComplet.length > 22 ? nomComplet.slice(0, 20) + '…' : nomComplet
+  const html  = `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+    <div style="width:${cs}px;height:${cs}px;border-radius:50%;background:radial-gradient(circle at 38% 32%,${light},${color});border:2.5px solid #fff;box-shadow:0 3px 10px ${color}44,0 0 0 2px ${color}33,inset 0 1px 0 rgba(255,255,255,0.35);display:flex;align-items:center;justify-content:center;">
+      <svg width="${svgS}" height="${svgS}" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="12" cy="7.5" r="3.5"/>
+        <path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
+      </svg>
+    </div>
+    <div style="background:rgba(255,255,255,0.97);border:1.5px solid ${color}55;border-radius:5px;padding:2px 6px;font-size:9px;font-weight:700;white-space:nowrap;margin-top:3px;color:${color};box-shadow:0 1px 5px rgba(0,0,0,0.15);max-width:130px;overflow:hidden;text-overflow:ellipsis;">${label}</div>
+  </div>`
+  return L.divIcon({ html, className: '', iconSize: [140, cs + 28], iconAnchor: [70, Math.round(cs / 2)] })
+}
+
 /* ── Rayon de bulle proportionnel à √(stock/max) ── */
 function bubbleR(stock: number, max: number, min = 10, maxR = 42): number {
   if (!stock || !max) return 0
@@ -88,6 +133,20 @@ function fmtKg(v: number) {
     : `${Math.round(v).toLocaleString('fr-FR')} kg`
 }
 
+function distKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function fmtDist(km: number): string {
+  const h = Math.floor(km / 60)
+  const m = Math.round((km / 60 - h) * 60)
+  return h === 0 ? `${Math.round(km)} km · ~${m} min` : `${Math.round(km)} km · ~${h}h${m > 0 ? m : ''}`
+}
+
 /* ═══════════════════ Panneaux latéraux ════════════════════ */
 
 function ZaePanel({ code, zones, agg, stocks }: {
@@ -96,11 +155,11 @@ function ZaePanel({ code, zones, agg, stocks }: {
   const zone  = zones.find(z => z.code === code)
   const color = ZAE_COLORS[code] || '#6b7280'
 
-  /* Top variétés dans cette ZAE (via mapping site→zae) */
+  /* Top variétés dans cette ZAE */
   const topVarietes = useMemo(() => {
     const map: Record<string, number> = {}
     stocks
-      .filter(r => SITE_TO_ZAE[r.codeSite] === code)
+      .filter(r => (r.zoneCode || SITE_TO_ZAE[r.codeSite]) === code)
       .forEach(r => { map[r.codeVariete] = (map[r.codeVariete] || 0) + Number(r.quantiteTotale) })
     return Object.entries(map)
       .sort((a, b) => b[1] - a[1])
@@ -111,7 +170,7 @@ function ZaePanel({ code, zones, agg, stocks }: {
   const byGen = useMemo(() => {
     const map: Record<string, number> = {}
     stocks
-      .filter(r => SITE_TO_ZAE[r.codeSite] === code)
+      .filter(r => (r.zoneCode || SITE_TO_ZAE[r.codeSite]) === code)
       .forEach(r => { map[r.codeGeneration] = (map[r.codeGeneration] || 0) + Number(r.quantiteTotale) })
     return map
   }, [stocks, code])
@@ -274,9 +333,20 @@ export function MapSemences({ roleKey }: Props) {
   /* ── Filtres ── */
   const [filterEspece, setFilterEspece] = useState('')
   const [filterGen,    setFilterGen]    = useState('')
-  const [showZAE,      setShowZAE]      = useState(true)
-  const [showSites,    setShowSites]    = useState(true)
-  const [showBubbles,  setShowBubbles]  = useState(true)
+  const [showZAE,          setShowZAE]          = useState(true)
+  const [showBubbles,      setShowBubbles]      = useState(true)
+  const [showSitesAndUsers, setShowSitesAndUsers] = useState(true)
+
+  /* ── Utilisateurs carte ── */
+  const [membres,  setMembres]  = useState<MembreCarte[]>([])
+  const [userPos,  setUserPos]  = useState<[number, number] | null>(null)
+
+  useEffect(() => {
+    navigator.geolocation?.getCurrentPosition(
+      p => setUserPos([p.coords.latitude, p.coords.longitude]),
+      () => {}
+    )
+  }, [])
 
   /* ── Panneau latéral ── */
   const [panel, setPanel] = useState<{ type: 'zae' | 'site'; code: string } | null>(null)
@@ -289,9 +359,11 @@ export function MapSemences({ roleKey }: Props) {
     Promise.all([
       api.get(endpoints.zones),
       api.get(endpoints.stocksAgrege),
-    ]).then(([zonesRes, stockRes]) => {
-      setZones(Array.isArray(zonesRes.data)  ? zonesRes.data  : [])
-      setStocksAgrege(Array.isArray(stockRes.data) ? stockRes.data : [])
+      api.get(endpoints.membresCarte).catch(() => ({ data: [] })),
+    ]).then(([zonesRes, stockRes, membresRes]) => {
+      setZones(Array.isArray(zonesRes.data)   ? zonesRes.data   : [])
+      setStocksAgrege(Array.isArray(stockRes.data)  ? stockRes.data  : [])
+      setMembres(Array.isArray(membresRes.data) ? membresRes.data : [])
       setLastUpdate(new Date())
     }).finally(() => setLoading(false))
   }, [])
@@ -318,21 +390,23 @@ export function MapSemences({ roleKey }: Props) {
     return map
   }, [filteredStocks])
 
-  /* ── Agrégation par ZAE ── */
+  /* ── Agrégation par ZAE (depuis zone_code dynamique de l'API) ── */
   const stockByZae = useMemo<Record<string, ZaeAgg>>(() => {
     const map: Record<string, ZaeAgg> = {}
-    Object.entries(stockBySite).forEach(([codeSite, data]) => {
-      const zae = SITE_TO_ZAE[codeSite]
+    filteredStocks.forEach(r => {
+      const zae = r.zoneCode || SITE_TO_ZAE[r.codeSite]
       if (!zae) return
+      const q = Number(r.quantiteTotale) || 0
       if (!map[zae]) map[zae] = { total: 0, sites: [], nbLots: 0 }
-      map[zae].total += data.total
-      if (!map[zae].sites.includes(codeSite)) map[zae].sites.push(codeSite)
+      map[zae].total += q
+      if (!map[zae].sites.includes(r.codeSite)) map[zae].sites.push(r.codeSite)
     })
     return map
-  }, [stockBySite])
+  }, [filteredStocks])
 
   const maxZae  = useMemo(() => Math.max(...Object.values(stockByZae).map(d => d.total), 1), [stockByZae])
   const maxSite = useMemo(() => Math.max(...Object.values(stockBySite).map(d => d.total), 1), [stockBySite])
+
 
   /* ── Espèces disponibles pour le filtre ── */
   const especeOptions = useMemo(() => {
@@ -348,11 +422,11 @@ export function MapSemences({ roleKey }: Props) {
     const ratio   = Math.min(stock / maxZae, 1)
     return {
       fillColor:   ZAE_COLORS[code] || '#6b7280',
-      fillOpacity: hasStock ? 0.10 + ratio * 0.28 : 0.03,
-      color:       hasStock ? ZAE_COLORS[code] || '#6b7280' : '#d1d5db',
-      weight:      hasStock ? 1.5 : 0.8,
-      dashArray:   hasStock ? undefined : '5 4',
-      opacity:     hasStock ? 0.85 : 0.4,
+      fillOpacity: hasStock ? 0.10 + ratio * 0.28 : 0.07,
+      color:       hasStock ? ZAE_COLORS[code] || '#6b7280' : '#9ca3af',
+      weight:      hasStock ? 1.5 : 1.1,
+      dashArray:   hasStock ? undefined : '4 3',
+      opacity:     hasStock ? 0.85 : 0.60,
     }
   }, [stockByZae, maxZae])
 
@@ -425,8 +499,8 @@ export function MapSemences({ roleKey }: Props) {
           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>COUCHES</span>
         </div>
         {toggleBtn(showZAE,     '#22c55e', '🗺 Zones ZAE',      () => setShowZAE(v => !v))}
-        {toggleBtn(showBubbles, '#0ea5e9', '⬤ Activité',        () => setShowBubbles(v => !v))}
-        {toggleBtn(showSites,   '#6366f1', '📍 Sites',          () => setShowSites(v => !v))}
+        {toggleBtn(showBubbles,       '#0ea5e9', '⬤ Activité',        () => setShowBubbles(v => !v))}
+        {toggleBtn(showSitesAndUsers, '#7c3aed', '👤 Acteurs', () => setShowSitesAndUsers(v => !v))}
 
         <div style={{ flex: 1 }} />
 
@@ -474,10 +548,10 @@ export function MapSemences({ roleKey }: Props) {
             scrollWheelZoom
             zoomControl
           >
-            {/* ── Fond CartoDB Positron (léger, sobre) ── */}
+            {/* ── Fond Stadia Alidade Smooth (style Positron, libre, sans clé) ── */}
             <TileLayer
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+              url="https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://stadiamaps.com/" target="_blank">Stadia Maps</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank">OpenStreetMap</a> contributors'
               subdomains="abcd"
               maxZoom={20}
             />
@@ -497,8 +571,28 @@ export function MapSemences({ roleKey }: Props) {
               const agg    = stockByZae[code]
               const stock  = agg?.total || 0
               const radius = bubbleR(stock, maxZae)
-              if (radius === 0) return null
               const color  = ZAE_COLORS[code] || '#6b7280'
+
+              if (radius === 0) {
+                /* Zone sans stock : mini-cercle gris toujours visible */
+                return (
+                  <CircleMarker
+                    key={`bubble-${code}`}
+                    center={[lat, lng]}
+                    radius={7}
+                    pathOptions={{ fillColor: '#9ca3af', fillOpacity: 0.28, color: '#9ca3af', weight: 1.2, opacity: 0.55 }}
+                    eventHandlers={{ click: () => setPanel({ type: 'zae', code }) }}
+                  >
+                    <Tooltip direction="center" offset={[0, 0]} opacity={1}>
+                      <div style={{ textAlign: 'center', lineHeight: 1.35 }}>
+                        <div style={{ fontWeight: 700, fontSize: 11, color: '#6b7280' }}>{ZAE_DISPLAY[code] || code}</div>
+                        <div style={{ fontSize: 9, color: '#9ca3af' }}>Aucun stock</div>
+                      </div>
+                    </Tooltip>
+                  </CircleMarker>
+                )
+              }
+
               return (
                 <CircleMarker
                   key={`bubble-${code}`}
@@ -507,7 +601,7 @@ export function MapSemences({ roleKey }: Props) {
                   pathOptions={{ fillColor: color, fillOpacity: 0.22, color, weight: 2, opacity: 0.6 }}
                   eventHandlers={{ click: () => setPanel({ type: 'zae', code }) }}
                 >
-                  <Tooltip permanent direction="center" offset={[0, 0]} opacity={1}>
+                  <Tooltip direction="center" offset={[0, 0]} opacity={1}>
                     <div style={{ textAlign: 'center', lineHeight: 1.35 }}>
                       <div style={{ fontWeight: 700, fontSize: 11, color }}>{ZAE_DISPLAY[code] || code}</div>
                       <div style={{ fontSize: 10, color: '#374151', fontWeight: 600 }}>{fmtKg(stock)}</div>
@@ -520,31 +614,116 @@ export function MapSemences({ roleKey }: Props) {
               )
             })}
 
-            {/* ── Couche 3 : Marqueurs de sites (icône personnage, cohérent avec MapCatalogue) ── */}
-            {showSites && Object.entries(SITE_COORDS).map(([code, [lat, lng]]) => {
-              const data     = stockBySite[code]
-              const total    = data?.total || 0
-              const meta     = SITE_META[code]
-              const zaeCode  = SITE_TO_ZAE[code] || null
-              const icon     = createSiteIcon(meta?.nom || code, total, maxSite, zaeCode)
-              const zaeColor = zaeCode && ZAE_COLORS[zaeCode] ? ZAE_COLORS[zaeCode] : '#15803d'
+            {/* ── Couche 3 : Acteurs (popup enrichi — stock par variété, distance, contact) ── */}
+            {showSitesAndUsers && membres.map(m => {
+              const icon  = createMembreIcon(m.nomComplet, m.role)
+              const color = ROLE_COLORS[m.role] || '#6b7280'
+              const label = ROLE_LABELS[m.role] || m.role
+
+              /* Variétés du site par nom de site (jointure naturelle) */
+              const siteStocks = filteredStocks.filter(r => r.nomSite === m.nomSite)
+              const siteTotal  = siteStocks.reduce((s, r) => s + Number(r.quantiteTotale), 0)
+              const varMap = new Map<string, { codeVariete: string; nomVariete: string; codeGen: string; codeEspece: string; total: number }>()
+              siteStocks.forEach(r => {
+                const existing = varMap.get(r.codeVariete)
+                if (existing) existing.total += Number(r.quantiteTotale)
+                else varMap.set(r.codeVariete, { codeVariete: r.codeVariete, nomVariete: r.nomVariete, codeGen: r.codeGeneration, codeEspece: r.codeEspece, total: Number(r.quantiteTotale) })
+              })
+              const varieties = Array.from(varMap.values()).sort((a, b) => b.total - a.total)
+
+              /* Distance depuis la position du viewer */
+              const km = userPos ? distKm(userPos[0], userPos[1], m.latitude, m.longitude) : null
+
               return (
                 <Marker
-                  key={`site-${code}`}
-                  position={[lat, lng]}
+                  key={`membre-${m.username}`}
+                  position={[m.latitude, m.longitude]}
                   icon={icon}
-                  eventHandlers={{ click: () => setPanel({ type: 'site', code }) }}
                 >
-                  <Tooltip direction="top" offset={[0, -8]}>
-                    <div style={{ lineHeight: 1.4 }}>
-                      <div style={{ fontWeight: 700, fontSize: 12 }}>{meta?.nom || code}</div>
-                      <div style={{ fontSize: 11, color: '#6b7280' }}>{meta?.type || ''} · {meta?.region || ''}</div>
-                      {total > 0
-                        ? <div style={{ fontSize: 11, color: zaeColor, fontWeight: 600 }}>{fmtKg(total)} disponibles</div>
-                        : <div style={{ fontSize: 11, color: '#9ca3af' }}>Aucun stock</div>
-                      }
+                  <Popup minWidth={230} maxWidth={290}>
+                    <div style={{ fontFamily: 'inherit', padding: '2px 0' }}>
+
+                      {/* En-tête : avatar + nom + rôle */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <div style={{
+                          width: 34, height: 34, borderRadius: '50%',
+                          background: `radial-gradient(circle at 38% 32%, ${lightenHex(color)}, ${color})`,
+                          border: '2px solid #fff', boxShadow: `0 2px 6px ${color}44`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                        }}>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill="white">
+                            <circle cx="12" cy="7.5" r="3.5"/>
+                            <path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, fontSize: 13, color: '#111827', lineHeight: 1.2 }}>{m.nomComplet}</div>
+                          <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, background: color + '18', color, borderRadius: 4, padding: '1px 6px', marginTop: 2 }}>
+                            {label}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Localisation */}
+                      <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.7, marginBottom: 4 }}>
+                        <div>📍 {m.nomSite}{m.zoneCode ? ` · ZAE ${m.zoneCode}` : ''}</div>
+                        <div>🏢 {m.nomOrganisation}</div>
+                        {km !== null && (
+                          <div style={{ color: '#2563eb', fontWeight: 600 }}>
+                            ✈ {fmtDist(km)} de votre position
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Stock par variété */}
+                      {varieties.length > 0 && (
+                        <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 6, paddingTop: 8 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>
+                              Stock disponible
+                            </span>
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d' }}>
+                              {fmtKg(siteTotal)} · {varieties.length} variété{varieties.length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          {varieties.slice(0, 4).map(v => (
+                            <div key={v.codeVariete} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
+                              <div>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#111827' }}>{v.nomVariete}</span>
+                                <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 5 }}>{v.codeEspece}</span>
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ fontSize: 9, fontWeight: 700, color: GEN_COLORS[v.codeGen] || '#6b7280', background: (GEN_COLORS[v.codeGen] || '#6b7280') + '18', borderRadius: 3, padding: '1px 4px' }}>
+                                  {v.codeGen}
+                                </span>
+                                <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>{fmtKg(v.total)}</span>
+                              </div>
+                            </div>
+                          ))}
+                          {varieties.length > 4 && (
+                            <div style={{ fontSize: 10, color: '#9ca3af', textAlign: 'right', marginTop: 3 }}>
+                              +{varieties.length - 4} autre{varieties.length - 4 > 1 ? 's' : ''} variété{varieties.length - 4 > 1 ? 's' : ''}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Bouton Contacter */}
+                      <button
+                        style={{
+                          marginTop: 10, width: '100%', padding: '7px 0',
+                          background: color, color: '#fff', border: 'none',
+                          borderRadius: 7, fontSize: 12, fontWeight: 700,
+                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                        }}
+                        onClick={() => {}}
+                      >
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        Contacter ce fournisseur
+                      </button>
+
                     </div>
-                  </Tooltip>
+                  </Popup>
                 </Marker>
               )
             })}
@@ -594,24 +773,33 @@ export function MapSemences({ roleKey }: Props) {
             <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>{code} — {name}</span>
           </div>
         ))}
-        <div style={{ marginLeft: 'auto', display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'radial-gradient(circle at 38% 32%,#4ade80,#15803d)', border: '2px solid #fff', boxShadow: '0 1px 4px #15803d44', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
-              </svg>
+      </div>
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Acteurs visibles :</span>
+        {Object.entries(ROLE_LABELS)
+          .filter(([role]) => {
+            const visible: Record<string, string[]> = {
+              'seed-admin':        ['seed-selector','seed-upsemcl','seed-multiplicator','seed-quotataire'],
+              'seed-upsemcl':      ['seed-selector','seed-multiplicator','seed-quotataire'],
+              'seed-selector':     ['seed-upsemcl','seed-multiplicator','seed-quotataire'],
+              'seed-multiplicator':['seed-upsemcl','seed-quotataire'],
+              'seed-quotataire':   ['seed-multiplicator'],
+            }
+            return (visible[roleKey] ?? []).includes(role)
+          })
+          .map(([role, label]) => (
+          <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{
+              width: 16, height: 16, borderRadius: '50%',
+              background: `radial-gradient(circle at 38% 32%, ${lightenHex(ROLE_COLORS[role])}, ${ROLE_COLORS[role]})`,
+              border: '2px solid #fff', boxShadow: `0 1px 4px ${ROLE_COLORS[role]}44`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}>
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/></svg>
             </div>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Site avec stock</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#9ca3af', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, opacity: 0.42 }}>
-              <svg width="9" height="9" viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
-              </svg>
-            </div>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Site sans stock</span>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   )

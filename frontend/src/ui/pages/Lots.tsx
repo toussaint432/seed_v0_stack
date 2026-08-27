@@ -778,6 +778,14 @@ function CatalogueG1UPSemCL({ setToast }: { setToast: (t: { msg: string; type: '
 /* ══════════════════════════════════════════════════════════════
    VUE MULTIPLICATEUR — Catalogue G3 + Mes Lots isolés
    ══════════════════════════════════════════════════════════════ */
+type CartLotItem = {
+  lotId: number; codeLot: string; idVariete: number
+  nomVariete: string; codeVariete: string
+  quantiteDispo: number; unite: string
+  tauxGermination: number | null; puretePhysique: number | null
+  quantite: number
+}
+
 function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type: 'success'|'error' }) => void }) {
   const [onglet, setOnglet]           = useState<'catalogue'|'meslots'>('catalogue')
   const [catalogueG3, setCatalogueG3] = useState<any[]>([])
@@ -787,9 +795,12 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [upsemclOrgId, setUpsemclOrgId] = useState<number | null>(null)
   const [loadingCat, setLoadingCat]   = useState(true)
   const [loadingMes, setLoadingMes]   = useState(true)
-  const [showCommande, setShowCommande] = useState(false)
-  const [commandeLot, setCommandeLot] = useState<any>(null)
-  const [cmdForm, setCmdForm]         = useState({ quantite: '', unite: 'kg', observations: '' })
+  const [cart, setCart]               = useState<CartLotItem[]>([])
+  const [cartObs, setCartObs]         = useState('')
+  const [cartAddLot, setCartAddLot]   = useState<any | null>(null)
+  const [cartAddQty, setCartAddQty]   = useState('')
+  const [cartAddUnite, setCartAddUnite] = useState('kg')
+  const [showCartModal, setShowCartModal] = useState(false)
   const [saving, setSaving]           = useState(false)
   const [lineageChain, setLineageChain]   = useState<any[] | null>(null)
   const [lineageLotCode, setLineageLotCode] = useState('')
@@ -1063,27 +1074,39 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     }
   }
 
-  // Commander un lot G3 (passer une demande à l'UPSemCL)
-  async function submitCommande(e: React.FormEvent) {
-    e.preventDefault(); if (!commandeLot) return; setSaving(true)
+  // ── Panier multi-lots G3 ─────────────────────────────────────────────────
+  const cartTotalKg = cart.reduce((s, i) => s + (i.unite === 't' ? i.quantite * 1000 : i.quantite), 0)
+  function cartIncludes(lotId: number) { return cart.some(i => i.lotId === lotId) }
+  function cartRemove(lotId: number) { setCart(c => c.filter(i => i.lotId !== lotId)) }
+  function openCartAdd(lot: any) { setCartAddLot(lot); setCartAddQty(''); setCartAddUnite('kg'); setShowCartModal(true) }
+  function cartAdd() {
+    if (!cartAddLot) return
+    const qty = Number(cartAddQty)
+    if (!qty || qty <= 0) return
+    const v = varietyMap[cartAddLot.idVariete]
+    setCart(c => [...c.filter(i => i.lotId !== cartAddLot.id), {
+      lotId: cartAddLot.id, codeLot: cartAddLot.codeLot, idVariete: cartAddLot.idVariete,
+      nomVariete: v?.nomVariete ?? '', codeVariete: v?.codeVariete ?? '',
+      quantiteDispo: Number(cartAddLot.quantiteNette), unite: cartAddUnite,
+      tauxGermination: cartAddLot.tauxGermination ?? null, puretePhysique: cartAddLot.puretePhysique ?? null,
+      quantite: qty,
+    }])
+    setShowCartModal(false)
+  }
+  async function submitCart(e: React.FormEvent) {
+    e.preventDefault(); if (cart.length === 0) return; setSaving(true)
     try {
       const code = 'CMD-G3-' + Date.now().toString(36).toUpperCase()
       await api.post(endpoints.orders, {
-        codeCommande: code,
-        client: commandeLot.responsableNom || 'Multiplicateur',
+        codeCommande: code, client: 'Multiplicateur',
         idOrganisationFournisseur: upsemclOrgId,
-        observations: cmdForm.observations || `Demande G3 — lot ${commandeLot.codeLot}`,
-        lignes: [{
-          idVariete:   commandeLot.idVariete,
-          idGeneration: 4, // G3
-          quantite:    Number(cmdForm.quantite),
-          unite:       cmdForm.unite,
-        }],
+        observations: cartObs || `Demande multi-lots G3 — ${cart.length} lot(s)`,
+        lignes: cart.map(item => ({ idVariete: item.idVariete, idGeneration: 4, quantite: item.quantite, unite: item.unite })),
       })
-      setToast({ msg: `Demande ${code} soumise à l'UPSemCL`, type: 'success' })
-      setShowCommande(false); setCmdForm({ quantite: '', unite: 'kg', observations: '' })
+      setToast({ msg: `Commande ${code} soumise — ${cart.length} lot${cart.length > 1 ? 's' : ''} à l'UPSemCL`, type: 'success' })
+      setCart([]); setCartObs(''); fetchAll()
     } catch (err: any) {
-      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la demande', type: 'error' })
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la commande', type: 'error' })
     } finally { setSaving(false) }
   }
 
@@ -1218,7 +1241,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
 
           <div style={{ padding: '10px 22px 6px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <ShoppingCart size={13} />
-            Sélectionnez un lot G3 et cliquez sur <strong style={{ color: 'var(--green-700)' }}>Commander</strong> pour soumettre une demande à l'UPSemCL.
+            Sélectionnez un ou plusieurs lots G3, définissez les quantités souhaitées, puis soumettez votre commande groupée à l'UPSemCL.
           </div>
 
           <div className="table-wrapper">
@@ -1243,8 +1266,9 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                     ? <tr><td colSpan={9}><div className="empty-state"><div className="empty-icon"><Store size={20} /></div><div className="empty-title">{searchCat ? 'Aucun résultat' : 'Aucun lot G3 disponible pour le moment'}</div></div></td></tr>
                     : catFiltered.map(l => {
                         const v = varietyMap[l.idVariete]
+                        const inCart = cartIncludes(l.id)
                         return (
-                          <tr key={l.id}>
+                          <tr key={l.id} style={{ background: inCart ? 'var(--green-50,#f0fdf4)' : undefined, transition: 'background .15s' }}>
                             <td>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
@@ -1288,14 +1312,25 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                               <div style={{ display: 'flex', gap: 4 }}>
                                 <button className="btn btn-ghost" style={{ width: 30, height: 30, padding: 0, borderRadius: 6 }} title="Traçabilité" onClick={() => showLineage(l)}><Eye size={13} /></button>
                                 {l.statutLot === 'DISPONIBLE' && (
-                                  <button
-                                    className="btn btn-primary"
-                                    style={{ height: 30, padding: '0 10px', fontSize: 11, gap: 4 }}
-                                    title="Commander ce lot G3"
-                                    onClick={() => { setCommandeLot(l); setCmdForm({ quantite: '', unite: 'kg', observations: '' }); setShowCommande(true) }}
-                                  >
-                                    <ShoppingCart size={12} /> Commander
-                                  </button>
+                                  inCart ? (
+                                    <button
+                                      className="btn"
+                                      style={{ height: 30, padding: '0 10px', fontSize: 11, gap: 4, display: 'flex', alignItems: 'center', color: '#15803d', border: '1.5px solid #86efac', background: '#f0fdf4', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
+                                      title="Retirer du panier"
+                                      onClick={() => cartRemove(l.id)}
+                                    >
+                                      <CheckCircle2 size={12} /> Dans le panier <X size={10} style={{ marginLeft: 2, opacity: 0.6 }} />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      className="btn btn-primary"
+                                      style={{ height: 30, padding: '0 10px', fontSize: 11, gap: 4 }}
+                                      title="Ajouter au panier"
+                                      onClick={() => openCartAdd(l)}
+                                    >
+                                      <ShoppingCart size={12} /> Ajouter
+                                    </button>
+                                  )
                                 )}
                               </div>
                             </td>
@@ -1939,58 +1974,104 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         </Modal>
       )}
 
-      {/* Modal commande G3 */}
-      {showCommande && commandeLot && (() => {
-        const v = varietyMap[commandeLot.idVariete]
+      {/* Modal ajout au panier */}
+      {showCartModal && cartAddLot && (() => {
+        const v = varietyMap[cartAddLot.idVariete]
         return (
           <Modal
-            title="Commander ce Lot G3"
-            subtitle={`${commandeLot.codeLot}${v ? ` — ${v.nomVariete}` : ''}`}
-            onClose={() => setShowCommande(false)}
+            title="Ajouter au panier"
+            subtitle={`${cartAddLot.codeLot}${v ? ` — ${v.nomVariete}` : ''}`}
+            onClose={() => setShowCartModal(false)}
             size="sm"
           >
-            <div style={{ background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: 'var(--green-800)' }}>
-              <div style={{ display: 'grid', gap: 4 }}>
-                <div><strong>Lot :</strong> {commandeLot.codeLot}</div>
-                {v && <div><strong>Variété :</strong> {v.nomVariete} ({v.codeVariete})</div>}
-                <div><strong>Disponible :</strong> {Number(commandeLot.quantiteNette).toLocaleString('fr-FR')} {commandeLot.unite}</div>
-                <div><strong>Germination :</strong> {commandeLot.tauxGermination ?? '—'}% · <strong>Pureté :</strong> {commandeLot.puretePhysique ?? '—'}%</div>
+            <div style={{ background: 'var(--green-50,#f0fdf4)', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#14532d' }}>
+              <div style={{ display: 'grid', gap: 3 }}>
+                {v && <div><strong>Variété :</strong> {v.nomVariete} · <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{v.codeVariete}</span></div>}
+                <div><strong>Stock disponible :</strong> {Number(cartAddLot.quantiteNette).toLocaleString('fr-FR')} {cartAddLot.unite}</div>
+                {cartAddLot.tauxGermination != null && <div><strong>Germination :</strong> {cartAddLot.tauxGermination}% · <strong>Pureté :</strong> {cartAddLot.puretePhysique ?? '—'}%</div>}
               </div>
             </div>
-            <form onSubmit={submitCommande}>
-              <Field label="Quantité demandée" required>
+            <form onSubmit={e => { e.preventDefault(); cartAdd() }}>
+              <Field label="Quantité souhaitée" required>
                 <div style={{ display: 'flex', gap: 8 }}>
                   <FormInput
                     type="number"
-                    value={cmdForm.quantite}
-                    onChange={e => setCmdForm(f => ({ ...f, quantite: e.target.value }))}
-                    placeholder={`Max ${Number(commandeLot.quantiteNette).toLocaleString('fr-FR')}`}
-                    min="1"
-                    max={commandeLot.quantiteNette}
-                    step="0.01"
-                    required
+                    value={cartAddQty}
+                    onChange={e => setCartAddQty(e.target.value)}
+                    placeholder={`Max ${Number(cartAddLot.quantiteNette).toLocaleString('fr-FR')}`}
+                    min="1" max={cartAddLot.quantiteNette} step="0.01"
+                    autoFocus
                     style={{ flex: 1 }}
                   />
-                  <FormSelect value={cmdForm.unite} onChange={e => setCmdForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}>
+                  <FormSelect value={cartAddUnite} onChange={e => setCartAddUnite(e.target.value)} style={{ width: 80 }}>
                     <option value="kg">kg</option>
                     <option value="t">t</option>
                   </FormSelect>
                 </div>
               </Field>
-              <Field label="Observations">
-                <textarea
-                  value={cmdForm.observations}
-                  onChange={e => setCmdForm(f => ({ ...f, observations: e.target.value }))}
-                  placeholder="Précisions sur la demande, délai souhaité…"
-                  rows={3}
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
-                />
-              </Field>
-              <FormActions onCancel={() => setShowCommande(false)} loading={saving} submitLabel="Soumettre la demande" />
+              <FormActions onCancel={() => setShowCartModal(false)} loading={false} submitLabel="Ajouter au panier" />
             </form>
           </Modal>
         )
       })()}
+
+      {/* Barre panier sticky */}
+      {cart.length > 0 && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 200,
+          background: 'var(--surface)', borderTop: '2px solid #16a34a',
+          boxShadow: '0 -4px 24px rgba(0,0,0,0.12)',
+          display: 'flex', alignItems: 'stretch', gap: 0,
+        }}>
+          {/* Résumé panier */}
+          <div style={{ flex: 1, padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <ShoppingCart size={16} style={{ color: '#16a34a' }} />
+              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
+                {cart.length} lot{cart.length > 1 ? 's' : ''} sélectionné{cart.length > 1 ? 's' : ''}
+              </span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                · {cartTotalKg.toLocaleString('fr-FR')} kg
+              </span>
+            </div>
+            {/* Chips des lots sélectionnés */}
+            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+              {cart.map(item => (
+                <span key={item.lotId} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 20, padding: '2px 8px 2px 10px', fontSize: 11.5, color: '#15803d', fontWeight: 600 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>{item.codeLot}</span>
+                  <span style={{ opacity: 0.7 }}>· {item.quantite.toLocaleString('fr-FR')} {item.unite}</span>
+                  <button onClick={() => cartRemove(item.lotId)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: '#15803d', opacity: 0.6, marginLeft: 2 }}><X size={11} /></button>
+                </span>
+              ))}
+            </div>
+          </div>
+          {/* Zone observations + bouton submit */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderLeft: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+            <input
+              value={cartObs}
+              onChange={e => setCartObs(e.target.value)}
+              placeholder="Observations (optionnel)"
+              style={{ width: 220, height: 36, padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--surface)', color: 'var(--text-primary)' }}
+            />
+            <button
+              className="btn btn-ghost"
+              style={{ height: 36, padding: '0 12px', fontSize: 12, color: 'var(--text-muted)' }}
+              onClick={() => setCart([])}
+            >
+              <X size={13} /> Vider
+            </button>
+            <button
+              className="btn btn-primary"
+              style={{ height: 36, padding: '0 18px', fontSize: 13, fontWeight: 700, gap: 6 }}
+              disabled={saving}
+              onClick={e => { e.preventDefault(); submitCart(e as any) }}
+            >
+              <ShoppingCart size={14} />
+              {saving ? 'Envoi…' : `Commander (${cart.length})`}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2053,6 +2134,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [membresLoading, setMembresLoading] = useState(false)
   const [search,         setSearch]          = useState('')
   const [genFilter,      setGenFilter]       = useState('')
+  const [filterStatut,   setFilterStatut]   = useState('')
   const [certLot,        setCertLot]         = useState<any | null>(null)
   const canManageCert = ['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey)
   const [selectedLot,    setSelectedLot]    = useState<any | null>(null)
@@ -2107,7 +2189,9 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const fmtKg = (v: number) => fmtT(v)
   const genStats = lotStatsApi
   const totalKg = Object.values(lotStatsApi).reduce((s, g) => s + g.totalKg, 0)
-  const activeGens = allowedGens.filter(g => lotStatsApi[g] && lotStatsApi[g].count > 0)
+  const activeGens = roleKey === 'seed-upsemcl'
+    ? allowedGens
+    : allowedGens.filter(g => lotStatsApi[g] && lotStatsApi[g].count > 0)
 
   const varietyMap: Record<number, { codeVariete: string; nomVariete: string }> =
     Object.fromEntries(varieties.map(v => [v.id, v]))
@@ -2146,15 +2230,18 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     ? 'Répartition des volumes par variété'
     : 'Production par variété'
 
+  const availableStatuts = [...new Set(displayLots.map(l => l.statutLot).filter(Boolean))].sort() as string[]
+
   const displayLotsFiltered = displayLots.filter(l => {
-    const matchGen = !genFilter || l.generation?.codeGeneration === genFilter
+    const matchGen    = !genFilter    || l.generation?.codeGeneration === genFilter
+    const matchStatut = !filterStatut || l.statutLot === filterStatut
     const s = search.toLowerCase()
     const v = varietyMap[l.idVariete]
     const matchSearch = !s
       || l.codeLot?.toLowerCase().includes(s)
       || v?.nomVariete?.toLowerCase().includes(s)
       || (v as any)?.codeVariete?.toLowerCase().includes(s)
-    return matchGen && matchSearch
+    return matchGen && matchStatut && matchSearch
   })
 
   async function submitNewLot(e: React.FormEvent) {
@@ -2391,7 +2478,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
 
         {/* Par génération */}
         {activeGens.map(gen => {
-          const stat = genStats[gen]!
+          const stat = genStats[gen] ?? { count: 0, totalKg: 0 }
           const hex  = GEN_HEX[gen] ?? '#6b7280'
           const isActive = genFilter === gen
           return (
@@ -2492,7 +2579,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
 
       <div className="card">
         <div className="card-header">
-          <span className="card-title"><span className="card-title-icon"><Package size={15} /></span>Liste des Lots</span>
+          <span className="card-title"><span className="card-title-icon"><Package size={15} /></span>{roleKey === 'seed-upsemcl' ? 'Mes Lots G1 · G2 · G3' : 'Liste des Lots'}</span>
           <div style={{ display: 'flex', gap: 8 }}>
             {displayLotsFiltered.length > 0 && (
               <button
@@ -2551,7 +2638,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
           </div>
           {/* Chips génération */}
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            {allowedGens.filter(g => genCounts[g] || roleKey === 'seed-admin').map(g => {
+            {allowedGens.filter(g => genCounts[g] || roleKey === 'seed-admin' || roleKey === 'seed-upsemcl').map(g => {
               const isActive = generation === g
               const hex = GEN_HEX[g] ?? '#6b7280'
               return (
@@ -2574,9 +2661,33 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               )
             })}
           </div>
+          {/* Filtre statut (UPSemCL et autres rôles) */}
+          {availableStatuts.length > 1 && (
+            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+              {availableStatuts.map(s => {
+                const isActive = filterStatut === s
+                const color = s === 'DISPONIBLE' ? '#16a34a' : s === 'TRANSFERE' ? '#0369a1' : '#6b7280'
+                return (
+                  <button
+                    key={s}
+                    onClick={() => setFilterStatut(filterStatut === s ? '' : s)}
+                    style={{
+                      height: 28, padding: '0 10px', borderRadius: 20, fontSize: 11, fontWeight: isActive ? 700 : 500,
+                      background: isActive ? color + '18' : 'var(--surface-2)',
+                      color: isActive ? color : 'var(--text-muted)',
+                      border: `1px solid ${isActive ? color + '55' : 'var(--border)'}`,
+                      cursor: 'pointer', transition: 'all .12s',
+                    }}
+                  >
+                    {s}
+                  </button>
+                )
+              })}
+            </div>
+          )}
           {/* Effacer filtres */}
-          {(search || genFilter || generation || filterEspece) && (
-            <button className="btn btn-ghost" style={{ fontSize: 12, height: 28 }} onClick={() => { setSearch(''); setGenFilter(''); setGeneration(''); setFilterEspece('') }}>
+          {(search || genFilter || generation || filterEspece || filterStatut) && (
+            <button className="btn btn-ghost" style={{ fontSize: 12, height: 28 }} onClick={() => { setSearch(''); setGenFilter(''); setGeneration(''); setFilterEspece(''); setFilterStatut('') }}>
               <X size={11} /> Effacer
             </button>
           )}
@@ -2604,8 +2715,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 <tr><td colSpan={6}>
                   <div className="empty-state">
                     <div className="empty-icon"><Package size={20} /></div>
-                    <div className="empty-title">{search || genFilter ? 'Aucun lot pour ce filtre' : 'Aucun lot'}</div>
-                    {canCreate && !search && !genFilter && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}
+                    <div className="empty-title">{search || genFilter || filterStatut ? 'Aucun lot pour ce filtre' : 'Aucun lot'}</div>
+                    {canCreate && !search && !genFilter && !filterStatut && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}
                   </div>
                 </td></tr>
               ) : displayLotsFiltered.map(l => {

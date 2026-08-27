@@ -9,6 +9,7 @@ public interface StockAgregeView {
     Long       getIdSite();
     String     getCodeSite();
     String     getNomSite();
+    String     getZoneCode();
     String     getCodeGeneration();
     String     getNomVariete();
     String     getCodeVariete();
