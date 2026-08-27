@@ -669,6 +669,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const [rawVarieties, setRawVarieties] = useState<any[]>([])
   const [rawOrders,    setRawOrders]    = useState<any[]>([])
   const [rawAgrege,    setRawAgrege]    = useState<any[]>([])
+  const [rawPrograms,  setRawPrograms]  = useState<any[]>([])
   const [varMap,       setVarMap]       = useState<Record<number, string>>({})
   const [loading,      setLoading]      = useState(true)
   const [refreshing,   setRefreshing]   = useState(false)
@@ -702,6 +703,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     const results = await Promise.allSettled([
       api.get(lotsUrl), api.get(stocksUrl), api.get(ordersUrl), api.get(endpoints.varieties),
       api.get(endpoints.stocksAgrege), api.get(endpoints.lotsStats),
+      api.get(endpoints.programs),
     ])
 
     const lots      = extractList(results[0].status === 'fulfilled' ? results[0].value.data : []).map(normalizeLot)
@@ -714,6 +716,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
     const rawStats = results[5].status === 'fulfilled'
       ? (Array.isArray(results[5].value.data) ? results[5].value.data : [])
+      : []
+    const programs  = results[6].status === 'fulfilled'
+      ? extractList(results[6].value.data)
       : []
     const genStats: Record<string, GenStat> = {}
     rawStats.forEach((s: any) => {
@@ -734,6 +739,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     setRawVarieties(varieties)
     setRawOrders(orders)
     setRawAgrege(agrege)
+    setRawPrograms(programs)
     setStats({ lotsCount, stockTotal, ordersCount: orders.length, varietiesCount: varieties.length, ordersPending, genStats, recentLots })
     setLoading(false)
     setRefreshing(false)
@@ -826,7 +832,6 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   /* ── Stock computation ── */
   const allowedStockGens = ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2']
   const varietyMap: Record<number, any> = Object.fromEntries(rawVarieties.map((v: any) => [v.id, v]))
-  const lotMap: Record<number, any>     = Object.fromEntries(rawLots.map((l: any) => [l.id, l]))
 
   const stockRowMap: Record<string, StockRow> = {}
   rawAgrege.forEach((s: any) => {
@@ -880,32 +885,30 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const stockMaxKg         = Math.max(1, ...filteredStockRows.map(r => r.stockKg))
   const hasStockFilter     = !!(filterEspece || filterVariete || filterGens.length < allowedStockGens.length)
 
-  /* ── Couverture stock / demande par espèce ── */
+  /* ── Couverture stock / demande par espèce ──
+     Stock : via rawAgrege (codeEspece + codeGeneration déjà résolus, pas de pagination)
+     Demande : via rawOrders (commandes actives) + résolution lot→variete→espece via rawAgrege */
   const especeCovMap: Record<string, { nom: string; stockKg: number; demandKg: number }> = {}
-  rawStocks.forEach((st: any) => {
-    const lotObj    = st.lot ?? lotMap[st.idLot ?? st.lot?.id ?? -1] ?? {}
-    const gen       = lotObj.generation?.codeGeneration ?? st.generation ?? '?'
+  rawAgrege.forEach((s: any) => {
+    const gen  = s.codeGeneration ?? '?'
     if (!allowedStockGens.includes(gen)) return
-    let variety: any = lotObj.variete ?? varietyMap[lotObj.idVariete ?? -1] ?? {}
-    if (!variety.codeVariete) variety = varietyMap[st.idVariete ?? -1] ?? st.variete ?? {}
-    const esp  = variety.espece ?? {}
-    const code = esp.codeEspece ?? '?'
+    const code = s.codeEspece ?? '?'
     if (code === '?') return
-    if (!especeCovMap[code]) especeCovMap[code] = { nom: esp.nomEspece ?? code, stockKg: 0, demandKg: 0 }
-    especeCovMap[code].stockKg += parseFloat(st.quantiteDisponible) || 0
+    if (!especeCovMap[code]) especeCovMap[code] = { nom: s.nomEspece ?? code, stockKg: 0, demandKg: 0 }
+    especeCovMap[code].stockKg += parseFloat(s.quantiteTotale) || 0
   })
   rawOrders.forEach((o: any) => {
-    const lot     = lotMap[o.idLot ?? o.lotId ?? -1] ?? {}
-    const gen     = lot.generation?.codeGeneration ?? o.generation ?? '?'
-    if (!allowedStockGens.includes(gen)) return
-    const variety = varietyMap[lot.idVariete ?? -1] ?? {}
-    const esp     = variety.espece ?? {}
-    const code    = esp.codeEspece ?? '?'
-    if (code === '?') return
-    // Commandes actives = soumises ou en cours (pas livrées/annulées/rejetées)
     if (!['SOUMISE','ACCEPTEE','EN_PREPARATION'].includes(o.statut ?? '')) return
-    if (!especeCovMap[code]) especeCovMap[code] = { nom: esp.nomEspece ?? code, stockKg: 0, demandKg: 0 }
-    especeCovMap[code].demandKg += parseFloat(o.quantite ?? o.quantiteDemandee ?? 0) || 0
+    ;(o.lignes ?? []).forEach((ligne: any) => {
+      const gen  = ligne.generation?.codeGeneration ?? '?'
+      if (!allowedStockGens.includes(gen)) return
+      const variety = varietyMap[ligne.idVariete ?? -1] ?? {}
+      const esp     = variety.espece ?? {}
+      const code    = esp.codeEspece ?? '?'
+      if (code === '?') return
+      if (!especeCovMap[code]) especeCovMap[code] = { nom: esp.nomEspece ?? code, stockKg: 0, demandKg: 0 }
+      especeCovMap[code].demandKg += parseFloat(ligne.quantiteDemandee ?? 0) || 0
+    })
   })
   const coverageItems = Object.entries(especeCovMap)
     .map(([code, v]) => ({ code, nom: v.nom, stockKg: v.stockKg, demandKg: v.demandKg, ratio: v.demandKg > 0 ? v.stockKg / v.demandKg : 99 }))
@@ -916,17 +919,17 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const criticalCov  = coverageItems.filter(c => c.demandKg > 0 && c.ratio < 1).length
   const warningCov   = coverageItems.filter(c => c.demandKg > 0 && c.ratio >= 1 && c.ratio < 2).length
 
-  /* ── Prévisions de récolte (lots EN_PRODUCTION) ── */
+  /* ── Prévisions de récolte (Programmes EN_COURS) ──
+     Un programme "En cours" = multiplication physiquement en production.
+     On utilise superficieHa + objectifKg du Programme comme données prévisionnelles. */
   const forecastByGen: Record<string, { lots: number; ha: number; expectedKg: number }> = {}
-  rawLots.forEach((l: any) => {
-    const statut = (l.statut ?? '').toUpperCase()
-    if (statut !== 'EN_PRODUCTION') return
-    const gen = l.generation?.codeGeneration ?? '?'
+  rawPrograms.forEach((p: any) => {
+    const statut = (p.statut ?? '').toUpperCase()
+    if (statut !== 'EN_COURS') return
+    const gen = p.generationCible ?? '?'
     if (!allowedStockGens.includes(gen)) return
-    const ha       = parseFloat(l.superficieHa ?? l.superficie_ha ?? 0) || 0
-    const rend     = parseFloat(l.rendementKgHa ?? l.rendement_kg_ha ?? 0) || 0
-    const brute    = parseFloat(l.productionBruteKg ?? l.production_brute_kg ?? 0) || 0
-    const expected = brute > 0 ? brute : (ha > 0 && rend > 0 ? ha * rend : 0)
+    const ha       = parseFloat(p.superficieHa ?? 0) || 0
+    const expected = parseFloat(p.objectifKg ?? 0) || 0
     if (!forecastByGen[gen]) forecastByGen[gen] = { lots: 0, ha: 0, expectedKg: 0 }
     forecastByGen[gen].lots++
     forecastByGen[gen].ha += ha
@@ -2186,7 +2189,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               </div>
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Prévisions de récolte</div>
-                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>Lots en production — campagne en cours</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>Programmes en cours — campagne active</div>
               </div>
             </div>
 
@@ -2203,9 +2206,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             ) : forecastEntries.length === 0 ? (
               <div style={{ padding: '40px 20px', textAlign: 'center' }}>
                 <div style={{ fontSize: 28, marginBottom: 8 }}>🌾</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Aucun lot en production</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Aucun programme en cours</div>
                 <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>
-                  Les prévisions apparaissent dès qu'un lot passe au statut EN_PRODUCTION avec superficie et rendement renseignés
+                  Les prévisions apparaissent dès qu'un programme passe au statut « En cours » avec superficie et objectif renseignés
                 </div>
               </div>
             ) : (
@@ -2216,7 +2219,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                     <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-sans)', color: '#15803d', letterSpacing: '-0.02em', lineHeight: 1 }}>
                       {totalForecastLots}
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>lots actifs</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>programmes actifs</div>
                   </div>
                   <div style={{ width: 1, background: 'var(--border)' }} />
                   <div style={{ textAlign: 'center' }}>
@@ -2248,7 +2251,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                               {gen}
                             </span>
                             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              {f.lots} lot{f.lots > 1 ? 's' : ''}
+                              {f.lots} programme{f.lots > 1 ? 's' : ''}
                               {f.ha > 0 && ` · ${f.ha.toLocaleString('fr-FR',{maximumFractionDigits:1})} ha`}
                             </span>
                           </div>
@@ -2268,7 +2271,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                         )}
                         {f.expectedKg === 0 && (
                           <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Superficie et rendement non renseignés sur ces lots
+                            Superficie et objectif non renseignés sur ces programmes
                           </div>
                         )}
                       </div>
