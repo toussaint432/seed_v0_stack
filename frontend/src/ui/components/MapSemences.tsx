@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
    MapSemences — Carte interactive Leaflet / OpenStreetMap
-   Couches : polygones ZAE · bulles d'activité · marqueurs sites
+   Couches : polygones ZAE · marqueurs acteurs (cluster par rôle)
    Rôles   : admin · sélectionneur · upsemcl · multiplicateur · quotataire
    ═══════════════════════════════════════════════════════════════ */
 import { useEffect, useState, useMemo, useCallback } from 'react'
@@ -9,11 +9,11 @@ import { MapContainer, TileLayer, GeoJSON, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import type { PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { X, MapPin, Layers, Filter, RefreshCw, Users } from 'lucide-react'
+import { X, MapPin, Layers, Filter, RefreshCw } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import {
-  SITE_COORDS, SITE_META, ZAE_COLORS, ZAE_DISPLAY,
+  SITE_META, ZAE_COLORS, ZAE_DISPLAY,
   SITE_TO_ZAE, SITE_TYPE_COLOR, SENEGAL_ZAE_GEOJSON,
 } from '../data/senegal-zae'
 
@@ -550,7 +550,6 @@ export function MapSemences({ roleKey }: Props) {
   }, [filteredStocks])
 
   const maxZae  = useMemo(() => Math.max(...Object.values(stockByZae).map(d => d.total), 1), [stockByZae])
-  const maxSite = useMemo(() => Math.max(...Object.values(stockBySite).map(d => d.total), 1), [stockBySite])
 
   const toggleRole = useCallback((role: string) => {
     setActiveRoles(prev => {
