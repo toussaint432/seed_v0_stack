@@ -45,7 +45,7 @@ public class ProgrammeController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
+    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-upsemcl')")
     @PostMapping
     public Programme create(@Valid @RequestBody Programme programme,
                             @AuthenticationPrincipal Jwt jwt) {
@@ -56,7 +56,7 @@ public class ProgrammeController {
         return programmeRepo.save(programme);
     }
 
-    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
+    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-upsemcl')")
     @PutMapping("/{id}")
     public ResponseEntity<Programme> update(@PathVariable Long id,
                                             @Valid @RequestBody Programme body,
@@ -83,7 +83,7 @@ public class ProgrammeController {
         return ResponseEntity.ok(programmeRepo.save(p));
     }
 
-    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector')")
+    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-upsemcl')")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id,
                                        @AuthenticationPrincipal Jwt jwt) {
