@@ -4,6 +4,7 @@
    Rôles   : admin · sélectionneur · upsemcl · multiplicateur · quotataire
    ═══════════════════════════════════════════════════════════════ */
 import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import type { PathOptions } from 'leaflet'
@@ -118,6 +119,23 @@ function createMembreIcon(nomComplet: string, role: string): L.DivIcon {
     <div style="background:rgba(255,255,255,0.97);border:1.5px solid ${color}55;border-radius:5px;padding:2px 6px;font-size:9px;font-weight:700;white-space:nowrap;margin-top:3px;color:${color};box-shadow:0 1px 5px rgba(0,0,0,0.15);max-width:130px;overflow:hidden;text-overflow:ellipsis;">${label}</div>
   </div>`
   return L.divIcon({ html, className: '', iconSize: [140, cs + 28], iconAnchor: [70, Math.round(cs / 2)] })
+}
+
+/* ── Icône cluster — personnage + badge compteur ── */
+function createClusterIcon(group: MembreCarte[]): L.DivIcon {
+  const allSameRole = group.every(m => m.role === group[0].role)
+  const color = allSameRole ? (ROLE_COLORS[group[0].role] || '#6b7280') : '#6b7280'
+  const light = lightenHex(color)
+  const count = group.length
+  const cs    = 34
+  const svgS  = Math.round(cs * 0.47)
+  const html  = `<div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;position:relative;">
+    <div style="width:${cs}px;height:${cs}px;border-radius:50%;background:radial-gradient(circle at 38% 32%,${light},${color});border:2.5px solid #fff;box-shadow:0 3px 10px ${color}44,0 0 0 2px ${color}33,inset 0 1px 0 rgba(255,255,255,0.35);display:flex;align-items:center;justify-content:center;">
+      <svg width="${svgS}" height="${svgS}" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/></svg>
+    </div>
+    <div style="position:absolute;top:-3px;right:calc(50% - ${Math.round(cs / 2) + 2}px);background:${color};color:#fff;border-radius:10px;font-size:10px;font-weight:800;padding:1px 5px;border:2px solid #fff;min-width:18px;text-align:center;line-height:16px;">${count}</div>
+  </div>`
+  return L.divIcon({ html, className: '', iconSize: [140, cs + 10], iconAnchor: [70, Math.round(cs / 2)] })
 }
 
 /* ── Rayon de bulle proportionnel à √(stock/max) ── */
@@ -321,6 +339,136 @@ function StatMini({ label, value, color }: { label: string; value: string; color
   )
 }
 
+/* ═══════════════════ Bouton contact ════════════════════ */
+
+function ClusterContactBtn({ username, color }: { username: string; color: string }) {
+  const navigate = useNavigate()
+  return (
+    <button
+      style={{ marginTop: 10, width: '100%', padding: '7px 0', background: color, color: '#fff', border: 'none', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}
+      onClick={() => navigate(`/messages?to=${username}`)}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Envoyer un message
+    </button>
+  )
+}
+
+/* ═══════════════════ Popup cluster ════════════════════ */
+
+function ClusterPopup({
+  group, filteredStocks, userPos,
+}: {
+  group: MembreCarte[]
+  filteredStocks: StockRow[]
+  userPos: [number, number] | null
+}) {
+  const [selected, setSelected] = useState<string | null>(null)
+  const m = selected ? group.find(g => g.username === selected) ?? null : null
+
+  if (m) {
+    const color    = ROLE_COLORS[m.role] || '#6b7280'
+    const label    = ROLE_LABELS[m.role] || m.role
+    const siteStocks = filteredStocks.filter(r => r.nomSite === m.nomSite)
+    const siteTotal  = siteStocks.reduce((s, r) => s + Number(r.quantiteTotale), 0)
+    const varMap     = new Map<string, { codeVariete: string; nomVariete: string; codeGen: string; codeEspece: string; total: number }>()
+    siteStocks.forEach(r => {
+      const ex = varMap.get(r.codeVariete)
+      if (ex) ex.total += Number(r.quantiteTotale)
+      else varMap.set(r.codeVariete, { codeVariete: r.codeVariete, nomVariete: r.nomVariete, codeGen: r.codeGeneration, codeEspece: r.codeEspece, total: Number(r.quantiteTotale) })
+    })
+    const varieties = Array.from(varMap.values()).sort((a, b) => b.total - a.total)
+    const km        = userPos ? distKm(userPos[0], userPos[1], m.latitude, m.longitude) : null
+
+    return (
+      <div style={{ fontFamily: 'inherit', padding: '2px 0' }}>
+        <button onClick={() => setSelected(null)} style={{ display: 'flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: '#6b7280', fontSize: 11, fontWeight: 600, padding: '0 0 8px 0', marginBottom: 4 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+          Retour à la liste
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <div style={{ width: 34, height: 34, borderRadius: '50%', background: `radial-gradient(circle at 38% 32%, ${lightenHex(color)}, ${color})`, border: '2px solid #fff', boxShadow: `0 2px 6px ${color}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/></svg>
+          </div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: '#111827', lineHeight: 1.2 }}>{m.nomComplet}</div>
+            <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, background: color + '18', color, borderRadius: 4, padding: '1px 6px', marginTop: 2 }}>{label}</span>
+          </div>
+        </div>
+        <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.7, marginBottom: 4 }}>
+          <div>📍 {m.nomSite}{m.zoneCode ? ` · ZAE ${m.zoneCode}` : ''}</div>
+          <div>🏢 {m.nomOrganisation}</div>
+          {km !== null && <div style={{ color: '#2563eb', fontWeight: 600 }}>✈ {fmtDist(km)} de votre position</div>}
+        </div>
+        {varieties.length > 0 && (
+          <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 6, paddingTop: 8 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase' }}>Stock disponible</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d' }}>{fmtKg(siteTotal)} · {varieties.length} variété{varieties.length > 1 ? 's' : ''}</span>
+            </div>
+            {varieties.slice(0, 4).map(v => (
+              <div key={v.codeVariete} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #f3f4f6' }}>
+                <div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#111827' }}>{v.nomVariete}</span>
+                  <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 5 }}>{v.codeEspece}</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: GEN_COLORS[v.codeGen] || '#6b7280', background: (GEN_COLORS[v.codeGen] || '#6b7280') + '18', borderRadius: 3, padding: '1px 4px' }}>{v.codeGen}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>{fmtKg(v.total)}</span>
+                </div>
+              </div>
+            ))}
+            {varieties.length > 4 && <div style={{ fontSize: 10, color: '#9ca3af', textAlign: 'right', marginTop: 3 }}>+{varieties.length - 4} autre{varieties.length - 4 > 1 ? 's' : ''} variété{varieties.length - 4 > 1 ? 's' : ''}</div>}
+          </div>
+        )}
+        <ClusterContactBtn username={m.username} color={color} />
+      </div>
+    )
+  }
+
+  /* ── Vue liste ── */
+  const allSameRole  = group.every(g => g.role === group[0].role)
+  const headerColor  = allSameRole ? (ROLE_COLORS[group[0].role] || '#6b7280') : '#6b7280'
+
+  return (
+    <div style={{ fontFamily: 'inherit', padding: '2px 0' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: `radial-gradient(circle at 38% 32%, ${lightenHex(headerColor)}, ${headerColor})`, border: '2px solid #fff', boxShadow: `0 2px 6px ${headerColor}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/></svg>
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#111827' }}>{group.length} acteurs</div>
+          <div style={{ fontSize: 11, color: '#6b7280' }}>📍 {group[0].nomSite}</div>
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+        {group.map(mem => {
+          const c = ROLE_COLORS[mem.role] || '#6b7280'
+          const l = ROLE_LABELS[mem.role] || mem.role
+          return (
+            <button
+              key={mem.username}
+              onClick={() => setSelected(mem.username)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#f9fafb', cursor: 'pointer', textAlign: 'left' }}
+              onMouseEnter={e => (e.currentTarget.style.background = '#eff6ff')}
+              onMouseLeave={e => (e.currentTarget.style.background = '#f9fafb')}
+            >
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: `radial-gradient(circle at 38% 32%, ${lightenHex(c)}, ${c})`, border: '2px solid #fff', boxShadow: `0 1px 4px ${c}44`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/></svg>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mem.nomComplet}</div>
+                <span style={{ fontSize: 9, fontWeight: 700, background: c + '18', color: c, borderRadius: 3, padding: '1px 5px' }}>{l}</span>
+              </div>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /* ═══════════════════ Composant principal ════════════════════ */
 
 export function MapSemences({ roleKey }: Props) {
@@ -407,6 +555,25 @@ export function MapSemences({ roleKey }: Props) {
   const maxZae  = useMemo(() => Math.max(...Object.values(stockByZae).map(d => d.total), 1), [stockByZae])
   const maxSite = useMemo(() => Math.max(...Object.values(stockBySite).map(d => d.total), 1), [stockBySite])
 
+  /* Groupes de membres co-localisés — même rôle uniquement.
+     Sélectionneurs/UPSemCL : 0.05° (site institutionnel partagé).
+     Multiplicateurs/Quotataires : 0.001° (individus séparés sauf coordonnées identiques). */
+  const memberGroups = useMemo<MembreCarte[][]>(() => {
+    const assigned = new Set<string>()
+    const groups: MembreCarte[][] = []
+    membres.forEach(m => {
+      if (assigned.has(m.username)) return
+      const institutional = m.role === 'seed-selector' || m.role === 'seed-upsemcl'
+      const threshold = institutional ? 0.05 : 0.001
+      const group = membres.filter(o =>
+        o.role === m.role &&
+        Math.hypot(m.latitude - o.latitude, m.longitude - o.longitude) < threshold
+      )
+      group.forEach(g => assigned.add(g.username))
+      groups.push(group)
+    })
+    return groups
+  }, [membres])
 
   /* ── Espèces disponibles pour le filtre ── */
   const especeOptions = useMemo(() => {
@@ -614,8 +781,25 @@ export function MapSemences({ roleKey }: Props) {
               )
             })}
 
-            {/* ── Couche 3 : Acteurs (popup enrichi — stock par variété, distance, contact) ── */}
-            {showSitesAndUsers && membres.map(m => {
+            {/* ── Couche 3 : Acteurs (cluster si co-localisés, sinon popup individuel) ── */}
+            {showSitesAndUsers && memberGroups.map((group, idx) => {
+              /* ── Cluster : plusieurs acteurs au même endroit ── */
+              if (group.length > 1) {
+                const centroid: [number, number] = [
+                  group.reduce((s, m) => s + m.latitude,  0) / group.length,
+                  group.reduce((s, m) => s + m.longitude, 0) / group.length,
+                ]
+                return (
+                  <Marker key={`cluster-${idx}`} position={centroid} icon={createClusterIcon(group)}>
+                    <Popup minWidth={230} maxWidth={290}>
+                      <ClusterPopup group={group} filteredStocks={filteredStocks} userPos={userPos} />
+                    </Popup>
+                  </Marker>
+                )
+              }
+
+              /* ── Acteur unique ── */
+              const m = group[0]
               const icon  = createMembreIcon(m.nomComplet, m.role)
               const color = ROLE_COLORS[m.role] || '#6b7280'
               const label = ROLE_LABELS[m.role] || m.role
@@ -709,18 +893,7 @@ export function MapSemences({ roleKey }: Props) {
                       )}
 
                       {/* Bouton Contacter */}
-                      <button
-                        style={{
-                          marginTop: 10, width: '100%', padding: '7px 0',
-                          background: color, color: '#fff', border: 'none',
-                          borderRadius: 7, fontSize: 12, fontWeight: 700,
-                          cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                        }}
-                        onClick={() => {}}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        Contacter ce fournisseur
-                      </button>
+                      <ClusterContactBtn username={m.username} color={color} />
 
                     </div>
                   </Popup>

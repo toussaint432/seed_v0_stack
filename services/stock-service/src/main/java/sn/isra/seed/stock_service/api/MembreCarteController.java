@@ -46,7 +46,7 @@ public class MembreCarteController {
         String placeholders = visibleRoles.stream().map(r -> "?").collect(Collectors.joining(", "));
 
         String sql = String.format("""
-            SELECT
+            SELECT DISTINCT ON (m.nom_complet, m.id_organisation, m.keycloak_role)
                 m.keycloak_username                              AS username,
                 m.nom_complet                                    AS "nomComplet",
                 m.keycloak_role                                  AS role,
@@ -83,7 +83,7 @@ public class MembreCarteController {
             JOIN shared.organisation o ON o.id = m.id_organisation
             WHERE m.keycloak_role IN (%s)
               AND o.active = true
-            ORDER BY m.keycloak_role, m.nom_complet
+            ORDER BY m.nom_complet, m.id_organisation, m.keycloak_role, m.id DESC
             """, placeholders);
 
         List<Map<String, Object>> rows = jdbc.queryForList(sql, visibleRoles.toArray());
