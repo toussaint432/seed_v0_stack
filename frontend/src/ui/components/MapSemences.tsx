@@ -5,7 +5,7 @@
    ═══════════════════════════════════════════════════════════════ */
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapContainer, TileLayer, CircleMarker, GeoJSON, Tooltip, Marker, Popup } from 'react-leaflet'
+import { MapContainer, TileLayer, GeoJSON, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import type { PathOptions } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
@@ -13,7 +13,7 @@ import { X, MapPin, Layers, Filter, RefreshCw, Users } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import {
-  SITE_COORDS, SITE_META, ZAE_CENTROIDS, ZAE_COLORS, ZAE_DISPLAY,
+  SITE_COORDS, SITE_META, ZAE_COLORS, ZAE_DISPLAY,
   SITE_TO_ZAE, SITE_TYPE_COLOR, SENEGAL_ZAE_GEOJSON,
 } from '../data/senegal-zae'
 
@@ -138,11 +138,6 @@ function createClusterIcon(group: MembreCarte[]): L.DivIcon {
   return L.divIcon({ html, className: '', iconSize: [140, cs + 10], iconAnchor: [70, Math.round(cs / 2)] })
 }
 
-/* ── Rayon de bulle proportionnel à √(stock/max) ── */
-function bubbleR(stock: number, max: number, min = 10, maxR = 42): number {
-  if (!stock || !max) return 0
-  return min + (maxR - min) * Math.sqrt(stock / max)
-}
 
 /* ── Formatage ── */
 function fmtKg(v: number) {
@@ -482,8 +477,10 @@ export function MapSemences({ roleKey }: Props) {
   const [filterEspece, setFilterEspece] = useState('')
   const [filterGen,    setFilterGen]    = useState('')
   const [showZAE,          setShowZAE]          = useState(true)
-  const [showBubbles,      setShowBubbles]      = useState(true)
   const [showSitesAndUsers, setShowSitesAndUsers] = useState(true)
+  const [activeRoles, setActiveRoles] = useState<Set<string>>(
+    () => new Set(['seed-selector', 'seed-upsemcl', 'seed-multiplicator', 'seed-quotataire'])
+  )
 
   /* ── Utilisateurs carte ── */
   const [membres,  setMembres]  = useState<MembreCarte[]>([])
@@ -555,17 +552,34 @@ export function MapSemences({ roleKey }: Props) {
   const maxZae  = useMemo(() => Math.max(...Object.values(stockByZae).map(d => d.total), 1), [stockByZae])
   const maxSite = useMemo(() => Math.max(...Object.values(stockBySite).map(d => d.total), 1), [stockBySite])
 
+  const toggleRole = useCallback((role: string) => {
+    setActiveRoles(prev => {
+      const next = new Set(prev)
+      if (next.has(role)) {
+        if (next.size > 1) next.delete(role)
+      } else {
+        next.add(role)
+      }
+      return next
+    })
+  }, [])
+
+  const visibleMembres = useMemo(
+    () => membres.filter(m => activeRoles.has(m.role)),
+    [membres, activeRoles]
+  )
+
   /* Groupes de membres co-localisés — même rôle uniquement.
      Sélectionneurs/UPSemCL : 0.05° (site institutionnel partagé).
-     Multiplicateurs/Quotataires : 0.001° (individus séparés sauf coordonnées identiques). */
+     Multiplicateurs/Quotataires : 0.01° (~1 km). */
   const memberGroups = useMemo<MembreCarte[][]>(() => {
     const assigned = new Set<string>()
     const groups: MembreCarte[][] = []
-    membres.forEach(m => {
+    visibleMembres.forEach(m => {
       if (assigned.has(m.username)) return
       const institutional = m.role === 'seed-selector' || m.role === 'seed-upsemcl'
-      const threshold = institutional ? 0.05 : 0.001
-      const group = membres.filter(o =>
+      const threshold = institutional ? 0.05 : 0.01
+      const group = visibleMembres.filter(o =>
         o.role === m.role &&
         Math.hypot(m.latitude - o.latitude, m.longitude - o.longitude) < threshold
       )
@@ -573,7 +587,7 @@ export function MapSemences({ roleKey }: Props) {
       groups.push(group)
     })
     return groups
-  }, [membres])
+  }, [visibleMembres])
 
   /* ── Espèces disponibles pour le filtre ── */
   const especeOptions = useMemo(() => {
@@ -666,8 +680,54 @@ export function MapSemences({ roleKey }: Props) {
           <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>COUCHES</span>
         </div>
         {toggleBtn(showZAE,     '#22c55e', '🗺 Zones ZAE',      () => setShowZAE(v => !v))}
-        {toggleBtn(showBubbles,       '#0ea5e9', '⬤ Activité',        () => setShowBubbles(v => !v))}
-        {toggleBtn(showSitesAndUsers, '#7c3aed', '👤 Acteurs', () => setShowSitesAndUsers(v => !v))}
+        {/* Acteurs : master toggle + filtres de rôle inline */}
+        <div style={{ display: 'flex', alignItems: 'center', borderRadius: 6, border: `1px solid ${showSitesAndUsers ? '#7c3aed55' : 'var(--border)'}`, overflow: 'hidden', transition: 'border-color .15s' }}>
+          <button onClick={() => setShowSitesAndUsers(v => !v)} style={{
+            display: 'flex', alignItems: 'center', gap: 5,
+            padding: '5px 10px', fontSize: 12, cursor: 'pointer', fontWeight: 500,
+            background: showSitesAndUsers ? '#7c3aed18' : 'var(--surface-3)',
+            border: 'none', color: showSitesAndUsers ? '#7c3aed' : 'var(--text-muted)',
+            transition: 'all .15s',
+          }}>
+            👤 Acteurs
+          </button>
+          {showSitesAndUsers && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '3px 7px', borderLeft: '1px solid #7c3aed33', background: '#7c3aed08' }}>
+              {Object.entries(ROLE_LABELS)
+                .filter(([role]) => {
+                  const visible: Record<string, string[]> = {
+                    'seed-admin':        ['seed-selector','seed-upsemcl','seed-multiplicator','seed-quotataire'],
+                    'seed-upsemcl':      ['seed-selector','seed-multiplicator','seed-quotataire'],
+                    'seed-selector':     ['seed-upsemcl','seed-multiplicator','seed-quotataire'],
+                    'seed-multiplicator':['seed-upsemcl','seed-quotataire'],
+                    'seed-quotataire':   ['seed-multiplicator'],
+                  }
+                  return (visible[roleKey] ?? []).includes(role)
+                })
+                .map(([role, label]) => {
+                  const active = activeRoles.has(role)
+                  return (
+                    <button
+                      key={role}
+                      onClick={() => toggleRole(role)}
+                      title={`${active ? 'Masquer' : 'Afficher'} ${label}`}
+                      style={{
+                        width: 20, height: 20, borderRadius: '50%', padding: 0, border: 'none',
+                        background: active
+                          ? `radial-gradient(circle at 38% 32%, ${lightenHex(ROLE_COLORS[role])}, ${ROLE_COLORS[role]})`
+                          : '#d1d5db',
+                        cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        opacity: active ? 1 : 0.45, transition: 'all .15s', flexShrink: 0,
+                        outline: active ? `2px solid ${ROLE_COLORS[role]}55` : 'none', outlineOffset: 1,
+                      }}
+                    >
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/></svg>
+                    </button>
+                  )
+                })}
+            </div>
+          )}
+        </div>
 
         <div style={{ flex: 1 }} />
 
@@ -733,53 +793,6 @@ export function MapSemences({ roleKey }: Props) {
               />
             )}
 
-            {/* ── Couche 2 : Bulles d'activité par ZAE ── */}
-            {showBubbles && Object.entries(ZAE_CENTROIDS).map(([code, [lat, lng]]) => {
-              const agg    = stockByZae[code]
-              const stock  = agg?.total || 0
-              const radius = bubbleR(stock, maxZae)
-              const color  = ZAE_COLORS[code] || '#6b7280'
-
-              if (radius === 0) {
-                /* Zone sans stock : mini-cercle gris toujours visible */
-                return (
-                  <CircleMarker
-                    key={`bubble-${code}`}
-                    center={[lat, lng]}
-                    radius={7}
-                    pathOptions={{ fillColor: '#9ca3af', fillOpacity: 0.28, color: '#9ca3af', weight: 1.2, opacity: 0.55 }}
-                    eventHandlers={{ click: () => setPanel({ type: 'zae', code }) }}
-                  >
-                    <Tooltip direction="center" offset={[0, 0]} opacity={1}>
-                      <div style={{ textAlign: 'center', lineHeight: 1.35 }}>
-                        <div style={{ fontWeight: 700, fontSize: 11, color: '#6b7280' }}>{ZAE_DISPLAY[code] || code}</div>
-                        <div style={{ fontSize: 9, color: '#9ca3af' }}>Aucun stock</div>
-                      </div>
-                    </Tooltip>
-                  </CircleMarker>
-                )
-              }
-
-              return (
-                <CircleMarker
-                  key={`bubble-${code}`}
-                  center={[lat, lng]}
-                  radius={radius}
-                  pathOptions={{ fillColor: color, fillOpacity: 0.22, color, weight: 2, opacity: 0.6 }}
-                  eventHandlers={{ click: () => setPanel({ type: 'zae', code }) }}
-                >
-                  <Tooltip direction="center" offset={[0, 0]} opacity={1}>
-                    <div style={{ textAlign: 'center', lineHeight: 1.35 }}>
-                      <div style={{ fontWeight: 700, fontSize: 11, color }}>{ZAE_DISPLAY[code] || code}</div>
-                      <div style={{ fontSize: 10, color: '#374151', fontWeight: 600 }}>{fmtKg(stock)}</div>
-                      <div style={{ fontSize: 9, color: '#9ca3af', marginTop: 1 }}>
-                        {agg?.sites.length || 0} site{(agg?.sites.length || 0) > 1 ? 's' : ''}
-                      </div>
-                    </div>
-                  </Tooltip>
-                </CircleMarker>
-              )
-            })}
 
             {/* ── Couche 3 : Acteurs (cluster si co-localisés, sinon popup individuel) ── */}
             {showSitesAndUsers && memberGroups.map((group, idx) => {
@@ -961,18 +974,18 @@ export function MapSemences({ roleKey }: Props) {
             return (visible[roleKey] ?? []).includes(role)
           })
           .map(([role, label]) => (
-          <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <div style={{
-              width: 16, height: 16, borderRadius: '50%',
-              background: `radial-gradient(circle at 38% 32%, ${lightenHex(ROLE_COLORS[role])}, ${ROLE_COLORS[role]})`,
-              border: '2px solid #fff', boxShadow: `0 1px 4px ${ROLE_COLORS[role]}44`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-            }}>
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/></svg>
+            <div key={role} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <div style={{
+                width: 16, height: 16, borderRadius: '50%',
+                background: `radial-gradient(circle at 38% 32%, ${lightenHex(ROLE_COLORS[role])}, ${ROLE_COLORS[role]})`,
+                border: '2px solid #fff', boxShadow: `0 1px 4px ${ROLE_COLORS[role]}44`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}>
+                <svg width="8" height="8" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/></svg>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
             </div>
-            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{label}</span>
-          </div>
-        ))}
+          ))}
       </div>
     </div>
   )
