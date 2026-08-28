@@ -16,6 +16,7 @@ import sn.isra.seed.lot_service.api.dto.LineageNode;
 import sn.isra.seed.lot_service.api.dto.LotGenStatsDto;
 import sn.isra.seed.lot_service.api.dto.LotSemencierDto;
 import sn.isra.seed.lot_service.api.mapper.LotMapper;
+import sn.isra.seed.lot_service.entity.HistoriqueStatutLot;
 import sn.isra.seed.lot_service.entity.LotSemencier;
 import sn.isra.seed.lot_service.entity.TransfertLot;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
@@ -77,10 +78,11 @@ public class LotController {
         return lotMapper.toDto(lotService.createChild(id, req, jwt));
     }
 
-    @PreAuthorize("hasAuthority('ROLE_seed-admin')")
+    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-multiplicator')")
     @PatchMapping("/{id}/statut")
     public ResponseEntity<LotSemencierDto> updateStatut(@PathVariable Long id,
-                                                         @RequestBody Map<String, String> body) {
+                                                         @RequestBody Map<String, String> body,
+                                                         @AuthenticationPrincipal Jwt jwt) {
         String statutStr = body.get("statut");
         if (statutStr == null || statutStr.isBlank())
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Le champ 'statut' est obligatoire");
@@ -90,9 +92,18 @@ public class LotController {
         } catch (IllegalArgumentException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Statut invalide : " + statutStr);
         }
+        List<String> roles = JwtHelper.extractRoles(jwt);
+        boolean isAdmin = roles.contains("seed-admin");
+        String username = JwtHelper.getUsername(jwt);
         return lotRepo.findById(id).map(lot -> {
+            if (!isAdmin && !username.equals(lot.getUsernameCreateur()))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vous ne pouvez modifier que vos propres lots");
+            StatutLot ancienStatut = lot.getStatutLot();
             lot.setStatutLot(nouveauStatut);
-            return ResponseEntity.ok(lotMapper.toDto(lotRepo.save(lot)));
+            LotSemencierDto saved = lotMapper.toDto(lotRepo.save(lot));
+            if (ancienStatut != nouveauStatut)
+                historiqueRepo.save(HistoriqueStatutLot.of(lot.getId(), ancienStatut, nouveauStatut, username, "mise à jour manuelle"));
+            return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
 

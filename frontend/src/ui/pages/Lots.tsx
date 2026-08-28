@@ -3142,20 +3142,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 Rendement estimé : <strong>{(Number(newLotForm.productionBruteKg) / Number(newLotForm.superficieHa)).toFixed(2)} kg/ha</strong>
               </div>
             )}
-            <Field label="Statut">
-              <FormSelect value={newLotForm.statutLot} onChange={e => setNewLotForm(f => ({ ...f, statutLot: e.target.value }))}>
-                <option value="DISPONIBLE">Disponible</option>
-                <option value="EN_PRODUCTION">En production</option>
-                <option value="EN_COURS_CERT">En cours de certification</option>
-                <option value="CERTIFIE">Certifiée</option>
-                <option value="TRANSFERE">Transféré</option>
-                <option value="EPUISE">Épuisé</option>
-                <option value="DECLASS">Déclassée</option>
-                <option value="SOUCHE">Souche</option>
-                <option value="PERDU">Perdu</option>
-                <option value="RETIRE">Retiré</option>
-              </FormSelect>
-            </Field>
+            {/* Statut toujours DISPONIBLE à la création — admin peut le modifier via la page */}
             {(['seed-selector', 'seed-upsemcl'].includes(roleKey)) ? (
               <Field label="Site de stockage initial">
                 <div style={{

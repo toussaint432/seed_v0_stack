@@ -652,7 +652,7 @@ export function App() {
             <Route path="/campagnes"      element={<Campagnes      roleKey={user.roleKey} />} />
             <Route path="/sites"          element={<Sites          roleKey={user.roleKey} />} />
             <Route path="/mes-sites"      element={<MesSites       roleKey={user.roleKey} />} />
-            <Route path="/programs"       element={<Programs       roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
+            <Route path="/programs"       element={<Programs       roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} username={user.name} />} />
             <Route path="/profile"        element={<Profile        roleKey={user.roleKey} />} />
             <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
             <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />

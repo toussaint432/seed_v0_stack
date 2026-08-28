@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import {
   Workflow, Plus, RefreshCw, Search, X, Eye, Edit2, Trash2,
-  MapPin, Clock, CheckCircle2, ChevronRight, ArrowRight,
+  MapPin, Clock, CheckCircle2, ChevronRight, ArrowRight, Sprout,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -12,7 +12,7 @@ import { Pagination } from '../components/Pagination'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { GEN_CHART_COLORS } from '../../lib/constants'
 
-interface Props { roleKey: string; userSpecialisation?: string | null }
+interface Props { roleKey: string; userSpecialisation?: string | null; username?: string }
 
 const PAGE_SIZE = 10
 
@@ -95,7 +95,7 @@ function suggestCode(roleKey: string, genCible: string, varCode: string): string
   return `${prefix}${slug}-${genCible}-${yr}`
 }
 
-export function Programs({ roleKey, userSpecialisation }: Props) {
+export function Programs({ roleKey, userSpecialisation, username }: Props) {
   const [programs,     setPrograms]     = useState<any[]>([])
   const [lots,         setLots]         = useState<any[]>([])
   const [varieties,    setVarieties]    = useState<any[]>([])
@@ -110,6 +110,11 @@ export function Programs({ roleKey, userSpecialisation }: Props) {
   const [editItem,     setEditItem]     = useState<any>(null)
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [saving,       setSaving]       = useState(false)
+  // Modal "Enregistrer le lot résultat"
+  const [showLotResultat,  setShowLotResultat]  = useState(false)
+  const [lotResultatProg,  setLotResultatProg]  = useState<any>(null)
+  const [lotResultatForm,  setLotResultatForm]  = useState({ codeLot: '', quantiteNette: '', tauxGermination: '', puretePhysique: '', dateProduction: '', campagne: '' })
+  const [savingResultat,   setSavingResultat]   = useState(false)
 
   // Droits par rôle
   const isAdmin     = roleKey === 'seed-admin'
@@ -119,7 +124,8 @@ export function Programs({ roleKey, userSpecialisation }: Props) {
 
   const FORM_INIT = {
     codeProgramme: '', idLotSource: '', generationCible: '',
-    multiplicateur: '', campagne: new Date().getFullYear().toString(),
+    multiplicateur: roleKey === 'seed-multiplicator' ? (username || '') : '',
+    campagne: new Date().getFullYear().toString(),
     surfacePrevueHa: '', quantiteSemenceAllouee: '',
     dateAttribution: new Date().toISOString().split('T')[0],
     statutProgramme: 'PLANIFIE', observations: '',
@@ -272,6 +278,46 @@ export function Programs({ roleKey, userSpecialisation }: Props) {
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
     } finally { setSaving(false) }
+  }
+
+  // ── Lot résultat — enregistrer la récolte depuis un programme EN_COURS ────
+  function openLotResultat(p: any) {
+    const srcLot = lots.find(l => l.id === p.idLot)
+    const v = srcLot ? varMap[srcLot.idVariete] as any : null
+    const genCible = p.generationCible ?? ''
+    const yr = p.campagne ?? new Date().getFullYear().toString()
+    const prefix = roleKey === 'seed-selector' ? 'SEL' : roleKey === 'seed-multiplicator' ? 'MUL' : 'UPS'
+    const vCode = v?.codeVariete ?? ''
+    const suggested = `${prefix}-${genCible}-${vCode.slice(0,6).toUpperCase()}-${yr}`.replace(/-+/g, '-')
+    setLotResultatProg(p)
+    setLotResultatForm({ codeLot: suggested, quantiteNette: p.objectifKg?.toString() ?? '', tauxGermination: '', puretePhysique: '', dateProduction: new Date().toISOString().split('T')[0], campagne: yr })
+    setShowLotResultat(true)
+  }
+
+  async function submitLotResultat(e: React.FormEvent) {
+    e.preventDefault(); setSavingResultat(true)
+    try {
+      const srcLot = lots.find(l => l.id === lotResultatProg?.idLot)
+      if (!srcLot) throw new Error('Lot source introuvable')
+      const payload = {
+        codeLot:       lotResultatForm.codeLot,
+        idVariete:     srcLot.idVariete,
+        generationCode: lotResultatProg.generationCible,
+        campagne:       lotResultatForm.campagne,
+        dateProduction: lotResultatForm.dateProduction || null,
+        quantiteNette:  parseFloat(lotResultatForm.quantiteNette),
+        unite:          'kg',
+        tauxGermination: lotResultatForm.tauxGermination ? parseFloat(lotResultatForm.tauxGermination) : null,
+        puretePhysique:  lotResultatForm.puretePhysique  ? parseFloat(lotResultatForm.puretePhysique)  : null,
+      }
+      await api.post(endpoints.lotChild(srcLot.id), payload)
+      // Programme → TERMINE
+      await api.put(endpoints.programById(lotResultatProg.id), { ...lotResultatProg, statut: 'TERMINE', idLot: lotResultatProg.idLot, generationCible: lotResultatProg.generationCible })
+      setToast({ msg: `Lot ${lotResultatForm.codeLot} enregistré — programme clôturé`, type: 'success' })
+      setShowLotResultat(false); setLotResultatProg(null); fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || err?.message || 'Erreur', type: 'error' })
+    } finally { setSavingResultat(false) }
   }
 
   // ── Vue admin : bandeau d'information ─────────────────────────
@@ -434,9 +480,19 @@ export function Programs({ roleKey, userSpecialisation }: Props) {
                           <td><StatusBadge status={p.statut} showIcon /></td>
                           {isAdmin && <td><RoleBadge role={p.roleCreateur} /></td>}
                           <td>
-                            <div style={{ display: 'flex', gap: 4 }}>
+                            <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                               <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} title="Détail" onClick={() => setShowDetail(p)}><Eye size={12} /></button>
                               {canEdit(p) && <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px' }} title="Modifier" onClick={() => openEdit(p)}><Edit2 size={12} /></button>}
+                              {canEdit(p) && p.statut === 'EN_COURS' && (
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ height: 26, padding: '0 8px', color: '#16a34a', fontWeight: 600, fontSize: 11, gap: 4, display: 'flex', alignItems: 'center' }}
+                                  title="Enregistrer le lot résultat de récolte"
+                                  onClick={() => openLotResultat(p)}
+                                >
+                                  <Sprout size={12} /> Résultat
+                                </button>
+                              )}
                               {canDelete(p) && <button className="btn btn-ghost" style={{ height: 26, padding: '0 8px', color: 'var(--red-600,#dc2626)' }} title="Supprimer" onClick={() => setDeleteTarget(p)}><Trash2 size={12} /></button>}
                             </div>
                           </td>
@@ -507,6 +563,67 @@ export function Programs({ roleKey, userSpecialisation }: Props) {
         )
       })()}
 
+      {/* ── Modal lot résultat de récolte ────────────────────── */}
+      {showLotResultat && lotResultatProg && (() => {
+        const srcLot = lots.find(l => l.id === lotResultatProg.idLot)
+        const srcGen = srcLot?.generation?.codeGeneration ?? '?'
+        const genCible = lotResultatProg.generationCible ?? '?'
+        return (
+          <Modal
+            title="Enregistrer le lot résultat"
+            subtitle={`Récolte du programme ${lotResultatProg.codeProgramme} · ${srcGen} → ${genCible}`}
+            onClose={() => { setShowLotResultat(false); setLotResultatProg(null) }}
+            size="lg"
+          >
+            {/* Résumé du programme */}
+            <div style={{ display: 'flex', gap: 12, padding: '10px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8, marginBottom: 16, fontSize: 12.5, flexWrap: 'wrap' }}>
+              <span>Lot source : <strong>{srcLot?.codeLot ?? '—'}</strong></span>
+              <span>·</span>
+              <span>Objectif : <strong>{lotResultatProg.objectifKg ? `${Number(lotResultatProg.objectifKg).toLocaleString('fr-FR')} kg` : '—'}</strong></span>
+              <span>·</span>
+              <span>Surface : <strong>{lotResultatProg.superficieHa ? `${lotResultatProg.superficieHa} ha` : '—'}</strong></span>
+            </div>
+            <form onSubmit={submitLotResultat}>
+              <FormRow>
+                <Field label="Code lot résultat" required hint="Code unique du lot produit">
+                  <FormInput value={lotResultatForm.codeLot} onChange={e => setLotResultatForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} required />
+                </Field>
+                <Field label="Génération produite">
+                  <div style={{ height: 36, display: 'flex', alignItems: 'center', paddingLeft: 12 }}>
+                    <GenBadge gen={srcGen} />
+                    <ArrowRight size={12} style={{ margin: '0 8px', color: 'var(--text-muted)' }} />
+                    <GenBadge gen={genCible} />
+                  </div>
+                </Field>
+              </FormRow>
+              <FormRow>
+                <Field label="Campagne" required>
+                  <FormInput value={lotResultatForm.campagne} onChange={e => setLotResultatForm(f => ({ ...f, campagne: e.target.value }))} required />
+                </Field>
+                <Field label="Date de production">
+                  <FormInput type="date" value={lotResultatForm.dateProduction} onChange={e => setLotResultatForm(f => ({ ...f, dateProduction: e.target.value }))} />
+                </Field>
+              </FormRow>
+              <Field label="Production réelle conditionnée (kg)" required hint="Quantité effectivement récoltée et conditionnée">
+                <FormInput type="number" value={lotResultatForm.quantiteNette} onChange={e => setLotResultatForm(f => ({ ...f, quantiteNette: e.target.value }))} placeholder="ex : 450" min="0" step="0.01" required />
+              </Field>
+              <FormRow>
+                <Field label="Taux germination (%)">
+                  <FormInput type="number" value={lotResultatForm.tauxGermination} onChange={e => setLotResultatForm(f => ({ ...f, tauxGermination: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" />
+                </Field>
+                <Field label="Pureté physique (%)">
+                  <FormInput type="number" value={lotResultatForm.puretePhysique} onChange={e => setLotResultatForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="99.5" min="0" max="100" step="0.1" />
+                </Field>
+              </FormRow>
+              <div style={{ padding: '10px 14px', background: 'var(--green-50,#f0fdf4)', border: '1px solid var(--green-200,#bbf7d0)', borderRadius: 8, fontSize: 12, color: 'var(--green-800,#166534)', marginBottom: 12 }}>
+                Le lot résultat sera créé en <strong>DISPONIBLE</strong> et le programme passera automatiquement en <strong>TERMINE</strong>.
+              </div>
+              <FormActions onCancel={() => { setShowLotResultat(false); setLotResultatProg(null) }} loading={savingResultat} submitLabel="Enregistrer la récolte" />
+            </form>
+          </Modal>
+        )
+      })()}
+
       {/* ── Modal formulaire ─────────────────────────────────── */}
       {showForm && (
         <Modal
@@ -569,12 +686,17 @@ export function Programs({ roleKey, userSpecialisation }: Props) {
                   disabled={!!editItem}
                 />
               </Field>
-              <Field label="Multiplicateur" required>
+              <Field
+                label="Multiplicateur"
+                required={roleKey !== 'seed-multiplicator'}
+                hint={roleKey === 'seed-multiplicator' ? 'Rempli automatiquement (vous êtes le multiplicateur)' : undefined}
+              >
                 <FormInput
                   value={form.multiplicateur}
                   onChange={e => setForm(f => ({ ...f, multiplicateur: e.target.value }))}
-                  placeholder="Nom ou organisation du multiplicateur"
-                  required
+                  placeholder={roleKey === 'seed-multiplicator' ? username || 'Votre nom' : 'Nom ou organisation du multiplicateur'}
+                  readOnly={roleKey === 'seed-multiplicator'}
+                  style={roleKey === 'seed-multiplicator' ? { background: 'var(--surface-2)', color: 'var(--text-secondary)', cursor: 'default' } : undefined}
                 />
               </Field>
             </FormRow>
@@ -601,11 +723,14 @@ export function Programs({ roleKey, userSpecialisation }: Props) {
               </Field>
             </FormRow>
 
-            <Field label="Statut">
-              <FormSelect value={form.statutProgramme} onChange={e => setForm(f => ({ ...f, statutProgramme: e.target.value }))}>
-                {STATUT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </FormSelect>
-            </Field>
+            {/* Statut uniquement en mode édition — à la création c'est toujours PLANIFIE */}
+            {editItem && (
+              <Field label="Statut">
+                <FormSelect value={form.statutProgramme} onChange={e => setForm(f => ({ ...f, statutProgramme: e.target.value }))}>
+                  {STATUT_OPTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </FormSelect>
+              </Field>
+            )}
 
             <Field label="Observations">
               <textarea
