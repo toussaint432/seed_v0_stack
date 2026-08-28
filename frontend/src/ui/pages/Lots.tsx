@@ -13,11 +13,20 @@ interface Props { roleKey: string; userSpecialisation?: string | null }
 // Chaîne stricte G0→G1→G2→G3→G4→R1→R2
 const NEXT_GEN: Record<string, string> = { G0:'G1', G1:'G2', G2:'G3', G3:'G4', G4:'R1', R1:'R2' }
 
-function suggestChildCode(parentCode: string, parentGen: string, childGen: string): string {
-  const base = parentCode.startsWith(parentGen + '-')
-    ? childGen + parentCode.slice(parentGen.length)
-    : childGen + '-' + parentCode
-  return base + '-01'
+function normalizeName(s: string): string {
+  return s.toUpperCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[\s\-_]+/g, '')
+}
+
+function generateLotCode(gen: string, codeEspece: string, nomVariete: string, year: number, existingLots: any[]): string {
+  const prefix = `${gen}-${normalizeName(codeEspece)}-${normalizeName(nomVariete)}-${year}-`
+  const maxNN = existingLots.reduce((max: number, l: any) => {
+    if (!l.codeLot?.startsWith(prefix)) return max
+    const n = parseInt(l.codeLot.slice(prefix.length), 10)
+    return isNaN(n) ? max : Math.max(max, n)
+  }, 0)
+  return `${prefix}${String(maxNN + 1).padStart(2, '0')}`
 }
 
 // ── Helpers certification (feu tricolore) ─────────────────────────
@@ -834,7 +843,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     campagne: new Date().getFullYear().toString(),
     dateProduction: '', quantiteNette: '', unite: 'kg',
     tauxGermination: '', puretePhysique: '',
-    superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: ''
+    superficieHa: '', productionBruteKg: '', niveauSemence: ''
   }
   const [newLotForm, setNewLotForm] = useState(MULT_NEW_FORM_INIT)
   const MULT_CHILD_FORM_INIT = {
@@ -843,7 +852,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     dateProduction: '', quantiteNette: '', unite: 'kg',
     tauxGermination: '', puretePhysique: '',
     quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '',
-    cycle: 'C', niveauSemence: '', siteCode: ''
+    niveauSemence: '', siteCode: ''
   }
   const [childForm, setChildForm] = useState(MULT_CHILD_FORM_INIT)
 
@@ -930,7 +939,6 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         puretePhysique: newLotForm.puretePhysique ? Number(newLotForm.puretePhysique) : undefined,
         superficieHa: newLotForm.superficieHa ? Number(newLotForm.superficieHa) : null,
         productionBruteKg: newLotForm.productionBruteKg ? Number(newLotForm.productionBruteKg) : null,
-        cycle: newLotForm.cycle || null,
         niveauSemence: NIVEAU_SEMENCE_MAP[newLotForm.generationCode] ?? null,
         codeEspece: selectedVariety?.espece?.codeEspece ?? null,
       })
@@ -961,7 +969,6 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         quantiteSemenceSrcKg: childForm.quantiteSemenceSrcKg ? Number(childForm.quantiteSemenceSrcKg) : undefined,
         superficieHa: childForm.superficieHa ? Number(childForm.superficieHa) : undefined,
         productionBruteKg: childForm.productionBruteKg ? Number(childForm.productionBruteKg) : undefined,
-        cycle: childForm.cycle || undefined,
         niveauSemence: NIVEAU_SEMENCE_MAP[childForm.generationCode] ?? undefined,
         siteCode: childForm.siteCode || undefined,
       })
@@ -1742,12 +1749,15 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                     title={`Créer lot ${childGenOptions(gen)[0]} depuis ce ${gen}`}
                                     onClick={() => {
                                       const nextGen = childGenOptions(gen)[0]
+                                      const v = varietyMap[l.idVariete]
+                                      const yr = new Date().getFullYear()
+                                      const code = v ? generateLotCode(nextGen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, [...mesLots, ...catalogueG3]) : ''
                                       setParentLot(l)
                                       setChildForm({
                                         ...MULT_CHILD_FORM_INIT,
                                         generationCode: nextGen,
-                                        codeLot: suggestChildCode(l.codeLot || '', gen, nextGen),
-                                        campagne: l.campagne || new Date().getFullYear().toString(),
+                                        codeLot: code,
+                                        campagne: l.campagne || yr.toString(),
                                       })
                                       setShowChildLot(true)
                                     }}
@@ -1776,11 +1786,17 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         <Modal title="Nouveau Lot" subtitle="Enregistrer un lot G3, R1 ou R2 dans votre inventaire" onClose={() => setShowNewLot(false)} size="lg">
           <form onSubmit={submitNewLot}>
             <FormRow>
-              <Field label="Code lot" required>
-                <FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G3-MIL-SOUNA3-2026" required />
+              <Field label="Code lot" required hint="Généré automatiquement · modifiable si besoin">
+                <FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G3-MIL-SOUNA3-2026-01" required />
               </Field>
               <Field label="Génération" required>
-                <FormSelect value={newLotForm.generationCode} onChange={e => setNewLotForm(f => ({ ...f, generationCode: e.target.value }))}>
+                <FormSelect value={newLotForm.generationCode} onChange={e => {
+                  const gen = e.target.value
+                  const v = varieties.find((x: any) => x.id === Number(newLotForm.idVariete))
+                  const yr = new Date().getFullYear()
+                  const code = v ? generateLotCode(gen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, [...mesLots, ...catalogueG3]) : newLotForm.codeLot
+                  setNewLotForm(f => ({ ...f, generationCode: gen, codeLot: code }))
+                }}>
                   <option value="G3">G3 — Certifiée C1</option>
                   <option value="G4">G4 — Certifiée C2</option>
                   <option value="R1">R1</option>
@@ -1789,7 +1805,13 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               </Field>
             </FormRow>
             <Field label="Variété" required>
-              <FormSelect value={newLotForm.idVariete} onChange={e => setNewLotForm(f => ({ ...f, idVariete: e.target.value }))} required>
+              <FormSelect value={newLotForm.idVariete} onChange={e => {
+                const varId = e.target.value
+                const v = varieties.find((x: any) => x.id === Number(varId))
+                const yr = new Date().getFullYear()
+                const code = v ? generateLotCode(newLotForm.generationCode, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, [...mesLots, ...catalogueG3]) : newLotForm.codeLot
+                setNewLotForm(f => ({ ...f, idVariete: varId, codeLot: code }))
+              }} required>
                 <option value="">— Choisir une variété —</option>
                 {varieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
               </FormSelect>
@@ -1809,11 +1831,6 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                   <FormSelect value={newLotForm.unite} onChange={e => setNewLotForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}><option value="kg">kg</option><option value="t">t</option></FormSelect>
                 </div>
               </Field>
-              <Field label="Cycle">
-                <FormSelect value={newLotForm.cycle} onChange={e => setNewLotForm(f => ({ ...f, cycle: e.target.value }))}>
-                  <option value="C">Court (C)</option><option value="L">Long (L)</option>
-                </FormSelect>
-              </Field>
             </FormRow>
             <FormRow>
               <Field label="Taux germination (%)">
@@ -1827,13 +1844,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               <Field label="Superficie plantée (ha)">
                 <FormInput type="number" value={newLotForm.superficieHa} onChange={e => setNewLotForm(f => ({ ...f, superficieHa: e.target.value }))} placeholder="2.0" min="0" step="0.01" />
               </Field>
-              <Field label="Production brute (kg)">
+              <Field label="Production brute (kg)" hint="Récolte totale brute avant séchage et tri">
                 <FormInput type="number" value={newLotForm.productionBruteKg} onChange={e => setNewLotForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1200" min="0" step="0.01" />
               </Field>
             </FormRow>
-            {newLotForm.superficieHa && newLotForm.productionBruteKg && Number(newLotForm.superficieHa) > 0 && (
-              <div style={{ padding: '7px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12 }}>
-                Rendement estimé : <strong>{(Number(newLotForm.productionBruteKg) / Number(newLotForm.superficieHa)).toFixed(2)} kg/ha</strong>
+            {(newLotForm.productionBruteKg && Number(newLotForm.productionBruteKg) > 0) && (
+              <div style={{ padding: '7px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {newLotForm.superficieHa && Number(newLotForm.superficieHa) > 0 && <span>Rendement : <strong>{(Number(newLotForm.productionBruteKg) / Number(newLotForm.superficieHa)).toFixed(2)} kg/ha</strong></span>}
+                {newLotForm.quantiteNette && Number(newLotForm.quantiteNette) > 0 && <span>Conditionnement : <strong>{((Number(newLotForm.quantiteNette) / Number(newLotForm.productionBruteKg)) * 100).toFixed(1)}%</strong> <span style={{ fontWeight: 400, color: 'var(--green-700)' }}>(norme : 70–85%)</span></span>}
               </div>
             )}
             <FormActions onCancel={() => setShowNewLot(false)} loading={saving} submitLabel="Enregistrer le lot" />
@@ -1944,13 +1962,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               <Field label="Superficie plantée (ha)">
                 <FormInput type="number" value={childForm.superficieHa} onChange={e => setChildForm(f => ({ ...f, superficieHa: e.target.value }))} placeholder="2.0" min="0" step="0.01" />
               </Field>
-              <Field label="Production brute (kg)">
+              <Field label="Production brute (kg)" hint="Récolte totale brute avant séchage et tri">
                 <FormInput type="number" value={childForm.productionBruteKg} onChange={e => setChildForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1600" min="0" step="0.01" />
               </Field>
             </FormRow>
-            {childForm.superficieHa && childForm.productionBruteKg && Number(childForm.superficieHa) > 0 && (
-              <div style={{ padding: '7px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12 }}>
-                Rendement estimé : <strong>{(Number(childForm.productionBruteKg) / Number(childForm.superficieHa)).toFixed(2)} kg/ha</strong>
+            {(childForm.productionBruteKg && Number(childForm.productionBruteKg) > 0) && (
+              <div style={{ padding: '7px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {childForm.superficieHa && Number(childForm.superficieHa) > 0 && <span>Rendement : <strong>{(Number(childForm.productionBruteKg) / Number(childForm.superficieHa)).toFixed(2)} kg/ha</strong></span>}
+                {childForm.quantiteNette && Number(childForm.quantiteNette) > 0 && <span>Conditionnement : <strong>{((Number(childForm.quantiteNette) / Number(childForm.productionBruteKg)) * 100).toFixed(1)}%</strong> <span style={{ fontWeight: 400, color: 'var(--green-700)' }}>(norme : 70–85%)</span></span>}
               </div>
             )}
             <Field label="Site de stockage" hint="Optionnel — enregistre automatiquement ce lot en stock">
@@ -2116,9 +2135,9 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   }
   const canReception = roleKey === 'seed-quotataire'
 
-  const NEW_LOT_INIT = { codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '' }
+  const NEW_LOT_INIT = { codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '' }
   const [newLotForm, setNewLotForm] = useState(NEW_LOT_INIT)
-  const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '' })
+  const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '' })
   const [transferForm, setTransferForm] = useState({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
   const [membres, setMembres] = useState<any[]>([])
   // Indicateur de chargement des destinataires (rafraîchi à chaque ouverture du modal)
@@ -2275,7 +2294,6 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         codeEspece: selectedVariety?.espece?.codeEspece ?? null,
         superficieHa: newLotForm.superficieHa ? Number(newLotForm.superficieHa) : null,
         productionBruteKg: newLotForm.productionBruteKg ? Number(newLotForm.productionBruteKg) : null,
-        cycle: newLotForm.cycle || null,
         niveauSemence: NIVEAU_SEMENCE_MAP[newLotForm.generationCode] ?? null,
       })
       setToast({ msg: `Lot ${newLotForm.codeLot} créé${newLotForm.siteCode ? ' · stock synchronisé automatiquement' : ''}`, type: 'success' })
@@ -2300,7 +2318,6 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         quantiteSemenceSrcKg: childForm.quantiteSemenceSrcKg ? Number(childForm.quantiteSemenceSrcKg) : undefined,
         superficieHa: childForm.superficieHa ? Number(childForm.superficieHa) : undefined,
         productionBruteKg: childForm.productionBruteKg ? Number(childForm.productionBruteKg) : undefined,
-        cycle: childForm.cycle || undefined,
         niveauSemence: NIVEAU_SEMENCE_MAP[childForm.generationCode] ?? undefined,
         siteCode: childForm.siteCode || undefined,
       })
@@ -2827,14 +2844,17 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                             title={`Créer lot ${NEXT_GEN[gen]} depuis ce ${gen}`}
                             onClick={() => {
                               const nextGen = NEXT_GEN[gen]
+                              const v = (varietyMap as any)[l.idVariete]
+                              const yr = new Date().getFullYear()
+                              const code = v ? generateLotCode(nextGen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : ''
                               setParentLot(l)
                               setChildForm({
-                                codeLot: suggestChildCode(l.codeLot || '', gen, nextGen),
+                                codeLot: code,
                                 generationCode: nextGen,
-                                campagne: l.campagne || new Date().getFullYear().toString(),
+                                campagne: l.campagne || yr.toString(),
                                 dateProduction: '', quantiteNette: '', unite: 'kg',
                                 tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '',
-                                superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '',
+                                superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '',
                               })
                               setShowChildLot(true)
                             }}
@@ -3015,13 +3035,16 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   <button className="btn btn-primary" style={{ fontSize: 12, gap: 5, flex: '1 1 auto' }}
                     onClick={() => {
                       const nextGen = NEXT_GEN[gen]
+                      const v = (varietyMap as any)[l.idVariete]
+                      const yr = new Date().getFullYear()
+                      const code = v ? generateLotCode(nextGen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : ''
                       setSelectedLot(null); setParentLot(l)
                       setChildForm({
-                        codeLot: suggestChildCode(l.codeLot || '', gen, nextGen),
-                        generationCode: nextGen, campagne: l.campagne || new Date().getFullYear().toString(),
+                        codeLot: code,
+                        generationCode: nextGen, campagne: l.campagne || yr.toString(),
                         dateProduction: '', quantiteNette: '', unite: 'kg',
                         tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '',
-                        superficieHa: '', productionBruteKg: '', cycle: 'C', niveauSemence: '', siteCode: '',
+                        superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '',
                       })
                       setShowChildLot(true)
                     }}>
@@ -3075,9 +3098,15 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         <Modal title="Nouveau Lot Semencier" subtitle="Enregistrer un nouveau lot dans la chaîne semencière" onClose={() => setShowNewLot(false)}>
           <form onSubmit={submitNewLot}>
             <FormRow>
-              <Field label="Code lot" required hint="Ex: G0-MIL-SOUNA3-2026"><FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G0-MIL-SOUNA3-2026" required /></Field>
+              <Field label="Code lot" required hint="Généré automatiquement · modifiable si besoin"><FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G0-MIL-SOUNA3-2026-01" required /></Field>
               <Field label="Variété" required hint={roleKey === 'seed-selector' && userSpecialisation ? `Filtrées : ${userSpecialisation}` : undefined}>
-                <FormSelect value={newLotForm.idVariete} onChange={e => setNewLotForm(f => ({ ...f, idVariete: e.target.value }))} required>
+                <FormSelect value={newLotForm.idVariete} onChange={e => {
+                  const varId = e.target.value
+                  const v = formVarieties.find((x: any) => x.id === Number(varId))
+                  const yr = new Date().getFullYear()
+                  const code = v ? generateLotCode(newLotForm.generationCode, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : newLotForm.codeLot
+                  setNewLotForm(f => ({ ...f, idVariete: varId, codeLot: code }))
+                }} required>
                   <option value="">-- Choisir une variété --</option>
                   {formVarieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
                 </FormSelect>
@@ -3085,7 +3114,13 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             </FormRow>
             <FormRow>
               <Field label="Génération" required>
-                <FormSelect value={newLotForm.generationCode} onChange={e => setNewLotForm(f => ({ ...f, generationCode: e.target.value }))} required>
+                <FormSelect value={newLotForm.generationCode} onChange={e => {
+                  const gen = e.target.value
+                  const v = formVarieties.find((x: any) => x.id === Number(newLotForm.idVariete))
+                  const yr = new Date().getFullYear()
+                  const code = v ? generateLotCode(gen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : newLotForm.codeLot
+                  setNewLotForm(f => ({ ...f, generationCode: gen, codeLot: code }))
+                }} required>
                   {allowedGens.map(g => <option key={g} value={g}>{g}</option>)}
                 </FormSelect>
               </Field>
@@ -3093,7 +3128,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             </FormRow>
             <FormRow>
               <Field label="Date de production"><FormInput type="date" value={newLotForm.dateProduction} onChange={e => setNewLotForm(f => ({ ...f, dateProduction: e.target.value }))} /></Field>
-              <Field label="Production conditionnée (kg)" required>
+              <Field label="Production conditionnée (kg)" required hint="Kg prêts au stock après séchage et tri — entre dans l'inventaire">
                 <div style={{ display: 'flex', gap: 8 }}>
                   <FormInput type="number" value={newLotForm.quantiteNette} onChange={e => setNewLotForm(f => ({ ...f, quantiteNette: e.target.value }))} placeholder="50" min="0" step="0.01" required style={{ flex: 1 }} />
                   <FormSelect value={newLotForm.unite} onChange={e => setNewLotForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}><option value="kg">kg</option><option value="t">t</option><option value="g">g</option></FormSelect>
@@ -3101,24 +3136,17 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               </Field>
             </FormRow>
             <FormRow>
-              <Field label="Taux germination (%)" required><FormInput type="number" value={newLotForm.tauxGermination} onChange={e => setNewLotForm(f => ({ ...f, tauxGermination: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" required /></Field>
-              <Field label="Pureté physique (%)" required><FormInput type="number" value={newLotForm.puretePhysique} onChange={e => setNewLotForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="99.5" min="0" max="100" step="0.1" required /></Field>
-            </FormRow>
-            <FormRow>
-              <Field label="Cycle">
-                <FormSelect value={newLotForm.cycle} onChange={e => setNewLotForm(f => ({ ...f, cycle: e.target.value }))}>
-                  <option value="C">Court (C)</option>
-                  <option value="L">Long (L)</option>
-                </FormSelect>
-              </Field>
+              <Field label="Taux germination (%)" required={roleKey === 'seed-selector'}><FormInput type="number" value={newLotForm.tauxGermination} onChange={e => setNewLotForm(f => ({ ...f, tauxGermination: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" required={roleKey === 'seed-selector'} /></Field>
+              <Field label="Pureté physique (%)" required={roleKey === 'seed-selector'}><FormInput type="number" value={newLotForm.puretePhysique} onChange={e => setNewLotForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="99.5" min="0" max="100" step="0.1" required={roleKey === 'seed-selector'} /></Field>
             </FormRow>
             <FormRow>
               <Field label="Superficie plantée (ha)"><FormInput type="number" value={newLotForm.superficieHa} onChange={e => setNewLotForm(f => ({ ...f, superficieHa: e.target.value }))} placeholder="2.5" min="0" step="0.01" /></Field>
-              <Field label="Production brute (kg)"><FormInput type="number" value={newLotForm.productionBruteKg} onChange={e => setNewLotForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1000" min="0" step="0.01" /></Field>
+              <Field label="Production brute (kg)" hint="Récolte totale brute avant séchage et tri"><FormInput type="number" value={newLotForm.productionBruteKg} onChange={e => setNewLotForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1000" min="0" step="0.01" /></Field>
             </FormRow>
-            {newLotForm.superficieHa && newLotForm.productionBruteKg && Number(newLotForm.superficieHa) > 0 && (
-              <div style={{ padding: '8px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12 }}>
-                Rendement estimé : <strong>{(Number(newLotForm.productionBruteKg) / Number(newLotForm.superficieHa)).toFixed(2)} kg/ha</strong>
+            {(newLotForm.productionBruteKg && Number(newLotForm.productionBruteKg) > 0) && (
+              <div style={{ padding: '8px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {newLotForm.superficieHa && Number(newLotForm.superficieHa) > 0 && <span>Rendement : <strong>{(Number(newLotForm.productionBruteKg) / Number(newLotForm.superficieHa)).toFixed(2)} kg/ha</strong></span>}
+                {newLotForm.quantiteNette && Number(newLotForm.quantiteNette) > 0 && <span>Conditionnement : <strong>{((Number(newLotForm.quantiteNette) / Number(newLotForm.productionBruteKg)) * 100).toFixed(1)}%</strong> <span style={{ fontWeight: 400, color: 'var(--green-700)' }}>(norme : 70–85%)</span></span>}
               </div>
             )}
             {/* Statut toujours DISPONIBLE à la création — admin peut le modifier via la page */}
@@ -3177,13 +3205,13 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               <Field label="Date de production"><FormInput type="date" value={childForm.dateProduction} onChange={e => setChildForm(f => ({ ...f, dateProduction: e.target.value }))} /></Field>
             </FormRow>
             <FormRow>
-              <Field label="Production conditionnée (kg)" required>
+              <Field label="Production conditionnée (kg)" required hint="Kg prêts au stock après séchage et tri — entre dans l'inventaire">
                 <div style={{ display: 'flex', gap: 8 }}>
                   <FormInput type="number" value={childForm.quantiteNette} onChange={e => setChildForm(f => ({ ...f, quantiteNette: e.target.value }))} placeholder="500" min="0" step="0.01" required style={{ flex: 1 }} />
                   <FormSelect value={childForm.unite} onChange={e => setChildForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}><option value="kg">kg</option><option value="t">t</option></FormSelect>
                 </div>
               </Field>
-              <Field label="Quantité semences utilisées (kg)" hint={roleKey === 'seed-selector' ? `Obligatoire — max ${Number(parentLot.quantiteNette).toLocaleString('fr-FR')} kg disponibles sur ${parentLot.codeLot}` : 'kg du lot parent plantés'} required={roleKey === 'seed-selector'}>
+              <Field label="Quantité semences utilisées (kg)" hint={roleKey === 'seed-selector' ? `Obligatoire — max ${Number(parentLot.quantiteNette).toLocaleString('fr-FR')} kg disponibles sur ${parentLot.codeLot}` : 'Kg prélevés sur le lot parent pour les semis — débite le stock source'} required={roleKey === 'seed-selector'}>
                 <FormInput
                   type="number"
                   value={childForm.quantiteSemenceSrcKg}
@@ -3223,20 +3251,13 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               <Field label="Pureté physique (%)"><FormInput type="number" value={childForm.puretePhysique} onChange={e => setChildForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" /></Field>
             </FormRow>
             <FormRow>
-              <Field label="Cycle">
-                <FormSelect value={childForm.cycle} onChange={e => setChildForm(f => ({ ...f, cycle: e.target.value }))}>
-                  <option value="C">Court (C)</option>
-                  <option value="L">Long (L)</option>
-                </FormSelect>
-              </Field>
-            </FormRow>
-            <FormRow>
               <Field label="Superficie plantée (ha)"><FormInput type="number" value={childForm.superficieHa} onChange={e => setChildForm(f => ({ ...f, superficieHa: e.target.value }))} placeholder="2.0" min="0" step="0.01" /></Field>
-              <Field label="Production brute (kg)"><FormInput type="number" value={childForm.productionBruteKg} onChange={e => setChildForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1600" min="0" step="0.01" /></Field>
+              <Field label="Production brute (kg)" hint="Récolte totale brute avant séchage et tri"><FormInput type="number" value={childForm.productionBruteKg} onChange={e => setChildForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1600" min="0" step="0.01" /></Field>
             </FormRow>
-            {childForm.superficieHa && childForm.productionBruteKg && Number(childForm.superficieHa) > 0 && (
-              <div style={{ padding: '8px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12 }}>
-                Rendement estimé : <strong>{(Number(childForm.productionBruteKg) / Number(childForm.superficieHa)).toFixed(2)} kg/ha</strong>
+            {(childForm.productionBruteKg && Number(childForm.productionBruteKg) > 0) && (
+              <div style={{ padding: '8px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                {childForm.superficieHa && Number(childForm.superficieHa) > 0 && <span>Rendement : <strong>{(Number(childForm.productionBruteKg) / Number(childForm.superficieHa)).toFixed(2)} kg/ha</strong></span>}
+                {childForm.quantiteNette && Number(childForm.quantiteNette) > 0 && <span>Conditionnement : <strong>{((Number(childForm.quantiteNette) / Number(childForm.productionBruteKg)) * 100).toFixed(1)}%</strong> <span style={{ fontWeight: 400, color: 'var(--green-700)' }}>(norme : 70–85%)</span></span>}
               </div>
             )}
             {(['seed-selector', 'seed-upsemcl'].includes(roleKey)) ? (
