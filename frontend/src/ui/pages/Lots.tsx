@@ -54,6 +54,15 @@ const GEN_BG: Record<string, string>     = Object.fromEntries(Object.entries(GEN
 const GEN_BORDER: Record<string, string> = Object.fromEntries(Object.entries(GEN_COLORS_RICH).map(([k, v]) => [k, v.border]))
 const ALL_GENS = ['G0','G1','G2','G3','G4','R1','R2']
 const GEN_IDS: Record<string, number> = { G0: 1, G1: 2, G2: 3, G3: 4, G4: 5, R1: 6, R2: 7 }
+const NIVEAU_SEMENCE_MAP: Record<string, string> = {
+  G0: '0 Semences originelles G0',
+  G1: '1 Semences de pré-base G1',
+  G2: '2 Semences de base G2',
+  G3: '3 Semences de base G3',
+  G4: '4 Semences certifiées G4',
+  R1: '5 Semences Certifiés R1',
+  R2: '6 Semences Certifiés R2',
+}
 const ROLE_GENERATIONS: Record<string, string[]> = { 'seed-admin': ALL_GENS, 'seed-selector': ['G0','G1'], 'seed-upsemcl': ['G1','G2','G3'], 'seed-multiplicator': ['G3','G4','R1','R2'], 'seed-quotataire': ['R2'] }
 
 /* ── Couleurs nœud généalogie par rôle acteur ── */
@@ -922,7 +931,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         superficieHa: newLotForm.superficieHa ? Number(newLotForm.superficieHa) : null,
         productionBruteKg: newLotForm.productionBruteKg ? Number(newLotForm.productionBruteKg) : null,
         cycle: newLotForm.cycle || null,
-        niveauSemence: newLotForm.niveauSemence || null,
+        niveauSemence: NIVEAU_SEMENCE_MAP[newLotForm.generationCode] ?? null,
         codeEspece: selectedVariety?.espece?.codeEspece ?? null,
       })
       setToast({ msg: `Lot ${newLotForm.codeLot} enregistré`, type: 'success' })
@@ -953,7 +962,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         superficieHa: childForm.superficieHa ? Number(childForm.superficieHa) : undefined,
         productionBruteKg: childForm.productionBruteKg ? Number(childForm.productionBruteKg) : undefined,
         cycle: childForm.cycle || undefined,
-        niveauSemence: childForm.niveauSemence || undefined,
+        niveauSemence: NIVEAU_SEMENCE_MAP[childForm.generationCode] ?? undefined,
         siteCode: childForm.siteCode || undefined,
       })
       setToast({ msg: `Lot ${childForm.codeLot} créé (${childForm.generationCode})${childForm.siteCode ? ' · stock synchronisé' : ''}`, type: 'success' })
@@ -1046,13 +1055,6 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       })
   })()
   const lotsChartGens = ML_GENS.filter(g => lotsChartData.some(d => (d.gens[g] ?? 0) > 0))
-
-  const NIVEAU_SEMENCE_MULT = [
-    '3 Semences de base G3',
-    '3b Semences certifiées G4',
-    '4 Semences Certifiés R1',
-    '5 Semences Certifiés R2',
-  ]
 
   const childGenOptions = (gen: string) => {
     if (gen === 'G3') return ['G4']
@@ -1834,12 +1836,6 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                 Rendement estimé : <strong>{(Number(newLotForm.productionBruteKg) / Number(newLotForm.superficieHa)).toFixed(2)} kg/ha</strong>
               </div>
             )}
-            <Field label="Niveau semence">
-              <FormSelect value={newLotForm.niveauSemence} onChange={e => setNewLotForm(f => ({ ...f, niveauSemence: e.target.value }))}>
-                <option value="">— Sélectionner —</option>
-                {NIVEAU_SEMENCE_MULT.map(n => <option key={n} value={n}>{n}</option>)}
-              </FormSelect>
-            </Field>
             <FormActions onCancel={() => setShowNewLot(false)} loading={saving} submitLabel="Enregistrer le lot" />
           </form>
         </Modal>
@@ -1957,12 +1953,6 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                 Rendement estimé : <strong>{(Number(childForm.productionBruteKg) / Number(childForm.superficieHa)).toFixed(2)} kg/ha</strong>
               </div>
             )}
-            <Field label="Niveau semence">
-              <FormSelect value={childForm.niveauSemence} onChange={e => setChildForm(f => ({ ...f, niveauSemence: e.target.value }))}>
-                <option value="">— Sélectionner —</option>
-                {NIVEAU_SEMENCE_MULT.map(n => <option key={n} value={n}>{n}</option>)}
-              </FormSelect>
-            </Field>
             <Field label="Site de stockage" hint="Optionnel — enregistre automatiquement ce lot en stock">
               <FormSelect value={childForm.siteCode} onChange={e => setChildForm(f => ({ ...f, siteCode: e.target.value }))}>
                 <option value="">— Sans enregistrement stock immédiat —</option>
@@ -2286,7 +2276,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         superficieHa: newLotForm.superficieHa ? Number(newLotForm.superficieHa) : null,
         productionBruteKg: newLotForm.productionBruteKg ? Number(newLotForm.productionBruteKg) : null,
         cycle: newLotForm.cycle || null,
-        niveauSemence: newLotForm.niveauSemence || null,
+        niveauSemence: NIVEAU_SEMENCE_MAP[newLotForm.generationCode] ?? null,
       })
       setToast({ msg: `Lot ${newLotForm.codeLot} créé${newLotForm.siteCode ? ' · stock synchronisé automatiquement' : ''}`, type: 'success' })
       setShowNewLot(false)
@@ -2311,7 +2301,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         superficieHa: childForm.superficieHa ? Number(childForm.superficieHa) : undefined,
         productionBruteKg: childForm.productionBruteKg ? Number(childForm.productionBruteKg) : undefined,
         cycle: childForm.cycle || undefined,
-        niveauSemence: childForm.niveauSemence || undefined,
+        niveauSemence: NIVEAU_SEMENCE_MAP[childForm.generationCode] ?? undefined,
         siteCode: childForm.siteCode || undefined,
       })
       setToast({ msg: `Lot enfant ${childForm.codeLot} créé${childForm.siteCode ? ' · stock synchronisé' : ''}`, type: 'success' })
@@ -3119,17 +3109,6 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 <FormSelect value={newLotForm.cycle} onChange={e => setNewLotForm(f => ({ ...f, cycle: e.target.value }))}>
                   <option value="C">Court (C)</option>
                   <option value="L">Long (L)</option>
-                </FormSelect>
-              </Field>
-              <Field label="Niveau semence">
-                <FormSelect value={newLotForm.niveauSemence} onChange={e => setNewLotForm(f => ({ ...f, niveauSemence: e.target.value }))}>
-                  <option value="">— Sélectionner —</option>
-                  <option value="0 Semences originelles G0">0 Semences originelles G0</option>
-                  <option value="1 Semences de pré-base G1">1 Semences de pré-base G1</option>
-                  <option value="2 Semences de base G2">2 Semences de base G2</option>
-                  <option value="3 Semences de base G3">3 Semences de base G3</option>
-                  <option value="4 Semences Certifiés R1">4 Semences Certifiés R1</option>
-                  <option value="5 Semences Certifiés R2">5 Semences Certifiés R2</option>
                 </FormSelect>
               </Field>
             </FormRow>
