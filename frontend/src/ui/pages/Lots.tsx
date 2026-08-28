@@ -2190,10 +2190,22 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   }, {})
 
   const fmtKg = (v: number) => fmtT(v)
-  const genStats = lotStatsApi
-  const totalKg = Object.values(lotStatsApi).reduce((s, g) => s + g.totalKg, 0)
+
+  // Pour UPSemCL : statistiques calculées depuis les lots de l'org (filtrés, non paginés)
+  // plutôt que l'endpoint global /lots/stats qui agrège toute la plateforme.
+  const genStats: Record<string, { count: number; totalKg: number }> =
+    roleKey === 'seed-upsemcl'
+      ? displayLots.reduce<Record<string, { count: number; totalKg: number }>>((acc, l) => {
+          const g = l.generation?.codeGeneration ?? 'N/A'
+          if (!acc[g]) acc[g] = { count: 0, totalKg: 0 }
+          acc[g].count++
+          acc[g].totalKg += Number(l.quantiteNette ?? 0)
+          return acc
+        }, {})
+      : lotStatsApi
+  const totalKg = Object.values(genStats).reduce((s, g) => s + g.totalKg, 0)
   const activeGens = roleKey === 'seed-upsemcl'
-    ? allowedGens
+    ? allowedGens.filter(g => (genStats[g]?.count ?? 0) > 0 || !lots.length)
     : allowedGens.filter(g => lotStatsApi[g] && lotStatsApi[g].count > 0)
 
   const varietyMap: Record<number, { codeVariete: string; nomVariete: string }> =
@@ -2467,7 +2479,11 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-              {statsLoading ? <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>…</span> : Object.values(lotStatsApi).reduce((s, g) => s + g.count, 0)}
+              {loading || statsLoading
+                ? <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>…</span>
+                : roleKey === 'seed-upsemcl'
+                  ? displayLots.length
+                  : Object.values(lotStatsApi).reduce((s, g) => s + g.count, 0)}
             </div>
             <div style={{ fontSize: 11, color: !genFilter ? 'var(--green-700,#15803d)' : 'var(--text-muted)', fontWeight: !genFilter ? 700 : 500 }}>
               Total lots
