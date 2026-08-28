@@ -2143,7 +2143,10 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
 
   async function fetchLots() {
     setLoading(true)
-    const url = generation ? `${endpoints.lots}?generation=${generation}` : endpoints.lots
+    // seed-upsemcl : endpoint non paginé pour charger G1+G2+G3 sans troncature à 20
+    const url = roleKey === 'seed-upsemcl'
+      ? endpoints.lotsMesLots
+      : generation ? `${endpoints.lots}?generation=${generation}` : endpoints.lots
     api.get(url).then(r => {
       let data = extractList(r.data).map(normalizeLot)
       if (roleKey !== 'seed-admin') data = data.filter((l: any) => allowedGens.includes(l.generation?.codeGeneration))

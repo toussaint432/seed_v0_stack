@@ -158,6 +158,9 @@ public class LotController {
         if (username == null) return ResponseEntity.ok(List.of());
         Long orgId = lotService.resolveOrgId(jwt);
         if (orgId == null) return ResponseEntity.ok(List.of());
+        List<String> roles = JwtHelper.extractRoles(jwt);
+        if (roles.contains("seed-upsemcl"))
+            return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findLotsUpsemclAll(orgId)));
         return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findMesLots(orgId, username)));
     }
 }

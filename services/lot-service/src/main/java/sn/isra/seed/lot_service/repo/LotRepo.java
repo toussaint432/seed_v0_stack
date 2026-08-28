@@ -188,6 +188,19 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         """)
     Page<LotSemencier> findLotsUpsemcl(@Param("orgId") Long orgId, Pageable pageable);
 
+    /**
+     * Tous les lots G1/G2/G3 de l'UPSemCL — sans pagination.
+     * Utilisé par GET /mes-lots pour éviter la troncature à 20 résultats
+     * qui masquait les lots G3 quand G1+G2 remplissaient déjà la première page.
+     */
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.generation.codeGeneration IN ('G1','G2','G3')
+          AND l.idOrgProducteur = :orgId
+        ORDER BY l.generation.ordreGeneration ASC, l.createdAt DESC
+        """)
+    List<LotSemencier> findLotsUpsemclAll(@Param("orgId") Long orgId);
+
     /** Débite la quantité nette du lot parent lors de la création d'un lot enfant. */
     @Modifying
     @Query("UPDATE LotSemencier l SET l.quantiteNette = l.quantiteNette - :qte WHERE l.id = :id")
