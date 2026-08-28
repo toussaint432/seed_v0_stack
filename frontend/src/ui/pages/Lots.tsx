@@ -2083,6 +2083,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [loading, setLoading] = useState(true)
   const [lotStatsApi, setLotStatsApi] = useState<Record<string, { count: number; totalKg: number }>>({})
   const [statsLoading, setStatsLoading] = useState(true)
+  const [stockAgrege, setStockAgrege] = useState<any[]>([])
   const [toast, setToast] = useState<{ msg: string; type: 'success'|'error' } | null>(null)
   const [lineageChain, setLineageChain] = useState<any[] | null>(null)
   const [lineageLotCode, setLineageLotCode] = useState('')
@@ -2159,6 +2160,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     api.get(endpoints.varieties).then(r => setVarieties(extractList(r.data).map(normalizeVariete))).catch(() => {})
     api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {})
     api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
+    if (roleKey === 'seed-upsemcl')
+      api.get(endpoints.stocksAgrege).then(r => setStockAgrege(extractList(r.data))).catch(() => {})
   }, [generation])
 
   useEffect(() => {
@@ -2191,18 +2194,23 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
 
   const fmtKg = (v: number) => fmtT(v)
 
-  // Pour UPSemCL : statistiques calculées depuis les lots de l'org (filtrés, non paginés)
-  // plutôt que l'endpoint global /lots/stats qui agrège toute la plateforme.
-  const genStats: Record<string, { count: number; totalKg: number }> =
-    roleKey === 'seed-upsemcl'
-      ? displayLots.reduce<Record<string, { count: number; totalKg: number }>>((acc, l) => {
-          const g = l.generation?.codeGeneration ?? 'N/A'
-          if (!acc[g]) acc[g] = { count: 0, totalKg: 0 }
-          acc[g].count++
-          acc[g].totalKg += Number(l.quantiteNette ?? 0)
-          return acc
-        }, {})
-      : lotStatsApi
+  // Pour UPSemCL : count depuis les lots filtrés, tonnes depuis stockAgrege (stock physique réel).
+  // Évite la divergence entre quantiteNette des lots (historique production) et stock disponible.
+  const genStats: Record<string, { count: number; totalKg: number }> = (() => {
+    if (roleKey !== 'seed-upsemcl') return lotStatsApi
+    const acc: Record<string, { count: number; totalKg: number }> = {}
+    displayLots.forEach(l => {
+      const g = l.generation?.codeGeneration ?? 'N/A'
+      if (!acc[g]) acc[g] = { count: 0, totalKg: 0 }
+      acc[g].count++
+    })
+    stockAgrege.forEach((s: any) => {
+      const g = s.codeGeneration ?? 'N/A'
+      if (!acc[g]) acc[g] = { count: 0, totalKg: 0 }
+      acc[g].totalKg += parseFloat(s.quantiteTotale) || 0
+    })
+    return acc
+  })()
   const totalKg = Object.values(genStats).reduce((s, g) => s + g.totalKg, 0)
   const activeGens = roleKey === 'seed-upsemcl'
     ? allowedGens.filter(g => (genStats[g]?.count ?? 0) > 0 || !lots.length)

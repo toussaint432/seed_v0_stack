@@ -723,10 +723,25 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     const programs  = results[6].status === 'fulfilled'
       ? extractList(results[6].value.data)
       : []
+    // Pour UPSemCL/multiplicateur : count depuis mes-lots (filtrés par org), tonnes depuis agrege
+    // Pour les autres rôles : stats globales depuis /lots/stats
     const genStats: Record<string, GenStat> = {}
-    rawStats.forEach((s: any) => {
-      genStats[s.codeGeneration] = { nbLots: Number(s.nbLots ?? 0), totalKg: Number(s.totalKg ?? 0) }
-    })
+    if (isMulti || isUpsemcl) {
+      lots.forEach((l: any) => {
+        const g = l.generation?.codeGeneration ?? 'N/A'
+        if (!genStats[g]) genStats[g] = { nbLots: 0, totalKg: 0 }
+        genStats[g].nbLots++
+      })
+      agrege.forEach((s: any) => {
+        const g = s.codeGeneration ?? 'N/A'
+        if (!genStats[g]) genStats[g] = { nbLots: 0, totalKg: 0 }
+        genStats[g].totalKg += parseFloat(s.quantiteTotale) || 0
+      })
+    } else {
+      rawStats.forEach((s: any) => {
+        genStats[s.codeGeneration] = { nbLots: Number(s.nbLots ?? 0), totalKg: Number(s.totalKg ?? 0) }
+      })
+    }
     // Pour UPSemCL et multiplicateur : lotsCount depuis mes-lots (filtré par org)
     // Pour les autres : depuis lotsStats global
     const lotsCount = (isMulti || isUpsemcl)
