@@ -80,7 +80,7 @@ const GREETINGS: Record<string, { title: string; sub: string }> = {
   'seed-quotataire':    { title: 'Espace Quotataire',         sub: 'Consultez le catalogue et passez vos commandes de semences' },
 }
 
-const REFRESH_MS = 30_000
+const REFRESH_MS = 15_000
 
 /* ────────────────── hook count-up ────────────────── */
 function useCountUp(target: number, delay = 0, enabled = true) {
@@ -748,7 +748,12 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   useEffect(() => {
     fetchAll()
     timerRef.current = setInterval(() => fetchAll(true), REFRESH_MS)
-    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchAll(true) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+      document.removeEventListener('visibilitychange', onVisible)
+    }
   }, [roleKey])
 
   useEffect(() => {
@@ -2226,7 +2231,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                     <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-sans)', color: '#0369a1', letterSpacing: '-0.02em', lineHeight: 1 }}>
                       {totalForecastHa > 0 ? totalForecastHa.toLocaleString('fr-FR',{maximumFractionDigits:1}) : '—'}
                     </div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>ha plantés</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>ha prévus</div>
                   </div>
                   <div style={{ width: 1, background: 'var(--border)' }} />
                   <div style={{ textAlign: 'center' }}>
@@ -2281,7 +2286,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
                 {/* Note de bas */}
                 <div style={{ padding: '8px 20px 14px', fontSize: 10.5, color: 'var(--text-muted)', borderTop: '1px solid var(--border)' }}>
-                  Estimation basée sur superficie × rendement (ou production brute si disponible). Complétez les fiches lots pour affiner les prévisions.
+                  Estimé à partir de l'objectif (kg) et de la superficie de chaque programme en cours. Mettez à jour les programmes pour affiner les prévisions.
                 </div>
               </>
             )}
