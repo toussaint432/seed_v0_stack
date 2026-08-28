@@ -695,9 +695,12 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   async function fetchAll(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
     const isMulti   = roleKey === 'seed-multiplicator'
+    const isUpsemcl = roleKey === 'seed-upsemcl'
     const isSel     = roleKey === 'seed-selector'
-    const lotsUrl   = isMulti ? endpoints.lotsMesLots    : endpoints.lots
-    const stocksUrl = isMulti ? endpoints.stockMonStock  : endpoints.stocks
+    // UPSemCL et multiplicateur utilisent mes-lots (non paginé, filtré par org)
+    const lotsUrl   = (isMulti || isUpsemcl) ? endpoints.lotsMesLots   : endpoints.lots
+    // UPSemCL et multiplicateur utilisent mon-stock (filtré par org, sans pagination)
+    const stocksUrl = (isMulti || isUpsemcl) ? endpoints.stockMonStock : endpoints.stocks
     const ordersUrl = isMulti ? endpoints.ordersATraiter : endpoints.orders
 
     const results = await Promise.allSettled([
@@ -724,9 +727,16 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     rawStats.forEach((s: any) => {
       genStats[s.codeGeneration] = { nbLots: Number(s.nbLots ?? 0), totalKg: Number(s.totalKg ?? 0) }
     })
-    const lotsCount = Object.values(genStats).reduce((s, g) => s + g.nbLots, 0)
+    // Pour UPSemCL et multiplicateur : lotsCount depuis mes-lots (filtré par org)
+    // Pour les autres : depuis lotsStats global
+    const lotsCount = (isMulti || isUpsemcl)
+      ? lots.length
+      : Object.values(genStats).reduce((s, g) => s + g.nbLots, 0)
 
-    const stockTotal    = stocks.reduce((s: number, x: any) => s + (parseFloat(x.quantiteDisponible) || 0), 0)
+    // stockTotal : agrege (filtré par org pour UPSemCL/multiplicateur) > mon-stock > fallback stocks paginé
+    const stockTotal = (isMulti || isUpsemcl)
+      ? agrege.reduce((s: number, x: any) => s + (parseFloat(x.quantiteTotale) || 0), 0)
+      : stocks.reduce((s: number, x: any) => s + (parseFloat(x.quantiteDisponible) || 0), 0)
     const ordersPending = orders.filter((o: any) => o.statut === 'SOUMISE').length
     const recentLots    = [...lots].sort((a: any, b: any) => (b.id || 0) - (a.id || 0)).slice(0, 8)
 
@@ -740,7 +750,11 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     setRawOrders(orders)
     setRawAgrege(agrege)
     setRawPrograms(programs)
-    setStats({ lotsCount, stockTotal, ordersCount: orders.length, varietiesCount: varieties.length, ordersPending, genStats, recentLots })
+    // Pour UPSemCL et multiplicateur : variétés actives depuis leurs lots filtrés par org
+    const varietiesCount = (isMulti || isUpsemcl)
+      ? new Set(lots.map((l: any) => l.idVariete).filter(Boolean)).size
+      : varieties.length
+    setStats({ lotsCount, stockTotal, ordersCount: orders.length, varietiesCount, ordersPending, genStats, recentLots })
     setLoading(false)
     setRefreshing(false)
   }
