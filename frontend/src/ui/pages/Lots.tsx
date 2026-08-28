@@ -3229,17 +3229,6 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   <option value="L">Long (L)</option>
                 </FormSelect>
               </Field>
-              <Field label="Niveau semence">
-                <FormSelect value={childForm.niveauSemence} onChange={e => setChildForm(f => ({ ...f, niveauSemence: e.target.value }))}>
-                  <option value="">— Sélectionner —</option>
-                  <option value="0 Semences originelles G0">0 Semences originelles G0</option>
-                  <option value="1 Semences de pré-base G1">1 Semences de pré-base G1</option>
-                  <option value="2 Semences de base G2">2 Semences de base G2</option>
-                  <option value="3 Semences de base G3">3 Semences de base G3</option>
-                  <option value="4 Semences Certifiés R1">4 Semences Certifiés R1</option>
-                  <option value="5 Semences Certifiés R2">5 Semences Certifiés R2</option>
-                </FormSelect>
-              </Field>
             </FormRow>
             <FormRow>
               <Field label="Superficie plantée (ha)"><FormInput type="number" value={childForm.superficieHa} onChange={e => setChildForm(f => ({ ...f, superficieHa: e.target.value }))} placeholder="2.0" min="0" step="0.01" /></Field>
