@@ -723,10 +723,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     const programs  = results[6].status === 'fulfilled'
       ? extractList(results[6].value.data)
       : []
-    // Pour UPSemCL/multiplicateur : count depuis mes-lots (filtrés par org), tonnes depuis agrege
-    // Pour les autres rôles : stats globales depuis /lots/stats
+    // UPSemCL/multi/sélectionneur : count depuis leurs lots filtrés, tonnes depuis agrege (stock physique)
+    // Autres rôles (admin, quotataire) : stats globales depuis /lots/stats
     const genStats: Record<string, GenStat> = {}
-    if (isMulti || isUpsemcl) {
+    if (isMulti || isUpsemcl || isSel) {
       lots.forEach((l: any) => {
         const g = l.generation?.codeGeneration ?? 'N/A'
         if (!genStats[g]) genStats[g] = { nbLots: 0, totalKg: 0 }
@@ -742,9 +742,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         genStats[s.codeGeneration] = { nbLots: Number(s.nbLots ?? 0), totalKg: Number(s.totalKg ?? 0) }
       })
     }
-    // Pour UPSemCL et multiplicateur : lotsCount depuis mes-lots (filtré par org)
-    // Pour les autres : depuis lotsStats global
-    const lotsCount = (isMulti || isUpsemcl)
+    // UPSemCL/multi/sélectionneur : lotsCount depuis leurs lots filtrés
+    const lotsCount = (isMulti || isUpsemcl || isSel)
       ? lots.length
       : Object.values(genStats).reduce((s, g) => s + g.nbLots, 0)
 
@@ -765,8 +764,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     setRawOrders(orders)
     setRawAgrege(agrege)
     setRawPrograms(programs)
-    // Pour UPSemCL et multiplicateur : variétés actives depuis leurs lots filtrés par org
-    const varietiesCount = (isMulti || isUpsemcl)
+    // UPSemCL/multi/sélectionneur : variétés actives depuis leurs lots filtrés
+    const varietiesCount = (isMulti || isUpsemcl || isSel)
       ? new Set(lots.map((l: any) => l.idVariete).filter(Boolean)).size
       : varieties.length
     setStats({ lotsCount, stockTotal, ordersCount: orders.length, varietiesCount, ordersPending, genStats, recentLots })
@@ -849,9 +848,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         sub: 'tous statuts',
         accent, delay: 0, suffix: undefined },
       { label: isSelector && specUp ? `Stock ${specUp}` : 'Stock total',
-        value: Math.round(displayStockTotal / 1000),
+        value: isSelector ? Math.round(displayStockTotal) : Math.round(displayStockTotal / 1000),
         sub: isSelector && specUp ? 'votre spécialisation' : undefined,
-        accent, delay: 80, suffix: 't' },
+        accent, delay: 80, suffix: isSelector ? 'kg' : 't' },
     ] : []),
     { label: isSelector && specUp ? `Variétés ${specUp}` : 'Variétés actives',
       value: displayVarietiesCount,

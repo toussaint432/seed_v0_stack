@@ -2160,7 +2160,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     api.get(endpoints.varieties).then(r => setVarieties(extractList(r.data).map(normalizeVariete))).catch(() => {})
     api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {})
     api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
-    if (roleKey === 'seed-upsemcl')
+    if (roleKey === 'seed-upsemcl' || roleKey === 'seed-selector')
       api.get(endpoints.stocksAgrege).then(r => setStockAgrege(extractList(r.data))).catch(() => {})
   }, [generation])
 
@@ -2194,10 +2194,11 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
 
   const fmtKg = (v: number) => fmtT(v)
 
-  // Pour UPSemCL : count depuis les lots filtrés, tonnes depuis stockAgrege (stock physique réel).
-  // Évite la divergence entre quantiteNette des lots (historique production) et stock disponible.
+  // UPSemCL et sélectionneur : count depuis leurs lots filtrés, tonnes depuis stockAgrege (stock physique).
+  // Évite la divergence entre quantiteNette (historique production) et stock disponible réel.
+  const useFilteredStats = roleKey === 'seed-upsemcl' || roleKey === 'seed-selector'
   const genStats: Record<string, { count: number; totalKg: number }> = (() => {
-    if (roleKey !== 'seed-upsemcl') return lotStatsApi
+    if (!useFilteredStats) return lotStatsApi
     const acc: Record<string, { count: number; totalKg: number }> = {}
     displayLots.forEach(l => {
       const g = l.generation?.codeGeneration ?? 'N/A'
@@ -2212,7 +2213,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     return acc
   })()
   const totalKg = Object.values(genStats).reduce((s, g) => s + g.totalKg, 0)
-  const activeGens = roleKey === 'seed-upsemcl'
+  const activeGens = useFilteredStats
     ? allowedGens.filter(g => (genStats[g]?.count ?? 0) > 0 || !lots.length)
     : allowedGens.filter(g => lotStatsApi[g] && lotStatsApi[g].count > 0)
 
@@ -2489,7 +2490,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             <div style={{ fontSize: 28, fontWeight: 800, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
               {loading || statsLoading
                 ? <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>…</span>
-                : roleKey === 'seed-upsemcl'
+                : useFilteredStats
                   ? displayLots.length
                   : Object.values(lotStatsApi).reduce((s, g) => s + g.count, 0)}
             </div>
