@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { TrendingUp, AlertTriangle, RefreshCw, BarChart2, Activity, Database } from 'lucide-react'
+import { TrendingUp, AlertTriangle, RefreshCw, BarChart2, Activity, Database, GitBranch } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
@@ -7,6 +7,22 @@ import { fmtT } from '../../lib/fmt'
 
 interface Props {
   userSpecialisation?: string | null
+}
+
+interface ChainDemand {
+  gen:      string
+  username: string
+  client:   string
+  qtyKg:    number
+  statut:   string
+  orderId:  number
+}
+
+interface ChainVariete {
+  codeVariete: string
+  nomVariete:  string
+  codeEspece:  string
+  demands:     ChainDemand[]
 }
 
 interface ProdVariete {
@@ -423,6 +439,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
   const [lots,        setLots]        = useState<any[]>([])
   const [rawStocks,   setRawStocks]   = useState<any[]>([])
   const [rawVarieties,setRawVarieties]= useState<any[]>([])
+  const [chainVarietes, setChainVarietes] = useState<ChainVariete[]>([])
   const [loading,    setLoading]    = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [stkSortCol, setStkSortCol] = useState<SelStockSortKey>('stockKg')
@@ -433,7 +450,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
     isRefresh ? setRefreshing(true) : setLoading(true)
     try {
       const [ordersRes, varietiesRes, stocksRes, lotsRes] = await Promise.allSettled([
-        api.get(endpoints.orders),
+        api.get(`${endpoints.orders}?size=200`),
         api.get(endpoints.varieties),
         api.get(endpoints.stocks),
         api.get(endpoints.lotsMesLots),
@@ -526,6 +543,47 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
         }))
 
       setAlerts(lowStocks)
+
+      /* ── Chaîne aval : qui commande mes variétés à quel niveau ── */
+      const chainMap: Record<string, ChainVariete> = {}
+      const ACTIVE_STATUTS = ['SOUMISE','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON','LIVREE']
+      orders.forEach((o: any) => {
+        if (!ACTIVE_STATUTS.includes((o.statut ?? '').toUpperCase())) return
+        ;(o.lignes ?? []).forEach((ligne: any) => {
+          const gen = ligne.generation?.codeGeneration ?? ligne.codeGeneration ?? '?'
+          if (!['G1','G3','G4','R1','R2'].includes(gen)) return
+          const variety = varMap[ligne.idVariete ?? -1] ?? {}
+          if (!variety.codeVariete) return
+          if (specFilter) {
+            const esp = (variety.espece?.codeEspece ?? '').toUpperCase()
+            if (esp && esp !== specFilter) return
+          }
+          const cv = variety.codeVariete
+          if (!chainMap[cv]) chainMap[cv] = {
+            codeVariete: cv,
+            nomVariete:  variety.nomVariete ?? cv,
+            codeEspece:  variety.espece?.codeEspece ?? '?',
+            demands: [],
+          }
+          const qtyKg = parseFloat(ligne.quantiteDemandee ?? 0) || 0
+          chainMap[cv].demands.push({
+            gen,
+            username: o.usernameAcheteur ?? o.client ?? '—',
+            client:   o.client ?? o.usernameAcheteur ?? '—',
+            qtyKg,
+            statut:   (o.statut ?? '').toUpperCase(),
+            orderId:  o.id ?? 0,
+          })
+        })
+      })
+      setChainVarietes(
+        Object.values(chainMap)
+          .map(v => ({ ...v, demands: v.demands.sort((a, b) => {
+            const ORDER = ['G1','G3','G4','R1','R2']
+            return ORDER.indexOf(a.gen) - ORDER.indexOf(b.gen)
+          })}))
+          .sort((a, b) => b.demands.length - a.demands.length)
+      )
     } catch { /* silencieux */ } finally {
       setLoading(false)
       setRefreshing(false)
@@ -852,6 +910,101 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Chaîne aval de mes variétés ── */}
+      {!loading && chainVarietes.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">
+              <span className="card-title-icon"><GitBranch size={14} /></span>
+              Chaîne aval — qui commande mes variétés
+            </span>
+            <span className="badge badge-blue" style={{ fontSize: 11 }}>
+              {chainVarietes.length} variété{chainVarietes.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {chainVarietes.map((v, vi) => {
+              const totalKg = v.demands.reduce((s, d) => s + d.qtyKg, 0)
+              return (
+                <div key={v.codeVariete} style={{
+                  borderBottom: vi < chainVarietes.length - 1 ? '1px solid var(--border)' : 'none',
+                  padding: '12px 16px',
+                }}>
+                  {/* En-tête variété */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{v.nomVariete}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+                      background: 'var(--surface-2)', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                      {v.codeEspece}
+                    </span>
+                    <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700,
+                      color: 'var(--text-primary)', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtT(totalKg)} total
+                    </span>
+                  </div>
+                  {/* Lignes de demande */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingLeft: 10,
+                    borderLeft: '2px solid var(--border)' }}>
+                    {v.demands.map((d, di) => {
+                      const genColor: Record<string, string> = { G1:'#0ea5e9', G3:'#f59e0b', G4:'#ef4444', R1:'#0f766e', R2:'#14b8a6' }
+                      const statutColor: Record<string, string> = {
+                        SOUMISE: '#6b7280', EN_NEGOCIATION: '#d97706', ACCORDEE: '#2563eb',
+                        EN_LIVRAISON: '#7c3aed', LIVREE: '#15803d',
+                      }
+                      const clr   = genColor[d.gen] ?? '#6b7280'
+                      const sClr  = statutColor[d.statut] ?? '#6b7280'
+                      const roleLabel: Record<string, string> = { G1: 'UPSemCL', G3: 'Mult.', G4: 'Mult.', R1: 'Mult.', R2: 'Quot.' }
+                      return (
+                        <div key={di} style={{
+                          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                          padding: '4px 8px', borderRadius: 6,
+                          background: di % 2 === 0 ? 'var(--surface-2)' : 'transparent',
+                        }}>
+                          {/* Badge génération */}
+                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
+                            background: `${clr}18`, color: clr, border: `1px solid ${clr}35`, flexShrink: 0 }}>
+                            {d.gen}
+                          </span>
+                          {/* Type d'acteur */}
+                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', flexShrink: 0 }}>
+                            → {roleLabel[d.gen] ?? '?'}
+                          </span>
+                          {/* Identité */}
+                          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 80 }}>
+                            {d.client !== d.username && d.client ? `${d.client}` : d.username}
+                          </span>
+                          {d.client !== d.username && d.username && (
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', flexShrink: 0 }}>
+                              @{d.username}
+                            </span>
+                          )}
+                          {/* Quantité */}
+                          <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
+                            fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)', flexShrink: 0 }}>
+                            {fmtT(d.qtyKg)}
+                          </span>
+                          {/* Statut */}
+                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
+                            background: `${sClr}14`, color: sClr, border: `1px solid ${sClr}30`, flexShrink: 0 }}>
+                            {d.statut.replace('_', ' ')}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+          {chainVarietes.length === 0 && !loading && (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
+              Aucune commande active sur vos variétés
+            </div>
+          )}
         </div>
       )}
 
