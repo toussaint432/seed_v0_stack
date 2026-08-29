@@ -21,6 +21,9 @@ interface ProdVariete {
 interface MonthlyPoint {
   month: string
   count: number
+  g1Kg: number
+  g3Kg: number
+  r2Kg: number
 }
 
 interface StockAlert {
@@ -122,6 +125,144 @@ function ProdHBarChart({ data }: { data: ProdVariete[] }) {
           <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>G1 — Pré-base</span>
         </div>
       </div>
+    </div>
+  )
+}
+
+/* ── Graphe mensuel empilé G1/G3/R2 en kg ── */
+const STACK_COLORS = { g1: '#0ea5e9', g3: '#f59e0b', r2: '#14b8a6' }
+const STACK_LABELS = { g1: 'G1 — UPSemCL', g3: 'G3 — Multiplicateurs', r2: 'R2 — Quotataires' }
+
+function StackedMonthChart({ data }: { data: MonthlyPoint[] }) {
+  const [hov, setHov] = useState<number | null>(null)
+  const totalG1 = data.reduce((s, d) => s + d.g1Kg, 0)
+  const totalG3 = data.reduce((s, d) => s + d.g3Kg, 0)
+  const totalR2 = data.reduce((s, d) => s + d.r2Kg, 0)
+  const totalKg = totalG1 + totalG3 + totalR2
+  const totalOrders = data.reduce((s, d) => s + d.count, 0)
+
+  const hasKg = totalKg > 0
+
+  const W = 400; const H = 160; const PT = 24; const PB = 28; const PL = 36; const PR = 10
+  const iW = W - PL - PR; const iH = H - PT - PB
+  const maxPerBar = Math.max(...data.map(d => d.g1Kg + d.g3Kg + d.r2Kg), 1)
+  const TICKS = 3
+  const niceMax = maxPerBar <= 0.1 ? 1 : Math.ceil(maxPerBar / Math.pow(10, Math.floor(Math.log10(maxPerBar)))) * Math.pow(10, Math.floor(Math.log10(maxPerBar)))
+  const bW = iW / data.length
+
+  function fmt(kg: number) {
+    if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`
+    return `${Math.round(kg)} kg`
+  }
+
+  const lastActiveIdx = data.reduce((best, d, i) => (d.g1Kg + d.g3Kg + d.r2Kg) > 0 ? i : best, -1)
+
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
+          {hasKg ? fmt(totalKg) : `${totalOrders} commande${totalOrders !== 1 ? 's' : ''}`}
+        </span>
+        <span style={{ color: 'var(--border)' }}>·</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>6 derniers mois</span>
+        {hasKg && (
+          <>
+            {(['g1','g3','r2'] as const).map(k => {
+              const kg = k === 'g1' ? totalG1 : k === 'g3' ? totalG3 : totalR2
+              if (kg <= 0) return null
+              return (
+                <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'var(--text-muted)' }}>
+                  <span style={{ width: 6, height: 6, borderRadius: 2, background: STACK_COLORS[k], display: 'inline-block' }} />
+                  {STACK_LABELS[k]} · <strong style={{ color: STACK_COLORS[k] }}>{fmt(kg)}</strong>
+                </span>
+              )
+            })}
+          </>
+        )}
+      </div>
+
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', display: 'block' }}>
+        {Array.from({ length: TICKS + 1 }, (_, t) => {
+          const y = PT + (t / TICKS) * iH
+          const v = niceMax * (1 - t / TICKS)
+          const label = v >= 1000 ? `${(v / 1000).toFixed(0)}t` : v > 0 ? `${Math.round(v)}` : '0'
+          return (
+            <g key={t}>
+              <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="var(--border)"
+                strokeWidth={t === TICKS ? 1.5 : 0.6} strokeDasharray={t === TICKS ? '0' : '3,4'} />
+              <text x={PL - 4} y={y + 4} textAnchor="end" fontSize={8}
+                fill="var(--text-muted)" fontFamily="var(--font-sans)">{label}</text>
+            </g>
+          )
+        })}
+
+        {data.map((d, i) => {
+          const total = d.g1Kg + d.g3Kg + d.r2Kg
+          const isHov  = hov === i
+          const isLast = i === lastActiveIdx
+          const x = PL + i * bW + bW * 0.15
+          const bw = bW * 0.7
+
+          let yBase = PT + iH
+          const segments = [
+            { key: 'g1', kg: d.g1Kg, color: STACK_COLORS.g1 },
+            { key: 'g3', kg: d.g3Kg, color: STACK_COLORS.g3 },
+            { key: 'r2', kg: d.r2Kg, color: STACK_COLORS.r2 },
+          ].filter(s => s.kg > 0)
+
+          const bars = segments.map(s => {
+            const bh = Math.max((s.kg / niceMax) * iH, 2)
+            const y  = yBase - bh
+            yBase -= bh
+            return { ...s, y, bh }
+          })
+
+          const topY = bars.length > 0 ? bars[bars.length - 1].y : PT + iH
+
+          return (
+            <g key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)} style={{ cursor: 'default' }}>
+              {isHov && <rect x={x - 2} y={PT} width={bw + 4} height={iH} rx={3} fill="#0ea5e9" opacity={0.05} />}
+              {bars.length === 0 && (
+                <rect x={x} y={PT + iH - 2} width={bw} height={2} rx={1} fill="var(--border)" opacity={0.4} />
+              )}
+              {bars.map((b, j) => (
+                <rect key={b.key} x={x} y={b.y} width={bw} height={b.bh}
+                  rx={j === bars.length - 1 ? 3 : 0}
+                  fill={b.color}
+                  opacity={isHov ? 1 : isLast ? 0.9 : 0.75}
+                  style={{ transition: 'opacity 0.15s' }} />
+              ))}
+              {total > 0 && (
+                <text x={x + bw / 2} y={topY - 5} textAnchor="middle"
+                  fontSize={isHov ? 9.5 : 8.5} fontWeight={700} fill="var(--text-secondary)"
+                  fontFamily="var(--font-sans)" style={{ transition: 'font-size 0.1s' }}>
+                  {fmt(total)}
+                </text>
+              )}
+              <text x={x + bw / 2} y={H - PB + 12} textAnchor="middle" fontSize={9}
+                fontWeight={isHov || isLast ? 700 : 400}
+                fill={isHov || isLast ? '#0369a1' : 'var(--text-muted)'}
+                fontFamily="var(--font-sans)">
+                {d.month}
+              </text>
+              {isHov && total > 0 && (
+                <g>
+                  <rect x={x + bw / 2 - 54} y={topY - 58} width={108} height={48} rx={6}
+                    fill="var(--text-primary)" opacity={0.92} />
+                  <text x={x + bw / 2} y={topY - 44} textAnchor="middle" fontSize={9.5}
+                    fontWeight={700} fill="#fff" fontFamily="var(--font-sans)">{d.month}</text>
+                  {d.g1Kg > 0 && <text x={x + bw / 2} y={topY - 32} textAnchor="middle" fontSize={8.5}
+                    fill={STACK_COLORS.g1} fontFamily="var(--font-sans)">G1: {fmt(d.g1Kg)}</text>}
+                  {d.g3Kg > 0 && <text x={x + bw / 2} y={topY - 32 + (d.g1Kg > 0 ? 11 : 0)} textAnchor="middle" fontSize={8.5}
+                    fill={STACK_COLORS.g3} fontFamily="var(--font-sans)">G3: {fmt(d.g3Kg)}</text>}
+                  {d.r2Kg > 0 && <text x={x + bw / 2} y={topY - 32 + (d.g1Kg > 0 ? 11 : 0) + (d.g3Kg > 0 ? 11 : 0)} textAnchor="middle" fontSize={8.5}
+                    fill={STACK_COLORS.r2} fontFamily="var(--font-sans)">R2: {fmt(d.r2Kg)}</text>}
+                </g>
+              )}
+            </g>
+          )
+        })}
+      </svg>
     </div>
   )
 }
@@ -295,7 +436,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
         api.get(endpoints.orders),
         api.get(endpoints.varieties),
         api.get(endpoints.stocks),
-        api.get(endpoints.lots),
+        api.get(endpoints.lotsMesLots),
       ])
 
       const orders    = extractList(ordersRes.status === 'fulfilled' ? ordersRes.value.data : null)
@@ -339,22 +480,30 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
       )
 
       /* ── Évolution mensuelle des commandes (6 derniers mois) ── */
-      const now   = new Date()
+      const now    = new Date()
       const MONTHS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
-      const monthPoints: MonthlyPoint[] = Array.from({ length: 6 }, (_, i) => {
+      const monthPoints: any[] = Array.from({ length: 6 }, (_, i) => {
         const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
-        return { month: MONTHS[d.getMonth()], count: 0, _year: d.getFullYear(), _month: d.getMonth() }
-      }) as any[]
+        return { month: MONTHS[d.getMonth()], count: 0, g1Kg: 0, g3Kg: 0, r2Kg: 0, _year: d.getFullYear(), _month: d.getMonth() }
+      })
 
       orders.forEach((o: any) => {
         const createdAt = o.createdAt || o.dateCommande
         if (!createdAt) return
         const d = new Date(createdAt)
-        const mp = (monthPoints as any[]).find((p: any) => p._year === d.getFullYear() && p._month === d.getMonth())
-        if (mp) mp.count++
+        const mp = monthPoints.find(p => p._year === d.getFullYear() && p._month === d.getMonth())
+        if (!mp) return
+        mp.count++
+        ;(o.lignes ?? []).forEach((ligne: any) => {
+          const gen = ligne.generation?.codeGeneration ?? ligne.codeGeneration ?? '?'
+          const qty = parseFloat(ligne.quantiteDemandee ?? 0) || 0
+          if (gen === 'G1')                         mp.g1Kg += qty
+          else if (['G2','G3','G4'].includes(gen))  mp.g3Kg += qty
+          else if (['R1','R2'].includes(gen))        mp.r2Kg += qty
+        })
       })
 
-      setMonthly(monthPoints.map(p => ({ month: p.month, count: p.count })))
+      setMonthly(monthPoints.map(p => ({ month: p.month, count: p.count, g1Kg: p.g1Kg, g3Kg: p.g3Kg, r2Kg: p.r2Kg })))
 
       /* ── Alertes stock faible (< 100 kg) ── */
       const lowStocks: StockAlert[] = stocks
@@ -488,12 +637,12 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
           </div>
         </div>
 
-        {/* ── LineChart — évolution mensuelle ── */}
+        {/* ── Demandes reçues — barres empilées G1/G3/R2 ── */}
         <div className="card">
           <div className="card-header">
             <span className="card-title">
               <span className="card-title-icon"><TrendingUp size={15} /></span>
-              Évolution des commandes (6 mois)
+              Demandes reçues sur vos variétés
             </span>
           </div>
           <div className="card-body" style={{ padding: '16px' }}>
@@ -504,7 +653,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
                 Aucune commande sur la période
               </div>
             ) : (
-              <OrdersChart data={monthly} color="#0369a1" />
+              <StackedMonthChart data={monthly} />
             )}
           </div>
         </div>

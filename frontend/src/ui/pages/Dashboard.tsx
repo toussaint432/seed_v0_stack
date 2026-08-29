@@ -676,7 +676,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const [heroVis,      setHeroVis]      = useState(false)
   const [mapExpanded,  setMapExpanded]  = useState(true)
   const [demandPeriod, setDemandPeriod] = useState<'1m' | '3m' | '6m' | '1a'>('3m')
-  const [demandGen,    setDemandGen]    = useState<'all' | 'G3' | 'R2'>('all')
+  const [demandGen,    setDemandGen]    = useState<'all' | 'G1' | 'G3' | 'R2'>('all')
 
   /* Stock filters */
   const [filterEspece,   setFilterEspece]   = useState('')
@@ -987,7 +987,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const DEMAND_DAYS: Record<string, number> = { '1m': 30, '3m': 90, '6m': 180, '1a': 365 }
   const demandCutoff = Date.now() - (DEMAND_DAYS[demandPeriod] ?? 90) * 86_400_000
 
-  type DemandEntry = { nomVariete: string; codeEspece: string; g3kg: number; r2kg: number; g3Orders: Set<number>; r2Orders: Set<number> }
+  type DemandEntry = { nomVariete: string; codeEspece: string; g1kg: number; g3kg: number; r2kg: number; g1Orders: Set<number>; g3Orders: Set<number>; r2Orders: Set<number> }
   const demandMap: Record<string, DemandEntry> = {}
 
   if (showDemandWidget) {
@@ -996,9 +996,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       if (!o.createdAt || new Date(o.createdAt).getTime() < demandCutoff) return
       ;(o.lignes ?? []).forEach((ligne: any) => {
         const gen      = ligne.generation?.codeGeneration ?? '?'
-        const isG3type = ['G0','G1','G2','G3','G4'].includes(gen)
+        const isG1     = gen === 'G1'
+        const isG3type = ['G0','G2','G3','G4'].includes(gen)
         const isR2type = ['R1','R2'].includes(gen)
-        if (!isG3type && !isR2type) return
+        if (!isG1 && !isG3type && !isR2type) return
         const variety = varietyMap[ligne.idVariete ?? -1] ?? {}
         if (!variety.codeVariete) return
         if (roleKey === 'seed-selector' && userSpecialisation && variety.espece?.codeEspece !== userSpecialisation) return
@@ -1007,10 +1008,11 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         if (!demandMap[key]) demandMap[key] = {
           nomVariete: variety.nomVariete ?? key,
           codeEspece: variety.espece?.codeEspece ?? '?',
-          g3kg: 0, r2kg: 0, g3Orders: new Set(), r2Orders: new Set(),
+          g1kg: 0, g3kg: 0, r2kg: 0, g1Orders: new Set(), g3Orders: new Set(), r2Orders: new Set(),
         }
-        if (isG3type) { demandMap[key].g3kg += qty; demandMap[key].g3Orders.add(o.id ?? 0) }
-        else          { demandMap[key].r2kg += qty; demandMap[key].r2Orders.add(o.id ?? 0) }
+        if (isG1)      { demandMap[key].g1kg += qty; demandMap[key].g1Orders.add(o.id ?? 0) }
+        else if (isG3type) { demandMap[key].g3kg += qty; demandMap[key].g3Orders.add(o.id ?? 0) }
+        else               { demandMap[key].r2kg += qty; demandMap[key].r2Orders.add(o.id ?? 0) }
       })
     })
   }
@@ -1028,19 +1030,29 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       code,
       nomVariete: d.nomVariete,
       codeEspece: d.codeEspece,
+      g1kg: d.g1kg,
       g3kg: d.g3kg,
       r2kg: d.r2kg,
-      total: d.g3kg + d.r2kg,
+      total: d.g1kg + d.g3kg + d.r2kg,
+      g1OrderCount: d.g1Orders.size,
       g3OrderCount: d.g3Orders.size,
       r2OrderCount: d.r2Orders.size,
       stockG3: stockG3ByVariete[code] ?? 0,
     }))
-    .filter(d => demandGen === 'G3' ? d.g3kg > 0 : demandGen === 'R2' ? d.r2kg > 0 : d.total > 0)
-    .sort((a, b) => demandGen === 'G3' ? b.g3kg - a.g3kg : demandGen === 'R2' ? b.r2kg - a.r2kg : b.total - a.total)
+    .filter(d => demandGen === 'G1' ? d.g1kg > 0 : demandGen === 'G3' ? d.g3kg > 0 : demandGen === 'R2' ? d.r2kg > 0 : d.total > 0)
+    .sort((a, b) => demandGen === 'G1' ? b.g1kg - a.g1kg : demandGen === 'G3' ? b.g3kg - a.g3kg : demandGen === 'R2' ? b.r2kg - a.r2kg : b.total - a.total)
     .slice(0, roleKey === 'seed-admin' ? 10 : 6)
 
-  const demandMax     = Math.max(...demandEntries.map(d => demandGen === 'G3' ? d.g3kg : demandGen === 'R2' ? d.r2kg : d.total), 1)
-  const demandTotalKg = demandEntries.reduce((s, d) => s + (demandGen === 'G3' ? d.g3kg : demandGen === 'R2' ? d.r2kg : d.total), 0)
+  function demandActiveKg(d: typeof demandEntries[0]) {
+    if (demandGen === 'G1') return d.g1kg
+    if (demandGen === 'G3') return d.g3kg
+    if (demandGen === 'R2') return d.r2kg
+    return d.total
+  }
+
+  const demandMax     = Math.max(...demandEntries.map(demandActiveKg), 1)
+  const demandTotalKg = demandEntries.reduce((s, d) => s + demandActiveKg(d), 0)
+  const demandG1Total = demandEntries.reduce((s, d) => s + d.g1kg, 0)
   const demandG3Total = demandEntries.reduce((s, d) => s + d.g3kg, 0)
   const demandR2Total = demandEntries.reduce((s, d) => s + d.r2kg, 0)
 
@@ -1995,20 +2007,19 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             {/* Filtre génération — masqué pour multiplicateurs (toujours R2) */}
             {roleKey !== 'seed-multiplicator' && (
               <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 8, padding: 3 }}>
-                {(['all','G3','R2'] as const).map(v => {
-                  const label = v === 'all' ? 'Vue complète' : v === 'G3' ? 'G3 → Mult.' : 'R2 → Quot.'
-                  const clr   = v === 'G3' ? GEN_COLOR.G3 : v === 'R2' ? GEN_COLOR.R2 : accent
-                  return (
-                    <button key={v} onClick={() => setDemandGen(v)} style={{
-                      padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
-                      fontSize: 11.5, fontWeight: demandGen === v ? 700 : 400,
-                      background: demandGen === v ? '#fff' : 'transparent',
-                      color: demandGen === v ? clr : 'var(--text-muted)',
-                      boxShadow: demandGen === v ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                      transition: 'all 0.15s',
-                    }}>{label}</button>
-                  )
-                })}
+                {(isSelector
+                  ? [['all','Vue complète',accent],['G1','G1 → UPSemCL',GEN_COLOR.G1],['G3','G3 → Mult.',GEN_COLOR.G3],['R2','R2 → Quot.',GEN_COLOR.R2]]
+                  : [['all','Vue complète',accent],['G3','G3 → Mult.',GEN_COLOR.G3],['R2','R2 → Quot.',GEN_COLOR.R2]]
+                ).map(([v, label, clr]) => (
+                  <button key={v} onClick={() => setDemandGen(v as 'all' | 'G1' | 'G3' | 'R2')} style={{
+                    padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                    fontSize: 11.5, fontWeight: demandGen === v ? 700 : 400,
+                    background: demandGen === v ? '#fff' : 'transparent',
+                    color: demandGen === v ? (clr as string) : 'var(--text-muted)',
+                    boxShadow: demandGen === v ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'all 0.15s',
+                  }}>{label}</button>
+                ))}
               </div>
             )}
           </div>
@@ -2036,8 +2047,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
                   {demandEntries.map((d, i) => {
                     const activeQty  = roleKey === 'seed-multiplicator' ? d.r2kg
+                                      : demandGen === 'G1' ? d.g1kg
                                       : demandGen === 'G3' ? d.g3kg
                                       : demandGen === 'R2' ? d.r2kg : d.total
+                    const g1pct      = demandMax > 0 ? (d.g1kg / demandMax) * 100 : 0
                     const g3pct      = demandMax > 0 ? (d.g3kg / demandMax) * 100 : 0
                     const r2pct      = demandMax > 0 ? (d.r2kg / demandMax) * 100 : 0
                     const activePct  = demandMax > 0 ? (activeQty / demandMax) * 100 : 0
@@ -2051,6 +2064,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                     const covBg      = covRatio === null ? '' : covRatio >= 1 ? '#f0fdf4' : covRatio >= 0.5 ? '#fffbeb' : '#fef2f2'
                     // Compteur de commandes
                     const cmdCount   = roleKey === 'seed-multiplicator' ? d.r2OrderCount
+                                      : demandGen === 'G1' ? d.g1OrderCount
                                       : demandGen === 'R2' ? d.r2OrderCount : d.g3OrderCount
                     return (
                       <div key={d.code} style={{ display: 'grid', gridTemplateColumns: '1fr 1.4fr 120px', alignItems: 'center', gap: 10 }}>
@@ -2072,12 +2086,22 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                         {/* Barre */}
                         <div style={{ position: 'relative', height: 6, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
                           {showSeg ? (
-                            <>
-                              {g3pct > 0 && <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${g3pct}%`, background: GEN_COLOR.G3, borderRadius: 99, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
-                              {r2pct > 0 && <div style={{ position: 'absolute', left: `${g3pct}%`, top: 0, height: '100%', width: `${r2pct}%`, background: GEN_COLOR.R2, opacity: 0.85, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1), left 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
-                            </>
+                            isSelector ? (
+                              /* Sélectionneur : G1 (bleu) + G3 (violet) + R2 (vert) */
+                              <>
+                                {g1pct > 0 && <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${g1pct}%`, background: GEN_COLOR.G1, borderRadius: 99, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
+                                {g3pct > 0 && <div style={{ position: 'absolute', left: `${g1pct}%`, top: 0, height: '100%', width: `${g3pct}%`, background: GEN_COLOR.G3, opacity: 0.85, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1), left 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
+                                {r2pct > 0 && <div style={{ position: 'absolute', left: `${g1pct + g3pct}%`, top: 0, height: '100%', width: `${r2pct}%`, background: GEN_COLOR.R2, opacity: 0.75, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1), left 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
+                              </>
+                            ) : (
+                              /* Autres rôles : G3 + R2 */
+                              <>
+                                {g3pct > 0 && <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${g3pct}%`, background: GEN_COLOR.G3, borderRadius: 99, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
+                                {r2pct > 0 && <div style={{ position: 'absolute', left: `${g3pct}%`, top: 0, height: '100%', width: `${r2pct}%`, background: GEN_COLOR.R2, opacity: 0.85, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1), left 0.65s cubic-bezier(0.4,0,0.2,1)' }} />}
+                              </>
+                            )
                           ) : (
-                            <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${activePct}%`, background: (roleKey === 'seed-multiplicator' || demandGen === 'R2') ? GEN_COLOR.R2 : demandGen === 'G3' ? GEN_COLOR.G3 : accent, borderRadius: 99, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1)' }} />
+                            <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${activePct}%`, background: (roleKey === 'seed-multiplicator' || demandGen === 'R2') ? GEN_COLOR.R2 : demandGen === 'G1' ? GEN_COLOR.G1 : demandGen === 'G3' ? GEN_COLOR.G3 : accent, borderRadius: 99, transition: 'width 0.65s cubic-bezier(0.4,0,0.2,1)' }} />
                           )}
                         </div>
                         {/* Quantité + part + nb commandes */}
@@ -2103,6 +2127,12 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                 <div style={{ marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--surface-2)', display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' as const, fontSize: 11 }}>
                   {(roleKey !== 'seed-multiplicator' && demandGen === 'all') ? (
                     <>
+                      {isSelector && demandG1Total > 0 && (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-muted)' }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: GEN_COLOR.G1, display: 'inline-block', flexShrink: 0 }} />
+                          G1 → UPSemCL · <strong style={{ color: GEN_COLOR.G1 }}>{fmtT(demandG1Total)}</strong>
+                        </span>
+                      )}
                       {demandG3Total > 0 && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-muted)' }}>
                           <span style={{ width: 8, height: 8, borderRadius: 2, background: GEN_COLOR.G3, display: 'inline-block', flexShrink: 0 }} />
@@ -2366,6 +2396,57 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       )}
       {roleKey === 'seed-selector' && (
         <SelectorAnalytics userSpecialisation={userSpecialisation} />
+      )}
+
+      {/* ── Prévisions de récolte — sélectionneur seulement ── */}
+      {isSelector && !loading && forecastEntries.length > 0 && (
+        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', marginBottom: 20 }}>
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 9, background: 'linear-gradient(135deg,var(--surface-2) 0%,#fff 100%)' }}>
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: '#f0fdf4', color: '#15803d', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ fontSize: 13 }}>🌱</span>
+            </div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Prévisions de récolte G0 / G1</div>
+              <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>Programmes en cours — campagne active</div>
+            </div>
+            <div style={{ marginLeft: 'auto', display: 'flex', gap: 20, alignItems: 'center' }}>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>{totalForecastLots}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>programmes actifs</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>{totalForecastHa}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>ha prévus</div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 18, fontWeight: 800, color: '#0ea5e9', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>~{fmtT(totalForecastKg)}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>production estimée</div>
+              </div>
+            </div>
+          </div>
+          <div style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {forecastEntries.map(([gen, f]) => {
+              const pct = totalForecastKg > 0 ? (f.expectedKg / totalForecastKg) * 100 : 0
+              return (
+                <div key={gen}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, borderRadius: 99, padding: '2px 9px', background: `${GEN_COLOR[gen]}18`, color: GEN_COLOR[gen], border: `1px solid ${GEN_COLOR[gen]}35` }}>{gen}</span>
+                      <span style={{ fontSize: 11.5, color: 'var(--text-secondary)' }}>{f.lots} programme{f.lots > 1 ? 's' : ''} · {f.ha} ha</span>
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#0ea5e9', fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums' }}>~{fmtT(f.expectedKg)}</span>
+                  </div>
+                  <div style={{ height: 7, background: 'var(--surface-3)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: `linear-gradient(90deg,${GEN_COLOR[gen]},${GEN_COLOR[gen]}99)`, borderRadius: 99, transition: 'width 0.8s ease' }} />
+                  </div>
+                </div>
+              )
+            })}
+            <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>
+              Estimé à partir de l'objectif (kg) et de la superficie de chaque programme en cours.
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ══════════════════════════════════════════════════════
