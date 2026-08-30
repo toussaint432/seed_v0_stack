@@ -53,6 +53,7 @@ public class OrderController {
   private final LotQuantiteRepo lotQuantiteRepo;
   private final LotReceptionRepo lotReceptionRepo;
   private final TransfertLotOrderRepo transfertLotOrderRepo;
+  private final sn.isra.seed.order_service.repo.GenerationSemenceRepo generationRepo;
   private final OrderEventProducer producer;
   private final ObjectMapper om;
 
@@ -190,7 +191,9 @@ public class OrderController {
         LigneCommande lc = new LigneCommande();
         lc.setCommande(saved);
         lc.setIdVariete(l.idVariete());
-        lc.setIdGeneration(l.idGeneration());
+        if (l.idGeneration() != null) {
+          generationRepo.findById(l.idGeneration()).ifPresent(lc::setGeneration);
+        }
         lc.setQuantiteDemandee(l.quantite());
         lc.setUnite(l.unite() == null ? "kg" : l.unite());
         ligneRepo.save(lc);
