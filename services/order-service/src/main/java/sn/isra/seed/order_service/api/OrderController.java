@@ -87,6 +87,10 @@ public class OrderController {
     return hasRole(jwt, "seed-upsemcl");
   }
 
+  private boolean isQuotaire(Jwt jwt) {
+    return hasRole(jwt, "seed-quotataire");
+  }
+
   private boolean hasRole(Jwt jwt, String role) {
     try {
       java.util.Map<String, Object> ra = jwt.getClaim("realm_access");
@@ -160,6 +164,12 @@ public class OrderController {
     Commande saved = commandeRepo.save(c);
 
     if (req.lignes() != null) {
+      if (isQuotaire(jwt)) {
+        boolean allR2 = req.lignes().stream()
+            .allMatch(l -> l.idGeneration() != null && l.idGeneration() == 7L);
+        if (!allR2) throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+            "Les quotataires ne peuvent commander que des semences R2 (commerciales)");
+      }
       for (CreateOrderRequest.Line l : req.lignes()) {
         java.math.BigDecimal dispo;
         // R1 (id=6) et R2 (id=7) : lots détenus par multiplicateurs → table stock

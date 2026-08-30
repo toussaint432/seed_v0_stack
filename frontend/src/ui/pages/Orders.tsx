@@ -44,15 +44,19 @@ const NEXT_ACTIONS: Record<string, { statut: string; label: string; danger?: boo
   EN_PREPARATION: [{ statut: 'LIVREE',         label: 'Marquer livrée'     }, { statut: 'ANNULEE',  label: 'Annuler',  danger: true }],
 }
 const GENERATIONS_CMD = [
-  { id: '1', label: 'G0 — Pré-base' }, { id: '2', label: 'G1 — Base' },
-  { id: '3', label: 'G2 — R1' },       { id: '4', label: 'G3 — R2' },
-  { id: '5', label: 'G4 — R3' },       { id: '6', label: 'R1' },
-  { id: '7', label: 'R2 — Certifiée' },
+  { id: '1', label: 'G0 — Génétique'   },
+  { id: '2', label: 'G1 — Pré-base'    },
+  { id: '3', label: 'G2 — Base'        },
+  { id: '4', label: 'G3 — Certif. C1'  },
+  { id: '5', label: 'G4 — Certif. C2'  },
+  { id: '6', label: 'R1 — Certifié'    },
+  { id: '7', label: 'R2 — Commercial'  },
 ]
 
 /** Correspondance idGeneration (1–7) → libellé affiché dans les tableaux et modales */
 const GEN_LABELS: Record<number, string> = {
-  1: 'G0 — Pré-base', 2: 'G1 — Base', 3: 'G2', 4: 'G3', 5: 'G4', 6: 'R1', 7: 'R2 — Certifiée',
+  1: 'G0 — Génétique', 2: 'G1 — Pré-base', 3: 'G2 — Base',
+  4: 'G3 — Certif. C1', 5: 'G4 — Certif. C2', 6: 'R1 — Certifié', 7: 'R2 — Commercial',
 }
 
 function buildOrderXlsSheets(orders: any[], orgs: any[], varieties: any[]) {
@@ -876,10 +880,13 @@ function VueQuotataire({ setToast }: { setToast: any }) {
                         ))}
                       </FormSelect>
                     </Field>
-                    <Field label="Génération" required>
-                      <FormSelect value={ligne.idGeneration} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => updateLigne(i,'idGeneration',e.target.value)}>
-                        {GENERATIONS_CMD.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-                      </FormSelect>
+                    <Field label="Génération">
+                      <div style={{ padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 6,
+                        fontSize: 13, background: 'var(--surface-2)', color: 'var(--text-secondary)',
+                        fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: '#14b8a6', display: 'inline-block' }} />
+                        R2 — Commercial
+                      </div>
                     </Field>
                     <Field label="Quantité" required>
                       <div style={{ display: 'flex', gap: 6 }}>

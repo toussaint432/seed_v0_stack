@@ -437,6 +437,7 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
   const isUPSemCL  = roleKey === 'seed-upsemcl'
   const isSelector = roleKey === 'seed-selector'
   const isMulti    = roleKey === 'seed-multiplicator'
+  const isQuotaire = roleKey === 'seed-quotataire'
   const canManage  = ['seed-admin', 'seed-upsemcl', 'seed-multiplicator', 'seed-selector'].includes(roleKey)
 
   const [stockForm, setStockForm] = useState({ idLot: '', siteCode: '', quantite: '', unite: 'kg' })
@@ -494,6 +495,7 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
     // Generation filter is already applied server-side; client-side is a safety guard
     if (isUPSemCL)  s = s.filter(st => UPSEMCL_GENS.includes(st.codeGeneration))
     if (isSelector) s = s.filter(st => SELECTOR_GENS.includes(st.codeGeneration))
+    if (isQuotaire) s = s.filter(st => st.codeGeneration === 'R2')
     if (isSelector && userSpecialisation) s = s.filter(st => !st.codeEspece || st.codeEspece.toUpperCase() === userSpecialisation.toUpperCase())
     if (site)       s = s.filter(st => st.codeSite === site)
     if (filterGen)  s = s.filter(st => st.codeGeneration === filterGen)
@@ -645,7 +647,11 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
     } finally { setSaving(false) }
   }
 
-  const genOptions = isUPSemCL ? UPSEMCL_GENS : isSelector ? SELECTOR_GENS : ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
+  const genOptions = isUPSemCL  ? UPSEMCL_GENS
+    : isSelector  ? SELECTOR_GENS
+    : isQuotaire  ? ['R2']
+    : isMulti     ? ['G3', 'G4', 'R1', 'R2']
+    : ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
 
   /* ── Transfert inter-orgs depuis le stock ── */
   function openTransferFromStock(stock: any, lot: any) {
