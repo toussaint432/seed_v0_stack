@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { TrendingUp, RefreshCw, ChevronRight, AlertTriangle, Download, ArrowRight } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -37,17 +38,14 @@ function G3CompareChart({ data }: { data: G3BarEntry[] }) {
     </div>
   )
 
-  const W = 380; const H = 180; const PT = 20; const PB = 28; const PL = 34; const PR = 8
+  const W = 380; const H = 190; const PT = 22; const PB = 32; const PL = 6; const PR = 6
   const iW = W - PL - PR; const iH = H - PT - PB
-  const maxVal = Math.max(...data.flatMap(d => [d.stockKg, d.demandKg]), 1)
-  const niceMax = maxVal <= 0.1 ? 1
-    : Math.ceil(maxVal / Math.pow(10, Math.floor(Math.log10(maxVal)))) * Math.pow(10, Math.floor(Math.log10(maxVal)))
   const grpW = iW / data.length
   const bW = grpW * 0.38
 
   return (
     <div>
-      <div style={{ display:'flex', gap:12, marginBottom:10, flexWrap:'wrap' }}>
+      <div style={{ display:'flex', gap:12, marginBottom:10, flexWrap:'wrap', alignItems:'center' }}>
         <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:10.5, color:'var(--text-muted)' }}>
           <span style={{ width:10, height:8, borderRadius:2, background:GC.G3, display:'inline-block' }} />
           Stock G3
@@ -56,55 +54,43 @@ function G3CompareChart({ data }: { data: G3BarEntry[] }) {
           <span style={{ width:10, height:8, borderRadius:2, background:'#f59e0b', display:'inline-block' }} />
           Demande G3
         </span>
+        <span style={{ fontSize:9.5, color:'var(--text-muted)', fontStyle:'italic', marginLeft:'auto' }}>Échelle par variété</span>
       </div>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:'visible', display:'block' }}>
-        {[0,1,2,3].map(t => {
-          const y = PT + (t/3)*iH
-          const v = niceMax*(1-t/3)
-          const lbl = v>=1000?`${(v/1000).toFixed(0)}t`:v>0?`${Math.round(v)}`:'0'
-          return (
-            <g key={t}>
-              <line x1={PL} y1={y} x2={W-PR} y2={y} stroke="var(--border)"
-                strokeWidth={t===3?1.5:0.5} strokeDasharray={t===3?'0':'3,4'} />
-              <text x={PL-4} y={y+3.5} textAnchor="end" fontSize={7.5}
-                fill="var(--text-muted)" fontFamily="var(--font-sans)">{lbl}</text>
-            </g>
-          )
-        })}
+        <line x1={PL} y1={PT+iH} x2={W-PR} y2={PT+iH} stroke="var(--border)" strokeWidth={1.5} />
         {data.map((d, i) => {
+          const localMax = Math.max(d.stockKg, d.demandKg, 1)
           const cx   = PL + i*grpW + grpW/2
           const x1   = cx - bW - 1
           const x2   = cx + 1
-          const sh1  = Math.max((d.stockKg/niceMax)*iH, d.stockKg>0?3:0)
-          const sh2  = Math.max((d.demandKg/niceMax)*iH, d.demandKg>0?3:0)
+          const sh1  = Math.max((d.stockKg/localMax)*iH, d.stockKg>0?3:0)
+          const sh2  = Math.max((d.demandKg/localMax)*iH, d.demandKg>0?3:0)
           const y1   = PT+iH-sh1; const y2 = PT+iH-sh2
           const isH  = hov===i
           const isCrit = d.demandKg>0 && d.stockKg<d.demandKg
+          const lbl = d.nomVariete.length>10 ? d.nomVariete.slice(0,10)+'…' : d.nomVariete
           return (
             <g key={i} onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)} style={{cursor:'default'}}>
               {isH && <rect x={x1-3} y={PT} width={bW*2+8} height={iH} rx={3} fill={GC.G3} opacity={0.05}/>}
-              {/* Stock bar */}
               <rect x={x1} y={y1} width={bW} height={Math.max(sh1,2)} rx={3}
                 fill={GC.G3} opacity={isH?1:0.75} style={{transition:'opacity 0.15s'}}/>
               {d.stockKg>0 && (
                 <text x={x1+bW/2} y={y1-4} textAnchor="middle" fontSize={isH?9:8}
                   fontWeight={700} fill={GC.G3} fontFamily="var(--font-sans)">{fmtT(d.stockKg)}</text>
               )}
-              {/* Demand bar */}
               <rect x={x2} y={y2} width={bW} height={Math.max(sh2,2)} rx={3}
                 fill={isCrit?'#dc2626':'#f59e0b'} opacity={isH?1:0.75} style={{transition:'opacity 0.15s'}}/>
               {d.demandKg>0 && (
                 <text x={x2+bW/2} y={y2-4} textAnchor="middle" fontSize={isH?9:8}
                   fontWeight={700} fill={isCrit?'#dc2626':'#f59e0b'} fontFamily="var(--font-sans)">{fmtT(d.demandKg)}</text>
               )}
-              {/* Var label */}
-              <text x={cx} y={H-PB+12} textAnchor="middle" fontSize={isH?8.5:8}
+              <text x={cx} y={H-PB+14} textAnchor="middle" fontSize={isH?8.5:8}
                 fontWeight={isH?700:400} fill={isH?GC.G3:'var(--text-muted)'} fontFamily="var(--font-sans)">
-                {d.codeVariete.length>7?d.codeVariete.slice(0,7)+'…':d.codeVariete}
+                {lbl}
               </text>
               {isH && (
                 <g>
-                  <rect x={cx-52} y={Math.min(y1,y2)-46} width={104} height={38} rx={5}
+                  <rect x={Math.max(PL+2,cx-52)} y={Math.min(y1,y2)-46} width={104} height={38} rx={5}
                     fill="var(--text-primary)" opacity={0.93}/>
                   <text x={cx} y={Math.min(y1,y2)-32} textAnchor="middle" fontSize={9}
                     fontWeight={700} fill="#fff" fontFamily="var(--font-sans)">{d.nomVariete}</text>
@@ -124,6 +110,8 @@ function G3CompareChart({ data }: { data: G3BarEntry[] }) {
 
 /* ── Couverture G3 stock vs demandes mult. ── */
 function G3CoverageBar({ rows }: { rows: CoverageRow[] }) {
+  const navigate = useNavigate()
+  const [popoverKey, setPopoverKey] = useState<string | null>(null)
   if (rows.length===0) return (
     <div style={{padding:'24px 0',textAlign:'center',color:'var(--text-muted)',fontSize:12}}>
       Aucune donnée de stock G3
@@ -131,7 +119,7 @@ function G3CoverageBar({ rows }: { rows: CoverageRow[] }) {
   )
   const maxKg = Math.max(...rows.map(r=>Math.max(r.stockG3Kg,r.demandG3Kg)),1)
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:10}}>
+    <div style={{display:'flex',flexDirection:'column',gap:10}} onClick={()=>setPopoverKey(null)}>
       {rows.sort((a,b)=>b.demandG3Kg-a.demandG3Kg).map(r=>{
         const ratio = r.demandG3Kg>0 ? r.stockG3Kg/r.demandG3Kg : Infinity
         const isCrit = r.demandG3Kg>0 && ratio<1
@@ -139,15 +127,20 @@ function G3CoverageBar({ rows }: { rows: CoverageRow[] }) {
         const clr = isCrit?'#dc2626':isWarn?'#d97706':'#15803d'
         const pctStock  = Math.min((r.stockG3Kg/maxKg)*100,100)
         const pctDemand = Math.min((r.demandG3Kg/maxKg)*100,100)
+        const isOpen = popoverKey === r.codeVariete
         return (
-          <div key={r.codeVariete}>
+          <div key={r.codeVariete} style={{position:'relative'}}>
             <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
               <span style={{fontSize:11.5,fontWeight:600,color:'var(--text-primary)',flex:1,
                 overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.nomVariete}</span>
               <span style={{fontSize:9.5,color:'var(--text-muted)',fontFamily:'monospace',flexShrink:0}}>{r.codeEspece}</span>
               {r.demandG3Kg>0 && (
-                <span style={{fontSize:9.5,fontWeight:700,padding:'1px 6px',borderRadius:99,
-                  background:`${clr}14`,color:clr,border:`1px solid ${clr}30`,flexShrink:0}}>
+                <span
+                  style={{fontSize:9.5,fontWeight:700,padding:'1px 6px',borderRadius:99,
+                    background:`${clr}14`,color:clr,border:`1px solid ${clr}30`,flexShrink:0,
+                    cursor:'pointer',userSelect:'none'}}
+                  onClick={e=>{e.stopPropagation();setPopoverKey(isOpen?null:r.codeVariete)}}
+                >
                   {isCrit?'⚠ Critique':isWarn?'⚠ Bas':'✓ OK'}
                 </span>
               )}
@@ -170,6 +163,45 @@ function G3CoverageBar({ rows }: { rows: CoverageRow[] }) {
                 </span>
               )}
             </div>
+            {isOpen && (
+              <div
+                style={{position:'absolute',top:'100%',right:0,marginTop:6,zIndex:300,
+                  background:'var(--bg)',border:'1px solid var(--border)',borderRadius:10,
+                  boxShadow:'0 8px 24px rgba(0,0,0,0.13)',padding:'12px 14px',minWidth:210}}
+                onClick={e=>e.stopPropagation()}
+              >
+                <div style={{fontSize:12,fontWeight:700,color:'var(--text-primary)',marginBottom:8}}>{r.nomVariete}</div>
+                <div style={{display:'flex',flexDirection:'column',gap:5,marginBottom:10}}>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:11}}>
+                    <span style={{color:'var(--text-muted)'}}>Stock G3</span>
+                    <span style={{fontWeight:700,fontFamily:'monospace',color:'#15803d'}}>{fmtT(r.stockG3Kg)}</span>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:11}}>
+                    <span style={{color:'var(--text-muted)'}}>Demande active</span>
+                    <span style={{fontWeight:700,fontFamily:'monospace',color:clr}}>{fmtT(r.demandG3Kg)}</span>
+                  </div>
+                  <div style={{display:'flex',justifyContent:'space-between',fontSize:11}}>
+                    <span style={{color:'var(--text-muted)'}}>Couverture</span>
+                    <span style={{fontWeight:700,fontFamily:'monospace',color:clr}}>
+                      {isFinite(ratio)?`${Math.round(ratio*100)}%`:'—'}
+                    </span>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:6}}>
+                  <button
+                    onClick={()=>navigate('/orders')}
+                    style={{flex:1,fontSize:10.5,fontWeight:600,padding:'5px 8px',borderRadius:6,
+                      border:'1px solid #0f766e28',background:'#0f766e10',color:'#0f766e',cursor:'pointer'}}
+                  >Voir les commandes</button>
+                  <button
+                    onClick={()=>navigate('/lots')}
+                    style={{flex:1,fontSize:10.5,fontWeight:600,padding:'5px 8px',borderRadius:6,
+                      border:'1px solid var(--border)',background:'var(--surface-2)',
+                      color:'var(--text-secondary)',cursor:'pointer'}}
+                  >Planifier G3</button>
+                </div>
+              </div>
+            )}
           </div>
         )
       })}

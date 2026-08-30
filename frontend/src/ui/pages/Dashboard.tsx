@@ -388,6 +388,60 @@ function HBarChart({ data }: { data: BarDatum[] }) {
   )
 }
 
+/* ── Graphe horizontal groupé par variété (plusieurs générations) ── */
+function GroupedHBarChart({ rows, accent }: { rows: StockRow[]; accent: string }) {
+  const [hovered, setHovered] = useState<string | null>(null)
+  if (rows.length === 0) return null
+  const grouped: Record<string, { nomVariete: string; gens: [string, number][] }> = {}
+  rows.forEach(r => {
+    if (!grouped[r.codeVariete]) grouped[r.codeVariete] = { nomVariete: r.nomVariete, gens: [] }
+    grouped[r.codeVariete].gens.push([r.generation, r.stockKg])
+  })
+  const globalMax = Math.max(1, ...rows.map(r => r.stockKg))
+  const entries = Object.entries(grouped).sort(([, a], [, b]) =>
+    b.gens.reduce((s, [, v]) => s + v, 0) - a.gens.reduce((s, [, v]) => s + v, 0)
+  )
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {entries.map(([code, { nomVariete, gens }]) => {
+        const isHov = hovered === code
+        const total = gens.reduce((s, [, v]) => s + v, 0)
+        return (
+          <div key={code}
+            onMouseEnter={() => setHovered(code)}
+            onMouseLeave={() => setHovered(null)}
+            style={{ display: 'grid', gridTemplateColumns: '150px 1fr 80px', alignItems: 'start', gap: 10, cursor: 'default' }}
+          >
+            <div style={{ paddingTop: 2 }}>
+              <div style={{ fontSize: 11.5, fontWeight: isHov ? 600 : 400, color: isHov ? D.ink : D.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const, transition: 'color 0.15s' }}>
+                {nomVariete}
+              </div>
+              <div style={{ fontSize: 9.5, color: 'var(--text-muted)', fontFamily: D.mono, marginTop: 1 }}>{code}</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {gens.map(([gen, kg]) => {
+                const pct = (kg / globalMax) * 100
+                return (
+                  <div key={gen} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, color: GEN_COLOR[gen] ?? '#6b7280', width: 20, flexShrink: 0, fontFamily: D.mono }}>{gen}</span>
+                    <div style={{ flex: 1, height: 5, background: '#f1f5f9', borderRadius: 99, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${pct}%`, background: GEN_COLOR[gen] ?? '#6b7280', borderRadius: 99, opacity: isHov ? 1 : 0.8, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
+                    </div>
+                    <span style={{ fontSize: 10, fontWeight: 600, fontFamily: D.mono, color: 'var(--text-muted)', width: 48, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums' }}>{fmtT(kg)}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, textAlign: 'right' as const, fontVariantNumeric: 'tabular-nums', fontFamily: D.mono, color: isHov ? accent : 'var(--text-secondary)', paddingTop: 2, transition: 'color 0.15s' }}>
+              {fmtT(total)}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 /* ── Distance badge (vert/amber/gris selon km) ── */
 function distBadge(km: number) {
   if (km < 80)  return { bg: '#f0fdf4', color: '#15803d', border: '#bbf7d0' }
@@ -679,6 +733,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const [mapExpanded,  setMapExpanded]  = useState(true)
   const [demandPeriod, setDemandPeriod] = useState<'1m' | '3m' | '6m' | '1a'>('3m')
   const [demandGen,    setDemandGen]    = useState<'all' | 'G1' | 'G3' | 'R2'>('all')
+  const [critPopoverCode, setCritPopoverCode] = useState<string | null>(null)
 
   /* Stock filters */
   const [filterEspece,   setFilterEspece]   = useState('')
@@ -917,7 +972,6 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
   const stockTotalAll      = stockRows.reduce((s, r) => s + r.stockKg, 0)
   const stockTotalFiltered = filteredStockRows.reduce((s, r) => s + r.stockKg, 0)
-  const stockMaxKg         = Math.max(1, ...filteredStockRows.map(r => r.stockKg))
   const hasStockFilter     = !!(filterEspece || filterVariete || filterGens.length < allowedStockGens.length)
 
   /* ── Couverture stock / demande par espèce ──
@@ -950,7 +1004,6 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     .filter(c => c.stockKg > 0 || c.demandKg > 0)
     .sort((a, b) => a.ratio - b.ratio)
     .slice(0, 8)
-  const maxCovKg     = Math.max(...coverageItems.map(c => Math.max(c.stockKg, c.demandKg)), 1)
   const criticalCov  = coverageItems.filter(c => c.demandKg > 0 && c.ratio < 1).length
   const warningCov   = coverageItems.filter(c => c.demandKg > 0 && c.ratio >= 1 && c.ratio < 2).length
 
@@ -972,7 +1025,6 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   })
   const forecastEntries   = Object.entries(forecastByGen).filter(([_, f]) => f.lots > 0).sort(([a], [b]) => allowedStockGens.indexOf(a) - allowedStockGens.indexOf(b))
   const totalForecastKg   = forecastEntries.reduce((s, [_, f]) => s + f.expectedKg, 0)
-  const maxForecastKg     = Math.max(...forecastEntries.map(([_, f]) => f.expectedKg), 1)
   const totalForecastLots = forecastEntries.reduce((s, [_, f]) => s + f.lots, 0)
   const totalForecastHa   = forecastEntries.reduce((s, [_, f]) => s + f.ha, 0)
 
@@ -983,6 +1035,26 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   ).length
 
   const hasAnyAlerts = criticalCov > 0 || warningCov > 0 || lotsACertifierCount > 0 || stats.ordersPending > 0
+
+  /* ── Pipeline G1→G2→G3 (totaux par stade) ── */
+  const pipeG1Kg    = stockRows.filter(r=>r.generation==='G1').reduce((s,r)=>s+r.stockKg,0)
+  const pipeG2Kg    = stockRows.filter(r=>r.generation==='G2').reduce((s,r)=>s+r.stockKg,0)
+  const pipeG3Kg    = stockRows.filter(r=>r.generation==='G3').reduce((s,r)=>s+r.stockKg,0)
+  const pipeG3DemKg = stockRows.filter(r=>r.generation==='G3').reduce((s,r)=>s+r.demandKg,0)
+
+  /* ── Demande active par génération (pour gap analyse prévisions) ── */
+  const demandByGen: Record<string, number> = {}
+  rawOrders.forEach((o: any) => {
+    if (!['SOUMISE','ACCEPTEE','EN_PREPARATION'].includes(o.statut ?? '')) return
+    ;(o.lignes ?? []).forEach((ligne: any) => {
+      const gen = ligne.generation?.codeGeneration ?? '?'
+      if (!allowedStockGens.includes(gen)) return
+      demandByGen[gen] = (demandByGen[gen] ?? 0) + (parseFloat(ligne.quantiteDemandee ?? 0) || 0)
+    })
+  })
+
+  /* ── Map lot id → lot (pour libellé variété dans programmes) ── */
+  const lotMap: Record<number, any> = Object.fromEntries(rawLots.map((l: any) => [Number(l.id), l]))
 
   /* ── Demande annuelle par variété (UPSemCL · Sélectionneurs · Multiplicateurs) ── */
   const showDemandWidget = ['seed-upsemcl', 'seed-admin'].includes(roleKey)
@@ -1739,7 +1811,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   </span>
                 )}
               </div>
-              <HBarChart data={filteredStockBarData} />
+              <GroupedHBarChart rows={filteredStockRows} accent={accent} />
               {/* Légende générations */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
                 {[...new Set(filteredStockBarData.map(b => b.gen))].map(gen => (
@@ -1862,8 +1934,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                       </td>
 
                       {/* Stock disponible */}
-                      <td style={{ padding: '10px 22px', minWidth: 160 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 4 }}>
+                      <td style={{ padding: '12px 22px', minWidth: 140 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
                           <span style={{
                             fontWeight: 800, fontSize: 14, fontVariantNumeric: 'tabular-nums',
                             fontFamily: 'var(--font-mono)', letterSpacing: '-0.01em',
@@ -1881,14 +1953,6 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                               {isCrit ? '⚠ Critique' : '⚠ Bas'}
                             </span>
                           )}
-                        </div>
-                        <div style={{ height: 4, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden' }}>
-                          <div style={{
-                            height: '100%', borderRadius: 99,
-                            width: `${Math.min(100, (r.stockKg / stockMaxKg) * 100)}%`,
-                            background: isCrit ? '#dc2626' : isLow ? '#d97706' : (GEN_COLOR[r.generation] ?? accent),
-                            transition: 'width 0.4s ease',
-                          }} />
                         </div>
                       </td>
 
@@ -2027,7 +2091,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
           </div>
 
           {/* ── Corps ── */}
-          <div style={{ padding: '18px 20px' }}>
+          <div style={{ padding: '18px 20px' }} onClick={() => setCritPopoverCode(null)}>
             {loading ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {[0,1,2,3].map(i => (
@@ -2079,8 +2143,55 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                               <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 4, background: 'var(--surface-2)', color: 'var(--text-muted)', flexShrink: 0, fontFamily: 'var(--font-mono)' }}>{d.codeEspece}</span>
                             </div>
                             {showCovBadge && covLabel && (
-                              <span style={{ display: 'inline-block', marginTop: 2, fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: covBg, color: covColor, border: `1px solid ${covColor}30` }}>
-                                ● {covLabel}
+                              <span style={{ position: 'relative', display: 'inline-block' }}>
+                                <span
+                                  style={{ display: 'inline-block', marginTop: 2, fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: covBg, color: covColor, border: `1px solid ${covColor}30`, cursor: 'pointer', userSelect: 'none' }}
+                                  onClick={e => { e.stopPropagation(); setCritPopoverCode(critPopoverCode === d.code ? null : d.code) }}
+                                >
+                                  ● {covLabel}
+                                </span>
+                                {critPopoverCode === d.code && (
+                                  <div
+                                    style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, zIndex: 200,
+                                      background: 'var(--bg, #fff)', border: '1px solid var(--border)', borderRadius: 10,
+                                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)', padding: '12px 14px', minWidth: 215 }}
+                                    onClick={e => e.stopPropagation()}
+                                  >
+                                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>{d.nomVariete}</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginBottom: 10 }}>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>Stock G3</span>
+                                        <span style={{ fontWeight: 700, fontFamily: D.mono, color: GEN_COLOR.G3 }}>{fmtT(d.stockG3)}</span>
+                                      </div>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>Demande G3</span>
+                                        <span style={{ fontWeight: 700, fontFamily: D.mono, color: covColor }}>{fmtT(d.g3kg)}</span>
+                                      </div>
+                                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                                        <span style={{ color: 'var(--text-muted)' }}>Couverture</span>
+                                        <span style={{ fontWeight: 700, fontFamily: D.mono, color: covColor }}>
+                                          {covRatio !== null ? `${Math.round((covRatio ?? 0) * 100)}%` : '—'}
+                                        </span>
+                                      </div>
+                                      {cmdCount > 0 && (
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                                          <span style={{ color: 'var(--text-muted)' }}>Commandes G3</span>
+                                          <span style={{ fontWeight: 700, fontFamily: D.mono }}>{cmdCount}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div style={{ display: 'flex', gap: 6 }}>
+                                      <button
+                                        onClick={() => navigate('/orders')}
+                                        style={{ flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6, border: `1px solid ${accent}28`, background: `${accent}10`, color: accent, cursor: 'pointer' }}
+                                      >Voir les commandes</button>
+                                      <button
+                                        onClick={() => navigate('/lots')}
+                                        style={{ flex: 1, fontSize: 10.5, fontWeight: 600, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface-2)', color: 'var(--text-secondary)', cursor: 'pointer' }}
+                                      >Planifier G3</button>
+                                    </div>
+                                  </div>
+                                )}
                               </span>
                             )}
                           </div>
@@ -2169,76 +2280,60 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       {showStock && (
         <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: 16, marginBottom: 20 }}>
 
-          {/* ── Couverture stock / demande par espèce ── */}
+          {/* ── Pipeline semencier G1 → G2 → G3 ── */}
           <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
             <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 9, background: 'linear-gradient(135deg,var(--surface-2) 0%,#fff 100%)' }}>
-              <div style={{ width: 28, height: 28, borderRadius: 7, background: '#eff6ff', color: '#2563eb', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ fontSize: 13 }}>⚖</span>
+              <div style={{ width: 28, height: 28, borderRadius: 7, background: `${accent}12`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <ArrowRight size={14} />
               </div>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Couverture stock / demande</div>
-                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>Ratio stock disponible ÷ commandes actives</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Pipeline G1 → G2 → G3</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>État de la chaîne de multiplication — stock disponible par stade</div>
               </div>
             </div>
-
             {loading ? (
-              <div style={{ padding: '12px 20px' }}>
-                {[0,1,2,3].map(i => (
-                  <div key={i} style={{ marginBottom: 14 }}>
-                    <div className="skeleton" style={{ width: '40%', height: 11, borderRadius: 4, marginBottom: 6 }} />
-                    <div className="skeleton" style={{ width: '100%', height: 8, borderRadius: 99 }} />
-                  </div>
-                ))}
-              </div>
-            ) : coverageItems.length === 0 ? (
-              <div style={{ padding: '40px 20px', textAlign: 'center' }}>
-                <div style={{ fontSize: 28, marginBottom: 8 }}>📊</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Aucune donnée de couverture</div>
-                <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 4 }}>Enregistrez du stock et des commandes pour voir les ratios</div>
+              <div style={{ padding: '16px 20px', display: 'flex', gap: 8 }}>
+                {[0,1,2].map(i => <div key={i} className="skeleton" style={{ flex: 1, height: 90, borderRadius: 8 }} />)}
               </div>
             ) : (
-              <div style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {coverageItems.map(c => {
-                  const isCrit = c.demandKg > 0 && c.ratio < 1
-                  const isWarn = c.demandKg > 0 && c.ratio >= 1 && c.ratio < 2
-                  const isOk   = !isCrit && !isWarn
-                  const clr    = isCrit ? '#dc2626' : isWarn ? '#92660a' : '#15803d'
-                  const trackBg = isCrit ? '#fee2e2' : isWarn ? '#fef3c7' : '#dcfce7'
-                  const fillBg  = isCrit ? 'linear-gradient(90deg,#ef4444,#fca5a5)' : isWarn ? 'linear-gradient(90deg,#f59e0b,#fcd34d)' : 'linear-gradient(90deg,#16a34a,#4ade80)'
-                  const stockPct  = c.demandKg > 0 ? Math.min((c.stockKg  / maxCovKg) * 100, 100) : Math.min((c.stockKg / maxCovKg) * 100, 100)
-                  const demandPct = c.demandKg > 0 ? Math.min((c.demandKg / maxCovKg) * 100, 100) : 0
+              <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'stretch', gap: 6 }}>
+                {([
+                  { gen: 'G1', kg: pipeG1Kg, label: 'Base',          sub: 'Stock G1' },
+                  { gen: 'G2', kg: pipeG2Kg, label: 'Multiplication', sub: 'Stock G2' },
+                  { gen: 'G3', kg: pipeG3Kg, label: 'Certifié',       sub: 'Stock G3', demKg: pipeG3DemKg },
+                ] as { gen: string; kg: number; label: string; sub: string; demKg?: number }[]).map(({ gen, kg, label, sub, demKg }, idx) => {
+                  const clr = GEN_COLOR[gen] ?? accent
+                  const bg  = GEN_CFG[gen]?.bg ?? 'var(--surface-2)'
+                  const isCrit = !!demKg && demKg > 0 && kg < demKg
                   return (
-                    <div key={c.code}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 5 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                          <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{c.code}</span>
-                          {c.nom !== c.code && <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{c.nom}</span>}
+                    <div key={gen} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 0 }}>
+                      <div style={{ flex: 1, borderRadius: 10, border: `1px solid ${isCrit ? '#dc262630' : clr+'28'}`, background: isCrit ? '#fef2f210' : bg, padding: '12px 14px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, borderRadius: 6, padding: '2px 9px', background: isCrit ? '#dc262618' : `${clr}18`, color: isCrit ? '#dc2626' : clr, border: `1px solid ${isCrit ? '#dc262630' : clr+'28'}` }}>{gen}</span>
+                          <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)' }}>{label}</span>
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: clr, fontFamily: 'var(--font-mono)' }}>
-                            {c.ratio >= 99 ? '—' : `${c.ratio.toFixed(1)}×`}
-                          </span>
-                          <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '1px 7px', background: trackBg, color: clr, border: `1px solid ${isCrit ? '#fecaca' : isWarn ? '#fde68a' : '#bbf7d0'}` }}>
-                            {isCrit ? 'CRITIQUE' : isWarn ? 'Bas' : isOk && c.demandKg === 0 ? 'Stock libre' : 'Couvert'}
-                          </span>
+                        <div style={{ fontSize: 20, fontWeight: 800, fontFamily: D.mono, color: isCrit ? '#dc2626' : clr, letterSpacing: '-0.02em', lineHeight: 1 }}>
+                          {kg > 0 ? fmtT(kg) : '—'}
                         </div>
-                      </div>
-                      {/* Barre stock */}
-                      <div style={{ position: 'relative', marginBottom: 4 }}>
-                        <div style={{ height: 7, background: 'var(--surface-3)', borderRadius: 99, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${stockPct}%`, background: fillBg, borderRadius: 99, transition: 'width 0.8s ease' }} />
-                        </div>
-                        {c.demandKg > 0 && (
-                          <div style={{
-                            position: 'absolute', top: 0, left: `${demandPct}%`, width: 2, height: 7,
-                            background: '#374151', borderRadius: 1, transform: 'translateX(-50%)',
-                          }} title={`Demande : ${fmtT(c.demandKg)}`} />
+                        <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 4 }}>{sub}</div>
+                        {demKg !== undefined && demKg > 0 && (
+                          <div style={{ marginTop: 6, paddingTop: 6, borderTop: `1px solid ${isCrit ? '#dc262628' : clr+'20'}` }}>
+                            <div style={{ fontSize: 9.5, color: isCrit ? '#dc2626' : 'var(--text-muted)', fontWeight: isCrit ? 700 : 400 }}>
+                              Demande&nbsp;<span style={{ fontFamily: D.mono }}>{fmtT(demKg)}</span>
+                            </div>
+                            {isCrit && (
+                              <div style={{ fontSize: 9, color: '#dc2626', marginTop: 2 }}>
+                                Déficit&nbsp;<strong style={{ fontFamily: D.mono }}>{fmtT(demKg - kg)}</strong>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)' }}>
-                        <span>Stock&nbsp;<span style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{fmtT(c.stockKg)}</span></span>
-                        {c.demandKg > 0 && <span>Demande&nbsp;<span style={{ fontWeight: 700, color: clr, fontFamily: 'var(--font-mono)' }}>{fmtT(c.demandKg)}</span></span>}
-                      </div>
+                      {idx < 2 && (
+                        <div style={{ display: 'flex', alignItems: 'center', padding: '0 3px', flexShrink: 0 }}>
+                          <ArrowRight size={13} color="var(--text-muted)" />
+                        </div>
+                      )}
                     </div>
                   )
                 })}
@@ -2302,46 +2397,49 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   </div>
                 </div>
 
-                {/* Par génération */}
-                <div style={{ padding: '14px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {forecastEntries.map(([gen, f]) => {
-                    const genClr = GEN_COLOR[gen] ?? '#6b7280'
-                    const genBg  = GEN_CFG[gen]?.bg ?? 'var(--surface-2)'
-                    const pct    = (f.expectedKg / maxForecastKg) * 100
-                    return (
-                      <div key={gen}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 11, fontWeight: 800, borderRadius: 7, padding: '3px 9px', background: genBg, color: genClr, border: `1px solid ${genClr}28` }}>
-                              {gen}
-                            </span>
-                            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                              {f.lots} programme{f.lots > 1 ? 's' : ''}
-                              {f.ha > 0 && ` · ${f.ha.toLocaleString('fr-FR',{maximumFractionDigits:1})} ha`}
-                            </span>
+                {/* Par programme */}
+                <div style={{ padding: '12px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {rawPrograms
+                    .filter((p: any) => (p.statut ?? '').toUpperCase() === 'EN_COURS' && allowedStockGens.includes(p.generationCible ?? '?'))
+                    .sort((a: any, b: any) => (parseFloat(b.objectifKg ?? 0) || 0) - (parseFloat(a.objectifKg ?? 0) || 0))
+                    .slice(0, 8)
+                    .map((p: any) => {
+                      const gen = p.generationCible ?? '?'
+                      const genClr = GEN_COLOR[gen] ?? '#6b7280'
+                      const genBg  = GEN_CFG[gen]?.bg ?? 'var(--surface-2)'
+                      const expectedKg = parseFloat(p.objectifKg ?? 0) || 0
+                      const demKg = demandByGen[gen] ?? 0
+                      const gap = expectedKg > 0 && demKg > 0 ? expectedKg - demKg : null
+                      const isDeficit = gap !== null && gap < 0
+                      const lot = p.idLot ? lotMap[Number(p.idLot)] : null
+                      const nomVariete = lot?.variete?.nomVariete ?? lot?.nomVariete ?? '—'
+                      const dateFin = p.dateFin ? new Date(p.dateFin).toLocaleDateString('fr-FR', { month: 'short', year: 'numeric' }) : null
+                      return (
+                        <div key={p.id ?? p.codeProgramme} style={{ borderRadius: 8, border: '1px solid var(--border)', padding: '10px 12px', background: isDeficit ? '#fef2f210' : 'var(--surface-2)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                            <span style={{ fontSize: 10.5, fontWeight: 800, borderRadius: 6, padding: '2px 8px', background: genBg, color: genClr, border: `1px solid ${genClr}28`, flexShrink: 0 }}>{gen}</span>
+                            <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }}>{nomVariete}</span>
+                            {gap !== null && (
+                              <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 7px', borderRadius: 99, background: isDeficit ? '#fef2f2' : '#f0fdf4', color: isDeficit ? '#dc2626' : '#15803d', border: `1px solid ${isDeficit ? '#fecaca' : '#bbf7d0'}`, flexShrink: 0 }}>
+                                {isDeficit ? `−${fmtT(-gap)}` : `+${fmtT(gap)}`}
+                              </span>
+                            )}
                           </div>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: genClr, fontFamily: 'var(--font-mono)' }}>
-                            {f.expectedKg > 0 ? `~${fmtT(f.expectedKg)}` : 'données manquantes'}
-                          </span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap' as const, gap: 8, fontSize: 10.5, color: 'var(--text-muted)' }}>
+                            {p.multiplicateur && <span style={{ fontWeight: 500 }}>{p.multiplicateur}</span>}
+                            {parseFloat(p.superficieHa ?? 0) > 0 && <span>{parseFloat(p.superficieHa).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} ha</span>}
+                            {dateFin && <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}><Clock size={9} />{dateFin}</span>}
+                            {expectedKg > 0 && <span style={{ fontWeight: 700, color: genClr, fontFamily: D.mono }}>~{fmtT(expectedKg)}</span>}
+                          </div>
+                          {demKg > 0 && expectedKg > 0 && (
+                            <div style={{ marginTop: 5, fontSize: 10, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 4 }}>
+                              Demande {gen} totale · <span style={{ fontWeight: 700, fontFamily: D.mono, color: isDeficit ? '#dc2626' : 'var(--text-secondary)' }}>{fmtT(demKg)}</span>
+                            </div>
+                          )}
                         </div>
-                        {f.expectedKg > 0 && (
-                          <div style={{ height: 9, background: `${genClr}14`, borderRadius: 99, overflow: 'hidden' }}>
-                            <div style={{
-                              height: '100%', width: `${pct}%`,
-                              background: `linear-gradient(90deg, ${genClr}, ${genClr}88)`,
-                              borderRadius: 99, transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)',
-                              boxShadow: `0 1px 6px ${genClr}40`,
-                            }} />
-                          </div>
-                        )}
-                        {f.expectedKg === 0 && (
-                          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                            Superficie et objectif non renseignés sur ces programmes
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                      )
+                    })
+                  }
                 </div>
 
                 {/* Note de bas */}
