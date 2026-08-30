@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { TrendingUp, AlertTriangle, RefreshCw, BarChart2, Activity, Database, GitBranch } from 'lucide-react'
+import { TrendingUp, AlertTriangle, RefreshCw, BarChart2, Activity, Database, GitBranch, Download, ChevronRight } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
 import { fmtT } from '../../lib/fmt'
+import { downloadXlsx } from '../../lib/exportUtils'
 
 interface Props {
   userSpecialisation?: string | null
@@ -149,7 +150,7 @@ function ProdHBarChart({ data }: { data: ProdVariete[] }) {
 const STACK_COLORS = { g1: '#0ea5e9', g3: '#f59e0b', r2: '#14b8a6' }
 const STACK_LABELS = { g1: 'G1 — UPSemCL', g3: 'G3 — Multiplicateurs', r2: 'R2 — Quotataires' }
 
-function StackedMonthChart({ data }: { data: MonthlyPoint[] }) {
+function StackedMonthChart({ data, periodLabel }: { data: MonthlyPoint[]; periodLabel: string }) {
   const [hov, setHov] = useState<number | null>(null)
   const totalG1 = data.reduce((s, d) => s + d.g1Kg, 0)
   const totalG3 = data.reduce((s, d) => s + d.g3Kg, 0)
@@ -159,12 +160,12 @@ function StackedMonthChart({ data }: { data: MonthlyPoint[] }) {
 
   const hasKg = totalKg > 0
 
-  const W = 400; const H = 160; const PT = 24; const PB = 28; const PL = 36; const PR = 10
+  const W = 400; const H = 200; const PT = 24; const PB = 28; const PL = 36; const PR = 10
   const iW = W - PL - PR; const iH = H - PT - PB
   const maxPerBar = Math.max(...data.map(d => d.g1Kg + d.g3Kg + d.r2Kg), 1)
   const TICKS = 3
   const niceMax = maxPerBar <= 0.1 ? 1 : Math.ceil(maxPerBar / Math.pow(10, Math.floor(Math.log10(maxPerBar)))) * Math.pow(10, Math.floor(Math.log10(maxPerBar)))
-  const bW = iW / data.length
+  const bW = iW / Math.max(data.length, 1)
 
   function fmt(kg: number) {
     if (kg >= 1000) return `${(kg / 1000).toFixed(1)} t`
@@ -176,11 +177,11 @@ function StackedMonthChart({ data }: { data: MonthlyPoint[] }) {
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
           {hasKg ? fmt(totalKg) : `${totalOrders} commande${totalOrders !== 1 ? 's' : ''}`}
         </span>
         <span style={{ color: 'var(--border)' }}>·</span>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>6 derniers mois</span>
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{periodLabel}</span>
         {hasKg && (
           <>
             {(['g1','g3','r2'] as const).map(k => {
@@ -283,154 +284,10 @@ function StackedMonthChart({ data }: { data: MonthlyPoint[] }) {
   )
 }
 
-/* ── Orders Chart — barres mensuelles + ligne de tendance ── */
-function OrdersChart({ data, color = '#0369a1' }: { data: MonthlyPoint[]; color?: string }) {
-  const [hov, setHov] = useState<number | null>(null)
-  if (data.length === 0) return null
-
-  const total = data.reduce((s, d) => s + d.count, 0)
-  const max   = Math.max(...data.map(d => d.count), 1)
-
-  const half      = Math.floor(data.length / 2)
-  const firstHalf = data.slice(0, half).reduce((s, d) => s + d.count, 0)
-  const secHalf   = data.slice(half).reduce((s, d)  => s + d.count, 0)
-  const trendPct  = firstHalf === 0 ? null : Math.round(((secHalf - firstHalf) / firstHalf) * 100)
-
-  const lastActiveIdx = data.reduce((best, d, i) => d.count > 0 ? i : best, -1)
-
-  const W = 400; const H = 150
-  const PT = 22; const PB = 28; const PL = 28; const PR = 10
-  const iW = W - PL - PR; const iH = H - PT - PB
-  const TICKS = 3
-  const niceMax = max <= 3 ? max + 1 : Math.ceil(max / Math.pow(10, Math.floor(Math.log10(max)))) * Math.pow(10, Math.floor(Math.log10(max)))
-  const bW = iW / data.length
-
-  /* Régression linéaire pour droite de tendance */
-  const n = data.length
-  const sumX  = data.reduce((s, _, i) => s + i, 0)
-  const sumY  = data.reduce((s, d) => s + d.count, 0)
-  const sumXY = data.reduce((s, d, i) => s + i * d.count, 0)
-  const sumX2 = data.reduce((s, _, i) => s + i * i, 0)
-  const denom = n * sumX2 - sumX * sumX || 1
-  const slope = (n * sumXY - sumX * sumY) / denom
-  const inter = (sumY - slope * sumX) / n
-  const trendLine = data.map((_, i) => ({
-    x: PL + (i / Math.max(n - 1, 1)) * iW,
-    y: Math.max(PT, Math.min(PT + iH, PT + iH - ((slope * i + inter) / niceMax) * iH)),
-  }))
-
-  return (
-    <div>
-      {/* Résumé */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-primary)' }}>
-          {total} commande{total !== 1 ? 's' : ''}
-        </span>
-        <span style={{ color: 'var(--border)' }}>·</span>
-        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>6 derniers mois</span>
-        {trendPct !== null && (
-          <>
-            <span style={{ color: 'var(--border)' }}>·</span>
-            <span style={{
-              fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
-              background: trendPct > 0 ? '#f0fdf4' : trendPct < 0 ? '#fef2f2' : '#f1f5f9',
-              color: trendPct > 0 ? '#15803d' : trendPct < 0 ? '#dc2626' : '#6b7280',
-              border: `1px solid ${trendPct > 0 ? '#bbf7d0' : trendPct < 0 ? '#fecaca' : '#e2e8f0'}`,
-            }}>
-              {trendPct > 0 ? '+' : ''}{trendPct}% tendance
-            </span>
-          </>
-        )}
-      </div>
-
-      {/* SVG */}
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', display: 'block' }}>
-        <defs>
-          <linearGradient id="ocBarG" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"   stopColor={color} stopOpacity={0.9} />
-            <stop offset="100%" stopColor={color} stopOpacity={0.45} />
-          </linearGradient>
-        </defs>
-
-        {/* Grille Y */}
-        {Array.from({ length: TICKS + 1 }, (_, t) => {
-          const y = PT + (t / TICKS) * iH
-          const v = Math.round(niceMax * (1 - t / TICKS))
-          return (
-            <g key={t}>
-              <line x1={PL} y1={y} x2={W - PR} y2={y}
-                stroke="var(--border)" strokeWidth={t === TICKS ? 1.5 : 0.6}
-                strokeDasharray={t === TICKS ? '0' : '3,4'} />
-              <text x={PL - 4} y={y + 4} textAnchor="end" fontSize={8}
-                fill="var(--text-muted)" fontFamily="var(--font-sans)">{v}</text>
-            </g>
-          )
-        })}
-
-        {/* Barres */}
-        {data.map((d, i) => {
-          const bh    = Math.max((d.count / niceMax) * iH, d.count > 0 ? 3 : 0)
-          const x     = PL + i * bW + bW * 0.18
-          const bw    = bW * 0.64
-          const y     = PT + iH - bh
-          const isHov = hov === i
-          const isLast = i === lastActiveIdx
-          return (
-            <g key={i} onMouseEnter={() => setHov(i)} onMouseLeave={() => setHov(null)} style={{ cursor: 'default' }}>
-              {/* Zone hover */}
-              {isHov && <rect x={x - 2} y={PT} width={bw + 4} height={iH} rx={3} fill={color} opacity={0.07} />}
-
-              {/* Barre */}
-              <rect x={x} y={y} width={bw} height={Math.max(bh, 2)} rx={4}
-                fill={isHov || isLast ? color : 'url(#ocBarG)'}
-                opacity={d.count === 0 ? 0.14 : isHov ? 1 : 0.82}
-                style={{ transition: 'opacity 0.15s' }} />
-
-              {/* Valeur au-dessus */}
-              {d.count > 0 && (
-                <text x={x + bw / 2} y={y - 5} textAnchor="middle"
-                  fontSize={isHov ? 10 : 9} fontWeight={700} fill={color}
-                  fontFamily="var(--font-sans)" style={{ transition: 'font-size 0.1s' }}>
-                  {d.count}
-                </text>
-              )}
-
-              {/* Label mois */}
-              <text x={x + bw / 2} y={H - PB + 12} textAnchor="middle" fontSize={9}
-                fontWeight={isHov || isLast ? 700 : 400}
-                fill={isHov || isLast ? color : 'var(--text-muted)'}
-                fontFamily="var(--font-sans)">
-                {d.month}
-              </text>
-
-              {/* Tooltip */}
-              {isHov && (
-                <g>
-                  <rect x={x + bw / 2 - 40} y={y - 38} width={80} height={28} rx={5}
-                    fill="var(--text-primary)" opacity={0.93} />
-                  <text x={x + bw / 2} y={y - 24} textAnchor="middle" fontSize={9.5}
-                    fontWeight={700} fill="#fff" fontFamily="var(--font-sans)">{d.month}</text>
-                  <text x={x + bw / 2} y={y - 13} textAnchor="middle" fontSize={9}
-                    fontWeight={600} fill={color} fontFamily="var(--font-sans)">
-                    {d.count} commande{d.count !== 1 ? 's' : ''}
-                  </text>
-                </g>
-              )}
-            </g>
-          )
-        })}
-
-        {/* Droite de tendance */}
-        {total > 0 && trendLine.length >= 2 && (
-          <polyline
-            points={trendLine.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}
-            fill="none" stroke={color} strokeWidth={1.5} strokeDasharray="5,3"
-            strokeLinecap="round" opacity={0.35} />
-        )}
-      </svg>
-    </div>
-  )
-}
+type Period = '1m'|'3m'|'6m'|'1a'
+type GenKey = 'g1'|'g3'|'r2'
+const PERIOD_COUNTS: Record<Period, number> = { '1m': 1, '3m': 3, '6m': 6, '1a': 12 }
+const PERIOD_LABELS: Record<Period, string> = { '1m': '1 dernier mois', '3m': '3 derniers mois', '6m': '6 derniers mois', '1a': '12 derniers mois' }
 
 export function SelectorAnalytics({ userSpecialisation }: Props) {
   const [prodByVariete, setProdByVariete] = useState<ProdVariete[]>([])
@@ -444,6 +301,8 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
   const [refreshing, setRefreshing] = useState(false)
   const [stkSortCol, setStkSortCol] = useState<SelStockSortKey>('stockKg')
   const [stkSortAsc, setStkSortAsc] = useState(false)
+  const [period, setPeriod]         = useState<Period>('6m')
+  const [genFilter, setGenFilter]   = useState<Set<GenKey>>(new Set())
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
 
   async function fetchData(isRefresh = false) {
@@ -496,11 +355,11 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
         Object.values(prodMap).sort((a, b) => b.total - a.total).slice(0, 8)
       )
 
-      /* ── Évolution mensuelle des commandes (6 derniers mois) ── */
+      /* ── Évolution mensuelle des commandes (12 derniers mois) ── */
       const now    = new Date()
       const MONTHS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
-      const monthPoints: any[] = Array.from({ length: 6 }, (_, i) => {
-        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1)
+      const monthPoints: any[] = Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1)
         return { month: MONTHS[d.getMonth()], count: 0, g1Kg: 0, g3Kg: 0, r2Kg: 0, _year: d.getFullYear(), _month: d.getMonth() }
       })
 
@@ -552,7 +411,11 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
         ;(o.lignes ?? []).forEach((ligne: any) => {
           const gen = ligne.generation?.codeGeneration ?? ligne.codeGeneration ?? '?'
           if (!['G1','G3','G4','R1','R2'].includes(gen)) return
-          const variety = varMap[ligne.idVariete ?? -1] ?? {}
+          const variety = varMap[ligne.idVariete ?? ligne.varieteId ?? -1]
+            ?? ligne.variete
+            ?? varMap[ligne.lot?.idVariete ?? ligne.lot?.varieteId ?? -1]
+            ?? ligne.lot?.variete
+            ?? {}
           if (!variety.codeVariete) return
           if (specFilter) {
             const esp = (variety.espece?.codeEspece ?? '').toUpperCase()
@@ -643,6 +506,110 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
     else { setStkSortCol(col); setStkSortAsc(false) }
   }
 
+  /* ── Données filtrées par période et génération ── */
+  const displayMonthly = monthly.slice(monthly.length - PERIOD_COUNTS[period])
+  const activeGens: Set<GenKey> = genFilter.size === 0 ? new Set(['g1','g3','r2']) : genFilter
+  const filteredMonthly: MonthlyPoint[] = displayMonthly.map(m => ({
+    ...m,
+    g1Kg: activeGens.has('g1') ? m.g1Kg : 0,
+    g3Kg: activeGens.has('g3') ? m.g3Kg : 0,
+    r2Kg: activeGens.has('r2') ? m.r2Kg : 0,
+  }))
+
+/* ── Chaîne complète : production G0/G1 (lots) + commandes aval ── */
+  const fullChainMap: Record<string, {
+    codeVariete: string; nomVariete: string; codeEspece: string
+    g0kg: number; g1kg: number; lotCount: number
+    demandesG1: ChainDemand[]; demandesG3: ChainDemand[]; demandesR2: ChainDemand[]
+  }> = {}
+
+  lots.forEach((l: any) => {
+    const gen = l.generation?.codeGeneration ?? ''
+    if (!['G0','G1'].includes(gen)) return
+    const v = varById[l.idVariete ?? l.varieteId ?? -1] ?? {}
+    const cv = v.codeVariete ?? l.codeVariete
+    if (!cv) return
+    if (specUp && (v.espece?.codeEspece ?? '').toUpperCase() !== specUp) return
+    if (!fullChainMap[cv]) fullChainMap[cv] = {
+      codeVariete: cv, nomVariete: v.nomVariete ?? cv,
+      codeEspece: v.espece?.codeEspece ?? '?',
+      g0kg: 0, g1kg: 0, lotCount: 0, demandesG1: [], demandesG3: [], demandesR2: [],
+    }
+    const qty = parseFloat(l.quantiteNette) || 0
+    if (gen === 'G0') fullChainMap[cv].g0kg += qty
+    else fullChainMap[cv].g1kg += qty
+    fullChainMap[cv].lotCount++
+  })
+
+  chainVarietes.forEach(v => {
+    if (!fullChainMap[v.codeVariete]) fullChainMap[v.codeVariete] = {
+      codeVariete: v.codeVariete, nomVariete: v.nomVariete, codeEspece: v.codeEspece,
+      g0kg: 0, g1kg: 0, lotCount: 0, demandesG1: [], demandesG3: [], demandesR2: [],
+    }
+    const entry = fullChainMap[v.codeVariete]
+    v.demands.forEach(d => {
+      if (d.gen === 'G1') entry.demandesG1.push(d)
+      else if (['G3','G4'].includes(d.gen)) entry.demandesG3.push(d)
+      else if (['R1','R2'].includes(d.gen)) entry.demandesR2.push(d)
+    })
+  })
+
+  const fullChain = Object.values(fullChainMap)
+    .filter(v => v.lotCount > 0 || v.demandesG1.length > 0 || v.demandesG3.length > 0 || v.demandesR2.length > 0)
+    .sort((a, b) => {
+      const ta = a.demandesR2.length + a.demandesG3.length + a.demandesG1.length
+      const tb = b.demandesR2.length + b.demandesG3.length + b.demandesG1.length
+      return tb !== ta ? tb - ta : (b.g1kg + b.g0kg) - (a.g1kg + a.g0kg)
+    })
+
+  /* ── KPI pipeline G0→G1→G3→Commandes ── */
+  const ACTIVE_LOT = ['DISPONIBLE','EN_PRODUCTION','CERTIFIE','EN_COURS_CERT','SOUCHE']
+  const kpiG0Kg = lots
+    .filter((l: any) => l.generation?.codeGeneration === 'G0' && ACTIVE_LOT.includes((l.statut ?? '').toUpperCase()))
+    .reduce((s: number, l: any) => s + (parseFloat(l.quantiteNette) || 0), 0)
+  const kpiG1Kg = lots
+    .filter((l: any) => l.generation?.codeGeneration === 'G1' && ACTIVE_LOT.includes((l.statut ?? '').toUpperCase()))
+    .reduce((s: number, l: any) => s + (parseFloat(l.quantiteNette) || 0), 0)
+  const kpiG3Kg = chainVarietes.reduce((s, v) =>
+    s + v.demands.filter(d => ['G3','G4'].includes(d.gen)).reduce((ss, d) => ss + d.qtyKg, 0), 0)
+  const kpiCmdActives = new Set(chainVarietes.flatMap(v => v.demands.map(d => d.orderId))).size
+
+  function handleExport() {
+    const date = new Date().toISOString().slice(0, 10)
+    const monthRows = filteredMonthly.map(m => [
+      m.month,
+      Math.round(m.g1Kg), parseFloat((m.g1Kg / 1000).toFixed(3)),
+      Math.round(m.g3Kg), parseFloat((m.g3Kg / 1000).toFixed(3)),
+      Math.round(m.r2Kg), parseFloat((m.r2Kg / 1000).toFixed(3)),
+      Math.round(m.g1Kg + m.g3Kg + m.r2Kg), parseFloat(((m.g1Kg + m.g3Kg + m.r2Kg) / 1000).toFixed(3)),
+      m.count,
+    ])
+    const chainRows: any[] = []
+    fullChain.forEach(v => {
+      const allD = [
+        ...v.demandesG1.map(d => ({ ...d, _gen: 'G1' })),
+        ...v.demandesG3.map(d => ({ ...d, _gen: d.gen })),
+        ...v.demandesR2.map(d => ({ ...d, _gen: d.gen })),
+      ]
+      allD.forEach(d => {
+        chainRows.push([v.nomVariete, v.codeVariete, v.codeEspece, d._gen, d.username, d.client, Math.round(d.qtyKg), parseFloat((d.qtyKg / 1000).toFixed(3)), d.statut])
+      })
+    })
+    downloadXlsx(`senjiw-demandes-selecteur-${period}-${date}`, [
+      { name: 'Mensuel', headers: ['Mois','G1 (kg)','G1 (t)','G3 (kg)','G3 (t)','R2 (kg)','R2 (t)','Total (kg)','Total (t)','Nb commandes'], rows: monthRows },
+      { name: 'Chaîne aval', headers: ['Variété','Code variété','Espèce','Génération','Username','Client','Quantité (kg)','Quantité (t)','Statut'], rows: chainRows },
+    ])
+  }
+
+  function toggleGen(k: GenKey) {
+    setGenFilter(prev => {
+      const next = new Set(prev)
+      if (next.has(k)) next.delete(k)
+      else next.add(k)
+      return next
+    })
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
 
@@ -651,7 +618,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <Activity size={16} color="var(--green-700)" />
           <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-            Analytics Sélectionneur
+            Pilotage semencier — Production & Chaîne aval
             {userSpecialisation && (
               <span style={{ marginLeft: 8, background: '#0369a120', color: '#0369a1', borderRadius: 99, padding: '2px 10px', fontSize: 12, fontWeight: 600 }}>
                 {userSpecialisation}
@@ -669,6 +636,44 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
           <RefreshCw size={12} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
           {refreshing ? 'Actualisation…' : 'Actualiser'}
         </button>
+      </div>
+
+      {/* ══ Pipeline KPI G0 → G1 → G3 → Commandes ══ */}
+      <div style={{ display: 'flex', gap: 0, borderRadius: 12, overflow: 'hidden',
+        border: '1px solid var(--border)', boxShadow: '0 1px 4px rgba(0,0,0,0.05)' }}>
+        {([
+          { label: 'G0 en stock',      value: fmtT(kpiG0Kg),         color: GEN_COLOR.G0, sub: 'Génétique' },
+          { label: 'G1 disponible',    value: fmtT(kpiG1Kg),         color: GEN_COLOR.G1, sub: 'Pré-base' },
+          { label: 'G3 demandés',      value: fmtT(kpiG3Kg),         color: GEN_COLOR.G3, sub: 'vers Multiplicateurs' },
+          { label: 'Commandes actives',value: String(kpiCmdActives),  color: '#6b7280',    sub: 'en cours' },
+        ] as const).map((step, i, arr) => (
+          <div key={step.label} style={{ flex: 1, display: 'flex', alignItems: 'center',
+            background: 'var(--surface)', minWidth: 0 }}>
+            <div style={{ flex: 1, padding: '12px 14px', minWidth: 0 }}>
+              {loading ? (
+                <div className="skeleton" style={{ height: 40, borderRadius: 6 }} />
+              ) : (
+                <>
+                  <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)',
+                    textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 3,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {step.label}
+                  </div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: step.color,
+                    fontVariantNumeric: 'tabular-nums', lineHeight: 1.1 }}>
+                    {step.value}
+                  </div>
+                  <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2 }}>
+                    {step.sub}
+                  </div>
+                </>
+              )}
+            </div>
+            {i < arr.length - 1 && (
+              <ChevronRight size={14} style={{ color: 'var(--border)', flexShrink: 0, marginRight: -1 }} />
+            )}
+          </div>
+        ))}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
@@ -695,26 +700,6 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
           </div>
         </div>
 
-        {/* ── Demandes reçues — barres empilées G1/G3/R2 ── */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">
-              <span className="card-title-icon"><TrendingUp size={15} /></span>
-              Demandes reçues sur vos variétés
-            </span>
-          </div>
-          <div className="card-body" style={{ padding: '16px' }}>
-            {loading ? (
-              <div className="skeleton" style={{ height: 120, borderRadius: 6 }} />
-            ) : monthly.every(m => m.count === 0) ? (
-              <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-                Aucune commande sur la période
-              </div>
-            ) : (
-              <StackedMonthChart data={monthly} />
-            )}
-          </div>
-        </div>
       </div>
 
       {/* ── Stock disponible par variété / génération ── */}
@@ -913,100 +898,316 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
         </div>
       )}
 
-      {/* ── Chaîne aval de mes variétés ── */}
-      {!loading && chainVarietes.length > 0 && (
-        <div className="card">
-          <div className="card-header">
+      {/* ── Section unifiée : Demandes reçues + Chaîne aval ── */}
+      <div className="card" style={{ overflow: 'hidden' }}>
+
+        {/* En-tête avec filtres */}
+        <div style={{ padding: '14px 18px 0', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
             <span className="card-title">
-              <span className="card-title-icon"><GitBranch size={14} /></span>
-              Chaîne aval — qui commande mes variétés
+              <span className="card-title-icon"><TrendingUp size={15} /></span>
+              Demandes reçues sur vos variétés
+              {specUp && (
+                <span style={{ marginLeft: 6, background: '#0369a120', color: '#0369a1', borderRadius: 99, padding: '2px 10px', fontSize: 11, fontWeight: 600 }}>
+                  {specUp}
+                </span>
+              )}
             </span>
-            <span className="badge badge-blue" style={{ fontSize: 11 }}>
-              {chainVarietes.length} variété{chainVarietes.length > 1 ? 's' : ''}
-            </span>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {/* Export */}
+              {!loading && (
+                <button
+                  onClick={handleExport}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}
+                  title="Exporter en Excel"
+                >
+                  <Download size={11} /> Export .xls
+                </button>
+              )}
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {chainVarietes.map((v, vi) => {
-              const totalKg = v.demands.reduce((s, d) => s + d.qtyKg, 0)
-              return (
-                <div key={v.codeVariete} style={{
-                  borderBottom: vi < chainVarietes.length - 1 ? '1px solid var(--border)' : 'none',
-                  padding: '12px 16px',
+
+          {/* Barre de filtres */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 12, flexWrap: 'wrap' }}>
+            {/* Période */}
+            <div style={{ display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 8, padding: 3 }}>
+              {(['1m','3m','6m','1a'] as const).map(p => (
+                <button key={p} onClick={() => setPeriod(p)} style={{
+                  padding: '3px 10px', borderRadius: 5, border: 'none', cursor: 'pointer',
+                  fontSize: 11.5, fontWeight: period === p ? 700 : 400,
+                  background: period === p ? 'var(--surface)' : 'transparent',
+                  color: period === p ? 'var(--text-primary)' : 'var(--text-muted)',
+                  boxShadow: period === p ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                  transition: 'all 0.12s',
                 }}>
-                  {/* En-tête variété */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{v.nomVariete}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
-                      background: 'var(--surface-2)', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
-                      {v.codeEspece}
-                    </span>
-                    <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700,
-                      color: 'var(--text-primary)', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
-                      {fmtT(totalKg)} total
-                    </span>
-                  </div>
-                  {/* Lignes de demande */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingLeft: 10,
-                    borderLeft: '2px solid var(--border)' }}>
-                    {v.demands.map((d, di) => {
-                      const genColor: Record<string, string> = { G1:'#0ea5e9', G3:'#f59e0b', G4:'#ef4444', R1:'#0f766e', R2:'#14b8a6' }
-                      const statutColor: Record<string, string> = {
-                        SOUMISE: '#6b7280', EN_NEGOCIATION: '#d97706', ACCORDEE: '#2563eb',
-                        EN_LIVRAISON: '#7c3aed', LIVREE: '#15803d',
-                      }
-                      const clr   = genColor[d.gen] ?? '#6b7280'
-                      const sClr  = statutColor[d.statut] ?? '#6b7280'
-                      const roleLabel: Record<string, string> = { G1: 'UPSemCL', G3: 'Mult.', G4: 'Mult.', R1: 'Mult.', R2: 'Quot.' }
-                      return (
-                        <div key={di} style={{
-                          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-                          padding: '4px 8px', borderRadius: 6,
-                          background: di % 2 === 0 ? 'var(--surface-2)' : 'transparent',
-                        }}>
-                          {/* Badge génération */}
-                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 99,
-                            background: `${clr}18`, color: clr, border: `1px solid ${clr}35`, flexShrink: 0 }}>
-                            {d.gen}
-                          </span>
-                          {/* Type d'acteur */}
-                          <span style={{ fontSize: 10.5, color: 'var(--text-muted)', flexShrink: 0 }}>
-                            → {roleLabel[d.gen] ?? '?'}
-                          </span>
-                          {/* Identité */}
-                          <span style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-primary)',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 80 }}>
-                            {d.client !== d.username && d.client ? `${d.client}` : d.username}
-                          </span>
-                          {d.client !== d.username && d.username && (
-                            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', flexShrink: 0 }}>
-                              @{d.username}
-                            </span>
-                          )}
-                          {/* Quantité */}
-                          <span style={{ fontSize: 12, fontWeight: 700, fontFamily: 'monospace',
-                            fontVariantNumeric: 'tabular-nums', color: 'var(--text-primary)', flexShrink: 0 }}>
-                            {fmtT(d.qtyKg)}
-                          </span>
-                          {/* Statut */}
-                          <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 99,
-                            background: `${sClr}14`, color: sClr, border: `1px solid ${sClr}30`, flexShrink: 0 }}>
-                            {d.statut.replace('_', ' ')}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+                  {p === '1m' ? '1 mois' : p === '3m' ? '3 mois' : p === '6m' ? '6 mois' : '1 an'}
+                </button>
+              ))}
+            </div>
+            <div style={{ width: 1, height: 20, background: 'var(--border)', flexShrink: 0 }} />
+            {/* Filtres génération */}
+            {([
+              { key: 'g1' as GenKey, label: 'G1 → UPSemCL', color: STACK_COLORS.g1 },
+              { key: 'g3' as GenKey, label: 'G3 → Mult.',   color: STACK_COLORS.g3 },
+              { key: 'r2' as GenKey, label: 'R2 → Quot.',   color: STACK_COLORS.r2 },
+            ]).map(({ key, label, color }) => {
+              const active = genFilter.size === 0 || genFilter.has(key)
+              const selected = genFilter.has(key)
+              return (
+                <button key={key} onClick={() => toggleGen(key)} style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 600,
+                  cursor: 'pointer', transition: 'all 0.12s',
+                  background: selected ? `${color}18` : 'var(--surface-2)',
+                  color: active ? color : 'var(--text-muted)',
+                  border: `1.5px solid ${selected ? color + '55' : 'var(--border)'}`,
+                }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: active ? color : 'var(--border)', display: 'inline-block', flexShrink: 0 }} />
+                  {label}
+                </button>
               )
             })}
           </div>
-          {chainVarietes.length === 0 && !loading && (
-            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 13 }}>
-              Aucune commande active sur vos variétés
-            </div>
-          )}
         </div>
-      )}
+
+        {/* Corps : graphique + chaîne aval côte à côte */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: 280 }}>
+
+          {/* Graphique mensuel */}
+          <div style={{ padding: '16px 20px', borderRight: '1px solid var(--border)' }}>
+            {loading ? (
+              <div className="skeleton" style={{ height: 220, borderRadius: 6 }} />
+            ) : filteredMonthly.every(m => m.g1Kg === 0 && m.g3Kg === 0 && m.r2Kg === 0) ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)', gap: 8 }}>
+                <TrendingUp size={32} style={{ opacity: 0.2 }} />
+                <span style={{ fontSize: 13 }}>Aucune commande sur la période</span>
+              </div>
+            ) : (
+              <StackedMonthChart data={filteredMonthly} periodLabel={PERIOD_LABELS[period]} />
+            )}
+          </div>
+
+          {/* Chaîne aval — pipeline 3 niveaux */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '12px 16px 8px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <GitBranch size={13} style={{ color: 'var(--text-muted)' }} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)' }}>
+                Chaîne aval — qui commande mes variétés
+              </span>
+              {!loading && (() => {
+                const g3t = fullChain.reduce((s, v) => s + v.demandesG3.reduce((ss, d) => ss + d.qtyKg, 0), 0)
+                const r2t = fullChain.reduce((s, v) => s + v.demandesR2.reduce((ss, d) => ss + d.qtyKg, 0), 0)
+                return (
+                  <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {(genFilter.size === 0 || genFilter.has('g3')) && g3t > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: STACK_COLORS.g3, fontVariantNumeric: 'tabular-nums' }}>
+                        G3 {fmtT(g3t)}
+                      </span>
+                    )}
+                    {(genFilter.size === 0 || genFilter.has('r2')) && r2t > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: STACK_COLORS.r2, fontVariantNumeric: 'tabular-nums' }}>
+                        R2 {fmtT(r2t)}
+                      </span>
+                    )}
+                    <span className="badge badge-blue" style={{ fontSize: 10 }}>
+                      {fullChain.length} variété{fullChain.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                )
+              })()}
+            </div>
+
+            <div style={{ overflowY: 'auto', maxHeight: 320, flex: 1 }}>
+              {loading ? (
+                <div style={{ padding: 16 }}><div className="skeleton" style={{ height: 160, borderRadius: 6 }} /></div>
+              ) : fullChain.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 24px', color: 'var(--text-muted)', gap: 8 }}>
+                  <GitBranch size={28} style={{ opacity: 0.2 }} />
+                  <span style={{ fontSize: 12 }}>Aucune variété en production</span>
+                </div>
+              ) : (
+                fullChain.map((v, vi) => {
+                  const showG1 = genFilter.size === 0 || genFilter.has('g1')
+                  const showG3 = genFilter.size === 0 || genFilter.has('g3')
+                  const showR2 = genFilter.size === 0 || genFilter.has('r2')
+                  const C: Record<string, string> = { G1:'#0ea5e9', G3:'#f59e0b', R2:'#14b8a6' }
+                  const sC: Record<string, string> = {
+                    SOUMISE:'#6b7280', EN_NEGOCIATION:'#d97706', ACCORDEE:'#2563eb',
+                    EN_LIVRAISON:'#7c3aed', LIVREE:'#15803d',
+                  }
+                  const r2Total = v.demandesR2.reduce((s, d) => s + d.qtyKg, 0)
+                  const g3Total = v.demandesG3.reduce((s, d) => s + d.qtyKg, 0)
+                  const g1HasNext = showG1 && (showG3 || showR2)
+                  const g3HasNext = showG3 && showR2
+
+                  return (
+                    <div key={v.codeVariete} style={{
+                      borderBottom: vi < fullChain.length - 1 ? '1px solid var(--border)' : 'none',
+                      padding: '10px 14px',
+                    }}>
+                      {/* En-tête variété */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{v.nomVariete}</span>
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                          background: 'var(--surface-2)', color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                          {v.codeEspece}
+                        </span>
+                        {(r2Total + g3Total) > 0 && (
+                          <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 800,
+                            color: 'var(--text-secondary)', fontVariantNumeric: 'tabular-nums' }}>
+                            {fmtT(r2Total + g3Total)}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Pipeline niveaux */}
+                      <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: 2 }}>
+
+                        {/* Niveau G0/G1 */}
+                        {showG1 && (
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 12, flexShrink: 0 }}>
+                              <div style={{ width: 10, height: 10, borderRadius: '50%', marginTop: 2, flexShrink: 0,
+                                background: v.lotCount > 0 ? C.G1 : 'var(--border)',
+                                border: '2px solid var(--surface)',
+                                boxShadow: v.lotCount > 0 ? `0 0 0 2px ${C.G1}30` : 'none',
+                              }} />
+                              {g1HasNext && <div style={{ width: 2, flex: 1, minHeight: 14, background: 'var(--border)', marginTop: 2 }} />}
+                            </div>
+                            <div style={{ flex: 1, paddingBottom: g1HasNext ? 6 : 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: v.lotCount > 0 ? C.G1 : 'var(--text-muted)' }}>G0/G1</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Production souche</span>
+                                {(v.g0kg + v.g1kg) > 0 && (
+                                  <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.G1, fontVariantNumeric: 'tabular-nums' }}>
+                                    {fmtT(v.g0kg + v.g1kg)}
+                                  </span>
+                                )}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                                {v.lotCount > 0
+                                  ? `${v.lotCount} lot${v.lotCount > 1 ? 's' : ''} · transfert vers UPSemCL`
+                                  : 'Aucun lot actif'}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Niveau G3 */}
+                        {showG3 && (
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 12, flexShrink: 0 }}>
+                              <div style={{ width: 10, height: 10, borderRadius: '50%', marginTop: 2, flexShrink: 0,
+                                background: v.demandesG3.length > 0 ? C.G3 : 'var(--border)',
+                                border: '2px solid var(--surface)',
+                                boxShadow: v.demandesG3.length > 0 ? `0 0 0 2px ${C.G3}30` : 'none',
+                              }} />
+                              {g3HasNext && <div style={{ width: 2, flex: 1, minHeight: 14, background: 'var(--border)', marginTop: 2 }} />}
+                            </div>
+                            <div style={{ flex: 1, paddingBottom: g3HasNext ? 6 : 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: v.demandesG3.length > 0 ? C.G3 : 'var(--text-muted)' }}>G3</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>→ Multiplicateurs</span>
+                                {g3Total > 0 && (
+                                  <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.G3, fontVariantNumeric: 'tabular-nums' }}>
+                                    {fmtT(g3Total)}
+                                  </span>
+                                )}
+                              </div>
+                              {v.demandesG3.length > 0 ? (
+                                v.demandesG3.map((d, i) => {
+                                  const sc = sC[d.statut] ?? '#6b7280'
+                                  return (
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap',
+                                      padding: '2px 6px', borderRadius: 5, background: i % 2 === 0 ? 'var(--surface-2)' : 'transparent' }}>
+                                      <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-primary)',
+                                        flex: 1, minWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {d.client !== d.username && d.client ? d.client : d.username}
+                                      </span>
+                                      <span style={{ fontSize: 10.5, fontWeight: 700, color: C.G3, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                                        {fmtT(d.qtyKg)}
+                                      </span>
+                                      <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 99,
+                                        background: `${sc}14`, color: sc, border: `1px solid ${sc}30`, flexShrink: 0 }}>
+                                        {d.statut.replace(/_/g, ' ')}
+                                      </span>
+                                    </div>
+                                  )
+                                })
+                              ) : (
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                                  Distribution via UPSemCL — non suivi directement
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Niveau R2 */}
+                        {showR2 && (
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 12, flexShrink: 0 }}>
+                              <div style={{ width: 10, height: 10, borderRadius: '50%', marginTop: 2, flexShrink: 0,
+                                background: v.demandesR2.length > 0 ? C.R2 : 'var(--border)',
+                                border: '2px solid var(--surface)',
+                                boxShadow: v.demandesR2.length > 0 ? `0 0 0 2px ${C.R2}30` : 'none',
+                              }} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: v.demandesR2.length > 0 ? C.R2 : 'var(--text-muted)' }}>R2</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>→ Quotataires</span>
+                                {r2Total > 0 && (
+                                  <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.R2, fontVariantNumeric: 'tabular-nums' }}>
+                                    {fmtT(r2Total)}
+                                  </span>
+                                )}
+                              </div>
+                              {v.demandesR2.length > 0 ? (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
+                                  {v.demandesR2.map((d, i) => {
+                                    const sc = sC[d.statut] ?? '#6b7280'
+                                    return (
+                                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
+                                        padding: '2px 6px', borderRadius: 5, background: i % 2 === 0 ? 'var(--surface-2)' : 'transparent' }}>
+                                        <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-primary)',
+                                          flex: 1, minWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                          {d.client !== d.username && d.client ? d.client : d.username}
+                                        </span>
+                                        {d.client !== d.username && d.username && (
+                                          <span style={{ fontSize: 9, color: 'var(--text-muted)', fontFamily: 'monospace', flexShrink: 0 }}>
+                                            @{d.username}
+                                          </span>
+                                        )}
+                                        <span style={{ fontSize: 10.5, fontWeight: 700, color: C.R2, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                                          {fmtT(d.qtyKg)}
+                                        </span>
+                                        <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 99,
+                                          background: `${sc}14`, color: sc, border: `1px solid ${sc}30`, flexShrink: 0 }}>
+                                          {d.statut.replace(/_/g, ' ')}
+                                        </span>
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              ) : (
+                                <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>
+                                  Aucune commande R2 en cours
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       <style>{`
         @keyframes pulse-dot {

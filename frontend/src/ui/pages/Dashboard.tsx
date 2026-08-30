@@ -9,7 +9,9 @@ import {
 import { api }             from '../../lib/api'
 import { endpoints }       from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
-import { SelectorAnalytics } from './SelectorAnalytics'
+import { SelectorAnalytics }        from './SelectorAnalytics'
+import { MultiplicateurAnalytics }  from './MultiplicateurAnalytics'
+import { UPSemCLAnalytics }         from './UPSemCLAnalytics'
 import { PendingDeliveries } from '../components/PendingDeliveries'
 import { MapSemences }     from '../components/MapSemences'
 import { TD as D }         from '../../lib/tokens'
@@ -983,7 +985,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const hasAnyAlerts = criticalCov > 0 || warningCov > 0 || lotsACertifierCount > 0 || stats.ordersPending > 0
 
   /* ── Demande annuelle par variété (UPSemCL · Sélectionneurs · Multiplicateurs) ── */
-  const showDemandWidget = ['seed-upsemcl', 'seed-selector', 'seed-multiplicator', 'seed-admin'].includes(roleKey)
+  const showDemandWidget = ['seed-upsemcl', 'seed-admin'].includes(roleKey)
   const DEMAND_DAYS: Record<string, number> = { '1m': 30, '3m': 90, '6m': 180, '1a': 365 }
   const demandCutoff = Date.now() - (DEMAND_DAYS[demandPeriod] ?? 90) * 86_400_000
 
@@ -2396,6 +2398,12 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       )}
       {roleKey === 'seed-selector' && (
         <SelectorAnalytics userSpecialisation={userSpecialisation} />
+      )}
+      {roleKey === 'seed-multiplicator' && (
+        <MultiplicateurAnalytics />
+      )}
+      {roleKey === 'seed-upsemcl' && (
+        <UPSemCLAnalytics />
       )}
 
       {/* ── Prévisions de récolte — sélectionneur seulement ── */}
