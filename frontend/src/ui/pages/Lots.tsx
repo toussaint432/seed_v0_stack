@@ -858,7 +858,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
 
   async function fetchAll() {
     setLoadingCat(true); setLoadingMes(true)
-    api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
+    api.get(endpoints.sitesMesSites).then(r => {
+      setSites(r.data)
+      if (r.data.length > 0) setChildForm(f => ({ ...f, siteCode: f.siteCode || r.data[0].codeSite }))
+    }).catch(() => {})
     const [catRes, mesRes, stockRes, varRes, orgRes, trRecus] = await Promise.allSettled([
       api.get(endpoints.lotsCatalogueG3),
       api.get(endpoints.lotsMesLots),
@@ -2288,7 +2291,11 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     fetchLots()
     api.get(endpoints.varieties).then(r => setVarieties(extractList(r.data).map(normalizeVariete))).catch(() => {})
     api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {})
-    api.get(endpoints.sites).then(r => setSites(r.data)).catch(() => {})
+    api.get(roleKey === 'seed-admin' ? endpoints.sites : endpoints.sitesMesSites).then(r => {
+      setSites(r.data)
+      if (roleKey === 'seed-quotataire' && r.data.length > 0)
+        setReceptionForm(f => ({ ...f, siteCode: f.siteCode || r.data[0].codeSite }))
+    }).catch(() => {})
     if (roleKey === 'seed-upsemcl' || roleKey === 'seed-selector')
       api.get(endpoints.stocksAgrege).then(r => setStockAgrege(extractList(r.data))).catch(() => {})
   }, [generation])
@@ -3277,7 +3284,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   background: 'var(--green-50)', border: '1px solid var(--green-200)', borderRadius: 6,
                   fontSize: 13, color: 'var(--green-800)', fontWeight: 600,
                 }}>
-                  {roleKey === 'seed-selector' ? 'CNRA-BAMBEY — CNRA Bambey' : 'UPSEMCL-SITE-BAMBEY — Site UPSemCL Bambey'}
+                  {sites[0] ? `${sites[0].codeSite} — ${sites[0].nomSite}` : (roleKey === 'seed-selector' ? 'CNRA-BAMBEY' : 'UPSEMCL-SITE-BAMBEY')}
                   <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--green-600)', marginLeft: 'auto' }}>Site fixe</span>
                 </div>
               </Field>
@@ -3387,7 +3394,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   background: 'var(--green-50)', border: '1px solid var(--green-200)', borderRadius: 6,
                   fontSize: 13, color: 'var(--green-800)', fontWeight: 600,
                 }}>
-                  {roleKey === 'seed-selector' ? 'CNRA-BAMBEY — CNRA Bambey' : 'UPSEMCL-SITE-BAMBEY — Site UPSemCL Bambey'}
+                  {sites[0] ? `${sites[0].codeSite} — ${sites[0].nomSite}` : (roleKey === 'seed-selector' ? 'CNRA-BAMBEY' : 'UPSEMCL-SITE-BAMBEY')}
                   <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--green-600)', marginLeft: 'auto' }}>Site fixe</span>
                 </div>
               </Field>

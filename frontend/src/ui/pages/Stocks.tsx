@@ -480,7 +480,7 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
       api.get(endpoints.stocksAgrege).then(r => setAgregeStocks(r.data)).catch(() => setAgregeStocks([])),
       api.get(lotsUrl).then(r              => setLots(extractList(r.data).map(normalizeLot))).catch(() => {}),
       api.get(endpoints.varieties).then(r  => setVarieties(extractList(r.data).map(normalizeVariete))).catch(() => {}),
-      api.get(endpoints.sites).then(r      => setSitesList(r.data)).catch(() => {}),
+      api.get(roleKey === 'seed-admin' ? endpoints.sites : endpoints.sitesMesSites).then(r => setSitesList(r.data)).catch(() => {}),
       api.get(endpoints.movements).then(r  => setMovements(r.data)).catch(() => {}),
       transferRule ? api.get(endpoints.membres).then(r => setMembres(r.data)).catch(() => {}) : Promise.resolve(),
     ])
