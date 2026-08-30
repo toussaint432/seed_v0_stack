@@ -358,13 +358,5 @@ public class LotService {
         boolean ok = stockCreditRepo.crediterSite(lot.getId(), siteCode, lot.getQuantiteNette());
         if (ok) log.info("Stock crédité : lot={} site={} qte={} kg", lot.getId(), siteCode, lot.getQuantiteNette());
         else     log.warn("Échec crédit stock lot={} site={}", lot.getId(), siteCode);
-        try {
-            producer.lotStockSync(om.writeValueAsString(Map.of(
-                "idLot",    lot.getId(),
-                "codeSite", siteCode,
-                "quantite", lot.getQuantiteNette(),
-                "unite",    lot.getUnite() != null ? lot.getUnite() : "kg"
-            )));
-        } catch (Exception ignored) {}
     }
 }

@@ -62,7 +62,12 @@ public class LotStockSyncConsumer {
                 return;
             }
 
-            // UPSERT atomique : crée la ligne si absente, incrémente si existante
+            // Idempotence : si une ligne stock existe déjà pour ce lot+site, ignorer
+            if (stockRepo.findByIdLotAndSite_CodeSite(idLot, codeSite).isPresent()) {
+                log.info("LotStockSyncConsumer : lot={} déjà enregistré sur site={} — message ignoré", idLot, codeSite);
+                return;
+            }
+
             stockRepo.creditQuantite(idLot, codeSite, quantite, unite);
 
             // Mouvement IN pour traçabilité
