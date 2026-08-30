@@ -512,12 +512,13 @@ function StatusPipeline({ statut }: { statut: string }) {
 interface OrderTableProps {
   orders: any[]; loading: boolean; emptyMsg: string
   orgs?: any[]; varieties?: any[]
+  membresMap?: Record<string, any>
   onUpdateStatus?: (id: number, statut: string) => Promise<void>
   /** Intercepte les commandes G3 SOUMISE → ouvre TraiterCommandeG3Modal */
   onValiderG3?: (cmd: any) => void
   extraColumns?: { head: string; cell: (o: any) => React.ReactNode }[]
 }
-function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], onUpdateStatus, onValiderG3, extraColumns = [] }: OrderTableProps) {
+function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], membresMap = {}, onUpdateStatus, onValiderG3, extraColumns = [] }: OrderTableProps) {
   const [page, setPage]     = useState(1)
   const [detail, setDetail] = useState<any>(null)
   const [actioning, setActioning] = useState(false)
@@ -1126,6 +1127,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             loading={loadingR}
             emptyMsg="Aucune commande reçue"
             varieties={varieties}
+            membresMap={membresMap}
             extraColumns={[{
               head: 'Actions',
               cell: (o: any) => o.statut === 'SOUMISE' ? (
@@ -1149,6 +1151,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             loading={loadingD}
             emptyMsg="Aucune demande G3 — cliquez sur « Nouvelle demande G3 » pour en soumettre une"
             varieties={varieties}
+            membresMap={membresMap}
             extraColumns={[{
               head: 'Action',
               cell: (o: any) => {

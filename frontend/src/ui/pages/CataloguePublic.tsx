@@ -36,6 +36,7 @@ interface CartItem {
   varieteId: number; nomVariete: string; codeVariete: string
   nomEspece: string; idGeneration: number; generation: string
   quantite: number; unite: string; disponible: number
+  organisationId?: number
 }
 
 type FournisseurEntry = {
@@ -124,10 +125,11 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
       return
     }
     const idGen = GEN_ID_MAP[gen] ?? 7
+    const organisationId = best?.organisationId ?? undefined
     setCart(prev => {
       const existing = prev.find(c => c.varieteId === v.varieteId)
       if (existing) return prev.map(c => c.varieteId === v.varieteId ? { ...c, quantite: c.quantite + qty } : c)
-      return [...prev, { varieteId: v.varieteId, nomVariete: v.nomVariete, codeVariete: v.codeVariete, nomEspece: v.nomEspece, idGeneration: idGen, generation: gen, quantite: qty, unite: 'kg', disponible: v.stockTotal }]
+      return [...prev, { varieteId: v.varieteId, nomVariete: v.nomVariete, codeVariete: v.codeVariete, nomEspece: v.nomEspece, idGeneration: idGen, generation: gen, quantite: qty, unite: 'kg', disponible: v.stockTotal, organisationId }]
     })
     setAddedIds(prev => { const s = new Set(prev); s.add(v.varieteId); return s })
     setTimeout(() => setAddedIds(prev => { const s = new Set(prev); s.delete(v.varieteId); return s }), 1800)
@@ -144,7 +146,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
     setCart(prev => {
       const existing = prev.find(c => c.varieteId === lot.varieteId)
       if (existing) return prev.map(c => c.varieteId === lot.varieteId ? { ...c, quantite: c.quantite + qty } : c)
-      return [...prev, { varieteId: lot.varieteId, nomVariete: lot.nomVariete, codeVariete: lot.codeVariete, nomEspece: lot.nomEspece, idGeneration: idGen, generation: lot.generation, quantite: qty, unite: lot.unite || 'kg', disponible: lot.quantiteDisponible }]
+      return [...prev, { varieteId: lot.varieteId, nomVariete: lot.nomVariete, codeVariete: lot.codeVariete, nomEspece: lot.nomEspece, idGeneration: idGen, generation: lot.generation, quantite: qty, unite: lot.unite || 'kg', disponible: lot.quantiteDisponible, organisationId: lot.organisationId }]
     })
   }
 
@@ -163,12 +165,15 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
     setOrderFeedback(null)
     try {
       const code = 'CMD-' + Date.now().toString(36).toUpperCase()
+      /* Détermine le fournisseur : si tous les articles viennent du même multiplicateur → on lie la commande */
+      const orgIds = [...new Set(cart.map(i => i.organisationId).filter((id): id is number => id != null))]
+      const idOrganisationFournisseur = orgIds.length === 1 ? orgIds[0] : null
       const resp = await fetch(`${ORDER}/orders`, {
         method: 'POST',
         headers: { ...headers, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           codeCommande: code, client: 'Commande catalogue',
-          idOrganisationFournisseur: null, observations: orderObs || null,
+          idOrganisationFournisseur, observations: orderObs || null,
           lignes: cart.map(item => ({ idVariete: item.varieteId, idGeneration: item.idGeneration, quantite: item.quantite, unite: item.unite })),
         }),
       })
