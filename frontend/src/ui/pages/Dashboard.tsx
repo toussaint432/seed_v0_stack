@@ -5,6 +5,7 @@ import {
   RefreshCw, Plus, Database, ArrowRight,
   Search, Filter, X, TrendingUp,
   Navigation, MapPin, Clock, Download,
+  ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { api }             from '../../lib/api'
 import { endpoints }       from '../../lib/endpoints'
@@ -731,6 +732,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const [refreshing,   setRefreshing]   = useState(false)
   const [heroVis,      setHeroVis]      = useState(false)
   const [mapExpanded,  setMapExpanded]  = useState(true)
+  const [stockCollapsed, setStockCollapsed] = useState(false)
   const [demandPeriod, setDemandPeriod] = useState<'1m' | '3m' | '6m' | '1a'>('3m')
   const [demandGen,    setDemandGen]    = useState<'all' | 'G1' | 'G3' | 'R2'>('all')
   const [critPopoverCode, setCritPopoverCode] = useState<string | null>(null)
@@ -1747,9 +1749,26 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   <Download size={11} /> Export .xls
                 </button>
               )}
+
+              {/* Bouton collapse */}
+              <button
+                onClick={() => setStockCollapsed(c => !c)}
+                title={stockCollapsed ? 'Déplier le widget stock' : 'Réduire le widget stock'}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  fontSize: 11.5, fontWeight: 600, height: 32, padding: '0 10px',
+                  borderRadius: 8, border: '1px solid var(--border)',
+                  background: stockCollapsed ? `${accent}12` : 'var(--surface-2)',
+                  color: stockCollapsed ? accent : 'var(--text-muted)',
+                  cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                {stockCollapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+              </button>
             </div>
           </div>
 
+          {!stockCollapsed && (<>
           {/* ── Barre auto-refresh + KPIs ── */}
           <div style={{
             padding: '9px 24px',
@@ -1992,6 +2011,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               100 / {filteredStockRows.length} lignes affichées
             </div>
           )}
+          </>)}
         </div>
       )}
 
