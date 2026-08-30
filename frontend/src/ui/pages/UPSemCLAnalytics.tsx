@@ -241,11 +241,15 @@ export function UPSemCLAnalytics() {
       /* ── Graphe vertical G3 : stock vs demande par variété ── */
       const g3Map: Record<string,G3BarEntry> = {}
       stocks.forEach((s:any)=>{
-        const gen = s.lot?.generation?.codeGeneration??s.generation??'?'
+        const gen = s.codeGeneration??s.lot?.generation?.codeGeneration??''
         if (gen!=='G3') return
-        const v = varMap[s.lot?.idVariete??s.lot?.varieteId??s.idVariete??-1]??s.variete??s.lot?.variete??{}
-        const cv = v.codeVariete; if (!cv) return
-        if (!g3Map[cv]) g3Map[cv]={codeVariete:cv,nomVariete:v.nomVariete??cv,stockKg:0,demandKg:0}
+        const cv = s.codeVariete??s.variete?.codeVariete??s.lot?.variete?.codeVariete
+        if (!cv) return
+        if (!g3Map[cv]) g3Map[cv]={
+          codeVariete:cv,
+          nomVariete:s.nomVariete??s.variete?.nomVariete??cv,
+          stockKg:0,demandKg:0,
+        }
         g3Map[cv].stockKg += parseFloat(s.quantiteDisponible)||0
       })
       orders.forEach((o:any)=>{

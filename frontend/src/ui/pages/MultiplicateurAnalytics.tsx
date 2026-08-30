@@ -223,10 +223,7 @@ export function MultiplicateurAnalytics() {
         else if (gen === 'R1' && DISPO_STATUTS.includes((l.statut ?? '').toUpperCase())) r1Kg += qty
       })
       const r2StockKg = stocks
-        .filter((s: any) => {
-          const gen = s.lot?.generation?.codeGeneration ?? s.generation ?? '?'
-          return gen === 'R2'
-        })
+        .filter((s: any) => (s.codeGeneration ?? s.lot?.generation?.codeGeneration ?? '') === 'R2')
         .reduce((sum: number, s: any) => sum + (parseFloat(s.quantiteDisponible) || 0), 0)
       const cmdCount = orders.filter((o: any) => ACTIVE_STATUTS.includes((o.statut ?? '').toUpperCase())).length
       setKpi({ g3Kg, g4Kg, r1Kg, r2StockKg, cmdCount })
@@ -258,13 +255,16 @@ export function MultiplicateurAnalytics() {
       /* ── Couverture R2 : stock vs commandes actives ── */
       const covMap: Record<string, CoverageRow> = {}
       stocks.forEach((s: any) => {
-        const gen = s.lot?.generation?.codeGeneration ?? s.generation ?? '?'
+        const gen = s.codeGeneration ?? s.lot?.generation?.codeGeneration ?? ''
         if (gen !== 'R2') return
-        const v = varMap[s.lot?.idVariete ?? s.lot?.varieteId ?? s.idVariete ?? -1]
-          ?? s.variete ?? s.lot?.variete ?? {}
-        const cv = v.codeVariete; if (!cv) return
-        if (!covMap[cv]) covMap[cv] = { codeVariete: cv, nomVariete: v.nomVariete ?? cv,
-          codeEspece: v.espece?.codeEspece ?? '?', stockR2Kg: 0, demandR2Kg: 0 }
+        const cv = s.codeVariete ?? s.variete?.codeVariete ?? s.lot?.variete?.codeVariete
+        if (!cv) return
+        if (!covMap[cv]) covMap[cv] = {
+          codeVariete: cv,
+          nomVariete: s.nomVariete ?? s.variete?.nomVariete ?? cv,
+          codeEspece: s.codeEspece ?? s.nomEspece ?? s.variete?.espece?.codeEspece ?? '?',
+          stockR2Kg: 0, demandR2Kg: 0,
+        }
         covMap[cv].stockR2Kg += parseFloat(s.quantiteDisponible) || 0
       })
       orders.forEach((o: any) => {
