@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import type { FormEvent, MouseEvent } from 'react'
 import {
   Database, RefreshCw, Plus, MapPin, Package, TrendingUp,
-  X, Archive, Search, ChevronDown,
+  X, Archive, Search, ChevronDown, Clock,
   ArrowRightLeft, FileText, Download, CheckCircle2,
 } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -26,6 +27,7 @@ const GEN_BADGE: Record<string, string> = Object.fromEntries(
 )
 const UPSEMCL_GENS   = ['G1', 'G2', 'G3']
 const SELECTOR_GENS  = ['G0', 'G1']
+const MULTI_GENS     = ['G3', 'G4', 'R1', 'R2']
 
 /* ── Règles de transfert inter-organisations par rôle ── */
 const TRANSFER_RULES_STOCK: Record<string, { allowedGens: string[]; source: string; destination: string; destRoleKey: string }> = {
@@ -408,6 +410,7 @@ function LotDropdown({ lots, value, onChange, placeholder = 'Sélectionner un lo
 }
 
 export function Stocks({ roleKey, userSpecialisation }: Props) {
+  const navigate = useNavigate()
   const [agregeStocks, setAgregeStocks] = useState<any[]>([])
   const [lots,         setLots]         = useState<any[]>([])
   const [varieties,    setVarieties]    = useState<any[]>([])
@@ -475,7 +478,7 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
 
   async function fetchAll(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
-    const lotsUrl = isMulti ? endpoints.lotsMesLots : endpoints.lots
+    const lotsUrl = (isMulti || isUPSemCL) ? endpoints.lotsMesLots : endpoints.lots
     await Promise.all([
       api.get(endpoints.stocksAgrege).then(r => setAgregeStocks(r.data)).catch(() => setAgregeStocks([])),
       api.get(lotsUrl).then(r              => setLots(extractList(r.data).map(normalizeLot))).catch(() => {}),
@@ -517,6 +520,16 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
   const varietySet = new Set(stocks.map((s: any) => s.nomVariete).filter(Boolean))
   const siteList   = [...new Set(agregeStocks.map((s: any) => s.codeSite).filter(Boolean))]
   const maxQty     = Math.max(...stocks.map((s: any) => parseFloat(s.quantiteTotale) || 0), 1)
+
+  const showRecentLots = isUPSemCL || isSelector || isMulti
+  const recentLots = (() => {
+    if (!showRecentLots) return []
+    let l = lots
+    if (isUPSemCL)  l = l.filter(lot => UPSEMCL_GENS.includes(lot.generation?.codeGeneration ?? ''))
+    if (isSelector) l = l.filter(lot => SELECTOR_GENS.includes(lot.generation?.codeGeneration ?? ''))
+    if (isMulti)    l = l.filter(lot => MULTI_GENS.includes(lot.generation?.codeGeneration ?? ''))
+    return [...l].sort((a, b) => (b.id || 0) - (a.id || 0)).slice(0, 8)
+  })()
 
   /* Générations accessibles selon le rôle — pilote les boutons et le graphe groupé.
      Admin/Quotataire/Multiplicateur : déduites dynamiquement des données réelles. */
@@ -1369,6 +1382,121 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* ── Lots récents ─────────────────────────────────────────────── */}
+      {showRecentLots && (
+        <div style={{ background: '#fff', borderRadius: 14, border: '1px solid var(--border)', overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)', marginTop: 20 }}>
+          <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 9, background: 'linear-gradient(135deg,var(--surface-2) 0%,#fff 100%)' }}>
+            <div style={{ width: 28, height: 28, borderRadius: 7, background: '#16a34a1a', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Clock size={13} />
+            </div>
+            <div>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>Lots récents</span>
+              <span style={{ fontSize: 10.5, color: 'var(--text-muted)', marginLeft: 8 }}>
+                {isUPSemCL ? 'G1, G2, G3' : isSelector ? 'G0, G1' : 'G3, G4, R1, R2'}
+              </span>
+            </div>
+            {!loading && recentLots.length > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 600, background: '#f0fdf4', color: '#15803d', border: '1px solid #bbf7d0', borderRadius: 99, padding: '2px 10px', marginLeft: 'auto' }}>
+                {recentLots.length} derniers lots
+              </span>
+            )}
+            <button
+              onClick={() => navigate('/lots')}
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '5px 12px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-secondary)', whiteSpace: 'nowrap' as const, marginLeft: recentLots.length > 0 ? 0 : 'auto' }}
+            >
+              Voir tous les lots →
+            </button>
+          </div>
+
+          {loading ? (
+            <div style={{ padding: '10px 0' }}>
+              {[0,1,2,3,4].map(i => (
+                <div key={i} style={{ display: 'flex', gap: 16, padding: '12px 22px', alignItems: 'center', borderBottom: i < 4 ? '1px solid var(--border)' : 'none' }}>
+                  <div className="skeleton" style={{ width: 170, height: 12, borderRadius: 4 }} />
+                  <div className="skeleton" style={{ width: 110, height: 12, borderRadius: 4 }} />
+                  <div className="skeleton" style={{ width: 36,  height: 22, borderRadius: 6, marginLeft: 'auto' }} />
+                  <div className="skeleton" style={{ width: 70,  height: 12, borderRadius: 4 }} />
+                  <div className="skeleton" style={{ width: 55,  height: 20, borderRadius: 4 }} />
+                </div>
+              ))}
+            </div>
+          ) : recentLots.length === 0 ? (
+            <div style={{ padding: '48px 20px', textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: 'var(--surface-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--text-muted)' }}>
+                <Package size={22} />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>Aucun lot enregistré</div>
+              <div style={{ fontSize: 12.5, color: 'var(--text-muted)', marginTop: 5 }}>Les lots apparaîtront ici après leur création</div>
+            </div>
+          ) : (
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr style={{ background: 'var(--surface-2)' }}>
+                  {['Code lot', 'Variété', 'Espèce', 'Génération', 'Quantité', 'Statut', 'Date'].map(h => (
+                    <th key={h} style={{ padding: '9px 22px', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.09em', textAlign: 'left', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' as const }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {recentLots.map((l: any, idx) => {
+                  const gen = l.generation?.codeGeneration ?? 'N/A'
+                  const genClr = GEN_COLOR[gen]
+                  const genBadge = GEN_BADGE[gen]
+                  const isLast = idx === recentLots.length - 1
+                  const qty = Number(l.quantiteNette ?? l.quantite) || 0
+                  const dateStr = l.createdAt
+                    ? new Date(l.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+                    : '—'
+                  return (
+                    <tr key={l.id}
+                      style={{ borderBottom: isLast ? 'none' : '1px solid var(--border)', transition: 'background 0.12s' }}
+                      onMouseEnter={(e: { currentTarget: HTMLElement }) => (e.currentTarget.style.background = 'var(--surface-2)')}
+                      onMouseLeave={(e: { currentTarget: HTMLElement }) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <td style={{ padding: '11px 22px', borderLeft: `3px solid ${genClr ?? 'var(--border)'}` }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 700, fontFamily: 'var(--font-mono)', color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
+                          {l.codeLot ?? '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '11px 22px', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
+                        {varMap[l.idVariete]?.nomVariete ?? l.variete?.nomVariete ?? '—'}
+                      </td>
+                      <td style={{ padding: '11px 22px', fontSize: 12.5, color: 'var(--text-muted)' }}>
+                        {l.variete?.espece?.nomEspece ?? l.espece?.nomEspece ?? varMap[l.idVariete]?.espece?.nomEspece ?? '—'}
+                      </td>
+                      <td style={{ padding: '11px 22px' }}>
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          minWidth: 34, height: 22, borderRadius: 6, padding: '0 7px',
+                          background: genBadge ?? 'var(--surface-3)',
+                          color: genClr ?? 'var(--text-muted)',
+                          fontSize: 11, fontWeight: 800,
+                          border: `1px solid ${genClr ? genClr + '28' : 'var(--border)'}`,
+                        }}>{gen}</span>
+                      </td>
+                      <td style={{ padding: '11px 22px' }}>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                          {qty > 0 ? qty.toLocaleString('fr-FR') : '—'}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>{l.unite ?? 'kg'}</span>
+                      </td>
+                      <td style={{ padding: '11px 22px' }}>
+                        <StatutBadge statut={l.statut ?? l.statutLot} />
+                      </td>
+                      <td style={{ padding: '11px 22px', fontSize: 11.5, color: 'var(--text-muted)', whiteSpace: 'nowrap' as const }}>
+                        {dateStr}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
 

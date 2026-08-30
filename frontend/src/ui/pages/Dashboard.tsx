@@ -869,7 +869,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const isQuotaire   = roleKey === 'seed-quotataire'
   const showStats    = !isQuotaire
   const showPipeline = ['seed-admin', 'seed-selector', 'seed-upsemcl'].includes(roleKey)
-  const showLots     = !isQuotaire
+  const showLots     = roleKey === 'seed-admin'
   const showOrders   = isQuotaire || ['seed-admin', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
   const showStock    = ['seed-admin', 'seed-upsemcl'].includes(roleKey)
 
