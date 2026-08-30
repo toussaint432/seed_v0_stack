@@ -1999,10 +1999,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
           DEMANDE VARIÉTÉS — UPSemCL · Sélectionneurs · Multiplicateurs
       ══════════════════════════════════════════════════════ */}
       {showDemandWidget && (
-        <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)', marginBottom: 20 }}>
+        <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, boxShadow: '0 1px 6px rgba(0,0,0,0.04)', marginBottom: 20 }}>
 
           {/* ── En-tête avec filtres ── */}
-          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${D.line}`, background: 'linear-gradient(135deg,var(--surface-2) 0%,#fff 100%)', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const }}>
+          <div style={{ padding: '14px 20px', borderBottom: `1px solid ${D.line}`, background: 'linear-gradient(135deg,var(--surface-2) 0%,#fff 100%)', borderRadius: '14px 14px 0 0', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' as const }}>
             <div style={{ width: 28, height: 28, borderRadius: 7, background: `${accent}12`, color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
               <TrendingUp size={14} />
             </div>
