@@ -71,7 +71,7 @@ function groupByOrg(items: CatalogueItem[]): FournisseurEntry[] {
 }
 
 /* ── Composant principal ──────────────────────────────── */
-export function CataloguePublic({ token, onContacter }: { roleKey: string; token: string; onContacter?: () => void }) {
+export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: string; token: string; onContacter?: () => void }) {
   const headers = { Authorization: `Bearer ${token}` }
 
   const [especes,   setEspeces]   = useState<Espece[]>([])
@@ -119,6 +119,10 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
     const r1 = v.lots.find(l => l.generation === 'R1')
     const best = r2 ?? r1 ?? v.lots[0]
     const gen = best?.generation ?? 'R2'
+    if (roleKey === 'seed-quotataire' && gen !== 'R2') {
+      setOrderFeedback({ msg: 'Seules les semences R2 peuvent être commandées par un Quotataire. Ce lot est en ' + gen + '.', type: 'error' })
+      return
+    }
     const idGen = GEN_ID_MAP[gen] ?? 7
     setCart(prev => {
       const existing = prev.find(c => c.varieteId === v.varieteId)
@@ -132,6 +136,10 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
 
   /* ── Ajout panier depuis la vue carte ── */
   function addToCartFromMap(lot: CatalogueItem, qty: number) {
+    if (roleKey === 'seed-quotataire' && lot.generation !== 'R2') {
+      setOrderFeedback({ msg: 'En tant que Quotataire, vous ne pouvez commander que des semences R2. Ce lot est en ' + lot.generation + '.', type: 'error' })
+      return
+    }
     const idGen = GEN_ID_MAP[lot.generation] ?? 7
     setCart(prev => {
       const existing = prev.find(c => c.varieteId === lot.varieteId)
@@ -976,7 +984,7 @@ export function CataloguePublic({ token, onContacter }: { roleKey: string; token
       {/* Feedback toast */}
       {orderFeedback && (
         <div onClick={() => setOrderFeedback(null)}
-          style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: orderFeedback.type === 'success' ? '#166534' : '#991b1b', color: '#fff', padding: '12px 20px', borderRadius: 10, fontSize: 13, fontWeight: 500, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', zIndex: 60, maxWidth: 480 }}>
+          style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: orderFeedback.type === 'success' ? '#166534' : '#991b1b', color: '#fff', padding: '12px 20px', borderRadius: 10, fontSize: 13, fontWeight: 500, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', zIndex: 2000, maxWidth: 480 }}>
           {orderFeedback.type === 'success' ? <CheckCircle2 size={15} /> : <X size={15} />}
           {orderFeedback.msg}
         </div>
