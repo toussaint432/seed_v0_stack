@@ -1154,25 +1154,145 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         />
       )}
 
-      {/* KPIs */}
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-icon green"><Store size={18} /></div>
-          <div className="stat-body"><div className="stat-value">{loadingCat ? '…' : catalogueG3.length}</div><div className="stat-label">Lots G3 disponibles</div></div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon blue"><Layers size={18} /></div>
-          <div className="stat-body"><div className="stat-value">{loadingMes ? '…' : mesLotsG3 + mesLotsG4}</div><div className="stat-label">Mes lots G3 / G4</div></div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon gold"><Package size={18} /></div>
-          <div className="stat-body"><div className="stat-value">{loadingMes ? '…' : mesLotsR1}</div><div className="stat-label">Mes lots R1</div></div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-icon green"><CheckCircle2 size={18} /></div>
-          <div className="stat-body"><div className="stat-value">{loadingMes ? '…' : mesLotsR2}</div><div className="stat-label">Mes lots R2 (vente)</div></div>
-        </div>
-      </div>
+      {/* KPIs — Pipeline interactif : chaîne G3 → G4 → R1 → R2 */}
+      {(() => {
+        const STEPS = [
+          {
+            id: 'cat',
+            label: 'G3 disponibles',
+            sublabel: 'Catalogue UPSemCL',
+            value: loadingCat ? null : catalogueG3.length,
+            accent: '#7c3aed',
+            bg: '#faf5ff',
+            icon: <Store size={15} />,
+            isActive: onglet === 'catalogue',
+            onClick: () => setOnglet('catalogue'),
+          },
+          {
+            id: 'G3',
+            label: 'G3 — réceptionnés',
+            sublabel: 'Reçus de l\'UPSemCL',
+            value: loadingMes ? null : mesLotsG3,
+            accent: '#d97706',
+            bg: '#fffbeb',
+            icon: <Package size={15} />,
+            isActive: onglet === 'meslots' && filterGenMes === 'G3',
+            onClick: () => { setOnglet('meslots'); setFilterGenMes(filterGenMes === 'G3' ? '' : 'G3') },
+          },
+          {
+            id: 'G4',
+            label: 'G4 — multiplication',
+            sublabel: 'Produits par semis G3→G4',
+            value: loadingMes ? null : mesLotsG4,
+            accent: '#c2410c',
+            bg: '#fff7ed',
+            icon: <GitBranch size={15} />,
+            isActive: onglet === 'meslots' && filterGenMes === 'G4',
+            onClick: () => { setOnglet('meslots'); setFilterGenMes(filterGenMes === 'G4' ? '' : 'G4') },
+          },
+          {
+            id: 'R1',
+            label: 'R1 — certifiés',
+            sublabel: 'Semences certifiées',
+            value: loadingMes ? null : mesLotsR1,
+            accent: '#0f766e',
+            bg: '#f0fdfa',
+            icon: <ShieldCheck size={15} />,
+            isActive: onglet === 'meslots' && filterGenMes === 'R1',
+            onClick: () => { setOnglet('meslots'); setFilterGenMes(filterGenMes === 'R1' ? '' : 'R1') },
+          },
+          {
+            id: 'R2',
+            label: 'R2 — commerciaux',
+            sublabel: 'Disponibles aux quotataires',
+            value: loadingMes ? null : mesLotsR2,
+            accent: '#14b8a6',
+            bg: '#ecfdf5',
+            icon: <CheckCircle2 size={15} />,
+            isActive: onglet === 'meslots' && filterGenMes === 'R2',
+            onClick: () => { setOnglet('meslots'); setFilterGenMes(filterGenMes === 'R2' ? '' : 'R2') },
+          },
+        ]
+        return (
+          <div style={{
+            display: 'flex', alignItems: 'stretch', gap: 0,
+            marginBottom: 22, borderRadius: 12, overflow: 'hidden',
+            border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)',
+          }}>
+            {STEPS.map((step, i) => {
+              const isEmpty = step.value === 0
+              return (
+                <React.Fragment key={step.id}>
+                  <div
+                    onClick={step.onClick}
+                    title={step.isActive ? 'Cliquer pour réinitialiser le filtre' : `Voir : ${step.label}`}
+                    style={{
+                      flex: 1, minWidth: 0,
+                      padding: '13px 15px 12px',
+                      cursor: 'pointer',
+                      background: step.isActive ? step.bg : 'var(--surface)',
+                      borderTop: 'none',
+                      transition: 'background .15s',
+                      display: 'flex', flexDirection: 'column', gap: 9,
+                      position: 'relative',
+                    }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = step.bg }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = step.isActive ? step.bg : 'var(--surface)' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <div style={{
+                        width: 30, height: 30, borderRadius: 7, flexShrink: 0,
+                        background: isEmpty && !step.isActive ? 'var(--surface-2)' : step.bg,
+                        color: isEmpty && !step.isActive ? 'var(--text-muted)' : step.accent,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        border: `1px solid ${isEmpty && !step.isActive ? 'var(--border)' : step.accent + '40'}`,
+                        transition: 'all .15s',
+                      }}>
+                        {step.icon}
+                      </div>
+                      <span style={{
+                        fontSize: 26, fontWeight: 800, lineHeight: 1,
+                        color: isEmpty ? 'var(--text-muted)' : 'var(--text-primary)',
+                        fontVariantNumeric: 'tabular-nums',
+                        letterSpacing: '-0.03em',
+                      }}>
+                        {step.value === null ? '…' : step.value}
+                      </span>
+                    </div>
+                    <div>
+                      <div style={{
+                        fontSize: 11.5, fontWeight: 700, lineHeight: 1.2,
+                        color: isEmpty && !step.isActive ? 'var(--text-muted)' : 'var(--text-primary)',
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {step.label}
+                      </div>
+                      <div style={{
+                        fontSize: 10, color: 'var(--text-muted)', marginTop: 2, lineHeight: 1.3,
+                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {step.sublabel}
+                      </div>
+                    </div>
+                  </div>
+                  {i < STEPS.length - 1 && (
+                    <div style={{
+                      width: 22, flexShrink: 0,
+                      background: 'var(--surface-2)',
+                      borderLeft: '1px solid var(--border)',
+                      borderRight: '1px solid var(--border)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'var(--text-muted)',
+                    }}>
+                      <ChevronRight size={11} />
+                    </div>
+                  )}
+                </React.Fragment>
+              )
+            })}
+          </div>
+        )
+      })()}
 
       {/* Onglets — badge orange si transferts en attente */}
       <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid var(--border)', marginBottom: 0, background: 'var(--surface-2)', borderRadius: '10px 10px 0 0', padding: '0 16px' }}>
