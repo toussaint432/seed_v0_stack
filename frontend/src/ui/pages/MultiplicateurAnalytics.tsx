@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { TrendingUp, RefreshCw, ChevronRight, AlertTriangle, Download, Package } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
-import { normalizeLot, normalizeStock, normalizeVariete, extractList } from '../../lib/normalizers'
+import { normalizeLot, normalizeVariete, extractList } from '../../lib/normalizers'
 import { fmtT } from '../../lib/fmt'
 import { GEN_CHART_COLORS } from '../../lib/constants'
 import { downloadXlsx } from '../../lib/exportUtils'
@@ -200,14 +200,14 @@ export function MultiplicateurAnalytics() {
       const [lotsRes, ordersRes, stocksRes, certifRes, varietiesRes] = await Promise.allSettled([
         api.get(endpoints.lotsMesLots),
         api.get(`${endpoints.orders}?size=200`),
-        api.get(endpoints.stockMonStock),
+        api.get(endpoints.stocksAgrege),
         api.get(endpoints.lotsMultCertif),
         api.get(endpoints.varieties),
       ])
 
       const lotsData  = extractList(lotsRes.status    === 'fulfilled' ? lotsRes.value.data    : null).map(normalizeLot)
       const orders    = extractList(ordersRes.status   === 'fulfilled' ? ordersRes.value.data   : null)
-      const stocks    = extractList(stocksRes.status   === 'fulfilled' ? stocksRes.value.data   : null).map(normalizeStock)
+      const stocks    = extractList(stocksRes.status   === 'fulfilled' ? stocksRes.value.data   : null)
       const certifRaw = extractList(certifRes.status   === 'fulfilled' ? certifRes.value.data   : null)
       const varieties = extractList(varietiesRes.status=== 'fulfilled' ? varietiesRes.value.data: null).map(normalizeVariete)
       const varMap: Record<number, any> = Object.fromEntries(varieties.map((v: any) => [v.id, v]))
@@ -223,8 +223,8 @@ export function MultiplicateurAnalytics() {
         else if (gen === 'R1' && DISPO_STATUTS.includes((l.statut ?? '').toUpperCase())) r1Kg += qty
       })
       const r2StockKg = stocks
-        .filter((s: any) => (s.codeGeneration ?? s.lot?.generation?.codeGeneration ?? '') === 'R2')
-        .reduce((sum: number, s: any) => sum + (parseFloat(s.quantiteDisponible) || 0), 0)
+        .filter((s: any) => s.codeGeneration === 'R2')
+        .reduce((sum: number, s: any) => sum + (parseFloat(s.quantiteTotale) || 0), 0)
       const cmdCount = orders.filter((o: any) => ACTIVE_STATUTS.includes((o.statut ?? '').toUpperCase())).length
       setKpi({ g3Kg, g4Kg, r1Kg, r2StockKg, cmdCount })
 
@@ -255,17 +255,15 @@ export function MultiplicateurAnalytics() {
       /* ── Couverture R2 : stock vs commandes actives ── */
       const covMap: Record<string, CoverageRow> = {}
       stocks.forEach((s: any) => {
-        const gen = s.codeGeneration ?? s.lot?.generation?.codeGeneration ?? ''
-        if (gen !== 'R2') return
-        const cv = s.codeVariete ?? s.variete?.codeVariete ?? s.lot?.variete?.codeVariete
-        if (!cv) return
+        if (s.codeGeneration !== 'R2') return
+        const cv = s.codeVariete; if (!cv) return
         if (!covMap[cv]) covMap[cv] = {
           codeVariete: cv,
-          nomVariete: s.nomVariete ?? s.variete?.nomVariete ?? cv,
-          codeEspece: s.codeEspece ?? s.nomEspece ?? s.variete?.espece?.codeEspece ?? '?',
+          nomVariete: s.nomVariete ?? cv,
+          codeEspece: s.codeEspece ?? '?',
           stockR2Kg: 0, demandR2Kg: 0,
         }
-        covMap[cv].stockR2Kg += parseFloat(s.quantiteDisponible) || 0
+        covMap[cv].stockR2Kg += parseFloat(s.quantiteTotale) || 0
       })
       orders.forEach((o: any) => {
         if (!ACTIVE_STATUTS.includes((o.statut ?? '').toUpperCase())) return

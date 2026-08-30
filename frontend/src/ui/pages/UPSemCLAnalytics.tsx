@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { TrendingUp, RefreshCw, ChevronRight, AlertTriangle, Download, ArrowRight } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
-import { normalizeLot, normalizeStock, normalizeVariete, extractList } from '../../lib/normalizers'
+import { normalizeLot, normalizeVariete, extractList } from '../../lib/normalizers'
 import { fmtT } from '../../lib/fmt'
 import { GEN_CHART_COLORS } from '../../lib/constants'
 import { downloadXlsx } from '../../lib/exportUtils'
@@ -202,14 +202,14 @@ export function UPSemCLAnalytics() {
     try {
       const [lotsRes, stocksRes, ordersRes, transfertsRes, varietiesRes] = await Promise.allSettled([
         api.get(endpoints.lotsMesLots),
-        api.get(endpoints.stockMonStock),
+        api.get(endpoints.stocksAgrege),
         api.get(`${endpoints.orders}?size=200`),
         api.get(endpoints.transfertsLot),
         api.get(endpoints.varieties),
       ])
 
       const lotsData  = extractList(lotsRes.status       ==='fulfilled'?lotsRes.value.data      :null).map(normalizeLot)
-      const stocks    = extractList(stocksRes.status      ==='fulfilled'?stocksRes.value.data    :null).map(normalizeStock)
+      const stocks    = extractList(stocksRes.status      ==='fulfilled'?stocksRes.value.data    :null)
       const orders    = extractList(ordersRes.status      ==='fulfilled'?ordersRes.value.data    :null)
       const transRaw  = extractList(transfertsRes.status  ==='fulfilled'?transfertsRes.value.data:null)
       const varieties = extractList(varietiesRes.status   ==='fulfilled'?varietiesRes.value.data :null).map(normalizeVariete)
@@ -241,16 +241,14 @@ export function UPSemCLAnalytics() {
       /* ── Graphe vertical G3 : stock vs demande par variété ── */
       const g3Map: Record<string,G3BarEntry> = {}
       stocks.forEach((s:any)=>{
-        const gen = s.codeGeneration??s.lot?.generation?.codeGeneration??''
-        if (gen!=='G3') return
-        const cv = s.codeVariete??s.variete?.codeVariete??s.lot?.variete?.codeVariete
-        if (!cv) return
+        if (s.codeGeneration!=='G3') return
+        const cv = s.codeVariete; if (!cv) return
         if (!g3Map[cv]) g3Map[cv]={
           codeVariete:cv,
-          nomVariete:s.nomVariete??s.variete?.nomVariete??cv,
+          nomVariete:s.nomVariete??cv,
           stockKg:0,demandKg:0,
         }
-        g3Map[cv].stockKg += parseFloat(s.quantiteDisponible)||0
+        g3Map[cv].stockKg += parseFloat(s.quantiteTotale)||0
       })
       orders.forEach((o:any)=>{
         if (!ACTIVE_ORDER.includes((o.statut??'').toUpperCase())) return
