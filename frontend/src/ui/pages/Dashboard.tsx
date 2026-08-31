@@ -1073,7 +1073,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       ;(o.lignes ?? []).forEach((ligne: any) => {
         const gen      = ligne.generation?.codeGeneration ?? '?'
         const isG1     = gen === 'G1'
-        const isG3type = ['G0','G2','G3','G4'].includes(gen)
+        const isG3type = gen === 'G3'
         const isR2type = ['R1','R2'].includes(gen)
         if (!isG1 && !isG3type && !isR2type) return
         const variety = varietyMap[ligne.idVariete ?? -1] ?? {}
