@@ -405,7 +405,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
 
       /* ── Chaîne aval : qui commande mes variétés à quel niveau ── */
       const chainMap: Record<string, ChainVariete> = {}
-      const ACTIVE_STATUTS = ['SOUMISE','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON','LIVREE']
+      const ACTIVE_STATUTS = ['SOUMISE','ACCEPTEE','LIVREE']
       orders.forEach((o: any) => {
         if (!ACTIVE_STATUTS.includes((o.statut ?? '').toUpperCase())) return
         ;(o.lignes ?? []).forEach((ligne: any) => {
@@ -549,7 +549,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
     const entry = fullChainMap[v.codeVariete]
     v.demands.forEach(d => {
       if (d.gen === 'G1') entry.demandesG1.push(d)
-      else if (['G3','G4'].includes(d.gen)) entry.demandesG3.push(d)
+      else if (d.gen === 'G3') entry.demandesG3.push(d)
       else if (['R1','R2'].includes(d.gen)) entry.demandesR2.push(d)
     })
   })

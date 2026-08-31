@@ -13,7 +13,7 @@ type Period = '1m' | '3m' | '6m' | '1a'
 const PERIOD_MONTHS: Record<Period, number> = { '1m': 1, '3m': 3, '6m': 6, '1a': 12 }
 const PERIOD_LABELS: Record<Period, string>  = { '1m': '1 mois', '3m': '3 mois', '6m': '6 mois', '1a': '1 an' }
 const MONTHS = ['Jan','Fév','Mar','Avr','Mai','Jun','Jul','Aoû','Sep','Oct','Nov','Déc']
-const ACTIVE_STATUTS = ['SOUMISE','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON','LIVREE']
+const ACTIVE_STATUTS = ['SOUMISE','ACCEPTEE']
 const REFRESH_INTERVAL = 30_000
 
 interface PipelineKpi {
