@@ -1096,7 +1096,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   // Stock G3 disponible par variété — signal de couverture pour UPSemCL et Admin
   const stockG3ByVariete: Record<string, number> = {}
   rawAgrege.forEach((s: any) => {
-    if (!['G1','G2','G3'].includes(s.codeGeneration ?? '')) return
+    if (s.codeGeneration !== 'G3') return
     const codeVar = s.codeVariete ?? ''
     if (codeVar) stockG3ByVariete[codeVar] = (stockG3ByVariete[codeVar] ?? 0) + (parseFloat(s.quantiteTotale) || 0)
   })

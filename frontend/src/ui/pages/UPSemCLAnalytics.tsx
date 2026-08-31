@@ -12,100 +12,16 @@ const GC = GEN_CHART_COLORS
 
 const REFRESH_INTERVAL = 30_000
 const ACTIVE_LOT = ['DISPONIBLE','EN_PRODUCTION','CERTIFIE','EN_COURS_CERT']
-const ACTIVE_ORDER = ['SOUMISE','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON']
+const ACTIVE_ORDER = ['SOUMISE','ACCEPTEE','EN_PREPARATION']
 
 interface CoverageRow {
   codeVariete: string; nomVariete: string; codeEspece: string
   stockG3Kg: number; demandG3Kg: number
 }
 
-interface G3BarEntry {
-  codeVariete: string; nomVariete: string; stockKg: number; demandKg: number
-}
-
 interface TransfertRow {
   id: number; codeLot: string; nomVariete: string
   destinataire: string; statut: string; dateTransfert: string
-}
-
-/* ── Graphe vertical groupé G3 stock vs demande ── */
-function G3CompareChart({ data }: { data: G3BarEntry[] }) {
-  const [hov, setHov] = useState<number | null>(null)
-  if (data.length === 0) return (
-    <div style={{ display:'flex', alignItems:'center', justifyContent:'center',
-      height:160, color:'var(--text-muted)', fontSize:12 }}>
-      Aucune donnée G3
-    </div>
-  )
-
-  const W = 380; const H = 190; const PT = 22; const PB = 32; const PL = 6; const PR = 6
-  const iW = W - PL - PR; const iH = H - PT - PB
-  const grpW = iW / data.length
-  const bW = grpW * 0.38
-
-  return (
-    <div>
-      <div style={{ display:'flex', gap:12, marginBottom:10, flexWrap:'wrap', alignItems:'center' }}>
-        <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:10.5, color:'var(--text-muted)' }}>
-          <span style={{ width:10, height:8, borderRadius:2, background:GC.G3, display:'inline-block' }} />
-          Stock G3
-        </span>
-        <span style={{ display:'flex', alignItems:'center', gap:5, fontSize:10.5, color:'var(--text-muted)' }}>
-          <span style={{ width:10, height:8, borderRadius:2, background:'#f59e0b', display:'inline-block' }} />
-          Demande G3
-        </span>
-        <span style={{ fontSize:9.5, color:'var(--text-muted)', fontStyle:'italic', marginLeft:'auto' }}>Échelle par variété</span>
-      </div>
-      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow:'visible', display:'block' }}>
-        <line x1={PL} y1={PT+iH} x2={W-PR} y2={PT+iH} stroke="var(--border)" strokeWidth={1.5} />
-        {data.map((d, i) => {
-          const localMax = Math.max(d.stockKg, d.demandKg, 1)
-          const cx   = PL + i*grpW + grpW/2
-          const x1   = cx - bW - 1
-          const x2   = cx + 1
-          const sh1  = Math.max((d.stockKg/localMax)*iH, d.stockKg>0?3:0)
-          const sh2  = Math.max((d.demandKg/localMax)*iH, d.demandKg>0?3:0)
-          const y1   = PT+iH-sh1; const y2 = PT+iH-sh2
-          const isH  = hov===i
-          const isCrit = d.demandKg>0 && d.stockKg<d.demandKg
-          const lbl = d.nomVariete.length>10 ? d.nomVariete.slice(0,10)+'…' : d.nomVariete
-          return (
-            <g key={i} onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)} style={{cursor:'default'}}>
-              {isH && <rect x={x1-3} y={PT} width={bW*2+8} height={iH} rx={3} fill={GC.G3} opacity={0.05}/>}
-              <rect x={x1} y={y1} width={bW} height={Math.max(sh1,2)} rx={3}
-                fill={GC.G3} opacity={isH?1:0.75} style={{transition:'opacity 0.15s'}}/>
-              {d.stockKg>0 && (
-                <text x={x1+bW/2} y={y1-4} textAnchor="middle" fontSize={isH?9:8}
-                  fontWeight={700} fill={GC.G3} fontFamily="var(--font-sans)">{fmtT(d.stockKg)}</text>
-              )}
-              <rect x={x2} y={y2} width={bW} height={Math.max(sh2,2)} rx={3}
-                fill={isCrit?'#dc2626':'#f59e0b'} opacity={isH?1:0.75} style={{transition:'opacity 0.15s'}}/>
-              {d.demandKg>0 && (
-                <text x={x2+bW/2} y={y2-4} textAnchor="middle" fontSize={isH?9:8}
-                  fontWeight={700} fill={isCrit?'#dc2626':'#f59e0b'} fontFamily="var(--font-sans)">{fmtT(d.demandKg)}</text>
-              )}
-              <text x={cx} y={H-PB+14} textAnchor="middle" fontSize={isH?8.5:8}
-                fontWeight={isH?700:400} fill={isH?GC.G3:'var(--text-muted)'} fontFamily="var(--font-sans)">
-                {lbl}
-              </text>
-              {isH && (
-                <g>
-                  <rect x={Math.max(PL+2,cx-52)} y={Math.min(y1,y2)-46} width={104} height={38} rx={5}
-                    fill="var(--text-primary)" opacity={0.93}/>
-                  <text x={cx} y={Math.min(y1,y2)-32} textAnchor="middle" fontSize={9}
-                    fontWeight={700} fill="#fff" fontFamily="var(--font-sans)">{d.nomVariete}</text>
-                  <text x={cx} y={Math.min(y1,y2)-20} textAnchor="middle" fontSize={8.5}
-                    fill={GC.G3} fontFamily="var(--font-sans)">Stock {fmtT(d.stockKg)}</text>
-                  <text x={cx} y={Math.min(y1,y2)-10} textAnchor="middle" fontSize={8.5}
-                    fill={isCrit?'#dc2626':'#f59e0b'} fontFamily="var(--font-sans)">Dem. {fmtT(d.demandKg)}</text>
-                </g>
-              )}
-            </g>
-          )
-        })}
-      </svg>
-    </div>
-  )
 }
 
 /* ── Couverture G3 stock vs demandes mult. ── */
@@ -221,7 +137,6 @@ function G3CoverageBar({ rows }: { rows: CoverageRow[] }) {
 
 export function UPSemCLAnalytics() {
   const [kpi,         setKpi]         = useState({ g1Kg:0, g2Kg:0, g3Kg:0, g3TransfKg:0, cmdG3:0 })
-  const [g3Bars,      setG3Bars]      = useState<G3BarEntry[]>([])
   const [coverageRows,setCoverageRows]= useState<CoverageRow[]>([])
   const [transferts,  setTransferts]  = useState<TransfertRow[]>([])
   const [alertes,     setAlertes]     = useState<{label:string;detail:string;critical:boolean}[]>([])
@@ -270,8 +185,8 @@ export function UPSemCLAnalytics() {
       ).size
       setKpi({g1Kg,g2Kg,g3Kg,g3TransfKg,cmdG3})
 
-      /* ── Graphe vertical G3 : stock vs demande par variété ── */
-      const g3Map: Record<string,G3BarEntry> = {}
+      /* ── Graphe couverture G3 : stock vs demande par variété ── */
+      const g3Map: Record<string,{codeVariete:string;nomVariete:string;stockKg:number;demandKg:number}> = {}
       stocks.forEach((s:any)=>{
         if (s.codeGeneration!=='G3') return
         const cv = s.codeVariete; if (!cv) return
@@ -292,8 +207,6 @@ export function UPSemCLAnalytics() {
           g3Map[cv].demandKg += parseFloat(ligne.quantiteDemandee??0)||0
         })
       })
-      setG3Bars(Object.values(g3Map).sort((a,b)=>b.demandKg-a.demandKg).slice(0,8))
-
       /* ── Couverture G3 ── */
       const covRows: CoverageRow[] = Object.values(g3Map).map(e=>({
         codeVariete: e.codeVariete, nomVariete: e.nomVariete,
@@ -325,11 +238,11 @@ export function UPSemCLAnalytics() {
       /* ── Alertes spécifiques UPSemCL ── */
       const als: {label:string;detail:string;critical:boolean}[] = []
       Object.values(g3Map).forEach(r=>{
-        if (r.demandKg>0 && r.stockG3Kg<r.demandKg) {
+        if (r.demandKg>0 && r.stockKg<r.demandKg) {
           als.push({
             label:`Stock G3 insuffisant — ${r.nomVariete}`,
-            detail:`Stock ${fmtT(r.stockG3Kg)} · Demande ${fmtT(r.demandKg)}`,
-            critical: r.stockG3Kg===0,
+            detail:`Stock ${fmtT(r.stockKg)} · Demande ${fmtT(r.demandKg)}`,
+            critical: r.stockKg===0,
           })
         }
       })
@@ -363,10 +276,10 @@ export function UPSemCLAnalytics() {
 
   function handleExport() {
     const date = new Date().toISOString().slice(0,10)
-    const g3Rows = g3Bars.map(r=>[r.nomVariete,r.codeVariete,Math.round(r.stockKg),Math.round(r.demandKg)])
+    const covRows = coverageRows.map(r=>[r.nomVariete,r.codeVariete,Math.round(r.stockG3Kg),Math.round(r.demandG3Kg)])
     const trRows = transferts.map(t=>[t.codeLot,t.nomVariete,t.destinataire,t.statut,t.dateTransfert?new Date(t.dateTransfert).toLocaleDateString('fr-FR'):'—'])
     downloadXlsx(`senjiw-upsemcl-${date}`,[
-      {name:'G3 stock vs demande',headers:['Variété','Code','Stock G3 (kg)','Demande G3 (kg)'],rows:g3Rows},
+      {name:'Couverture G3',headers:['Variété','Code','Stock G3 (kg)','Demande G3 (kg)'],rows:covRows},
       {name:'Transferts G3',headers:['Code lot','Variété','Destinataire','Statut','Date'],rows:trRows},
     ])
   }
@@ -444,40 +357,27 @@ export function UPSemCLAnalytics() {
         ))}
       </div>
 
-      {/* ══ ② Graphe comparatif G3 + Couverture ══ */}
+      {/* ══ ② Couverture G3 ══ */}
       <div className="card" style={{overflow:'hidden'}}>
         <div style={{padding:'12px 18px 0',borderBottom:'1px solid var(--border)'}}>
           <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:12,flexWrap:'wrap'}}>
             <span className="card-title">
               <span className="card-title-icon"><TrendingUp size={14}/></span>
-              G3 stock vs demande — par variété
+              Couverture G3 · Multiplicateurs
             </span>
-            {!loading && g3Bars.length>0 && (
+            {!loading && coverageRows.length>0 && (
               <span className="badge badge-blue" style={{marginLeft:'auto',fontSize:10}}>
-                {g3Bars.length} variété{g3Bars.length>1?'s':''}
+                {coverageRows.length} variété{coverageRows.length>1?'s':''}
               </span>
             )}
           </div>
         </div>
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',minHeight:220}}>
-          <div style={{padding:'16px 20px',borderRight:'1px solid var(--border)'}}>
-            {loading?(
-              <div className="skeleton" style={{height:180,borderRadius:6}}/>
-            ):(
-              <G3CompareChart data={g3Bars}/>
-            )}
-          </div>
-          <div style={{padding:'16px 20px'}}>
-            <div style={{fontSize:12,fontWeight:700,color:'var(--text-primary)',marginBottom:14,
-              display:'flex',alignItems:'center',gap:6}}>
-              Couverture G3 · Multiplicateurs
-            </div>
-            {loading?(
-              <div className="skeleton" style={{height:160,borderRadius:6}}/>
-            ):(
-              <G3CoverageBar rows={coverageRows}/>
-            )}
-          </div>
+        <div style={{padding:'16px 20px'}}>
+          {loading?(
+            <div className="skeleton" style={{height:160,borderRadius:6}}/>
+          ):(
+            <G3CoverageBar rows={coverageRows}/>
+          )}
         </div>
       </div>
 
