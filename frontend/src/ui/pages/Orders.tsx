@@ -58,6 +58,7 @@ const GEN_LABELS: Record<number, string> = {
   1: 'G0 — Génétique', 2: 'G1 — Pré-base', 3: 'G2 — Base',
   4: 'G3 — Certif. C1', 5: 'G4 — Certif. C2', 6: 'R1 — Certifié', 7: 'R2 — Commercial',
 }
+const GEN_SHORT: Record<number, string> = { 1: 'G0', 2: 'G1', 3: 'G2', 4: 'G3', 5: 'G4', 6: 'R1', 7: 'R2' }
 
 function buildOrderXlsSheets(orders: any[], orgs: any[], varieties: any[]) {
   const orgMap = Object.fromEntries(orgs.map((o: any) => [o.id, o.nomOrganisation ?? `#${o.id}`]))
@@ -469,14 +470,17 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
         {/* Tooltip HTML absolu sur la barre survolée */}
         {hovData && clicked === null && (() => {
           const hovKg = sumKg(hovData.rawOrders)
-          // Top 4 variétés par volume demandé
-          const vMap: Record<string, { nom: string; kg: number }> = {}
+          // Top 4 variétés·génération par volume demandé
+          const vMap: Record<string, { nom: string; gen: string; kg: number }> = {}
           for (const o of hovData.rawOrders) {
             for (const l of (Array.isArray(o.lignes) ? o.lignes : [])) {
               const vId = String(l.idVariete)
+              const gId = Number(l.idGeneration)
+              const rowKey = `${vId}_${gId}`
               const v = varById[vId]
               const nom = v?.nomVariete ?? `#${l.idVariete}`
-              vMap[vId] = { nom, kg: (vMap[vId]?.kg ?? 0) + toKg(Number(l.quantiteDemandee) || 0, l.unite) }
+              const gen = GEN_SHORT[gId] ?? `G${gId}`
+              vMap[rowKey] = { nom, gen, kg: (vMap[rowKey]?.kg ?? 0) + toKg(Number(l.quantiteDemandee) || 0, l.unite) }
             }
           }
           const topVars = Object.values(vMap).sort((a, b) => b.kg - a.kg).slice(0, 4)
@@ -517,8 +521,14 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
                 <div style={{ marginTop: 6, paddingTop: 5, borderTop: '1px solid var(--border)' }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Variétés</div>
                   {topVars.map((v, vi) => (
-                    <div key={vi} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 2 }}>
-                      <span style={{ color: 'var(--text-secondary)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{v.nom}</span>
+                    <div key={vi} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', minWidth: 0 }}>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.nom}</span>
+                        <span style={{ fontSize: 9.5, fontWeight: 700, padding: '1px 4px', borderRadius: 3, flexShrink: 0,
+                          background: v.gen === 'R2' ? '#8b5cf614' : v.gen === 'G3' ? '#f59e0b14' : '#3b82f614',
+                          color:      v.gen === 'R2' ? '#7c3aed'   : v.gen === 'G3' ? '#d97706'   : '#2563eb',
+                        }}>{v.gen}</span>
+                      </span>
                       <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 10.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtKg(v.kg)}</span>
                     </div>
                   ))}
@@ -549,10 +559,8 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
       {/* ── Panel de détail (barre cliquée) ── */}
       {clicked !== null && (() => {
         const pt = data[clicked]
-        const varById = Object.fromEntries(varieties.map((v: any) => [String(v.id), v]))
-        const toKg = (qty: number, unite?: string) => unite === 't' ? qty * 1000 : qty
 
-        type VarEntry = { nom: string; code: string; espece: string; kgD: number; nbSoumise: number; nbEnCours: number; nbLivree: number; nbAnnulee: number }
+        type VarEntry = { nom: string; code: string; espece: string; gen: string; genFull: string; kgD: number; nbSoumise: number; nbEnCours: number; nbLivree: number; nbAnnulee: number }
         const byVar: Record<string, VarEntry> = {}
 
         for (const o of pt.rawOrders) {
@@ -563,24 +571,29 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
 
           for (const l of lignes) {
             const vId = String(l.idVariete)
+            const gId = Number(l.idGeneration)
+            const rowKey = `${vId}_${gId}`
             const v = varById[vId]
-            if (!byVar[vId]) byVar[vId] = {
+            if (!byVar[rowKey]) byVar[rowKey] = {
               nom: v?.nomVariete ?? `Variété #${l.idVariete}`,
               code: v?.codeVariete ?? '—',
               espece: v?.espece?.codeEspece ?? v?.espece?.nomEspece ?? '—',
+              gen: GEN_SHORT[gId] ?? `G${gId}`,
+              genFull: GEN_LABELS[gId] ?? `Génération ${gId}`,
               kgD: 0, nbSoumise: 0, nbEnCours: 0, nbLivree: 0, nbAnnulee: 0,
             }
-            byVar[vId].kgD += toKg(Number(l.quantiteDemandee) || 0, l.unite)
-            if (sKey === 'SOUMISE')  byVar[vId].nbSoumise++
-            if (sKey === 'EN_COURS') byVar[vId].nbEnCours++
-            if (sKey === 'LIVREE')   byVar[vId].nbLivree++
-            if (sKey === 'ANNULEE')  byVar[vId].nbAnnulee++
+            byVar[rowKey].kgD += toKg(Number(l.quantiteDemandee) || 0, l.unite)
+            if (sKey === 'SOUMISE')  byVar[rowKey].nbSoumise++
+            if (sKey === 'EN_COURS') byVar[rowKey].nbEnCours++
+            if (sKey === 'LIVREE')   byVar[rowKey].nbLivree++
+            if (sKey === 'ANNULEE')  byVar[rowKey].nbAnnulee++
           }
         }
 
         const rows = Object.values(byVar).sort((a, b) => b.kgD - a.kgD)
         const totalKg = rows.reduce((s, r) => s + r.kgD, 0)
         const hasLignes = rows.length > 0
+        const nbVarietesUniques = new Set(rows.map(r => r.code)).size
 
         return (
           <div style={{
@@ -600,20 +613,18 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
                   </div>
                   <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>
                     {pt.total} commande{pt.total > 1 ? 's' : ''}
-                    {hasLignes && ` · ${rows.length} variété${rows.length > 1 ? 's' : ''} · ${totalKg >= 1000 ? `${(totalKg / 1000).toFixed(2)} t` : `${Math.round(totalKg)} kg`} demandés`}
+                    {hasLignes && ` · ${nbVarietesUniques} variété${nbVarietesUniques > 1 ? 's' : ''} · ${rows.length} ligne${rows.length > 1 ? 's' : ''} · ${totalKg >= 1000 ? `${(totalKg / 1000).toFixed(2)} t` : `${Math.round(totalKg)} kg`} demandés`}
                   </div>
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {/* Mini-synthèse statuts */}
                 {pt.LIVREE   > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#10b981', background: '#10b98112', padding: '2px 8px', borderRadius: 5 }}>{pt.LIVREE} livrée{pt.LIVREE > 1 ? 's' : ''}</span>}
                 {pt.EN_COURS > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#f59e0b', background: '#f59e0b12', padding: '2px 8px', borderRadius: 5 }}>{pt.EN_COURS} en cours</span>}
                 {pt.SOUMISE  > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#3b82f6', background: '#3b82f612', padding: '2px 8px', borderRadius: 5 }}>{pt.SOUMISE} soumise{pt.SOUMISE > 1 ? 's' : ''}</span>}
                 {pt.ANNULEE  > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#ef4444', background: '#ef444412', padding: '2px 8px', borderRadius: 5 }}>{pt.ANNULEE} annulée{pt.ANNULEE > 1 ? 's' : ''}</span>}
                 <button onClick={() => setClicked(null)} style={{
                   marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer',
-                  fontSize: 16, color: 'var(--text-muted)', lineHeight: 1, padding: '2px 4px',
-                  borderRadius: 4,
+                  fontSize: 16, color: 'var(--text-muted)', lineHeight: 1, padding: '2px 4px', borderRadius: 4,
                 }}>✕</button>
               </div>
             </div>
@@ -627,9 +638,19 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      {['Variété', 'Code', 'Espèce', 'Qté demandée', 'Livrées', 'En cours', 'Soumises', 'Annulées'].map(h => (
+                      {[
+                        { h: 'Variété',      right: false },
+                        { h: 'Code',         right: false },
+                        { h: 'Espèce',       right: false },
+                        { h: 'Génération',   right: false },
+                        { h: 'Qté demandée', right: true  },
+                        { h: 'Livrées',      right: true  },
+                        { h: 'En cours',     right: true  },
+                        { h: 'Soumises',     right: true  },
+                        { h: 'Annulées',     right: true  },
+                      ].map(({ h, right }) => (
                         <th key={h} style={{
-                          padding: '7px 12px', textAlign: h === 'Qté demandée' || h.startsWith('Li') || h.startsWith('En') || h.startsWith('So') || h.startsWith('An') ? 'right' : 'left',
+                          padding: '7px 12px', textAlign: right ? 'right' : 'left',
                           fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
                           textTransform: 'uppercase', letterSpacing: '.05em',
                           background: 'var(--surface-2)', whiteSpace: 'nowrap',
@@ -640,9 +661,17 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
                   <tbody>
                     {rows.map((r, ri) => (
                       <tr key={ri} style={{ borderBottom: '1px solid var(--border)', background: ri % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
-                        <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-primary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nom}</td>
-                        <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', fontSize: 11 }}>{r.code}</td>
+                        <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-primary)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nom}</td>
+                        <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontSize: 11 }}>{r.code}</td>
                         <td style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontSize: 11 }}>{r.espece}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          <span style={{
+                            fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                            background: r.gen === 'R2' ? '#8b5cf614' : r.gen === 'G3' ? '#f59e0b14' : '#3b82f614',
+                            color:      r.gen === 'R2' ? '#7c3aed'   : r.gen === 'G3' ? '#d97706'   : '#2563eb',
+                            whiteSpace: 'nowrap',
+                          }}>{r.genFull}</span>
+                        </td>
                         <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                           {r.kgD >= 1000 ? `${(r.kgD / 1000).toFixed(2)} t` : `${Math.round(r.kgD)} kg`}
                         </td>
@@ -655,7 +684,7 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)' }}>
-                      <td colSpan={3} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL</td>
+                      <td colSpan={4} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL · {rows.length} ligne{rows.length > 1 ? 's' : ''}</td>
                       <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
                         {totalKg >= 1000 ? `${(totalKg / 1000).toFixed(2)} t` : `${Math.round(totalKg)} kg`}
                       </td>
