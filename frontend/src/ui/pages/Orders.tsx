@@ -143,7 +143,7 @@ type Periode  = '7J' | '4S' | '3M' | '6M' | '12M'
 type SerieKey = 'LIVREE' | 'EN_COURS' | 'SOUMISE' | 'ANNULEE'
 
 interface PointData extends Record<SerieKey, number> {
-  label: string; sublabel: string; total: number
+  label: string; sublabel: string; total: number; rawOrders: any[]
 }
 
 const SERIE_CFG: ReadonlyArray<{ key: SerieKey; label: string; couleur: string }> = [
@@ -171,7 +171,7 @@ function calcTicksY(max: number): number[] {
 function buildPointData(label: string, sublabel: string, cmds: any[]): PointData {
   const nb = (ss: string[]) => cmds.filter(o => ss.includes(o.statut)).length
   return {
-    label, sublabel, total: cmds.length,
+    label, sublabel, total: cmds.length, rawOrders: cmds,
     SOUMISE:  nb(['SOUMISE']),
     EN_COURS: nb(['ACCEPTEE','EN_PREPARATION','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON']),
     LIVREE:   nb(['LIVREE']),
@@ -295,9 +295,10 @@ function KpiCard({ icon, value, label, accent, active, onClick, loading }: KpiPr
 }
 
 // Graphe d'évolution avancé avec sélecteur de période et barres empilées par statut
-function EvolutionChart({ orders }: { orders: any[] }) {
+function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?: any[] }) {
   const [periode, setPeriode] = useState<Periode>('6M')
   const [hovered, setHovered] = useState<number | null>(null)
+  const [clicked, setClicked] = useState<number | null>(null)
 
   const data     = useMemo(() => calcPeriode(orders, periode), [orders, periode])
   const maxTotal = Math.max(...data.map(d => d.total), 1)
@@ -344,7 +345,7 @@ function EvolutionChart({ orders }: { orders: any[] }) {
         </div>
         <div style={{ display: 'flex', background: 'var(--surface-2)', borderRadius: 8, padding: 3, border: '1px solid var(--border)', gap: 2 }}>
           {(['7J', '4S', '3M', '6M', '12M'] as Periode[]).map(p => (
-            <button key={p} onClick={() => { setPeriode(p); setHovered(null) }}
+            <button key={p} onClick={() => { setPeriode(p); setHovered(null); setClicked(null) }}
               style={{
                 padding: '3px 9px', borderRadius: 5, border: 'none', cursor: 'pointer',
                 fontSize: 11, fontWeight: 700,
@@ -393,19 +394,21 @@ function EvolutionChart({ orders }: { orders: any[] }) {
 
           {/* Barres empilées par statut */}
           {data.map((d, i) => {
-            const bx    = PL + i * (BARW + GAP)
-            const isHov = hovered === i
-            let yBot    = PT + PH   // curseur de l'empilement (bas → haut)
+            const bx      = PL + i * (BARW + GAP)
+            const isHov   = hovered === i
+            const isSel   = clicked === i
+            let yBot      = PT + PH
 
             return (
               <g key={i}
                 onMouseEnter={() => setHovered(i)}
                 onMouseLeave={() => setHovered(null)}
+                onClick={() => setClicked(clicked === i ? null : i)}
                 style={{ cursor: 'pointer' }}
               >
                 {/* Fond de la barre */}
                 <rect x={bx} y={PT} width={BARW} height={PH} rx={4}
-                  fill="var(--surface-2,#f1f5f9)" opacity={isHov ? 0.9 : 0.55} />
+                  fill={isSel ? '#16a34a18' : 'var(--surface-2,#f1f5f9)'} opacity={isHov || isSel ? 0.95 : 0.55} />
 
                 {/* Segments colorés par statut */}
                 {ORDRE.map(key => {
@@ -414,22 +417,28 @@ function EvolutionChart({ orders }: { orders: any[] }) {
                   const by  = yBot - bh; yBot -= bh
                   return (
                     <rect key={key} x={bx} y={by} width={BARW} height={bh}
-                      fill={SERIE_COULEUR[key]} opacity={isHov ? 1 : 0.84} rx={0} />
+                      fill={SERIE_COULEUR[key]} opacity={isHov || isSel ? 1 : 0.84} rx={0} />
                   )
                 })}
+
+                {/* Indicateur de sélection (bord vert) */}
+                {isSel && (
+                  <rect x={bx} y={PT} width={BARW} height={PH} rx={4}
+                    fill="none" stroke="#16a34a" strokeWidth={2} />
+                )}
 
                 {/* Total affiché au-dessus */}
                 {d.total > 0 && (
                   <text x={bx + BARW / 2} y={yBot - 3} textAnchor="middle" fontSize={8}
                     fontWeight="700"
-                    fill={isHov ? 'var(--text-primary)' : 'var(--text-muted)'}
+                    fill={isHov || isSel ? 'var(--text-primary)' : 'var(--text-muted)'}
                     fontFamily="Plus Jakarta Sans, system-ui, sans-serif">{d.total}</text>
                 )}
 
                 {/* Label axe X */}
                 <text x={bx + BARW / 2} y={PT + PH + 14} textAnchor="middle" fontSize={8}
-                  fontWeight={isHov ? '700' : '400'}
-                  fill={isHov ? 'var(--text-primary)' : 'var(--text-muted)'}
+                  fontWeight={isHov || isSel ? '700' : '400'}
+                  fill={isHov || isSel ? (isSel ? '#16a34a' : 'var(--text-primary)') : 'var(--text-muted)'}
                   fontFamily="Plus Jakarta Sans, system-ui, sans-serif">{d.label}</text>
               </g>
             )
@@ -470,7 +479,134 @@ function EvolutionChart({ orders }: { orders: any[] }) {
             <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}>{s.label}</span>
           </div>
         ))}
+        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>— cliquer une barre pour le détail</span>
       </div>
+
+      {/* ── Panel de détail (barre cliquée) ── */}
+      {clicked !== null && (() => {
+        const pt = data[clicked]
+        const varById = Object.fromEntries(varieties.map((v: any) => [String(v.id), v]))
+        const toKg = (qty: number, unite?: string) => unite === 't' ? qty * 1000 : qty
+
+        type VarEntry = { nom: string; code: string; espece: string; kgD: number; nbSoumise: number; nbEnCours: number; nbLivree: number; nbAnnulee: number }
+        const byVar: Record<string, VarEntry> = {}
+
+        for (const o of pt.rawOrders) {
+          const lignes: any[] = Array.isArray(o.lignes) ? o.lignes : []
+          const sKey: SerieKey = ['ANNULEE','REJETEE'].includes(o.statut) ? 'ANNULEE'
+            : ['ACCEPTEE','EN_PREPARATION','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON'].includes(o.statut) ? 'EN_COURS'
+            : o.statut === 'LIVREE' ? 'LIVREE' : 'SOUMISE'
+
+          for (const l of lignes) {
+            const vId = String(l.idVariete)
+            const v = varById[vId]
+            if (!byVar[vId]) byVar[vId] = {
+              nom: v?.nomVariete ?? `Variété #${l.idVariete}`,
+              code: v?.codeVariete ?? '—',
+              espece: v?.espece?.codeEspece ?? v?.espece?.nomEspece ?? '—',
+              kgD: 0, nbSoumise: 0, nbEnCours: 0, nbLivree: 0, nbAnnulee: 0,
+            }
+            byVar[vId].kgD += toKg(Number(l.quantiteDemandee) || 0, l.unite)
+            if (sKey === 'SOUMISE')  byVar[vId].nbSoumise++
+            if (sKey === 'EN_COURS') byVar[vId].nbEnCours++
+            if (sKey === 'LIVREE')   byVar[vId].nbLivree++
+            if (sKey === 'ANNULEE')  byVar[vId].nbAnnulee++
+          }
+        }
+
+        const rows = Object.values(byVar).sort((a, b) => b.kgD - a.kgD)
+        const totalKg = rows.reduce((s, r) => s + r.kgD, 0)
+        const hasLignes = rows.length > 0
+
+        return (
+          <div style={{
+            marginTop: 16, borderRadius: 10, border: '1.5px solid #16a34a40',
+            background: 'var(--surface)', overflow: 'hidden',
+          }}>
+            {/* En-tête panel */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 16px', background: '#16a34a0c', borderBottom: '1px solid #16a34a30',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 3, height: 22, borderRadius: 2, background: '#16a34a', flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '.01em' }}>
+                    Détail — {pt.sublabel || pt.label}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1 }}>
+                    {pt.total} commande{pt.total > 1 ? 's' : ''}
+                    {hasLignes && ` · ${rows.length} variété${rows.length > 1 ? 's' : ''} · ${totalKg >= 1000 ? `${(totalKg / 1000).toFixed(2)} t` : `${Math.round(totalKg)} kg`} demandés`}
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {/* Mini-synthèse statuts */}
+                {pt.LIVREE   > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#10b981', background: '#10b98112', padding: '2px 8px', borderRadius: 5 }}>{pt.LIVREE} livrée{pt.LIVREE > 1 ? 's' : ''}</span>}
+                {pt.EN_COURS > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#f59e0b', background: '#f59e0b12', padding: '2px 8px', borderRadius: 5 }}>{pt.EN_COURS} en cours</span>}
+                {pt.SOUMISE  > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#3b82f6', background: '#3b82f612', padding: '2px 8px', borderRadius: 5 }}>{pt.SOUMISE} soumise{pt.SOUMISE > 1 ? 's' : ''}</span>}
+                {pt.ANNULEE  > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#ef4444', background: '#ef444412', padding: '2px 8px', borderRadius: 5 }}>{pt.ANNULEE} annulée{pt.ANNULEE > 1 ? 's' : ''}</span>}
+                <button onClick={() => setClicked(null)} style={{
+                  marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer',
+                  fontSize: 16, color: 'var(--text-muted)', lineHeight: 1, padding: '2px 4px',
+                  borderRadius: 4,
+                }}>✕</button>
+              </div>
+            </div>
+
+            {!hasLignes ? (
+              <div style={{ padding: '18px 16px', fontSize: 12, color: 'var(--text-muted)', textAlign: 'center' }}>
+                Aucune ligne de commande disponible pour cette période.
+              </div>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      {['Variété', 'Code', 'Espèce', 'Qté demandée', 'Livrées', 'En cours', 'Soumises', 'Annulées'].map(h => (
+                        <th key={h} style={{
+                          padding: '7px 12px', textAlign: h === 'Qté demandée' || h.startsWith('Li') || h.startsWith('En') || h.startsWith('So') || h.startsWith('An') ? 'right' : 'left',
+                          fontSize: 10, fontWeight: 700, color: 'var(--text-muted)',
+                          textTransform: 'uppercase', letterSpacing: '.05em',
+                          background: 'var(--surface-2)', whiteSpace: 'nowrap',
+                        }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r, ri) => (
+                      <tr key={ri} style={{ borderBottom: '1px solid var(--border)', background: ri % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
+                        <td style={{ padding: '8px 12px', fontWeight: 600, color: 'var(--text-primary)', maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nom}</td>
+                        <td style={{ padding: '8px 12px', color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', fontSize: 11 }}>{r.code}</td>
+                        <td style={{ padding: '8px 12px', color: 'var(--text-secondary)', fontSize: 11 }}>{r.espece}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                          {r.kgD >= 1000 ? `${(r.kgD / 1000).toFixed(2)} t` : `${Math.round(r.kgD)} kg`}
+                        </td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: r.nbLivree  ? 700 : 400, color: r.nbLivree  ? '#10b981' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{r.nbLivree  || '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: r.nbEnCours ? 700 : 400, color: r.nbEnCours ? '#f59e0b' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{r.nbEnCours || '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: r.nbSoumise ? 700 : 400, color: r.nbSoumise ? '#3b82f6' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{r.nbSoumise || '—'}</td>
+                        <td style={{ padding: '8px 12px', textAlign: 'right', fontWeight: r.nbAnnulee ? 700 : 400, color: r.nbAnnulee ? '#ef4444' : 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{r.nbAnnulee || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)' }}>
+                      <td colSpan={3} style={{ padding: '7px 12px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                        {totalKg >= 1000 ? `${(totalKg / 1000).toFixed(2)} t` : `${Math.round(totalKg)} kg`}
+                      </td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: '#10b981', fontVariantNumeric: 'tabular-nums' }}>{pt.LIVREE  || '—'}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: '#f59e0b', fontVariantNumeric: 'tabular-nums' }}>{pt.EN_COURS || '—'}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: '#3b82f6', fontVariantNumeric: 'tabular-nums' }}>{pt.SOUMISE  || '—'}</td>
+                      <td style={{ padding: '7px 12px', textAlign: 'right', fontWeight: 800, color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{pt.ANNULEE  || '—'}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            )}
+          </div>
+        )
+      })()}
     </div>
   )
 }
@@ -814,7 +950,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
       </div>
 
       {/* Graphe évolution */}
-      {!loading && <EvolutionChart orders={orders} />}
+      {!loading && <EvolutionChart orders={orders} varieties={varieties} />}
 
       <div className="card">
         <div className="card-header">
@@ -1108,7 +1244,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
         </div>
 
         {/* Graphe (contextualisé à l'onglet actif) */}
-        {!loading && <div style={{ padding: '0 16px 0' }}><EvolutionChart orders={activeOrders} /></div>}
+        {!loading && <div style={{ padding: '0 16px 0' }}><EvolutionChart orders={activeOrders} varieties={varieties} /></div>}
 
         {/* Barre de recherche */}
         <div className="filters-bar">
@@ -1910,7 +2046,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
         </div>
       )}
 
-      {!loading && <EvolutionChart orders={orders} />}
+      {!loading && <EvolutionChart orders={orders} varieties={varieties} />}
 
       <div className="card">
         <div className="card-header">
@@ -2041,7 +2177,7 @@ function VueAdmin({ setToast }: { setToast: any }) {
         <KpiCard icon={<Truck size={20} />}          value={delivered}     label="Livrées"          accent="#10b981" active={kpiFilter === 'delivered'}  onClick={() => toggleKpi('delivered')} loading={loading} />
       </div>
 
-      {!loading && <EvolutionChart orders={orders} />}
+      {!loading && <EvolutionChart orders={orders} varieties={varieties} />}
 
       <div className="card">
         <div className="card-header">
