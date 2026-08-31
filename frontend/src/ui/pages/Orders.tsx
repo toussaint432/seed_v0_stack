@@ -226,15 +226,20 @@ function calcPeriode(orders: any[], periode: Periode): PointData[] {
 }
 
 // Mini indicateur statistique de synthèse
-function StatMini({ label, value, couleur, icon }: {
-  label: string; value: string | number; couleur?: string; icon?: React.ReactNode
+function StatMini({ label, value, couleur, icon, sublabel }: {
+  label: string; value: string | number; couleur?: string; icon?: React.ReactNode; sublabel?: string
 }) {
   return (
     <div style={{ background: 'var(--surface-2)', borderRadius: 8, padding: '8px 10px', textAlign: 'center', border: '1px solid var(--border)' }}>
       <div style={{ fontSize: 14, fontWeight: 800, color: couleur ?? 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, lineHeight: 1.2 }}>
         {icon}{value}
       </div>
-      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 3, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+      {sublabel && (
+        <div style={{ fontSize: 10, color: couleur ?? 'var(--text-secondary)', marginTop: 2, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
+          {sublabel}
+        </div>
+      )}
+      <div style={{ fontSize: 9.5, color: 'var(--text-muted)', marginTop: 2, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em' }}>
         {label}
       </div>
     </div>
@@ -304,12 +309,28 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
   const maxTotal = Math.max(...data.map(d => d.total), 1)
   const yTicks   = useMemo(() => calcTicksY(maxTotal), [maxTotal])
 
+  // ── Helpers volumes ──
+  const toKg = (qty: number, unite?: string) => unite === 't' ? qty * 1000 : qty
+  const fmtKg = (kg: number) => kg >= 1000 ? `${(kg / 1000).toFixed(2)} t` : `${Math.round(kg)} kg`
+  const sumKg = (cmds: any[]) => cmds.reduce((s, o) => {
+    const lignes: any[] = Array.isArray(o.lignes) ? o.lignes : []
+    return s + lignes.reduce((ls, l) => ls + toKg(Number(l.quantiteDemandee) || 0, l.unite), 0)
+  }, 0)
+
+  const varById = useMemo(() => Object.fromEntries(varieties.map((v: any) => [String(v.id), v])), [varieties])
+
   // ── KPI de synthèse sur la période affichée ──
+  const allPeriodeOrders = useMemo(() => data.flatMap(d => d.rawOrders), [data])
   const totalP = data.reduce((s, d) => s + d.total,   0)
   const totalL = data.reduce((s, d) => s + d.LIVREE,  0)
   const totalA = data.reduce((s, d) => s + d.ANNULEE, 0)
   const tauxL  = totalP > 0 ? Math.round(totalL / totalP * 100) : 0
   const tauxA  = totalP > 0 ? Math.round(totalA / totalP * 100) : 0
+
+  const totalKg   = useMemo(() => sumKg(allPeriodeOrders), [allPeriodeOrders])
+  const livreeKg  = useMemo(() => sumKg(allPeriodeOrders.filter(o => o.statut === 'LIVREE')), [allPeriodeOrders])
+  const annuleeKg = useMemo(() => sumKg(allPeriodeOrders.filter(o => ['ANNULEE','REJETEE'].includes(o.statut))), [allPeriodeOrders])
+
   // Tendance : 1re moitié vs 2e moitié de la période
   const mid   = Math.floor(data.length / 2)
   const avant = data.slice(0, mid).reduce((s, d) => s + d.total, 0)
@@ -360,9 +381,9 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
 
       {/* ── Indicateurs de synthèse ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, marginBottom: 14 }}>
-        <StatMini label="Total commandes"        value={totalP} />
-        <StatMini label={`Livrées · ${tauxL}%`}  value={totalL} couleur="#10b981" icon={<Truck   size={11} />} />
-        <StatMini label={`Annulées · ${tauxA}%`} value={totalA} couleur="#ef4444" icon={<XCircle size={11} />} />
+        <StatMini label="Total commandes"        value={totalP} sublabel={totalKg > 0 ? fmtKg(totalKg) : undefined} />
+        <StatMini label={`Livrées · ${tauxL}%`}  value={totalL} sublabel={livreeKg > 0 ? fmtKg(livreeKg) : undefined}  couleur="#10b981" icon={<Truck   size={11} />} />
+        <StatMini label={`Annulées · ${tauxA}%`} value={totalA} sublabel={annuleeKg > 0 ? fmtKg(annuleeKg) : undefined} couleur="#ef4444" icon={<XCircle size={11} />} />
         <StatMini
           label="Tendance période"
           value={delta !== null ? `${delta >= 0 ? '+' : ''}${delta}%` : '—'}
@@ -446,29 +467,72 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
         </svg>
 
         {/* Tooltip HTML absolu sur la barre survolée */}
-        {hovData && (
-          <div style={{
-            position: 'absolute', top: 0, left: `${tooltipPct}%`,
-            transform: 'translateX(-50%) translateY(-105%)',
-            background: 'var(--surface)', border: '1px solid var(--border-strong)',
-            borderRadius: 8, padding: '8px 11px', fontSize: 11,
-            pointerEvents: 'none', zIndex: 20, minWidth: 150,
-            boxShadow: '0 4px 16px rgba(0,0,0,.13)',
-          }}>
-            <div style={{ fontWeight: 700, fontSize: 11.5, marginBottom: 6, paddingBottom: 5, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-              {hovData.sublabel || hovData.label}
-              <span style={{ marginLeft: 6, color: '#16a34a', fontWeight: 800 }}>{hovData.total}</span>
-              <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> cmd{hovData.total > 1 ? 's' : ''}</span>
-            </div>
-            {SERIE_CFG.filter(s => hovData[s.key] > 0).map(s => (
-              <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                <div style={{ width: 8, height: 8, borderRadius: 2, background: s.couleur, flexShrink: 0 }} />
-                <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{s.label}</span>
-                <span style={{ fontWeight: 700, color: s.couleur }}>{hovData[s.key]}</span>
+        {hovData && clicked === null && (() => {
+          const hovKg = sumKg(hovData.rawOrders)
+          // Top 4 variétés par volume demandé
+          const vMap: Record<string, { nom: string; kg: number }> = {}
+          for (const o of hovData.rawOrders) {
+            for (const l of (Array.isArray(o.lignes) ? o.lignes : [])) {
+              const vId = String(l.idVariete)
+              const v = varById[vId]
+              const nom = v?.nomVariete ?? `#${l.idVariete}`
+              vMap[vId] = { nom, kg: (vMap[vId]?.kg ?? 0) + toKg(Number(l.quantiteDemandee) || 0, l.unite) }
+            }
+          }
+          const topVars = Object.values(vMap).sort((a, b) => b.kg - a.kg).slice(0, 4)
+          return (
+            <div style={{
+              position: 'absolute', top: 0, left: `${tooltipPct}%`,
+              transform: 'translateX(-50%) translateY(-105%)',
+              background: 'var(--surface)', border: '1px solid var(--border-strong)',
+              borderRadius: 9, padding: '9px 12px', fontSize: 11,
+              pointerEvents: 'none', zIndex: 20, minWidth: 190,
+              boxShadow: '0 6px 20px rgba(0,0,0,.15)',
+            }}>
+              {/* En-tête : période + total */}
+              <div style={{ fontWeight: 700, fontSize: 11.5, marginBottom: 6, paddingBottom: 5, borderBottom: '1px solid var(--border)', color: 'var(--text-primary)', display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+                <span>{hovData.sublabel || hovData.label}</span>
+                <span>
+                  <span style={{ color: '#16a34a', fontWeight: 800 }}>{hovData.total}</span>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 400, fontSize: 10 }}> cmd{hovData.total > 1 ? 's' : ''}</span>
+                </span>
               </div>
-            ))}
-          </div>
-        )}
+              {/* Volume kg */}
+              {hovKg > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5, paddingBottom: 5, borderBottom: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>Volume demandé</span>
+                  <span style={{ fontWeight: 800, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{fmtKg(hovKg)}</span>
+                </div>
+              )}
+              {/* Statuts */}
+              {SERIE_CFG.filter(s => hovData[s.key] > 0).map(s => (
+                <div key={s.key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <div style={{ width: 7, height: 7, borderRadius: 2, background: s.couleur, flexShrink: 0 }} />
+                  <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{s.label}</span>
+                  <span style={{ fontWeight: 700, color: s.couleur }}>{hovData[s.key]}</span>
+                </div>
+              ))}
+              {/* Top variétés */}
+              {topVars.length > 0 && (
+                <div style={{ marginTop: 6, paddingTop: 5, borderTop: '1px solid var(--border)' }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 4 }}>Variétés</div>
+                  {topVars.map((v, vi) => (
+                    <div key={vi} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 2 }}>
+                      <span style={{ color: 'var(--text-secondary)', fontSize: 10.5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{v.nom}</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: 10.5, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{fmtKg(v.kg)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Hint clic */}
+              {hovData.total > 0 && (
+                <div style={{ marginTop: 6, paddingTop: 4, borderTop: '1px solid var(--border)', fontSize: 9.5, color: '#16a34a', fontWeight: 600, textAlign: 'center' }}>
+                  ↙ Cliquer pour le détail complet
+                </div>
+              )}
+            </div>
+          )
+        })()}
       </div>
 
       {/* ── Légende ── */}
@@ -479,7 +543,7 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
             <span style={{ fontSize: 10.5, color: 'var(--text-muted)', fontWeight: 500 }}>{s.label}</span>
           </div>
         ))}
-        <span style={{ fontSize: 10, color: 'var(--text-muted)', fontStyle: 'italic' }}>— cliquer une barre pour le détail</span>
+        <span style={{ fontSize: 10, color: '#16a34a', fontWeight: 600, background: '#16a34a0d', padding: '2px 7px', borderRadius: 4, border: '1px solid #16a34a25' }}>↙ Cliquer une barre · variétés + kg en détail</span>
       </div>
 
       {/* ── Panel de détail (barre cliquée) ── */}
