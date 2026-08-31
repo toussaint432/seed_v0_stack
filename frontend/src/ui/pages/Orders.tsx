@@ -301,7 +301,7 @@ function KpiCard({ icon, value, label, accent, active, onClick, loading }: KpiPr
 }
 
 // Graphe d'évolution avancé avec sélecteur de période et barres empilées par statut
-function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?: any[] }) {
+function EvolutionChart({ orders, varieties = [], orgs = [] }: { orders: any[]; varieties?: any[]; orgs?: any[] }) {
   const [periode, setPeriode] = useState<Periode>('6M')
   const [hovered, setHovered] = useState<number | null>(null)
   const [clicked, setClicked] = useState<number | null>(null)
@@ -559,6 +559,7 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
       {/* ── Panel de détail (barre cliquée) ── */}
       {clicked !== null && (() => {
         const pt = data[clicked]
+        const orgMap = Object.fromEntries(orgs.map((o: any) => [String(o.id), o.nomOrganisation ?? `#${o.id}`]))
 
         type VarEntry = { nom: string; code: string; espece: string; gen: string; genFull: string; kgD: number; nbSoumise: number; nbEnCours: number; nbLivree: number; nbAnnulee: number }
         const byVar: Record<string, VarEntry> = {}
@@ -594,6 +595,44 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
         const totalKg = rows.reduce((s, r) => s + r.kgD, 0)
         const hasLignes = rows.length > 0
         const nbVarietesUniques = new Set(rows.map(r => r.code)).size
+        const periodeLabel = (pt.sublabel || pt.label).replace(/\s+/g, '-').toLowerCase()
+
+        function exportDetail() {
+          // Feuille 1 — agrégat Variété × Génération
+          const detailSheet = {
+            name: `Détail ${pt.sublabel || pt.label}`.slice(0, 31),
+            headers: ['Variété', 'Code variété', 'Espèce', 'Génération', 'Qté demandée (kg)', 'Qté demandée (t)', 'Livrées', 'En cours', 'Soumises', 'Annulées'],
+            rows: rows.map(r => [
+              r.nom, r.code, r.espece, r.genFull,
+              Math.round(r.kgD), parseFloat((r.kgD / 1000).toFixed(3)),
+              r.nbLivree || 0, r.nbEnCours || 0, r.nbSoumise || 0, r.nbAnnulee || 0,
+            ]),
+          }
+
+          // Feuille 2 — commandes brutes de la période
+          const cmdRows = pt.rawOrders.map((o: any) => {
+            const lignes: any[] = Array.isArray(o.lignes) ? o.lignes : []
+            const gens = [...new Set(lignes.map((l: any) => GEN_SHORT[Number(l.idGeneration)] ?? `G${l.idGeneration}`))].join(' / ')
+            const kgTotal = lignes.reduce((s: number, l: any) => s + toKg(Number(l.quantiteDemandee) || 0, l.unite), 0)
+            return [
+              o.codeCommande ?? '',
+              o.client ?? '',
+              orgMap[String(o.idOrganisationFournisseur)] ?? `#${o.idOrganisationFournisseur}`,
+              STATUS_CFG[o.statut]?.label ?? o.statut ?? '',
+              formatDateForExport(o.createdAt),
+              gens,
+              Math.round(kgTotal),
+              parseFloat((kgTotal / 1000).toFixed(3)),
+            ]
+          })
+          const cmdSheet = {
+            name: `Commandes ${pt.sublabel || pt.label}`.slice(0, 31),
+            headers: ['Code commande', 'Client', 'Fournisseur', 'Statut', 'Date', 'Génération(s)', 'Qté totale (kg)', 'Qté totale (t)'],
+            rows: cmdRows,
+          }
+
+          downloadXlsx(`senjiw-detail-${periodeLabel}-${new Date().toISOString().slice(0,10)}`, [detailSheet, cmdSheet])
+        }
 
         return (
           <div style={{
@@ -622,6 +661,13 @@ function EvolutionChart({ orders, varieties = [] }: { orders: any[]; varieties?:
                 {pt.EN_COURS > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#f59e0b', background: '#f59e0b12', padding: '2px 8px', borderRadius: 5 }}>{pt.EN_COURS} en cours</span>}
                 {pt.SOUMISE  > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#3b82f6', background: '#3b82f612', padding: '2px 8px', borderRadius: 5 }}>{pt.SOUMISE} soumise{pt.SOUMISE > 1 ? 's' : ''}</span>}
                 {pt.ANNULEE  > 0 && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#ef4444', background: '#ef444412', padding: '2px 8px', borderRadius: 5 }}>{pt.ANNULEE} annulée{pt.ANNULEE > 1 ? 's' : ''}</span>}
+                {hasLignes && (
+                  <button onClick={exportDetail} className="btn btn-secondary" style={{
+                    height: 28, fontSize: 11, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 5,
+                  }}>
+                    <Download size={11} /> Export .xls
+                  </button>
+                )}
                 <button onClick={() => setClicked(null)} style={{
                   marginLeft: 4, background: 'none', border: 'none', cursor: 'pointer',
                   fontSize: 16, color: 'var(--text-muted)', lineHeight: 1, padding: '2px 4px', borderRadius: 4,
@@ -1043,7 +1089,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
       </div>
 
       {/* Graphe évolution */}
-      {!loading && <EvolutionChart orders={orders} varieties={varieties} />}
+      {!loading && <EvolutionChart orders={orders} varieties={varieties} orgs={orgs} />}
 
       <div className="card">
         <div className="card-header">
@@ -1337,7 +1383,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
         </div>
 
         {/* Graphe (contextualisé à l'onglet actif) */}
-        {!loading && <div style={{ padding: '0 16px 0' }}><EvolutionChart orders={activeOrders} varieties={varieties} /></div>}
+        {!loading && <div style={{ padding: '0 16px 0' }}><EvolutionChart orders={activeOrders} varieties={varieties} orgs={orgs} /></div>}
 
         {/* Barre de recherche */}
         <div className="filters-bar">
@@ -2141,7 +2187,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
         </div>
       )}
 
-      {!loading && <EvolutionChart orders={orders} varieties={varieties} />}
+      {!loading && <EvolutionChart orders={orders} varieties={varieties} orgs={orgs} />}
 
       <div className="card">
         <div className="card-header">
@@ -2272,7 +2318,7 @@ function VueAdmin({ setToast }: { setToast: any }) {
         <KpiCard icon={<Truck size={20} />}          value={delivered}     label="Livrées"          accent="#10b981" active={kpiFilter === 'delivered'}  onClick={() => toggleKpi('delivered')} loading={loading} />
       </div>
 
-      {!loading && <EvolutionChart orders={orders} varieties={varieties} />}
+      {!loading && <EvolutionChart orders={orders} varieties={varieties} orgs={orgs} />}
 
       <div className="card">
         <div className="card-header">
