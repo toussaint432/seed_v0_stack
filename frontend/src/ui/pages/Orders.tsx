@@ -2039,7 +2039,9 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
       api.get(endpoints.organisations),
       api.get(endpoints.varieties),
     ])
-    setOrders(oRes.status === 'fulfilled' ? extractList(oRes.value.data) : [])
+    const allOrders = oRes.status === 'fulfilled' ? extractList(oRes.value.data) : []
+    // UPSemCL ne traite que les commandes G3 (idGeneration 4) venant des multiplicateurs
+    setOrders(allOrders.filter((o: any) => Array.isArray(o.lignes) && o.lignes.some((l: any) => l.idGeneration === 4)))
     setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
     if (varRes.status === 'fulfilled') setVarieties(extractList(varRes.value.data).map(normalizeVariete))
     setLoading(false)
