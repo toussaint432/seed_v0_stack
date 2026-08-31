@@ -1558,9 +1558,42 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
 
 /* ══════════════════════════════════════════════════════════════════════════════
    MODAL : PRÉPARER & LIVRER UNE COMMANDE G3
-   Permet à l'agent UPSemCL de sélectionner le lot G3 à transférer
-   et de valider la livraison directe en une seule action atomique.
+   FIFO automatique : les lots les plus anciens sont affectés en premier.
+   L'agent UPSemCL vérifie et peut ajuster les quantités avant de confirmer.
    ══════════════════════════════════════════════════════════════════════════════ */
+
+interface FifoAlloc {
+  idLigne: number
+  idLot: number
+  lotCode: string
+  dateProd: string
+  disponible: number
+  quantite: number
+}
+
+/** Calcule l'affectation FIFO : lots triés par dateProduction ASC, remplis dans l'ordre. */
+function computeFifo(lignesG3: any[], lotsG3: any[]): FifoAlloc[] {
+  const result: FifoAlloc[] = []
+  const avail = lotsG3
+    .map(l => ({ ...l, remaining: Number(l.quantiteNette) }))
+    .sort((a, b) => new Date(a.dateProduction ?? '9999-12-31').getTime() - new Date(b.dateProduction ?? '9999-12-31').getTime())
+
+  for (const ligne of lignesG3) {
+    let needed = Number(ligne.quantiteDemandee ?? 0)
+    for (const lot of avail.filter(l => l.idVariete === ligne.idVariete)) {
+      if (needed <= 0 || lot.remaining <= 0) continue
+      const take = Math.min(lot.remaining, needed)
+      result.push({
+        idLigne: ligne.id, idLot: lot.id, lotCode: lot.codeLot,
+        dateProd: lot.dateProduction ?? '—', disponible: Number(lot.quantiteNette), quantite: take,
+      })
+      lot.remaining -= take
+      needed -= take
+    }
+  }
+  return result
+}
+
 function TraiterCommandeG3Modal({
   commande, varieties, onClose, onSuccess, setToast,
 }: {
@@ -1570,70 +1603,62 @@ function TraiterCommandeG3Modal({
   onSuccess: () => void
   setToast: (t: any) => void
 }) {
-  const [lotsG3,     setLotsG3]     = useState<any[]>([])
-  const [loading,    setLoading]     = useState(true)
-  const [saving,     setSaving]      = useState(false)
-  /* Map idLigne → { idLot sélectionné, quantite à transférer } */
-  const [selections, setSelections]  = useState<Record<number, { idLot: number | null; quantite: string }>>({})
+  const [lotsG3,    setLotsG3]   = useState<any[]>([])
+  const [loading,   setLoading]  = useState(true)
+  const [saving,    setSaving]   = useState(false)
+  const [allocs,    setAllocs]   = useState<FifoAlloc[]>([])
 
-  /* Lignes de la commande ayant la génération G3 (idGeneration = 4) */
   const lignesG3: any[] = (commande.lignes ?? []).filter((l: any) => l.idGeneration === 4)
 
   useEffect(() => {
-    /* Initialiser les sélections avec la quantité demandée par défaut */
-    const init: Record<number, { idLot: number | null; quantite: string }> = {}
-    for (const l of lignesG3) init[l.id] = { idLot: null, quantite: String(l.quantiteDemandee ?? '') }
-    setSelections(init)
-
-    /* Charger tous les lots G3 disponibles depuis le catalogue */
     api.get(endpoints.lotsCatalogueG3)
-      .then(r => setLotsG3(r.data))
+      .then(r => {
+        const lots = r.data
+        setLotsG3(lots)
+        setAllocs(computeFifo(lignesG3, lots))
+      })
       .catch(() => setLotsG3([]))
       .finally(() => setLoading(false))
   }, [])
 
-  /** Retourne le nom de la variété pour affichage */
   function varNom(idVariete: number) {
     const v = varieties.find((vv: any) => vv.id === idVariete)
     return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
   }
 
-  /** Filtre les lots disponibles pour une variété donnée */
-  function lotsForLigne(idVariete: number) {
-    return lotsG3.filter((lot: any) => lot.idVariete === idVariete)
+  function updateQte(idLigne: number, idLot: number, val: string) {
+    setAllocs(a => a.map(r =>
+      r.idLigne === idLigne && r.idLot === idLot ? { ...r, quantite: Math.max(0, Number(val) || 0) } : r
+    ))
   }
 
-  function setLot(idLigne: number, idLot: number) {
-    setSelections(s => ({ ...s, [idLigne]: { ...s[idLigne], idLot } }))
-  }
-  function setQte(idLigne: number, quantite: string) {
-    setSelections(s => ({ ...s, [idLigne]: { ...s[idLigne], quantite } }))
+  function allocsForLigne(idLigne: number) {
+    return allocs.filter(a => a.idLigne === idLigne)
   }
 
-  /* Le bouton Confirmer n'est actif que si chaque ligne G3 a un lot + une quantité valide */
-  const isValid = lignesG3.every((l: any) => {
-    const sel = selections[l.id]
-    return sel && sel.idLot !== null && sel.quantite && Number(sel.quantite) > 0
-  })
+  function isLigneCovered(ligne: any) {
+    const total = allocsForLigne(ligne.id).reduce((s, a) => s + a.quantite, 0)
+    return total >= Number(ligne.quantiteDemandee ?? 0)
+  }
+
+  const allCovered = lignesG3.length > 0 && lignesG3.every(isLigneCovered)
+  const hasAllocs  = allocs.length > 0
 
   async function submit() {
-    if (!isValid) return
+    if (!allCovered) return
     setSaving(true)
     try {
-      const allocations = lignesG3.map((l: any) => ({
-        idLigne:  l.id,
-        idLot:    selections[l.id].idLot,
-        quantite: Number(selections[l.id].quantite),
-      }))
+      const allocations = allocs
+        .filter(a => a.quantite > 0)
+        .map(a => ({ idLigne: a.idLigne, idLot: a.idLot, quantite: a.quantite }))
       await api.post(endpoints.ordersValiderEtLivrer(commande.id), { allocations })
-      setToast({ msg: `Commande ${commande.codeCommande} livrée — lot(s) G3 transféré(s)`, type: 'success' })
+      setToast({ msg: `Commande ${commande.codeCommande} livrée — lots G3 transférés`, type: 'success' })
       onSuccess()
       onClose()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la livraison', type: 'error' })
     } finally {
-      setSaving(false)
-    }
+      setSaving(false) }
   }
 
   return (
@@ -1643,114 +1668,93 @@ function TraiterCommandeG3Modal({
       onClose={onClose}
       size="lg"
     >
-      {/* Bannière d'information */}
+      {/* Bannière FIFO */}
       <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#1e40af', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
         <Zap size={15} style={{ marginTop: 1, flexShrink: 0 }} />
-        <span>Sélectionnez le lot G3 à transférer et confirmez la quantité. La livraison sera enregistrée immédiatement : le multiplicateur recevra les semences dans <strong>Mes Lots</strong> et pourra créer des lots G4 → R1 → R2 pour la traçabilité.</span>
+        <span>Affectation <strong>FIFO automatique</strong> — les lots les plus anciens sont utilisés en premier. Vérifiez les quantités et confirmez. Le multiplicateur recevra les semences dans <strong>Mes Lots</strong>.</span>
       </div>
 
-      {/* Une section par ligne G3 de la commande */}
-      {lignesG3.map((ligne: any) => {
-        const lots = lotsForLigne(ligne.idVariete)
-        const sel  = selections[ligne.id] ?? { idLot: null, quantite: '' }
-        const lotSelectionne = lots.find((l: any) => l.id === sel.idLot)
+      {loading ? (
+        <div className="skeleton" style={{ height: 100, borderRadius: 10, marginBottom: 14 }} />
+      ) : (
+        <>
+          {lignesG3.map((ligne: any) => {
+            const rows    = allocsForLigne(ligne.id)
+            const totalAl = rows.reduce((s, a) => s + a.quantite, 0)
+            const demanded = Number(ligne.quantiteDemandee ?? 0)
+            const covered  = totalAl >= demanded
+            const manque   = demanded - totalAl
 
-        return (
-          <div key={ligne.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 14, background: 'var(--surface-2)' }}>
-            {/* En-tête de la ligne */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{varNom(ligne.idVariete)}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
-                  Génération G3 · Quantité demandée : <strong style={{ color: 'var(--text-primary)' }}>{ligne.quantiteDemandee} {ligne.unite}</strong>
+            return (
+              <div key={ligne.id} style={{ border: `1px solid ${covered ? '#bbf7d0' : '#fca5a5'}`, borderRadius: 10, padding: 16, marginBottom: 14, background: covered ? '#f0fdf4' : '#fef2f2' }}>
+                {/* En-tête ligne */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{varNom(ligne.idVariete)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                      G3 · Demandé : <strong style={{ color: 'var(--text-primary)' }}>{demanded} kg</strong>
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: covered ? '#15803d' : '#dc2626', background: covered ? '#dcfce7' : '#fee2e2', borderRadius: 99, padding: '3px 11px', flexShrink: 0 }}>
+                    {covered ? `${totalAl} / ${demanded} kg ✓` : `${totalAl} / ${demanded} kg — manque ${manque} kg`}
+                  </span>
                 </div>
-              </div>
-              <span style={{ background: '#dcfce7', color: '#15803d', borderRadius: 99, padding: '3px 11px', fontSize: 11.5, fontWeight: 700, flexShrink: 0 }}>G3</span>
-            </div>
 
-            {/* Sélection du lot G3 disponible */}
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
-                Lot G3 à affecter
+                {rows.length === 0 ? (
+                  <div style={{ padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, fontSize: 12.5, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <XCircle size={13} /> Aucun lot G3 disponible pour cette variété — stock UPSemCL insuffisant.
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>
+                      Affectation FIFO
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {rows.map(row => (
+                        <div key={row.idLot} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 7 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <span style={{ fontWeight: 700, fontSize: 12.5, fontFamily: 'monospace', color: 'var(--text-primary)' }}>{row.lotCode}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>
+                              {row.dateProd !== '—' ? new Date(row.dateProd).toLocaleDateString('fr-FR') : '—'}
+                            </span>
+                            <span style={{ fontSize: 11, color: '#15803d', marginLeft: 8 }}>· {row.disponible} kg dispo</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                            <input
+                              type="number"
+                              value={row.quantite}
+                              min={0}
+                              max={row.disponible}
+                              onChange={e => updateQte(ligne.id, row.idLot, e.target.value)}
+                              style={{ width: 90, padding: '5px 8px', border: '1px solid var(--border-strong)', borderRadius: 5, fontSize: 13, fontFamily: 'var(--font-sans)', textAlign: 'right', outline: 'none', background: 'var(--surface)', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}
+                            />
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>kg</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
-              {loading ? (
-                <div className="skeleton" style={{ height: 44, borderRadius: 8 }} />
-              ) : lots.length === 0 ? (
-                <div style={{ padding: '11px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <XCircle size={14} /> Aucun lot G3 disponible pour cette variété.
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  {lots.map((lot: any) => (
-                    <label
-                      key={lot.id}
-                      style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', border: `2px solid ${sel.idLot === lot.id ? '#16a34a' : 'var(--border)'}`, borderRadius: 9, cursor: 'pointer', background: sel.idLot === lot.id ? '#f0fdf4' : 'var(--surface)', transition: 'border-color .12s, background .12s' }}
-                    >
-                      <input
-                        type="radio"
-                        name={`lot-ligne-${ligne.id}`}
-                        checked={sel.idLot === lot.id}
-                        onChange={() => setLot(ligne.id, lot.id)}
-                        style={{ accentColor: '#16a34a', width: 15, height: 15, cursor: 'pointer' }}
-                      />
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <span style={{ fontWeight: 700, fontSize: 13, fontFamily: 'monospace', color: 'var(--text-primary)' }}>{lot.codeLot}</span>
-                        <span style={{ fontSize: 11.5, color: 'var(--text-muted)', marginLeft: 10 }}>
-                          {lot.campagne ?? '—'}
-                        </span>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: '#15803d' }}>{lot.quantiteNette} kg</div>
-                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>disponible</div>
-                      </div>
-                      <span style={{ fontSize: 10.5, background: lot.statutLot === 'CERTIFIE' ? '#dcfce7' : '#eff6ff', color: lot.statutLot === 'CERTIFIE' ? '#15803d' : '#1d4ed8', borderRadius: 99, padding: '2px 9px', fontWeight: 600, flexShrink: 0 }}>
-                        {lot.statutLot}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+            )
+          })}
 
-            {/* Quantité à transférer */}
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 7 }}>
-                Quantité à transférer ({ligne.unite})
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <input
-                  type="number"
-                  value={sel.quantite}
-                  min={1}
-                  max={lotSelectionne ? Math.min(Number(lotSelectionne.quantiteNette), ligne.quantiteDemandee) : ligne.quantiteDemandee}
-                  onChange={e => setQte(ligne.id, e.target.value)}
-                  disabled={sel.idLot === null}
-                  style={{ padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: 150, outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)', color: sel.idLot === null ? 'var(--text-muted)' : 'var(--text-primary)' }}
-                />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  sur <strong>{ligne.quantiteDemandee}</strong> {ligne.unite} demandé{ligne.quantiteDemandee > 1 ? 's' : ''}
-                  {lotSelectionne && (
-                    <span style={{ color: '#15803d', marginLeft: 8 }}>· lot : {lotSelectionne.quantiteNette} kg dispo</span>
-                  )}
-                </span>
-              </div>
+          {!hasAllocs && !loading && (
+            <div style={{ padding: '14px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 9, fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 9 }}>
+              <XCircle size={15} /> Aucun lot G3 disponible — impossible de livrer cette commande.
             </div>
-          </div>
-        )
-      })}
+          )}
+        </>
+      )}
 
-      {/* Boutons de validation */}
+      {/* Boutons */}
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
         <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
         <button
           className="btn btn-primary"
-          style={{
-            background: isValid && !saving ? 'linear-gradient(135deg, #16a34a, #059669)' : undefined,
-            border: 'none', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7,
-            opacity: !isValid ? 0.6 : 1,
-          }}
+          style={{ background: allCovered && !saving ? 'linear-gradient(135deg,#16a34a,#059669)' : undefined, border: 'none', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, opacity: !allCovered ? 0.6 : 1 }}
           onClick={submit}
-          disabled={!isValid || saving}
+          disabled={!allCovered || saving}
         >
           {saving
             ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Livraison en cours…</>

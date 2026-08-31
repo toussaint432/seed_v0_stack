@@ -404,7 +404,8 @@ public class OrderController {
     }
 
     String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
-    String codeTransfert = "TL-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+    // Code de base stocké sur la commande ; chaque ligne reçoit un code unique suffixé "-L{id}"
+    String baseCode = "TL-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
 
     for (LigneCommande ligne : commande.getLignes()) {
       if (ligne.getIdLotPropose() == null || ligne.getQuantiteProposee() == null) {
@@ -438,9 +439,10 @@ public class OrderController {
       // Débiter le stock UPSemCL
       stockOrderRepo.debitUpsemcl(ligne.getIdLotPropose(), ligne.getQuantiteProposee());
 
-      // Créer le transfert_lot EN_ATTENTE (validé par l'accusé de réception du multiplicateur)
+      // Code unique par ligne pour respecter UNIQUE(code_transfert)
+      String codeLigne = baseCode + "-L" + ligne.getId();
       transfertLotOrderRepo.createPendingTransfert(
-          codeTransfert,
+          codeLigne,
           ligne.getIdLotPropose(),
           emetteur,
           commande.getUsernameAcheteur(),
@@ -454,7 +456,7 @@ public class OrderController {
     }
 
     commande.setStatut(StatutCommande.EN_LIVRAISON);
-    commande.setCodeTransfertGenere(codeTransfert);
+    commande.setCodeTransfertGenere(baseCode);
     return ResponseEntity.ok(commandeRepo.save(commande));
   }
 
@@ -594,7 +596,8 @@ public class OrderController {
 
       // 2c. Créer un lot de réception pour le multiplicateur + créditer son site principal
       String uniteItem = ligne.getUnite() != null ? ligne.getUnite() : "kg";
-      String codeLotRec = "REC-" + commande.getId() + "-L" + item.idLigne();
+      // Inclut idLot pour unicité quand plusieurs lots couvrent la même ligne (FIFO multi-lot)
+      String codeLotRec = "REC-" + commande.getId() + "-L" + item.idLigne() + "-" + item.idLot();
       Long newLotId = lotReceptionRepo.createReceptionLot(
           item.idLot(), codeLotRec,
           commande.getIdOrganisationAcheteur(),

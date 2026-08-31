@@ -1112,8 +1112,20 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       await api.post(endpoints.orders, {
         codeCommande: code, client: 'Multiplicateur',
         idOrganisationFournisseur: upsemclOrgId,
-        observations: cartObs || `Demande multi-lots G3 — ${cart.length} lot(s)`,
-        lignes: cart.map(item => ({ idVariete: item.idVariete, idGeneration: 4, quantite: item.quantite, unite: item.unite })),
+        observations: cartObs || `Demande G3 — ${cart.length} lot${cart.length > 1 ? 's' : ''} sélectionné${cart.length > 1 ? 's' : ''}`,
+        // Agrégation par variété : plusieurs lots de la même variété → une seule ligne (kg)
+        lignes: Object.values(
+          cart.reduce<Record<string, { idVariete: number; idGeneration: number; quantite: number; unite: string }>>(
+            (acc, item) => {
+              const key = String(item.idVariete)
+              const kgQty = item.unite === 't' ? item.quantite * 1000 : item.quantite
+              if (!acc[key]) acc[key] = { idVariete: item.idVariete, idGeneration: 4, quantite: 0, unite: 'kg' }
+              acc[key].quantite += kgQty
+              return acc
+            },
+            {}
+          )
+        ),
       })
       setToast({ msg: `Commande ${code} soumise — ${cart.length} lot${cart.length > 1 ? 's' : ''} à l'UPSemCL`, type: 'success' })
       setCart([]); setCartObs(''); fetchAll()

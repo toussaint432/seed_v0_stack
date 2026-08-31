@@ -58,26 +58,31 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
                                @Param("destinataire") String destinataire,
                                @Param("quantite") BigDecimal quantite);
 
-    /** Accepte un transfert en attente : statut → ACCEPTE + date_acceptation = aujourd'hui. */
+    /**
+     * Accepte un ou plusieurs transferts EN_ATTENTE liés à une commande.
+     * Supporte les deux formats de code :
+     *   - ancien (mono-ligne) : code exact   → WHERE code_transfert = 'TL-XXX'
+     *   - nouveau (multi-lignes) : préfixe   → WHERE code_transfert LIKE 'TL-XXX-%'
+     */
     @Modifying
     @Query(value = """
         UPDATE transfert_lot
         SET statut = 'ACCEPTE', date_acceptation = CURRENT_DATE
         WHERE code_transfert = :code
+           OR code_transfert LIKE :code || '-%'
         """, nativeQuery = true)
     int accepterTransfert(@Param("code") String code);
 
     /**
      * Redirige un transfert EN_ATTENTE vers le lot de réception (REC) créé pour le multiplicateur.
-     * À appeler avant accepterTransfert, dans accuserReception, pour que le transfert_lot
-     * pointe sur le bon lot (idOrgProducteur = multiplicateur) et non sur le lot UPSemCL source.
+     * Supporte les deux formats de code (exact ou préfixe avec suffixe -L{id}).
      */
     @Modifying
     @Query(value = """
         UPDATE transfert_lot
         SET id_lot = :newLotId
-        WHERE code_transfert = :code
-          AND id_lot          = :oldLotId
+        WHERE (code_transfert = :code OR code_transfert LIKE :code || '-%')
+          AND id_lot = :oldLotId
         """, nativeQuery = true)
     int updateTransfertIdLot(@Param("code")      String code,
                               @Param("oldLotId") Long   oldLotId,
