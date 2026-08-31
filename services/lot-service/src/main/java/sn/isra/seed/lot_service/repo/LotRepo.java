@@ -51,13 +51,15 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
     /**
      * Catalogue G3 visible par les multiplicateurs.
      * Retourne uniquement les lots G3 DISPONIBLES avec quantité > 0.
-     * Les lots épuisés (quantiteNette = 0) sont exclus — inutiles pour commander.
+     * Exclut les lots de réception (code REC-*) créés lors des livraisons aux multiplicateurs :
+     * ceux-ci appartiennent à "Mes Lots" du multiplicateur, pas au catalogue UPSemCL.
      */
     @Query("""
         SELECT l FROM LotSemencier l
         WHERE l.generation.codeGeneration = 'G3'
           AND l.statutLot = :statut
           AND l.quantiteNette > 0
+          AND l.codeLot NOT LIKE 'REC-%'
         ORDER BY l.dateProduction DESC, l.createdAt DESC
         """)
     List<LotSemencier> findCatalogueG3(@Param("statut") StatutLot statut);
