@@ -114,6 +114,16 @@ public class LotSemencier {
     @Column(name = "code_espece", length = 30)
     private String codeEspece;
 
+    /** Nom commercial de la variété — dénormalisé pour affichage sans appel catalog-service. */
+    @Size(max = 200)
+    @Column(name = "nom_variete", length = 200)
+    private String nomVariete;
+
+    /** Code variétal (ex: MIL-GAWANE) — dénormalisé pour identification rapide. */
+    @Size(max = 50)
+    @Column(name = "code_variete", length = 50)
+    private String codeVariete;
+
     // ── Champs production PCAE ─────────────────────────────
     @Column(name = "superficie_ha", precision = 10, scale = 2)
     private BigDecimal superficieHa;

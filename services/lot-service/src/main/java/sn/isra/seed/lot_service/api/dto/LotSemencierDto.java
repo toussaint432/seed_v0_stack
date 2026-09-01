@@ -17,6 +17,8 @@ public record LotSemencierDto(
     String        codeLot,
     Long          idVariete,
     String        codeEspece,
+    String        nomVariete,
+    String        codeVariete,
 
     // Génération aplatie
     Long          generationId,

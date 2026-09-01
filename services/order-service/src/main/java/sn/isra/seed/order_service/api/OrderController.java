@@ -37,7 +37,9 @@ import org.springframework.data.web.PageableDefault;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import sn.isra.seed.order_service.entity.MembreOrganisation;
 
 @Slf4j
 @RestController
@@ -146,12 +148,18 @@ public class OrderController {
   @PostMapping
   public Commande create(@Valid @RequestBody CreateOrderRequest req,
                          @AuthenticationPrincipal Jwt jwt) throws Exception {
-    String username   = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
-    Long orgAcheteur  = null;
-    if (username != null) {
-      orgAcheteur = membreRepo.findByKeycloakUsername(username)
-          .map(m -> m.getOrganisation().getId()).orElse(null);
-    }
+    String username = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+    Optional<MembreOrganisation> membre = username != null
+        ? membreRepo.findByKeycloakUsername(username)
+        : Optional.empty();
+    Long orgAcheteur = membre.map(m -> m.getOrganisation().getId()).orElse(null);
+
+    String localisationAcheteur = membre.map(m -> {
+      String loc = m.getOrganisation().getLocalite();
+      String reg = m.getOrganisation().getRegion();
+      if (loc != null && reg != null) return loc + ", " + reg;
+      return loc != null ? loc : reg;
+    }).orElse(null);
 
     Commande c = new Commande();
     c.setCodeCommande(req.codeCommande());
@@ -159,6 +167,9 @@ public class OrderController {
     c.setStatut(StatutCommande.SOUMISE);
     c.setUsernameAcheteur(username);
     c.setIdOrganisationAcheteur(orgAcheteur);
+    c.setNomCompletAcheteur(membre.map(m -> m.getNomComplet()).orElse(null));
+    c.setNomOrganisationAcheteur(membre.map(m -> m.getOrganisation().getNomOrganisation()).orElse(null));
+    c.setLocalisationAcheteur(localisationAcheteur);
     c.setIdOrganisationFournisseur(req.idOrganisationFournisseur());
     c.setObservations(req.observations());
     c.setCreatedAt(Instant.now());
@@ -436,8 +447,13 @@ public class OrderController {
       lotQuantiteRepo.insertHistoriqueTransfert(
           ligne.getIdLotPropose(), ancienStatut, nouveauStatut, emetteur, commentaire);
 
-      // Débiter le stock UPSemCL
-      stockOrderRepo.debitUpsemcl(ligne.getIdLotPropose(), ligne.getQuantiteProposee());
+      // Débiter le stock du fournisseur (multiplicateur ou UPSemCL selon idOrganisationFournisseur)
+      if (commande.getIdOrganisationFournisseur() != null) {
+        stockOrderRepo.debitByOrg(ligne.getIdLotPropose(),
+            commande.getIdOrganisationFournisseur(), ligne.getQuantiteProposee());
+      } else {
+        stockOrderRepo.debitUpsemcl(ligne.getIdLotPropose(), ligne.getQuantiteProposee());
+      }
 
       // Code unique par ligne pour respecter UNIQUE(code_transfert)
       String codeLigne = baseCode + "-L" + ligne.getId();

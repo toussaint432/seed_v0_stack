@@ -167,9 +167,14 @@ public class LotController {
         if (jwt == null) return ResponseEntity.status(401).build();
         String username = JwtHelper.getUsername(jwt);
         if (username == null) return ResponseEntity.ok(List.of());
+        List<String> roles = JwtHelper.extractRoles(jwt);
+        if (roles.contains("seed-selector")) {
+            String spec = jwt.getClaimAsString("specialisation");
+            if (spec != null) spec = spec.toUpperCase();
+            return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findForSelector(username, spec)));
+        }
         Long orgId = lotService.resolveOrgId(jwt);
         if (orgId == null) return ResponseEntity.ok(List.of());
-        List<String> roles = JwtHelper.extractRoles(jwt);
         if (roles.contains("seed-upsemcl"))
             return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findLotsUpsemclAll(orgId)));
         return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findMesLots(orgId, username)));

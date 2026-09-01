@@ -41,6 +41,25 @@ public interface StockOrderRepo extends JpaRepository<Stock, Long> {
     int debitUpsemcl(@Param("idLot") Long idLot, @Param("qte") BigDecimal qte);
 
     /**
+     * Débite le stock d'une organisation précise pour un lot donné.
+     * Utilisé lors du faire-transfert multiplicateur → quotataire
+     * (le fournisseur est un multiplicateur, pas l'UPSemCL).
+     */
+    @Modifying
+    @Query(value = """
+        UPDATE stock
+           SET quantite_disponible = quantite_disponible - :qte
+         WHERE id_lot = :idLot
+           AND id_site IN (
+               SELECT s.id FROM site s
+               WHERE s.id_organisation = :idOrg
+           )
+        """, nativeQuery = true)
+    int debitByOrg(@Param("idLot") Long idLot,
+                   @Param("idOrg") Long idOrg,
+                   @Param("qte") BigDecimal qte);
+
+    /**
      * Crédite le stock du site PRINCIPAL de l'organisation destinataire pour un lot donné.
      * INSERT ou UPDATE atomique via ON CONFLICT.
      * Utilise ORDER BY est_principal DESC, id ASC pour toujours cibler le site principal.

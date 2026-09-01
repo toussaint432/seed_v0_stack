@@ -1,6 +1,8 @@
 package sn.isra.seed.lot_service.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,6 +48,9 @@ public class LotService {
     private final StockCreditRepo      stockCreditRepo;
     private final LotEventProducer     producer;
     private final ObjectMapper         om;
+
+    @PersistenceContext
+    private EntityManager em;
 
     private static final Map<String, String> FLUX_RULES = Map.of(
         "seed-selector",  "seed-upsemcl",
@@ -116,6 +121,17 @@ public class LotService {
         if (lot.getUnite() == null || lot.getUnite().isBlank()) lot.setUnite("kg");
         if (lot.getStatutLot() == null) lot.setStatutLot(StatutLot.DISPONIBLE);
 
+        if ((lot.getNomVariete() == null || lot.getNomVariete().isBlank()) && lot.getIdVariete() != null) {
+            try {
+                Object[] row = (Object[]) em.createNativeQuery(
+                    "SELECT nom_variete, code_variete FROM catalog.variete WHERE id = :id")
+                    .setParameter("id", lot.getIdVariete())
+                    .getSingleResult();
+                lot.setNomVariete((String) row[0]);
+                lot.setCodeVariete((String) row[1]);
+            } catch (Exception ignored) {}
+        }
+
         LotSemencier saved;
         try {
             saved = lotRepo.save(lot);
@@ -172,6 +188,10 @@ public class LotService {
         LotSemencier child = new LotSemencier();
         child.setCodeLot(req.codeLot());
         child.setIdVariete(req.idVariete() != null ? req.idVariete() : parent.getIdVariete());
+        child.setNomVariete(req.nomVariete() != null && !req.nomVariete().isBlank()
+            ? req.nomVariete() : parent.getNomVariete());
+        child.setCodeVariete(req.codeVariete() != null && !req.codeVariete().isBlank()
+            ? req.codeVariete() : parent.getCodeVariete());
         // code_espece et campagne ↔ id_campagne sont gérés par les triggers DB (V44)
         child.setGeneration(gen);
         child.setLotParent(parent);

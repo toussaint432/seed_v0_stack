@@ -6,6 +6,8 @@ import java.time.LocalDate;
 public record CreateChildLotRequest(
     String codeLot,
     Long idVariete,
+    String nomVariete,
+    String codeVariete,
     String generationCode,
     String campagne,
     LocalDate dateProduction,

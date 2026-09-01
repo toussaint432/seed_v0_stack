@@ -48,6 +48,21 @@ public class Commande {
     @Column(name = "id_organisation_fournisseur")
     private Long idOrganisationFournisseur;
 
+    /** Prénom + Nom de l'acheteur — dénormalisé depuis membre_organisation à la création. */
+    @Size(max = 200)
+    @Column(name = "nom_complet_acheteur", length = 200)
+    private String nomCompletAcheteur;
+
+    /** Nom de l'organisation acheteuse — dénormalisé pour affichage sans join. */
+    @Size(max = 200)
+    @Column(name = "nom_organisation_acheteur", length = 200)
+    private String nomOrganisationAcheteur;
+
+    /** Localisation (localité, région) de l'acheteur — dénormalisée pour la chaîne aval. */
+    @Size(max = 200)
+    @Column(name = "localisation_acheteur", length = 200)
+    private String localisationAcheteur;
+
     @Column(columnDefinition = "TEXT")
     private String observations;
 
