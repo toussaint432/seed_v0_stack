@@ -846,6 +846,136 @@ L'architecture microservices de Sen Jiwu est **intrinsèquement scalable** : cha
 
 ---
 
+## Niveaux d'exposition — Accès depuis une autre machine
+
+### Pourquoi `localhost` est inaccessible depuis l'extérieur
+
+Tous les ports sont actuellement liés à `127.0.0.1` (adresse loopback) dans `docker-compose.yml` :
+
+```yaml
+ports:
+  - "127.0.0.1:5173:5173"    # frontend
+  - "127.0.0.1:18080:8080"   # Keycloak
+  - "127.0.0.1:18081:8080"   # catalog-service
+  # ...
+```
+
+`127.0.0.1` est une adresse **locale à la machine elle-même**. Aucun autre appareil — même connecté au même réseau Wi-Fi — ne peut y accéder. C'est intentionnel en développement (surface d'attaque réduite), mais cela bloque tout accès externe.
+
+---
+
+### Niveau 1 — Réseau local (LAN)
+
+**Cas d'usage** : jury/collègues dans la même salle, démonstration en réseau d'entreprise ou sur un réseau Wi-Fi partagé.
+
+```
+Ton laptop (Docker)  ─── Wi-Fi/LAN ───►  Laptop jury
+192.168.1.42:5173                         http://192.168.1.42:5173
+```
+
+**Ce qu'il faut faire :**
+- Remplacer `127.0.0.1` par `0.0.0.0` dans les bindings `docker-compose.yml` pour exposer sur toutes les interfaces réseau
+- Mettre à jour Keycloak et CORS avec l'IP locale de la machine (voir section [3 endroits à mettre à jour](#les-3-endroits-à-mettre-à-jour-obligatoires) ci-dessous)
+
+**Limites :**
+- L'IP locale change selon le réseau (chaque réseau Wi-Fi attribue une IP différente)
+- Pas de HTTPS — navigateurs modernes peuvent bloquer certaines fonctionnalités
+- Ne fonctionne pas si le jury est à distance
+
+---
+
+### Niveau 2 — URL publique temporaire (tunnel)
+
+**Cas d'usage** : jury à distance, démo en ligne ponctuelle, démonstration sans serveur dédié.
+
+```
+Internet
+    ↓
+Tunnel (ngrok / Cloudflare Tunnel)
+    ↓ URL générée : https://abc123.ngrok.io
+Ton laptop (Docker)
+```
+
+**Outils disponibles :**
+
+| Outil | Avantage | Limite |
+|---|---|---|
+| **ngrok** | Simple, rapide à configurer | URL change à chaque session (version gratuite), limite de connexions |
+| **Cloudflare Tunnel** | URL stable possible, gratuit | Configuration légèrement plus complexe |
+| **localtunnel** | Très simple | Instable, déconseillé pour démo officielle |
+
+**Limites :**
+- URL temporaire et instable (ngrok gratuit)
+- Keycloak doit aussi être exposé via un tunnel (ou sur la même URL publique) — sinon le flux OAuth2 casse
+- Non adapté à un usage continu ou multi-utilisateurs
+
+---
+
+### Niveau 3 — Serveur dédié avec URL stable
+
+**Cas d'usage** : URL permanente partageable, accès multi-utilisateurs, démo mémoire en ligne, déploiement ISRA.
+
+```
+Internet
+    ↓
+Serveur (VPS ou serveur physique ISRA)
+    ↓ IP publique ou domaine : senjiwu.isra.sn
+Reverse proxy Nginx / Traefik  (TLS / HTTPS)
+    ↓
+Docker Compose (tous les services)
+```
+
+**Options de serveur :**
+
+| Option | Coût | Cas d'usage |
+|---|---|---|
+| VPS OVH / DigitalOcean / Hetzner | 5–15€/mois | Démo mémoire, test public |
+| Render / Railway (PaaS) | Gratuit (limité) / payant | Prototype rapide |
+| Serveur physique ISRA/CNRA | Gratuit (infra ISRA) | Production réelle — OS10 |
+
+> Le détail de la mise en production sur serveur ISRA est documenté dans la section [Déploiement sur serveur ISRA (OS10)](#déploiement-sur-serveur-isra-os10) ci-dessous.
+
+---
+
+### Les 3 endroits à mettre à jour (obligatoires)
+
+C'est le point critique de tout accès externe. **Si un seul des trois n'est pas mis à jour, la connexion échoue** (redirect_uri mismatch Keycloak ou CORS bloqué côté API).
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  1. KEYCLOAK (infra/keycloak/ — realm seed-v0)                  │
+│     → Redirect URIs du client seed-frontend                     │
+│     → Web Origins (CORS) dans le realm                         │
+│     Avant : http://localhost:5173                               │
+│     Après : https://ton-domaine.com  (ou http://IP:5173)        │
+├─────────────────────────────────────────────────────────────────┤
+│  2. SPRING BOOT (docker-compose.yml)                            │
+│     → CORS_ALLOWED_ORIGINS sur les 4 microservices             │
+│     Avant : http://localhost:5173                               │
+│     Après : https://ton-domaine.com  (ou http://IP:5173)        │
+├─────────────────────────────────────────────────────────────────┤
+│  3. FRONTEND (src/lib/keycloak.ts ou variable d'environnement)  │
+│     → URL de Keycloak que le navigateur appelle                 │
+│     Avant : http://localhost:18080                              │
+│     Après : https://auth.ton-domaine.com  (ou http://IP:18080)  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+> **Pourquoi le point 3 est souvent oublié** : le navigateur de l'utilisateur distant doit pouvoir joindre Keycloak directement (le flux PKCE se fait côté client). Si Keycloak reste sur `localhost:18080`, le navigateur distant ne peut pas le contacter — même si le frontend est accessible.
+
+---
+
+### Tableau de décision rapide
+
+| Besoin | Solution recommandée | Délai estimé |
+|---|---|---|
+| Présenter au jury dans la même salle | Niveau 1 — LAN (IP locale) | ~30 min |
+| Présenter au jury à distance ponctuellement | Niveau 2 — Tunnel ngrok/Cloudflare | ~15 min |
+| URL stable pour soutenance en ligne | Niveau 3 — VPS (OVH/Hetzner) | 1–2 jours |
+| Déploiement production utilisateurs ISRA | Niveau 3 — Serveur physique ISRA | Planification DSI ISRA |
+
+---
+
 ## Déploiement sur serveur ISRA (OS10)
 
 ### Architecture cible
