@@ -251,17 +251,14 @@ export function UPSemCLAnalytics() {
       lotsData.forEach((l:any)=>{
         const gen = l.generation?.codeGeneration??''
         const qty = parseFloat(l.quantiteNette)||0
-        if (!ACTIVE_LOT.includes((l.statut??'').toUpperCase())) return
+        if (!ACTIVE_LOT.includes((l.statutLot??'').toUpperCase())) return
         if (gen==='G1') g1Kg+=qty
         else if (gen==='G2') g2Kg+=qty
         else if (gen==='G3') g3Kg+=qty
       })
       const g3TransfKg = transRaw
-        .filter((t:any)=>{
-          const gen = t.lot?.generation?.codeGeneration??t.codeGeneration??''
-          return gen==='G3'
-        })
-        .reduce((s:number,t:any)=>s+(parseFloat(t.quantite??t.quantiteTransferee??0)||0),0)
+        .filter((t:any) => t.generationTransferee === 'G3' && t.statut === 'ACCEPTE')
+        .reduce((s:number,t:any)=>s+(parseFloat(t.quantite??0)||0),0)
       const cmdG3 = new Set(
         orders.filter((o:any)=>ACTIVE_ORDER.includes((o.statut??'').toUpperCase()) &&
           (o.lignes??[]).some((l:any)=>l.generation?.codeGeneration==='G3'||l.codeGeneration==='G3'))
@@ -300,23 +297,25 @@ export function UPSemCLAnalytics() {
       setCoverageRows(covRows)
 
       /* ── Transferts G3 envoyés ── */
+      const lotById: Record<number,any> = Object.fromEntries(lotsData.map((l:any)=>[l.id,l]))
       const tRows: TransfertRow[] = transRaw
-        .filter((t:any)=>{
-          const gen = t.lot?.generation?.codeGeneration??t.codeGeneration??''
-          return gen==='G3'
-        })
-        .slice(0,10)
-        .map((t:any)=>({
-          id: t.id??0,
-          codeLot: t.lot?.codeLot??t.codeLot??'—',
-          nomVariete: varMap[t.lot?.idVariete??t.lot?.varieteId??-1]?.nomVariete??t.lot?.variete?.nomVariete??'—',
-          destinataire: t.destinataire??t.usernameDestinataire??t.organisationDestinataire??'—',
-          statut: (t.statut??'').toUpperCase(),
-          dateTransfert: t.dateTransfert??t.createdAt??'',
-        }))
-        .sort((a:TransfertRow,b:TransfertRow)=>
-          new Date(b.dateTransfert).getTime()-new Date(a.dateTransfert).getTime()
+        .filter((t:any) => t.generationTransferee === 'G3')
+        .sort((a:any,b:any)=>
+          new Date(b.dateAcceptation??b.dateDemande??b.createdAt??0).getTime()
+          - new Date(a.dateAcceptation??a.dateDemande??a.createdAt??0).getTime()
         )
+        .slice(0,10)
+        .map((t:any)=>{
+          const lot = lotById[t.idLot]
+          return {
+            id: t.id??0,
+            codeLot: t.codeTransfert??'—',
+            nomVariete: lot?.nomVariete || lot?.codeVariete || '—',
+            destinataire: t.usernameDestinataire??'—',
+            statut: (t.statut??'').toUpperCase(),
+            dateTransfert: t.dateAcceptation??t.dateDemande??t.createdAt??'',
+          }
+        })
       setTransferts(tRows)
 
       /* ── Alertes spécifiques UPSemCL ── */
@@ -332,7 +331,7 @@ export function UPSemCLAnalytics() {
       })
       lotsData.forEach((l:any)=>{
         const gen = l.generation?.codeGeneration??''
-        const statut = (l.statut??'').toUpperCase()
+        const statut = (l.statutLot??'').toUpperCase()
         if (gen==='G1' && statut==='DISPONIBLE') {
           const daysAgo = l.dateCreation
             ? Math.floor((Date.now()-new Date(l.dateCreation).getTime())/86400000) : null

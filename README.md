@@ -386,6 +386,59 @@ Chaque lot conserve une référence vers son **lot parent**, permettant une tra�
 
 ---
 
+## Indicateurs agronomiques — formulaire de création de lot
+
+Lors de la création d'un lot semencier, deux indicateurs sont calculés automatiquement à partir des données saisies et affichés en temps réel.
+
+### Rendement parcellaire
+
+```
+Rendement (kg/ha) = Production brute (kg) ÷ Superficie plantée (ha)
+```
+
+Mesure la productivité brute de la parcelle de multiplication. Reflète la récolte totale avant post-récolte, rapportée à la surface cultivée. Indicateur neutre dans l'interface (pas de code couleur actuellement).
+
+**Plages de référence indicatives pour la filière semencière ISRA :**
+
+| Espèce | Faible | Normal | Élevé |
+|---|---|---|---|
+| Mil (*Pennisetum glaucum*) | < 600 kg/ha | 600–2 500 kg/ha | > 2 500 kg/ha |
+| Riz (*Oryza sativa*) | < 2 500 kg/ha | 2 500–6 000 kg/ha | > 6 000 kg/ha |
+| Niébé (*Vigna unguiculata*) | < 400 kg/ha | 400–1 200 kg/ha | > 1 200 kg/ha |
+| Arachide (*Arachis hypogaea*) | < 800 kg/ha | 800–2 000 kg/ha | > 2 000 kg/ha |
+| Sorgho (*Sorghum bicolor*) | < 500 kg/ha | 500–2 000 kg/ha | > 2 000 kg/ha |
+
+> ⚙️ **Évolution prévue** : un code couleur par espèce (vert / orange / rouge) sera ajouté pour alerter visuellement l'utilisateur quand le rendement sort des normes ISRA par espèce, permettant de détecter les erreurs de saisie avant soumission. Cette fonctionnalité nécessite de fixer les seuils espèce par espèce en concertation avec les agronomes ISRA/CNRA.
+
+---
+
+### Taux de conditionnement
+
+```
+Conditionnement (%) = Production conditionnée (kg) ÷ Production brute (kg) × 100
+```
+
+Mesure la proportion de la récolte brute effectivement transformée en semence prête à stocker, après les opérations post-récolte : séchage, tri, épuration, emballage.
+
+**Code couleur dans le formulaire :**
+
+| Plage | Couleur | Interprétation |
+|---|---|---|
+| 70–85% | 🟢 Vert | Dans la norme ISRA — valeurs cohérentes |
+| 50–69% ou 86–95% | 🟠 Orange | Hors norme — à vérifier (pertes élevées ou production brute sous-estimée) |
+| < 50% ou > 95% | 🔴 Rouge | Suspect — probable erreur de saisie |
+
+**Pourquoi la norme est 70–85% ?** Cette fourchette correspond aux pertes incompressibles du post-récolte semencier :
+- Séchage : perte de 8–15% d'humidité (le grain frais pèse plus que le grain sec)
+- Tri et épuration : élimination des grains mal formés, brisés, infestés (~5–10%)
+- Manipulation et emballage : ~1–3%
+
+Un ratio > 95% signifie que presque rien n'a été perdu au conditionnement — physiquement impossible si la production brute est la récolte fraîche non triée. Un ratio < 50% signale des pertes anormalement élevées (dégâts de stockage, parasites, erreur de saisie).
+
+La formule et la norme sont affichées en rappel contextuel dans le formulaire dès qu'un ratio est calculé.
+
+---
+
 ## Structure du projet
 
 ```
@@ -623,6 +676,7 @@ triggers {
 - [x] Campagnes, Sites, Programmes de multiplication
 - [x] Messagerie interne entre acteurs
 - [x] Tableaux de bord analytiques (global + sélectionneur)
+- [x] Indicateurs agronomiques en temps réel dans le formulaire lot (rendement kg/ha, taux de conditionnement avec code couleur vert/orange/rouge et description pédagogique)
 - [x] Monitoring : Prometheus, Grafana, Alertmanager, Kafka UI
 - [x] 64+ migrations Flyway — schéma base de données entièrement versionné
 - [x] Schema per Service — 6 schémas PostgreSQL distincts (catalog, lot, stock, orders, shared, geo)
@@ -665,6 +719,10 @@ triggers {
 - [ ] Déploiement sur serveur physique ISRA/CNRA Bambey (Ubuntu 22.04, 8 Go RAM min)
 - [ ] Sauvegarde automatique PostgreSQL (cron + stockage externe)
 - [ ] Monitoring en conditions réelles + ajustement des seuils d'alerte Alertmanager
+
+### À venir (Fonctionnel — Indicateurs agronomiques)
+- [ ] Code couleur rendement par espèce dans le formulaire de création de lot (vert / orange / rouge selon les seuils ISRA par espèce) — nécessite validation des seuils par les agronomes CNRA pour mil, riz, niébé, arachide, sorgho
+- [ ] Extension possible : intégration des seuils dans la base de données (table `catalog.espece` ou table dédiée) pour permettre une mise à jour sans redéploiement frontend
 
 ### À venir (Formation & Documentation — OS11)
 - [ ] Guide utilisateur par rôle en PDF (sélectionneur, UPSemCL, multiplicateur, quotataire, admin)

@@ -1011,14 +1011,16 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], memb
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueQuotataire({ setToast }: { setToast: any }) {
   const navigate = useNavigate()
-  const [orders,    setOrders]    = useState<any[]>([])
-  const [orgs,      setOrgs]      = useState<any[]>([])
-  const [varieties, setVarieties] = useState<any[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [showForm,  setShowForm]  = useState(false)
-  const [saving,    setSaving]    = useState(false)
-  const [kpiFilter, setKpiFilter] = useState<KpiKey | null>(null)
-  const [search,    setSearch]    = useState('')
+  const [orders,       setOrders]       = useState<any[]>([])
+  const [orgs,         setOrgs]         = useState<any[]>([])
+  const [varieties,    setVarieties]    = useState<any[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [showForm,     setShowForm]     = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [kpiFilter,    setKpiFilter]    = useState<KpiKey | null>(null)
+  const [search,       setSearch]       = useState('')
+  const [voirPropModal, setVoirPropModal] = useState<any | null>(null)
+  const [actioning,    setActioning]    = useState<number | null>(null)
 
   const [form, setForm] = useState({
     idOrganisationFournisseur: '',
@@ -1045,6 +1047,17 @@ function VueQuotataire({ setToast }: { setToast: any }) {
   function addLigne()                             { setForm(f => ({ ...f, lignes: [...f.lignes, { idVariete: '', idGeneration: '7', quantite: '', unite: 'kg' }] })) }
   function removeLigne(i: number)                 { setForm(f => ({ ...f, lignes: f.lignes.filter((_, j) => j !== i) })) }
   function updateLigne(i: number, k: string, v: string) { setForm(f => ({ ...f, lignes: f.lignes.map((l, j) => j === i ? { ...l, [k]: v } : l) })) }
+
+  async function accuserReceptionQ(id: number, code: string) {
+    setActioning(id)
+    try {
+      await api.patch(endpoints.orderAccuserReception(id), {})
+      setToast({ msg: `Réception accusée pour ${code} — semences créditées dans vos stocks`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de l\'accusé de réception', type: 'error' })
+    } finally { setActioning(null) }
+  }
 
   async function submitOrder(e: React.FormEvent) {
     e.preventDefault(); setSaving(true)
@@ -1123,8 +1136,51 @@ function VueQuotataire({ setToast }: { setToast: any }) {
           </div>
           {(search || kpiFilter) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setKpiFilter(null) }}><X size={11} /> Effacer filtres</button>}
         </div>
-        <OrderTable orders={displayed} loading={loading} emptyMsg="Aucune commande" orgs={orgs} varieties={varieties} />
+        <OrderTable
+          orders={displayed}
+          loading={loading}
+          emptyMsg="Aucune commande"
+          orgs={orgs}
+          varieties={varieties}
+          extraColumns={[{
+            head: 'Action',
+            cell: (o: any) => {
+              if (o.statut === 'EN_NEGOCIATION') {
+                return (
+                  <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #d97706, #b45309)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => setVoirPropModal(o)} disabled={actioning === o.id}>
+                    <Eye size={11} /> Voir proposition
+                  </button>
+                )
+              }
+              if (o.statut === 'ACCORDEE') {
+                return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={11} /> En attente de transfert</span>
+              }
+              if (o.statut === 'EN_LIVRAISON') {
+                return (
+                  <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => accuserReceptionQ(o.id, o.codeCommande)} disabled={actioning === o.id}>
+                    {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <PackageCheck size={11} />}
+                    Accuser réception
+                  </button>
+                )
+              }
+              return null
+            },
+          }]}
+        />
       </div>
+
+      {voirPropModal && (
+        <VoirPropositionModal
+          commande={voirPropModal}
+          varieties={varieties}
+          onClose={() => setVoirPropModal(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
+          fournisseurLabel="Le multiplicateur"
+        />
+      )}
 
       {showForm && (
         <Modal title="Nouvelle Commande" subtitle="Soumettre une demande de semences certifiées" onClose={() => setShowForm(false)} size="lg">
@@ -1209,8 +1265,9 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
   const [orgs,          setOrgs]          = useState<any[]>([])
   const [showForm,      setShowForm]      = useState(false)
   const [formSaving,    setFormSaving]    = useState(false)
-  const [voirPropModal, setVoirPropModal] = useState<any | null>(null)
-  const [membresMap,    setMembresMap]    = useState<Record<string, any>>({})
+  const [voirPropModal,    setVoirPropModal]    = useState<any | null>(null)
+  const [proposerRecuModal, setProposerRecuModal] = useState<any | null>(null)
+  const [membresMap,       setMembresMap]       = useState<Record<string, any>>({})
   const [form, setForm] = useState({
     observations: '',
     lignes: [{ idVariete: '', quantite: '', unite: 'kg' }],
@@ -1308,6 +1365,17 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
     } finally { setActioning(null) }
   }
 
+  async function faireTransfertRecue(id: number, code: string) {
+    setActioning(id)
+    try {
+      await api.post(endpoints.orderFaireTransfert(id), {})
+      setToast({ msg: `Transfert déclenché pour ${code} — le quotataire peut maintenant accuser réception`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors du transfert', type: 'error' })
+    } finally { setActioning(null) }
+  }
+
   const activeOrders = onglet === 'recues' ? recues : demandes
   const loading      = onglet === 'recues' ? loadingR : loadingD
 
@@ -1395,7 +1463,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
           {(search || kpiFilter) && <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => { setSearch(''); setKpiFilter(null) }}><X size={11} /> Effacer</button>}
         </div>
 
-        {/* Tableau commandes reçues */}
+        {/* Tableau commandes reçues (quotataires) */}
         {onglet === 'recues' && (
           <OrderTable
             orders={displayed}
@@ -1405,16 +1473,38 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             membresMap={membresMap}
             extraColumns={[{
               head: 'Actions',
-              cell: (o: any) => o.statut === 'SOUMISE' ? (
-                <div style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px' }} onClick={() => confirmer(o.id)} disabled={saving}>
-                    <CheckCircle2 size={11} /> Confirmer
-                  </button>
-                  <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 8px', color: 'var(--red-600)', border: '1px solid #fecaca' }} onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }} disabled={saving}>
-                    <Ban size={11} />
-                  </button>
-                </div>
-              ) : null,
+              cell: (o: any) => {
+                if (o.statut === 'SOUMISE') {
+                  return (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #d97706, #b45309)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                        onClick={() => setProposerRecuModal(o)} disabled={saving}>
+                        <Settings2 size={11} /> Proposer
+                      </button>
+                      <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 8px', color: 'var(--red-600)', border: '1px solid #fecaca' }}
+                        onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }} disabled={saving}>
+                        <Ban size={11} />
+                      </button>
+                    </div>
+                  )
+                }
+                if (o.statut === 'EN_NEGOCIATION') {
+                  return <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, fontStyle: 'italic' }}>En attente du quotataire</span>
+                }
+                if (o.statut === 'ACCORDEE') {
+                  return (
+                    <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #6d28d9, #4c1d95)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                      onClick={() => faireTransfertRecue(o.id, o.codeCommande)} disabled={actioning === o.id}>
+                      {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Truck size={11} />}
+                      Faire le transfert
+                    </button>
+                  )
+                }
+                if (o.statut === 'EN_LIVRAISON') {
+                  return <span style={{ fontSize: 11, color: '#6d28d9', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Truck size={11} /> En livraison</span>
+                }
+                return null
+              },
             }]}
           />
         )}
@@ -1548,6 +1638,16 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
           commande={voirPropModal}
           varieties={varieties}
           onClose={() => setVoirPropModal(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
+        />
+      )}
+
+      {proposerRecuModal && (
+        <ProposeMulModal
+          commande={proposerRecuModal}
+          varieties={varieties}
+          onClose={() => setProposerRecuModal(null)}
           onSuccess={fetchAll}
           setToast={setToast}
         />
@@ -1767,6 +1867,167 @@ function TraiterCommandeG3Modal({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : PROPOSER une allocation (Multiplicateur → Quotataire)
+   Charge les lots R1/R2 du multiplicateur (mes-lots) pour la sélection.
+   ══════════════════════════════════════════════════════════════════════════════ */
+function ProposeMulModal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const [mesLots,    setMesLots]    = useState<any[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [saving,     setSaving]     = useState(false)
+  const [selections, setSelections] = useState<Record<number, { idLot: number | null; quantite: string }>>({})
+
+  const lignes: any[] = commande.lignes ?? []
+
+  useEffect(() => {
+    const init: Record<number, { idLot: number | null; quantite: string }> = {}
+    for (const l of lignes) {
+      init[l.id] = {
+        idLot: l.idLotPropose ?? null,
+        quantite: l.quantiteProposee != null ? String(l.quantiteProposee) : String(l.quantiteDemandee ?? ''),
+      }
+    }
+    setSelections(init)
+    api.get(endpoints.lotsMesLots)
+      .then(r => {
+        const all = Array.isArray(r.data) ? r.data : (r.data?.content ?? [])
+        setMesLots(all.filter((l: any) =>
+          l.generationCode === 'R2' &&
+          ['DISPONIBLE','CERTIFIE'].includes(l.statutLot) &&
+          Number(l.quantiteNette) > 0
+        ))
+      })
+      .catch(() => setMesLots([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+  function lotsForLigne(idVariete: number) {
+    return mesLots.filter((lot: any) => lot.idVariete === idVariete)
+  }
+
+  const isValid = lignes.length > 0 && lignes.every((l: any) => {
+    const sel = selections[l.id]
+    return sel && sel.idLot !== null && sel.quantite && Number(sel.quantite) > 0
+  })
+
+  async function submit() {
+    if (!isValid) return; setSaving(true)
+    try {
+      const propositions = lignes.map((l: any) => ({
+        idLigne: l.id,
+        idLot: selections[l.id].idLot,
+        quantiteProposee: Number(selections[l.id].quantite),
+      }))
+      await api.patch(endpoints.orderProposer(commande.id), { propositions })
+      setToast({ msg: `Proposition envoyée pour ${commande.codeCommande} — le quotataire va recevoir votre offre`, type: 'success' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la proposition', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal
+      title="Proposer une allocation"
+      subtitle={`${commande.codeCommande} — Acheteur : ${commande.usernameAcheteur ?? '—'}`}
+      onClose={onClose} size="lg"
+    >
+      <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Settings2 size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>Sélectionnez le lot <strong>R2</strong> disponible et proposez la quantité. Le quotataire pourra <strong>accepter ou refuser</strong> votre proposition avant le transfert physique.</span>
+      </div>
+
+      {lignes.map((ligne: any) => {
+        const lots  = lotsForLigne(ligne.idVariete)
+        const sel   = selections[ligne.id] ?? { idLot: null, quantite: '' }
+        const lotSel = lots.find((l: any) => l.id === sel.idLot)
+        return (
+          <div key={ligne.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 14, background: 'var(--surface-2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{varNom(ligne.idVariete)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                  Demandé : <strong style={{ color: 'var(--text-primary)' }}>{ligne.quantiteDemandee} {ligne.unite}</strong>
+                </div>
+              </div>
+              <span style={{ background: '#f0fdf4', color: '#15803d', borderRadius: 99, padding: '3px 11px', fontSize: 11.5, fontWeight: 700 }}>R2</span>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Lot à proposer</div>
+              {loading ? (
+                <div className="skeleton" style={{ height: 44, borderRadius: 8 }} />
+              ) : lots.length === 0 ? (
+                <div style={{ padding: '11px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <XCircle size={14} /> Aucun lot R2 disponible pour cette variété.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {lots.map((lot: any) => (
+                    <label key={lot.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', border: `2px solid ${sel.idLot === lot.id ? '#d97706' : 'var(--border)'}`, borderRadius: 9, cursor: 'pointer', background: sel.idLot === lot.id ? '#fefce8' : 'var(--surface)', transition: 'all .12s' }}>
+                      <input type="radio" name={`lot-mul-${ligne.id}`} checked={sel.idLot === lot.id} onChange={() => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], idLot: lot.id } }))} style={{ accentColor: '#d97706', width: 15, height: 15 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, fontFamily: 'monospace' }}>{lot.codeLot}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{lot.generationCode}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{lot.campagne ?? '—'}</span>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#15803d' }}>{lot.quantiteNette} kg</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>disponible</div>
+                      </div>
+                      <span style={{ fontSize: 10.5, background: lot.statutLot === 'CERTIFIE' ? '#dcfce7' : '#eff6ff', color: lot.statutLot === 'CERTIFIE' ? '#15803d' : '#1d4ed8', borderRadius: 99, padding: '2px 9px', fontWeight: 600 }}>
+                        {lot.statutLot}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 7 }}>
+                Quantité proposée ({ligne.unite})
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <input
+                  type="number" value={sel.quantite} min={1}
+                  max={lotSel ? lotSel.quantiteNette : undefined}
+                  onChange={e => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], quantite: e.target.value } }))}
+                  disabled={sel.idLot === null}
+                  style={{ padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: 150, outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)' }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  sur <strong>{ligne.quantiteDemandee}</strong> {ligne.unite} demandé{ligne.quantiteDemandee > 1 ? 's' : ''}
+                  {lotSel && <span style={{ color: '#15803d', marginLeft: 8 }}>· lot : {lotSel.quantiteNette} kg dispo</span>}
+                </span>
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+        <button
+          className="btn btn-primary"
+          style={{ background: isValid && !saving ? 'linear-gradient(135deg, #d97706, #b45309)' : undefined, border: 'none', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, opacity: !isValid ? 0.6 : 1 }}
+          onClick={submit} disabled={!isValid || saving}
+        >
+          {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><Settings2 size={13} /> Envoyer la proposition</>}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
    MODAL : PROPOSER une allocation (UPSemCL → Multiplicateur)
    ══════════════════════════════════════════════════════════════════════════════ */
 function ProposeModal({
@@ -1921,12 +2182,14 @@ function ProposeModal({
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   MODAL : VOIR PROPOSITION (Multiplicateur) — Accepter ou Refuser
+   MODAL : VOIR PROPOSITION — Accepter ou Refuser
+   Utilisé par le multiplicateur (proposition UPSemCL) ET par le quotataire
+   (proposition du multiplicateur). Le fournisseurLabel adapte le texte.
    ══════════════════════════════════════════════════════════════════════════════ */
 function VoirPropositionModal({
-  commande, varieties, onClose, onSuccess, setToast,
+  commande, varieties, onClose, onSuccess, setToast, fournisseurLabel,
 }: {
-  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void; fournisseurLabel?: string
 }) {
   const [saving,    setSaving]    = useState(false)
   const [mesSites,  setMesSites]  = useState<any[]>([])
@@ -1956,7 +2219,7 @@ function VoirPropositionModal({
     setSaving(true)
     try {
       await api.patch(endpoints.orderAccepterProposition(commande.id), { siteCode })
-      setToast({ msg: `Proposition acceptée — l'UPSemCL va déclencher le transfert`, type: 'success' })
+      setToast({ msg: `Proposition acceptée — le fournisseur va déclencher le transfert`, type: 'success' })
       onSuccess(); onClose()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message ?? 'Erreur', type: 'error' })
@@ -1976,13 +2239,13 @@ function VoirPropositionModal({
 
   return (
     <Modal
-      title="Proposition de l'UPSemCL"
+      title={`Proposition de ${fournisseurLabel ?? "l'UPSemCL"}`}
       subtitle={`Commande ${commande.codeCommande}`}
       onClose={onClose} size="md"
     >
       <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
         <Clock size={15} style={{ marginTop: 1, flexShrink: 0 }} />
-        <span>L'UPSemCL a proposé les quantités ci-dessous. Vous pouvez <strong>accepter</strong> pour valider le transfert ou <strong>refuser</strong> pour négocier une nouvelle proposition via la messagerie.</span>
+        <span>{fournisseurLabel ?? "L'UPSemCL"} a proposé les quantités ci-dessous. Vous pouvez <strong>accepter</strong> pour valider le transfert ou <strong>refuser</strong> pour négocier une nouvelle proposition via la messagerie.</span>
       </div>
 
       {lignes.length === 0 && (

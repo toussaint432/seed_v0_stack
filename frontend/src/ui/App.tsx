@@ -120,7 +120,7 @@ function getNavSections(roleKey: string): NavSection[] {
         { section: 'Général',        items: [dashboard] },
         { section: 'Référentiel',    items: [{ ...varieties, label: 'Variétés & Espèces' }, { id: 'catalogue' as Page, label: 'Catalogue R1/R2', icon: Store }] },
         { section: 'Commandes',      items: [orders, { id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
-        { section: 'Réceptions',     items: [{ ...lots, label: 'Semences reçues' }] },
+        { section: 'Logistique',     items: [stocks, transfers, { ...lots, label: 'Semences reçues' }] },
         { section: 'Mes Données',    items: [mesSites] },
       ]
 

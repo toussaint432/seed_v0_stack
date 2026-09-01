@@ -2437,7 +2437,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
       })
       setToast({ msg: `Lot ${newLotForm.codeLot} créé${newLotForm.siteCode ? ' · stock synchronisé automatiquement' : ''}`, type: 'success' })
       setShowNewLot(false)
-      setNewLotForm(NEW_LOT_INIT)
+      setNewLotForm({ ...NEW_LOT_INIT, generationCode: allowedGens[0] ?? 'G0' })
       fetchLots()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur lors de la création', type: 'error' })
@@ -2794,7 +2794,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                 <Download size={13} /> Export .xls
               </button>
             )}
-            {canCreate && <button className="btn btn-primary" onClick={() => setShowNewLot(true)}><Plus size={13} /> Nouveau lot</button>}
+            {canCreate && <button className="btn btn-primary" onClick={() => { setNewLotForm({ ...NEW_LOT_INIT, generationCode: allowedGens[0] ?? 'G0' }); setShowNewLot(true) }}><Plus size={13} /> Nouveau lot</button>}
             <button className="btn btn-secondary btn-icon" onClick={fetchLots}><RefreshCw size={13} /></button>
           </div>
         </div>
@@ -2890,7 +2890,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   <div className="empty-state">
                     <div className="empty-icon"><Package size={20} /></div>
                     <div className="empty-title">{search || genFilter || filterStatut ? 'Aucun lot pour ce filtre' : 'Aucun lot'}</div>
-                    {canCreate && !search && !genFilter && !filterStatut && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => setShowNewLot(true)}>+ Créer un lot</button>}
+                    {canCreate && !search && !genFilter && !filterStatut && <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={() => { setNewLotForm({ ...NEW_LOT_INIT, generationCode: allowedGens[0] ?? 'G0' }); setShowNewLot(true) }}>+ Créer un lot</button>}
                   </div>
                 </td></tr>
               ) : displayLotsFiltered.map(l => {
@@ -3282,12 +3282,39 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               <Field label="Superficie plantée (ha)"><FormInput type="number" value={newLotForm.superficieHa} onChange={e => setNewLotForm(f => ({ ...f, superficieHa: e.target.value }))} placeholder="2.5" min="0" step="0.01" /></Field>
               <Field label="Production brute (kg)" hint="Récolte totale brute avant séchage et tri"><FormInput type="number" value={newLotForm.productionBruteKg} onChange={e => setNewLotForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1000" min="0" step="0.01" /></Field>
             </FormRow>
-            {(newLotForm.productionBruteKg && Number(newLotForm.productionBruteKg) > 0) && (
-              <div style={{ padding: '8px 12px', background: 'var(--green-50)', border: '1px solid var(--green-100)', borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', marginBottom: 12, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                {newLotForm.superficieHa && Number(newLotForm.superficieHa) > 0 && <span>Rendement : <strong>{(Number(newLotForm.productionBruteKg) / Number(newLotForm.superficieHa)).toFixed(2)} kg/ha</strong></span>}
-                {newLotForm.quantiteNette && Number(newLotForm.quantiteNette) > 0 && <span>Conditionnement : <strong>{((Number(newLotForm.quantiteNette) / Number(newLotForm.productionBruteKg)) * 100).toFixed(1)}%</strong> <span style={{ fontWeight: 400, color: 'var(--green-700)' }}>(norme : 70–85%)</span></span>}
-              </div>
-            )}
+            {(newLotForm.productionBruteKg && Number(newLotForm.productionBruteKg) > 0) && (() => {
+              const brute = Number(newLotForm.productionBruteKg)
+              const condKg = newLotForm.quantiteNette && Number(newLotForm.quantiteNette) > 0 ? Number(newLotForm.quantiteNette) : null
+              const pct = condKg != null ? (condKg / brute) * 100 : null
+              const ok   = pct != null && pct >= 70 && pct <= 85
+              const warn = pct != null && !ok && pct >= 50 && pct <= 95
+              const bad  = pct != null && !ok && !warn
+              const color  = ok ? 'var(--green-700)' : warn ? '#b45309' : bad ? '#dc2626' : 'var(--green-800)'
+              const bg     = ok ? 'var(--green-50)'  : warn ? '#fef3c7' : bad ? '#fee2e2' : 'var(--green-50)'
+              const border = ok ? 'var(--green-100)' : warn ? '#fde68a' : bad ? '#fecaca' : 'var(--green-100)'
+              const label  = ok   ? 'dans la norme (70–85%)'
+                           : pct != null && pct > 95 ? 'suspect — vérifier la production brute'
+                           : pct != null && pct > 85 ? 'au-dessus de la norme (70–85%)'
+                           : pct != null && pct >= 50 ? 'en-dessous de la norme (70–85%)'
+                           : pct != null ? 'pertes anormales — vérifier les saisies' : ''
+              return (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ padding: '8px 12px', background: bg, border: `1px solid ${border}`, borderRadius: 6, fontSize: 12.5, color: 'var(--green-800)', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                    {newLotForm.superficieHa && Number(newLotForm.superficieHa) > 0 && (
+                      <span>Rendement : <strong>{(brute / Number(newLotForm.superficieHa)).toFixed(2)} kg/ha</strong></span>
+                    )}
+                    {pct != null && (
+                      <span style={{ color }}>Conditionnement : <strong>{pct.toFixed(1)}%</strong><span style={{ fontWeight: 400 }}> — {label}</span></span>
+                    )}
+                  </div>
+                  {pct != null && (
+                    <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                      <strong>Conditionnement</strong> = Production conditionnée ÷ Production brute × 100. Mesure la proportion de la récolte brute transformée en semence prête à stocker après séchage, tri et emballage. Norme ISRA : 70–85%.
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
             {/* Statut toujours DISPONIBLE à la création — admin peut le modifier via la page */}
             {(['seed-selector', 'seed-upsemcl'].includes(roleKey)) ? (
               <Field label="Site de stockage initial">
