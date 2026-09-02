@@ -760,10 +760,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     const lotsUrl   = (isMulti || isUpsemcl) ? endpoints.lotsMesLots   : endpoints.lots
     // UPSemCL et multiplicateur utilisent mon-stock (filtré par org, sans pagination)
     const stocksUrl = (isMulti || isUpsemcl) ? endpoints.stockMonStock : endpoints.stocks
-    const ordersUrl = isMulti ? endpoints.ordersATraiter : endpoints.orders
+    const ordersUrl = isSel ? null : isMulti ? endpoints.ordersATraiter : endpoints.orders
 
     const results = await Promise.allSettled([
-      api.get(lotsUrl), api.get(stocksUrl), api.get(ordersUrl), api.get(endpoints.varieties),
+      api.get(lotsUrl), api.get(stocksUrl), ordersUrl ? api.get(ordersUrl) : Promise.resolve({ data: [] }), api.get(endpoints.varieties),
       api.get(endpoints.stocksAgrege), api.get(endpoints.lotsStats),
       api.get(endpoints.programs),
     ])
@@ -1036,7 +1036,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     (l.statut === 'EN_COURS_CERT')
   ).length
 
-  const hasAnyAlerts = criticalCov > 0 || warningCov > 0 || lotsACertifierCount > 0 || stats.ordersPending > 0
+  const hasAnyAlerts = criticalCov > 0 || warningCov > 0 || lotsACertifierCount > 0 || (!isSelector && stats.ordersPending > 0)
 
   /* ── Pipeline G1→G2→G3 (totaux par stade) ── */
   const pipeG1Kg    = stockRows.filter(r=>r.generation==='G1').reduce((s,r)=>s+r.stockKg,0)
@@ -1344,7 +1344,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               { count: criticalCov,        label: criticalCov <= 1 ? 'espèce critique' : 'espèces critiques', clr: '#dc2626', bg: '#fef2f2', brd: '#fecaca', action: false },
               { count: warningCov,          label: 'en tension',                                                clr: '#d97706', bg: '#fffbeb', brd: '#fde68a', action: false },
               { count: lotsACertifierCount, label: 'lots à certifier',                                          clr: '#1e40af', bg: '#eff6ff', brd: '#bfdbfe', action: false },
-              { count: stats.ordersPending, label: 'commandes en attente',                                      clr: accent,    bg: `${accent}0d`, brd: `${accent}30`, action: true },
+              ...(!isSelector ? [{ count: stats.ordersPending, label: 'commandes en attente', clr: accent, bg: `${accent}0d`, brd: `${accent}30`, action: true }] : []),
             ] as { count: number; label: string; clr: string; bg: string; brd: string; action: boolean }[]).map((item, i) => (
               <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 {i > 0 && <span style={{ color: D.line }}>·</span>}
