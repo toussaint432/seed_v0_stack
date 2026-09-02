@@ -596,27 +596,58 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             )}
           </div>
 
-          {/* Barre de distribution */}
-          {!loading && kpiActive > 0 && (
+          {/* Jauge circulaire — taux de diffusion */}
+          {kpiActive > 0 && (
             <div style={{ background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '10px 16px', boxShadow: 'var(--shadow-xs)', display: 'flex', alignItems: 'center', gap: 16 }}>
-              <span style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>Répartition</span>
-              <div style={{ flex: 1, height: 7, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', display: 'flex' }}>
-                {kpiDiffusee > 0 && <div style={{ width: `${(kpiDiffusee / kpiActive) * 100}%`, background: '#16a34a', transition: 'width 0.8s ease' }} />}
-                {kpiEnTest > 0 && <div style={{ width: `${(kpiEnTest / kpiActive) * 100}%`, background: '#7c3aed', transition: 'width 0.8s ease' }} />}
-              </div>
-              <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
-                {kpiDiffusee > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: '#16a34a', display: 'inline-block' }} />
-                    {kpiDiffusee} diffusées
-                  </span>
-                )}
-                {kpiEnTest > 0 && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: 'var(--text-secondary)' }}>
-                    <span style={{ width: 8, height: 8, borderRadius: 2, background: '#7c3aed', display: 'inline-block' }} />
-                    {kpiEnTest} en test
-                  </span>
-                )}
+              {(() => {
+                const gaugePct = kpiDiffusee / kpiActive
+                const gaugeColor = gaugePct >= 0.8 ? '#16a34a' : gaugePct >= 0.6 ? '#d97706' : '#dc2626'
+                const arcLen = 131.95
+                const offset = arcLen * (1 - gaugePct)
+                return (
+                  <svg width="64" height="64" viewBox="0 0 72 72" style={{ display: 'block', flexShrink: 0 }}>
+                    <path d="M 16.2 55.8 A 28 28 0 1 1 55.8 55.8"
+                      fill="none" stroke="var(--surface-3)" strokeWidth="6" strokeLinecap="round" />
+                    <path d="M 16.2 55.8 A 28 28 0 1 1 55.8 55.8"
+                      fill="none" stroke={gaugeColor} strokeWidth="6" strokeLinecap="round"
+                      strokeDasharray={arcLen} strokeDashoffset={offset}
+                      style={{ transition: 'stroke-dashoffset 0.8s ease, stroke 0.5s' }}
+                    />
+                    <text x="36" y="31" textAnchor="middle" dominantBaseline="central"
+                      fontSize="13" fontWeight="800" fill="var(--text-primary)"
+                      style={{ fontFamily: 'var(--font-sans)' }}>
+                      {`${Math.round(gaugePct * 100)}%`}
+                    </text>
+                    <text x="36" y="44" textAnchor="middle" dominantBaseline="central"
+                      fontSize="8" fill="var(--text-muted)"
+                      style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                      DIFFUSION
+                    </text>
+                  </svg>
+                )
+              })()}
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 6 }}>Taux de diffusion</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {kpiDiffusee > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: '#16a34a', display: 'inline-block', flexShrink: 0 }} />
+                      {kpiDiffusee} diffusée{kpiDiffusee > 1 ? 's' : ''} / {kpiActive} actives
+                    </span>
+                  )}
+                  {kpiEnTest > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: '#7c3aed', display: 'inline-block', flexShrink: 0 }} />
+                      {kpiEnTest} en évaluation
+                    </span>
+                  )}
+                  {kpiRetiree > 0 && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: '#dc2626', display: 'inline-block', flexShrink: 0 }} />
+                      {kpiRetiree} retirée{kpiRetiree > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           )}
@@ -642,25 +673,52 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>toutes espèces confondues</div>
             </div>
 
-            {/* Taux de diffusion avec mini barre intégrée */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '18px 20px 20px' }}>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: 10 }}>Taux de diffusion</div>
-              <div style={{ fontSize: 34, fontWeight: 700, letterSpacing: '-0.03em', color: 'var(--text-primary)', lineHeight: 1, marginBottom: 12 }}>
-                {loading ? '…' : kpiActive > 0 ? Math.round((kpiDiffusee / kpiActive) * 100) : '—'}
-                {!loading && kpiActive > 0 && <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--text-muted)', marginLeft: 3 }}>%</span>}
+            {/* Taux de diffusion — jauge circulaire */}
+            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '18px 20px 20px', display: 'flex', alignItems: 'center', gap: 16 }}>
+              {(() => {
+                const gaugePct = kpiActive > 0 ? kpiDiffusee / kpiActive : 0
+                const gaugeColor = gaugePct >= 0.8 ? '#16a34a' : gaugePct >= 0.6 ? '#d97706' : '#dc2626'
+                const arcLen = 131.95
+                const offset = arcLen * (1 - gaugePct)
+                return (
+                  <svg width="72" height="72" viewBox="0 0 72 72" style={{ display: 'block', flexShrink: 0 }}>
+                    <path d="M 16.2 55.8 A 28 28 0 1 1 55.8 55.8"
+                      fill="none" stroke="var(--surface-3)" strokeWidth="6" strokeLinecap="round" />
+                    <path d="M 16.2 55.8 A 28 28 0 1 1 55.8 55.8"
+                      fill="none" stroke={gaugeColor} strokeWidth="6" strokeLinecap="round"
+                      strokeDasharray={arcLen} strokeDashoffset={offset}
+                      style={{ transition: 'stroke-dashoffset 0.8s ease, stroke 0.5s' }}
+                    />
+                    <text x="36" y="31" textAnchor="middle" dominantBaseline="central"
+                      fontSize="13" fontWeight="800" fill="var(--text-primary)"
+                      style={{ fontFamily: 'var(--font-sans)' }}>
+                      {loading ? '…' : `${Math.round(gaugePct * 100)}%`}
+                    </text>
+                    <text x="36" y="44" textAnchor="middle" dominantBaseline="central"
+                      fontSize="8" fill="var(--text-muted)"
+                      style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                      DIFFUSION
+                    </text>
+                  </svg>
+                )
+              })()}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500, textTransform: 'uppercase' as const, letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: 8 }}>Taux de diffusion</div>
+                {!loading && kpiActive > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                      <span style={{ width: 8, height: 8, borderRadius: 2, background: '#16a34a', display: 'inline-block', flexShrink: 0 }} />
+                      {kpiDiffusee} diffusée{kpiDiffusee > 1 ? 's' : ''}
+                    </span>
+                    {kpiEnTest > 0 && (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: 'var(--text-secondary)' }}>
+                        <span style={{ width: 8, height: 8, borderRadius: 2, background: '#7c3aed', display: 'inline-block', flexShrink: 0 }} />
+                        {kpiEnTest} en évaluation
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
-              {!loading && kpiActive > 0 && (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 11, color: 'var(--text-muted)' }}>
-                    <span><strong style={{ color: '#16a34a' }}>{kpiDiffusee}</strong> diffusées</span>
-                    <span><strong style={{ color: '#7c3aed' }}>{kpiEnTest}</strong> en test</span>
-                  </div>
-                  <div style={{ height: 5, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', display: 'flex', gap: 2 }}>
-                    {kpiDiffusee > 0 && <div style={{ width: `${(kpiDiffusee / kpiActive) * 100}%`, background: '#16a34a', borderRadius: 99, transition: 'width 0.8s ease' }} />}
-                    {kpiEnTest > 0 && <div style={{ width: `${(kpiEnTest / kpiActive) * 100}%`, background: '#7c3aed', borderRadius: 99, transition: 'width 0.8s ease' }} />}
-                  </div>
-                </div>
-              )}
             </div>
 
           </div>
