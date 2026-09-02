@@ -27,6 +27,22 @@ const ESPECE_ICONS: Record<string, LucideIcon> = {
   ARACHIDE: Sprout, NIEBE: Sprout, COWPEA: Sprout,
 }
 
+const ESPECE_COLORS: Record<string, string> = {
+  ARACHIDE: '#b45309', ARA: '#b45309',
+  SESAME: '#7c3aed',   SES: '#7c3aed',
+  RIZ: '#0d9488',
+  BLE: '#854d0e',      BLED: '#854d0e',
+  NIEBE: '#3730a3',    NIE: '#3730a3',
+  MIL: '#9a3412',
+  FONIO: '#3f6212',    FON: '#3f6212',
+  MAIS: '#c2410c',     MAI: '#c2410c',
+  SORGHO: '#92400e',   SOR: '#92400e',
+}
+function especeColor(code?: string): string {
+  if (!code) return 'var(--green-600)'
+  return ESPECE_COLORS[code.toUpperCase()] ?? 'var(--green-600)'
+}
+
 export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [species,   setSpecies]   = useState<any[]>([])
   const [varieties, setVarieties] = useState<any[]>([])
@@ -950,8 +966,10 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                     >
                       <div style={{
                         width: 30, height: 30, borderRadius: 7, flexShrink: 0,
-                        background: isActive ? '#16a34a' : isMySpec ? '#eff6ff' : 'var(--surface-3)',
-                        color:      isActive ? '#fff'    : isMySpec ? '#1d4ed8' : 'var(--green-600)',
+                        background: isActive
+                          ? especeColor(s.codeEspece)
+                          : isMySpec ? '#eff6ff' : 'var(--surface-3)',
+                        color: isActive ? '#fff' : isMySpec ? '#1d4ed8' : especeColor(s.codeEspece),
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                       }}>
                         <Icon size={14} />
@@ -966,6 +984,12 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           {s.nomCommun}
                           {isMySpec && <span style={{ fontSize: 9.5, color: '#3b82f6', fontWeight: 700, background: '#dbeafe', padding: '1px 5px', borderRadius: 4 }}>Votre spéc.</span>}
                         </div>
+                        {st.total > 0 && (
+                          <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 1, display: 'flex', gap: 5 }}>
+                            {st.diff > 0 && <span style={{ color: '#16a34a', fontWeight: 600 }}>{st.diff} diff.</span>}
+                            {st.enTest > 0 && <span style={{ color: '#7c3aed', fontWeight: 600 }}>{st.enTest} test</span>}
+                          </div>
+                        )}
                       </div>
                       {/* Bouton historique admin — traçabilité espèce */}
                       {isAdmin && (
@@ -1011,8 +1035,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       </button>
                       <span style={{
                         fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
-                        color: isActive ? 'var(--green-700)' : 'var(--text-muted)',
-                        background: isActive ? 'var(--green-100)' : 'var(--surface-3)',
+                        color: isActive ? especeColor(s.codeEspece) : 'var(--text-muted)',
+                        background: isActive ? `${especeColor(s.codeEspece)}18` : 'var(--surface-3)',
                         padding: '2px 8px', borderRadius: 99, flexShrink: 0,
                       }}>
                         {st.total}
@@ -1089,16 +1113,19 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           {/* Barre de recherche + chip espèce active */}
           <div style={{ padding: '10px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              {selectedSpecies && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--green-50)', border: '1px solid var(--green-200)', borderRadius: 99, padding: '3px 10px 3px 7px', fontSize: 12, color: 'var(--green-700)', flexShrink: 0 }}>
-                  {React.createElement(ESPECE_ICONS[selectedSpecies.codeEspece] ?? ESPECE_ICONS.default, { size: 11 })}
-                  <span style={{ fontWeight: 700 }}>{selectedSpecies.codeEspece}</span>
-                  <span style={{ fontWeight: 400 }}>{selectedSpecies.nomCommun}</span>
-                  <button onClick={() => { setSelectedSpeciesId(null); setSelectedVarietyId(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', marginLeft: 2, color: 'var(--green-700)' }}>
-                    <X size={12} />
-                  </button>
-                </div>
-              )}
+              {selectedSpecies && (() => {
+                const ec = especeColor(selectedSpecies.codeEspece)
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, background: `${ec}12`, border: `1px solid ${ec}40`, borderRadius: 99, padding: '3px 10px 3px 7px', fontSize: 12, color: ec, flexShrink: 0 }}>
+                    {React.createElement(ESPECE_ICONS[selectedSpecies.codeEspece] ?? ESPECE_ICONS.default, { size: 11 })}
+                    <span style={{ fontWeight: 700 }}>{selectedSpecies.codeEspece}</span>
+                    <span style={{ fontWeight: 400, opacity: 0.85 }}>{selectedSpecies.nomCommun}</span>
+                    <button onClick={() => { setSelectedSpeciesId(null); setSelectedVarietyId(null) }} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', marginLeft: 2, color: ec }}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                )
+              })()}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--surface)', border: '1px solid var(--border-strong)', borderRadius: 6, padding: '0 11px', height: 34, flex: 1, minWidth: 200 }}>
                 <Search size={13} color="var(--text-placeholder)" />
                 <input
@@ -1117,9 +1144,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             {/* Filtre rapide par statut */}
             <div style={{ display: 'flex', gap: 6 }}>
               {[
-                { value: '',         label: 'Toutes',  dot: undefined },
-                { value: 'DIFFUSEE', label: 'Diffusées', dot: '#16a34a' },
-                { value: 'EN_TEST',  label: 'En test',   dot: '#7c3aed' },
+                { value: '',         label: 'Toutes',    dot: undefined,  count: kpiActive + (showArchived ? kpiArchived : 0) },
+                { value: 'DIFFUSEE', label: 'Diffusées', dot: '#16a34a',  count: kpiDiffusee },
+                { value: 'EN_TEST',  label: 'En test',   dot: '#7c3aed',  count: kpiEnTest },
               ].map(chip => (
                 <button
                   key={chip.value}
@@ -1135,6 +1162,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 >
                   {chip.dot && <span style={{ width: 6, height: 6, borderRadius: '50%', background: filterStatut === chip.value ? 'var(--surface)' : chip.dot, display: 'inline-block' }} />}
                   {chip.label}
+                  <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.7 }}>({chip.count})</span>
                 </button>
               ))}
             </div>
@@ -1218,6 +1246,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       const dTitle     = `Non autorisé — spécialisation : ${userSpecialisation ?? 'N/A'}`
                       const dStyle     = !allowed ? { opacity: 0.35, cursor: 'not-allowed' as const } : {}
                       const isSelected = selectedVarietyId === v.id
+                      const statusBorderColor = v.statutVariete === 'DIFFUSEE' ? '#16a34a'
+                        : v.statutVariete === 'EN_TEST' ? '#7c3aed'
+                        : v.statutVariete === 'ARCHIVEE' ? '#9ca3af' : 'transparent'
                       return (
                         <tr
                           key={v.id}
@@ -1225,7 +1256,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                             opacity:    isArchived ? 0.5 : 1,
                             cursor:     'pointer',
                             background: isSelected ? 'var(--green-50)' : undefined,
-                            boxShadow:  isSelected ? 'inset 3px 0 0 var(--green-500)' : undefined,
+                            boxShadow:  isSelected
+                              ? 'inset 3px 0 0 var(--green-500)'
+                              : `inset 3px 0 0 ${statusBorderColor}`,
                             transition: 'background 0.15s, box-shadow 0.15s',
                           }}
                           onClick={() => setSelectedVarietyId(isSelected ? null : v.id)}
