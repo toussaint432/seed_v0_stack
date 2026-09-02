@@ -72,9 +72,10 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [desarchiveTarget, setDesarchiveTarget] = useState<any>(null)
   const [desarchiving,     setDesarchiving]     = useState(false)
 
-  const [filterStatut, setFilterStatut] = useState<string>('')
-  const [moreMenuId,   setMoreMenuId]   = useState<number | null>(null)
-  const [hoverEspeceId, setHoverEspeceId] = useState<number | null>(null)
+  const [filterStatut,   setFilterStatut]   = useState<string>('')
+  const [moreMenuId,     setMoreMenuId]     = useState<number | null>(null)
+  const [hoverEspeceId,  setHoverEspeceId]  = useState<number | null>(null)
+  const [hoveredRowId,   setHoveredRowId]   = useState<number | null>(null)
 
   const [allZones,      setAllZones]      = useState<any[]>([])
   const [zonesTarget,   setZonesTarget]   = useState<any>(null)
@@ -1262,6 +1263,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                             transition: 'background 0.15s, box-shadow 0.15s',
                           }}
                           onClick={() => setSelectedVarietyId(isSelected ? null : v.id)}
+                          onMouseEnter={() => setHoveredRowId(v.id)}
+                          onMouseLeave={() => setHoveredRowId(null)}
                           title={isSelected ? 'Désélectionner' : 'Voir les détails'}
                         >
                           {/* Code variété */}
@@ -1376,64 +1379,46 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                                   </button>
                                 </>
                               )}
-                              {/* ··· menu actions secondaires */}
-                              <div style={{ position: 'relative' }}>
-                                <button
-                                  className="btn btn-ghost"
-                                  style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}
-                                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); setMoreMenuId(moreMenuId === v.id ? null : v.id) }}
-                                  title="Plus d'actions"
-                                >
-                                  ···
-                                </button>
-                                {moreMenuId === v.id && (
-                                  <div
-                                    style={{ position: 'absolute', right: 0, top: 'calc(100% + 4px)', zIndex: 50, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, boxShadow: '0 6px 20px rgba(0,0,0,0.10)', minWidth: 172, padding: 4 }}
-                                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                              {/* Actions secondaires — visibles au hover */}
+                              <div style={{ display: 'flex', gap: 2, opacity: hoveredRowId === v.id ? 1 : 0, pointerEvents: hoveredRowId === v.id ? 'auto' : 'none', transition: 'opacity 0.15s' }}>
+                                {v.ficheVarietalePath ? (
+                                  <button
+                                    className="btn btn-ghost"
+                                    style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563eb' }}
+                                    onClick={() => setPdfViewerModal({ url: endpoints.varietyFicheUrl(v.id), title: `Fiche variétale — ${v.nomVariete}`, downloadName: `fiche-${v.codeVariete}`, ctx: { type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}`, codeEspece: v.espece?.codeEspece } })}
+                                    title="Fiche variétale"
                                   >
-                                    {/* Fiche variétale */}
-                                    {v.ficheVarietalePath ? (
-                                      <button
-                                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, color: '#2563eb', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const }}
-                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--surface-2)' }}
-                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'none' }}
-                                        onClick={() => { setPdfViewerModal({ url: endpoints.varietyFicheUrl(v.id), title: `Fiche variétale — ${v.nomVariete}`, downloadName: `fiche-${v.codeVariete}`, ctx: { type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}`, codeEspece: v.espece?.codeEspece } }); setMoreMenuId(null) }}
-                                      >
-                                        <FileText size={12} /> Fiche variétale
-                                      </button>
-                                    ) : isAdminOrSelector && !isArchived && allowed ? (
-                                      <button
-                                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const }}
-                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--surface-2)' }}
-                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'none' }}
-                                        onClick={() => { setPdfUploadModal({ type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}` }); setMoreMenuId(null) }}
-                                      >
-                                        <Upload size={12} /> Uploader fiche PDF
-                                      </button>
-                                    ) : null}
-                                    {/* Historique */}
-                                    {isAdminOrSelector && (
-                                      <button
-                                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const }}
-                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--surface-2)' }}
-                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'none' }}
-                                        onClick={() => { openHistorique(v); setMoreMenuId(null) }}
-                                      >
-                                        <History size={12} /> Historique
-                                      </button>
-                                    )}
-                                    {/* Zones agro-écologiques */}
-                                    {!isArchived && (
-                                      <button
-                                        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 6, fontSize: 12, color: 'var(--text-secondary)', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' as const }}
-                                        onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'var(--surface-2)' }}
-                                        onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = 'none' }}
-                                        onClick={() => { openZones(v, !allowed); setMoreMenuId(null) }}
-                                      >
-                                        <MapPin size={12} /> Zones agro-écologiques
-                                      </button>
-                                    )}
-                                  </div>
+                                    <FileText size={13} />
+                                  </button>
+                                ) : isAdminOrSelector && !isArchived && allowed ? (
+                                  <button
+                                    className="btn btn-ghost"
+                                    style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}
+                                    onClick={() => setPdfUploadModal({ type: 'fiche', id: v.id, name: `${v.codeVariete} — ${v.nomVariete}` })}
+                                    title="Uploader fiche PDF"
+                                  >
+                                    <Upload size={13} />
+                                  </button>
+                                ) : null}
+                                {isAdminOrSelector && (
+                                  <button
+                                    className="btn btn-ghost"
+                                    style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}
+                                    onClick={() => openHistorique(v)}
+                                    title="Historique"
+                                  >
+                                    <History size={13} />
+                                  </button>
+                                )}
+                                {!isArchived && (
+                                  <button
+                                    className="btn btn-ghost"
+                                    style={{ width: 28, height: 28, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}
+                                    onClick={() => openZones(v, !allowed)}
+                                    title="Zones agro-écologiques"
+                                  >
+                                    <MapPin size={13} />
+                                  </button>
                                 )}
                               </div>
                             </div>
