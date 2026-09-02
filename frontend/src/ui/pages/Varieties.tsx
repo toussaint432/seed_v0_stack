@@ -75,7 +75,6 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [filterStatut,   setFilterStatut]   = useState<string>('')
   const [moreMenuId,     setMoreMenuId]     = useState<number | null>(null)
   const [hoverEspeceId,  setHoverEspeceId]  = useState<number | null>(null)
-  const [hoveredRowId,   setHoveredRowId]   = useState<number | null>(null)
 
   const [allZones,      setAllZones]      = useState<any[]>([])
   const [zonesTarget,   setZonesTarget]   = useState<any>(null)
@@ -1263,8 +1262,6 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                             transition: 'background 0.15s, box-shadow 0.15s',
                           }}
                           onClick={() => setSelectedVarietyId(isSelected ? null : v.id)}
-                          onMouseEnter={() => setHoveredRowId(v.id)}
-                          onMouseLeave={() => setHoveredRowId(null)}
                           title={isSelected ? 'Désélectionner' : 'Voir les détails'}
                         >
                           {/* Code variété */}
@@ -1379,8 +1376,8 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                                   </button>
                                 </>
                               )}
-                              {/* Actions secondaires — visibles au hover */}
-                              <div style={{ display: 'flex', gap: 2, opacity: hoveredRowId === v.id ? 1 : 0, pointerEvents: hoveredRowId === v.id ? 'auto' : 'none', transition: 'opacity 0.15s' }}>
+                              {/* Actions secondaires — toujours visibles selon contexte */}
+                              <div style={{ display: 'flex', gap: 2 }}>
                                 {v.ficheVarietalePath ? (
                                   <button
                                     className="btn btn-ghost"
