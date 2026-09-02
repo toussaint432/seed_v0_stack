@@ -701,7 +701,8 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
     .reduce((s: number, l: any) => s + (parseFloat(l.quantiteNette) || 0), 0)
   const kpiG3Kg = chainVarietes.reduce((s, v) =>
     s + v.demands.filter(d => ['G3','G4'].includes(d.gen)).reduce((ss, d) => ss + d.qtyKg, 0), 0)
-  const kpiCmdActives = new Set(chainVarietes.flatMap(v => v.demands.map(d => d.orderId))).size
+  const kpiR2Kg = chainVarietes.reduce((s, v) =>
+    s + v.demands.filter(d => ['R1','R2'].includes(d.gen)).reduce((ss, d) => ss + d.qtyKg, 0), 0)
 
   /* Certification G1 (lots G1 avec statut certification en attente ou rejeté) */
   const certifEnAttente = lots.filter((l: any) =>
@@ -824,7 +825,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
             { label: 'G0 en stock',       value: fmtT(kpiG0Kg),        color: GEN_COLOR.G0, sub: 'Noyau génétique' },
             { label: 'G1 disponible',     value: fmtT(kpiG1Kg),        color: GEN_COLOR.G1, sub: 'Pré-base' },
             { label: 'G3 demandés',       value: fmtT(kpiG3Kg),        color: GEN_COLOR.G3, sub: 'vers Multiplicateurs' },
-            { label: 'Commandes actives', value: String(kpiCmdActives), color: '#6b7280',    sub: 'en cours' },
+            { label: 'R2 demandés',       value: fmtT(kpiR2Kg),        color: GEN_COLOR.R2, sub: 'vers Quotataires' },
           ] as const).map((step, i, arr) => (
             <div key={step.label} style={{ flex: 1, display: 'flex', alignItems: 'center', background: 'var(--surface)', minWidth: 0 }}>
               <div style={{ flex: 1, padding: '12px 14px', minWidth: 0 }}>
