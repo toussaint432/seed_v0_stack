@@ -28,15 +28,15 @@ const ESPECE_ICONS: Record<string, LucideIcon> = {
 }
 
 const ESPECE_COLORS: Record<string, string> = {
-  ARACHIDE: '#b45309', ARA: '#b45309',
-  SESAME: '#7c3aed',   SES: '#7c3aed',
-  RIZ: '#0d9488',
-  BLE: '#854d0e',      BLED: '#854d0e',
-  NIEBE: '#3730a3',    NIE: '#3730a3',
-  MIL: '#9a3412',
-  FONIO: '#3f6212',    FON: '#3f6212',
-  MAIS: '#c2410c',     MAI: '#c2410c',
-  SORGHO: '#92400e',   SOR: '#92400e',
+  ARACHIDE: '#b45309', ARA: '#b45309',   // ambre    — couleur naturelle arachide
+  BLE: '#0891b2',      BLED: '#0891b2',  // cyan     — grain pâle, ciel ouvert
+  FONIO: '#65a30d',    FON: '#65a30d',   // lime     — végétal, culture locale
+  MAIS: '#eab308',     MAI: '#eab308',   // jaune    — couleur du maïs
+  MIL: '#dc2626',                        // rouge    — signal fort, distinctif
+  NIEBE: '#1d4ed8',    NIE: '#1d4ed8',   // bleu     — légumineuse
+  RIZ: '#0f766e',                        // teal     — aquatique
+  SESAME: '#9333ea',   SES: '#9333ea',   // violet   — distinctif
+  SORGHO: '#be185d',   SOR: '#be185d',   // rose     — très distinct de tout
 }
 function especeColor(code?: string): string {
   if (!code) return 'var(--green-600)'
