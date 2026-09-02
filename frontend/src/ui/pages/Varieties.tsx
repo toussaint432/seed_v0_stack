@@ -806,7 +806,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       onKeyDown={(e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { setSelectedSpeciesId(isActive ? null : s.id); setSelectedVarietyId(null) } }}
                       onMouseEnter={() => setHoverEspeceId(s.id)}
                       onMouseLeave={() => setHoverEspeceId(null)}
-                      style={{ cursor: 'pointer' }}
+                      style={{ cursor: 'pointer', '--espece-color': especeColor(s.codeEspece), '--espece-active-bg': `${especeColor(s.codeEspece)}1a` } as any}
                     >
                       <div style={{
                         width: 30, height: 30, borderRadius: 7, flexShrink: 0,

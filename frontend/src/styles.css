@@ -1021,8 +1021,8 @@ tbody td {
   background: var(--surface-3);
 }
 .species-filter-item[data-active="true"] {
-  background: var(--sidebar-active, rgba(45,181,106,0.10));
-  box-shadow: inset 3px 0 0 var(--green-600);
+  background: var(--espece-active-bg, rgba(45,181,106,0.10));
+  box-shadow: inset 3px 0 0 var(--espece-color, var(--green-600));
 }
 
 .species-filter-all-dot {
