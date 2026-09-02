@@ -520,223 +520,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       )}
 
       {/* ── KPI Cards — 3 niveaux : variété > espèce > global ── */}
-      {selectedVariety ? (
-
-        /* Niveau 3 : variété sélectionnée */
-        <div style={{ marginBottom: 20 }}>
-          {/* Breadcrumb neutre */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            background: 'var(--surface-2)', border: '1px solid var(--border)',
-            borderRadius: 10, padding: '8px 14px', marginBottom: 12,
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              <Sprout size={14} color="var(--green-600)" />
-              <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>{selectedVariety.codeVariete}</code>
-              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.nomVariete}</span>
-              {selectedSpecies && (
-                <span style={{ fontSize: 11, color: 'var(--text-muted)', borderLeft: '1px solid var(--border)', paddingLeft: 8 }}>
-                  {selectedSpecies.nomCommun}
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              {selectedSpecies && (
-                <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--text-muted)', gap: 5, height: 28 }}
-                  onClick={() => setSelectedVarietyId(null)}>
-                  <Leaf size={12} /> Vue espèce
-                </button>
-              )}
-              <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--text-muted)', gap: 5, height: 28 }}
-                onClick={() => { setSelectedVarietyId(null); setSelectedSpeciesId(null) }}>
-                <X size={12} /> Vue globale
-              </button>
-            </div>
-          </div>
-
-          {/* ── Ligne 1 : 4 KPI chips ───────────────────────────── */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 12 }}>
-            {/* Espèce */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                <Leaf size={18} />
-              </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)', lineHeight: 1.1 }}>{selectedVariety.espece?.codeEspece ?? '—'}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedVariety.espece?.nomCommun ?? 'Espèce'}</div>
-              </div>
-            </div>
-
-            {/* Statut */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                <CheckCircle2 size={18} />
-              </div>
-              <div>
-                <div style={{ marginBottom: 4 }}>
-                  <span className={`badge ${STATUT_CONFIG[selectedVariety.statutVariete]?.cls ?? 'badge-gray'}`} style={{ fontSize: 12 }}>
-                    {STATUT_CONFIG[selectedVariety.statutVariete]?.label ?? selectedVariety.statutVariete}
-                  </span>
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Statut actuel</div>
-              </div>
-            </div>
-
-            {/* Cycle */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                <Clock size={18} />
-              </div>
-              <div>
-                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)', lineHeight: 1.1 }}>
-                  {selectedVariety.cycleMin != null && selectedVariety.cycleMax != null
-                    ? (selectedVariety.cycleMin === selectedVariety.cycleMax ? `${selectedVariety.cycleMin} j` : `${selectedVariety.cycleMin}–${selectedVariety.cycleMax} j`)
-                    : '—'}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Cycle végétatif</div>
-              </div>
-            </div>
-
-            {/* Rendement */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                <TrendingUp size={18} />
-              </div>
-              <div>
-                <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'var(--font-sans)', color: 'var(--text-primary)', lineHeight: 1.1 }}>
-                  {selectedVariety.rendementMin != null && selectedVariety.rendementMax != null
-                    ? (selectedVariety.rendementMin === selectedVariety.rendementMax ? `${selectedVariety.rendementMin} t/ha` : `${selectedVariety.rendementMin}–${selectedVariety.rendementMax} t/ha`)
-                    : '—'}
-                </div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Rendement potentiel</div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Ligne 2 : Identification officielle + Agronomie ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '3fr 2fr', gap: 12, marginBottom: 12 }}>
-
-            {/* Identification officielle */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '16px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                <User size={13} color="var(--green-600)" />
-                <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Identification officielle</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 20px' }}>
-                {selectedVariety.selectionneurPrincipal && (
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Sélectionneur principal</div>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.selectionneurPrincipal}</div>
-                  </div>
-                )}
-                {selectedVariety.anneeCreation && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Année d'obtention</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{selectedVariety.anneeCreation}</div>
-                  </div>
-                )}
-                {selectedVariety.anneeHomologation && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Homologation</div>
-                    <div style={{ fontSize: 13, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{selectedVariety.anneeHomologation}</div>
-                  </div>
-                )}
-                {selectedVariety.numeroSelection && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>N° de sélection</div>
-                    <code style={{ fontSize: 11.5, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '2px 7px', borderRadius: 4, border: '1px solid var(--border)' }}>{selectedVariety.numeroSelection}</code>
-                  </div>
-                )}
-                {selectedVariety.synonyme && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Synonyme(s)</div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontStyle: 'italic' }}>{selectedVariety.synonyme}</div>
-                  </div>
-                )}
-                {selectedVariety.origine && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Origine</div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{selectedVariety.origine}</div>
-                  </div>
-                )}
-                {selectedVariety.pedigree && (
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Pedigree</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', lineHeight: 1.5 }}>{selectedVariety.pedigree}</div>
-                  </div>
-                )}
-                {!selectedVariety.selectionneurPrincipal && !selectedVariety.anneeCreation && !selectedVariety.anneeHomologation && !selectedVariety.numeroSelection && !selectedVariety.synonyme && !selectedVariety.origine && !selectedVariety.pedigree && (
-                  <div style={{ gridColumn: '1 / -1', color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic', textAlign: 'center', padding: '10px 0' }}>
-                    Aucune donnée d'identification renseignée
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Agronomie */}
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '16px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 14, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
-                <FlaskConical size={13} color="var(--green-600)" />
-                <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Agronomie</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {selectedVariety.natureGenetique && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Nature génétique</div>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.natureGenetique}</div>
-                  </div>
-                )}
-                {selectedVariety.photosensibilite && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Photosensibilité</div>
-                    <span style={{
-                      display: 'inline-block', fontSize: 11.5, fontWeight: 600,
-                      padding: '2px 9px', borderRadius: 5,
-                      background: selectedVariety.photosensibilite === 'Sensible' ? '#fef3c7' : selectedVariety.photosensibilite === 'Peu sensible' ? '#f0fdf4' : 'var(--surface-2)',
-                      color: selectedVariety.photosensibilite === 'Sensible' ? '#92400e' : selectedVariety.photosensibilite === 'Peu sensible' ? '#166534' : 'var(--text-secondary)',
-                      border: '1px solid',
-                      borderColor: selectedVariety.photosensibilite === 'Sensible' ? '#fcd34d' : selectedVariety.photosensibilite === 'Peu sensible' ? '#bbf7d0' : 'var(--border)',
-                    }}>{selectedVariety.photosensibilite}</span>
-                  </div>
-                )}
-                {selectedVariety.typeGrain && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Type de grain</div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{selectedVariety.typeGrain}</div>
-                  </div>
-                )}
-                {selectedVariety.vocationCulturale && (
-                  <div>
-                    <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 }}>Vocation culturale</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{selectedVariety.vocationCulturale}</div>
-                  </div>
-                )}
-                {!selectedVariety.natureGenetique && !selectedVariety.photosensibilite && !selectedVariety.typeGrain && !selectedVariety.vocationCulturale && (
-                  <div style={{ color: 'var(--text-muted)', fontSize: 12, fontStyle: 'italic', textAlign: 'center', padding: '10px 0' }}>
-                    Aucune donnée agronomique renseignée
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Ligne 3 : Documents ──────────────────────────────── */}
-          {selectedVariety.ficheVarietalePath && (
-            <div style={{ background: 'var(--surface)', borderRadius: 12, border: '1px solid var(--border)', boxShadow: 'var(--shadow-xs)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <FileText size={14} color="var(--text-secondary)" />
-              <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Documents</span>
-              <button
-                className="btn btn-ghost"
-                style={{ height: 28, padding: '0 10px', borderRadius: 7, display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', fontWeight: 600 }}
-                onClick={() => setPdfViewerModal({ url: endpoints.varietyFicheUrl(selectedVariety.id), title: `Fiche variétale — ${selectedVariety.nomVariete}`, downloadName: `fiche-${selectedVariety.codeVariete}`, ctx: { type: 'fiche', id: selectedVariety.id, name: `${selectedVariety.codeVariete} — ${selectedVariety.nomVariete}`, codeEspece: selectedVariety.espece?.codeEspece } })}
-              >
-                <FileText size={12} /> Fiche variétale
-              </button>
-            </div>
-          )}
-        </div>
-
-      ) : selectedSpecies ? (
+      {selectedSpecies ? (
 
         /* Niveau 2 : espèce sélectionnée */
         <div style={{ marginBottom: 20 }}>
@@ -2010,6 +1794,210 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           </div>
         </div>
       )}
+
+      {/* ── Slide-in drawer — détail variété ── */}
+      {selectedVariety && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.08)' }}
+          onClick={() => setSelectedVarietyId(null)}
+        />
+      )}
+      <div style={{
+        position: 'fixed', top: 0, right: 0,
+        height: '100vh', width: 460,
+        background: 'var(--surface)',
+        borderLeft: '1px solid var(--border)',
+        boxShadow: '-8px 0 32px rgba(0,0,0,0.10)',
+        transform: selectedVariety ? 'translateX(0)' : 'translateX(100%)',
+        transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+        zIndex: 301,
+        overflowY: 'auto',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        {selectedVariety && (
+          <>
+            {/* Header sticky */}
+            <div style={{
+              position: 'sticky', top: 0, zIndex: 1,
+              background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+              padding: '14px 18px',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                {selectedVariety.espece && React.createElement(ESPECE_ICONS[selectedVariety.espece.codeEspece] ?? ESPECE_ICONS.default, { size: 14, color: especeColor(selectedVariety.espece.codeEspece) })}
+                <code style={{ fontSize: 10.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '1px 6px', borderRadius: 4, border: '1px solid var(--border)', flexShrink: 0 }}>{selectedVariety.codeVariete}</code>
+                <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 13.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedVariety.nomVariete}</span>
+              </div>
+              <button className="btn btn-ghost" style={{ width: 30, height: 30, padding: 0, borderRadius: 7, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                onClick={() => setSelectedVarietyId(null)} title="Fermer">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+              {/* KPIs 2×2 */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                {/* Espèce */}
+                <div style={{ background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: selectedVariety.espece ? `${especeColor(selectedVariety.espece.codeEspece)}18` : 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: selectedVariety.espece ? especeColor(selectedVariety.espece.codeEspece) : 'var(--text-secondary)', flexShrink: 0 }}>
+                    {selectedVariety.espece ? React.createElement(ESPECE_ICONS[selectedVariety.espece.codeEspece] ?? ESPECE_ICONS.default, { size: 16 }) : <Leaf size={16} />}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>{selectedVariety.espece?.codeEspece ?? '—'}</div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedVariety.espece?.nomCommun ?? 'Espèce'}</div>
+                  </div>
+                </div>
+                {/* Statut */}
+                <div style={{ background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                    <CheckCircle2 size={16} />
+                  </div>
+                  <div>
+                    <div style={{ marginBottom: 4 }}><span className={`badge ${STATUT_CONFIG[selectedVariety.statutVariete]?.cls ?? 'badge-gray'}`}>{STATUT_CONFIG[selectedVariety.statutVariete]?.label ?? selectedVariety.statutVariete}</span></div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>Statut actuel</div>
+                  </div>
+                </div>
+                {/* Cycle */}
+                <div style={{ background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                    <Clock size={16} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                      {selectedVariety.cycleMin != null && selectedVariety.cycleMax != null
+                        ? (selectedVariety.cycleMin === selectedVariety.cycleMax ? `${selectedVariety.cycleMin} j` : `${selectedVariety.cycleMin}–${selectedVariety.cycleMax} j`)
+                        : '—'}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>Cycle végétatif</div>
+                  </div>
+                </div>
+                {/* Rendement */}
+                <div style={{ background: 'var(--surface-2)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-secondary)', flexShrink: 0 }}>
+                    <TrendingUp size={16} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.1 }}>
+                      {selectedVariety.rendementMin != null && selectedVariety.rendementMax != null
+                        ? (selectedVariety.rendementMin === selectedVariety.rendementMax ? `${selectedVariety.rendementMin} t/ha` : `${selectedVariety.rendementMin}–${selectedVariety.rendementMax} t/ha`)
+                        : '—'}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginTop: 2 }}>Rendement potentiel</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Identification officielle */}
+              <div style={{ background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                  <User size={12} color="var(--green-600)" />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Identification officielle</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 16px' }}>
+                  {selectedVariety.selectionneurPrincipal && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Sélectionneur principal</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.selectionneurPrincipal}</div>
+                    </div>
+                  )}
+                  {selectedVariety.anneeCreation && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Année d'obtention</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{selectedVariety.anneeCreation}</div>
+                    </div>
+                  )}
+                  {selectedVariety.anneeHomologation && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Homologation</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{selectedVariety.anneeHomologation}</div>
+                    </div>
+                  )}
+                  {selectedVariety.numeroSelection && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>N° de sélection</div>
+                      <code style={{ fontSize: 11, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '2px 6px', borderRadius: 4, border: '1px solid var(--border)' }}>{selectedVariety.numeroSelection}</code>
+                    </div>
+                  )}
+                  {selectedVariety.synonyme && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Synonyme(s)</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontStyle: 'italic' }}>{selectedVariety.synonyme}</div>
+                    </div>
+                  )}
+                  {selectedVariety.origine && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Origine</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{selectedVariety.origine}</div>
+                    </div>
+                  )}
+                  {selectedVariety.pedigree && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Pedigree</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)', lineHeight: 1.5 }}>{selectedVariety.pedigree}</div>
+                    </div>
+                  )}
+                  {!selectedVariety.selectionneurPrincipal && !selectedVariety.anneeCreation && !selectedVariety.anneeHomologation && !selectedVariety.numeroSelection && !selectedVariety.synonyme && !selectedVariety.origine && !selectedVariety.pedigree && (
+                    <div style={{ gridColumn: '1 / -1', color: 'var(--text-muted)', fontSize: 11.5, fontStyle: 'italic', textAlign: 'center', padding: '8px 0' }}>Aucune donnée d'identification renseignée</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Agronomie */}
+              <div style={{ background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid var(--border)' }}>
+                  <FlaskConical size={12} color="var(--green-600)" />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Agronomie</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {selectedVariety.natureGenetique && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Nature génétique</div>
+                      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)' }}>{selectedVariety.natureGenetique}</div>
+                    </div>
+                  )}
+                  {selectedVariety.photosensibilite && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Photosensibilité</div>
+                      <span style={{ display: 'inline-block', fontSize: 11.5, fontWeight: 600, padding: '2px 9px', borderRadius: 5, background: selectedVariety.photosensibilite === 'Sensible' ? '#fef3c7' : selectedVariety.photosensibilite === 'Peu sensible' ? '#f0fdf4' : 'var(--surface-2)', color: selectedVariety.photosensibilite === 'Sensible' ? '#92400e' : selectedVariety.photosensibilite === 'Peu sensible' ? '#166534' : 'var(--text-secondary)', border: '1px solid', borderColor: selectedVariety.photosensibilite === 'Sensible' ? '#fcd34d' : selectedVariety.photosensibilite === 'Peu sensible' ? '#bbf7d0' : 'var(--border)' }}>{selectedVariety.photosensibilite}</span>
+                    </div>
+                  )}
+                  {selectedVariety.typeGrain && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Type de grain</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{selectedVariety.typeGrain}</div>
+                    </div>
+                  )}
+                  {selectedVariety.vocationCulturale && (
+                    <div>
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 2 }}>Vocation culturale</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>{selectedVariety.vocationCulturale}</div>
+                    </div>
+                  )}
+                  {!selectedVariety.natureGenetique && !selectedVariety.photosensibilite && !selectedVariety.typeGrain && !selectedVariety.vocationCulturale && (
+                    <div style={{ color: 'var(--text-muted)', fontSize: 11.5, fontStyle: 'italic', textAlign: 'center', padding: '8px 0' }}>Aucune donnée agronomique renseignée</div>
+                  )}
+                </div>
+              </div>
+
+              {/* Documents */}
+              {selectedVariety.ficheVarietalePath && (
+                <div style={{ background: 'var(--surface)', borderRadius: 10, border: '1px solid var(--border)', padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <FileText size={13} color="var(--text-secondary)" />
+                  <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-secondary)' }}>Documents</span>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ height: 28, padding: '0 10px', borderRadius: 7, display: 'flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: '#2563eb', background: '#eff6ff', border: '1px solid #bfdbfe', fontWeight: 600 }}
+                    onClick={() => setPdfViewerModal({ url: endpoints.varietyFicheUrl(selectedVariety.id), title: `Fiche variétale — ${selectedVariety.nomVariete}`, downloadName: `fiche-${selectedVariety.codeVariete}`, ctx: { type: 'fiche', id: selectedVariety.id, name: `${selectedVariety.codeVariete} — ${selectedVariety.nomVariete}`, codeEspece: selectedVariety.espece?.codeEspece } })}
+                  >
+                    <FileText size={12} /> Fiche variétale
+                  </button>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* ── Modal upload PDF ── */}
       {pdfUploadModal && (
