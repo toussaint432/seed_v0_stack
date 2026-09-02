@@ -213,6 +213,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const kpiActive   = kpiBase.filter(v => v.statutVariete !== 'ARCHIVEE').length
   const kpiDiffusee = kpiBase.filter(v => v.statutVariete === 'DIFFUSEE').length
   const kpiEnTest   = kpiBase.filter(v => v.statutVariete === 'EN_TEST').length
+  const kpiRetiree  = kpiBase.filter(v => v.statutVariete === 'RETIREE').length
   const kpiArchived = kpiBase.filter(v => v.statutVariete === 'ARCHIVEE').length
 
   const filtered = varieties.filter(v => {
@@ -1148,6 +1149,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 { value: '',         label: 'Toutes',    dot: undefined,  count: kpiActive + (showArchived ? kpiArchived : 0) },
                 { value: 'DIFFUSEE', label: 'Diffusées', dot: '#16a34a',  count: kpiDiffusee },
                 { value: 'EN_TEST',  label: 'En test',   dot: '#7c3aed',  count: kpiEnTest },
+                { value: 'RETIREE',  label: 'Retirées',  dot: '#dc2626',  count: kpiRetiree },
               ].map(chip => (
                 <button
                   key={chip.value}
