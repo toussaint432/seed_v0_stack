@@ -602,25 +602,25 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               {(() => {
                 const gaugePct = kpiDiffusee / kpiActive
                 const gaugeColor = gaugePct >= 0.8 ? '#16a34a' : gaugePct >= 0.6 ? '#d97706' : '#dc2626'
-                const arcLen = 131.95
+                const arcLen = 150.8
                 const offset = arcLen * (1 - gaugePct)
                 return (
-                  <svg width="64" height="64" viewBox="0 0 72 72" style={{ display: 'block', flexShrink: 0 }}>
-                    <path d="M 16.2 55.8 A 28 28 0 1 1 55.8 55.8"
-                      fill="none" stroke="var(--surface-3)" strokeWidth="6" strokeLinecap="round" />
-                    <path d="M 16.2 55.8 A 28 28 0 1 1 55.8 55.8"
-                      fill="none" stroke={gaugeColor} strokeWidth="6" strokeLinecap="round"
+                  <svg width="72" height="72" viewBox="0 0 80 80" style={{ display: 'block', flexShrink: 0 }}>
+                    <path d="M 17.4 62.6 A 32 32 0 1 1 62.6 62.6"
+                      fill="none" stroke="var(--surface-3)" strokeWidth="7" strokeLinecap="round" />
+                    <path d="M 17.4 62.6 A 32 32 0 1 1 62.6 62.6"
+                      fill="none" stroke={gaugeColor} strokeWidth="7" strokeLinecap="round"
                       strokeDasharray={arcLen} strokeDashoffset={offset}
                       style={{ transition: 'stroke-dashoffset 0.8s ease, stroke 0.5s' }}
                     />
-                    <text x="36" y="31" textAnchor="middle" dominantBaseline="central"
-                      fontSize="13" fontWeight="800" fill="var(--text-primary)"
-                      style={{ fontFamily: 'var(--font-sans)' }}>
+                    <text x="40" y="35" textAnchor="middle" dominantBaseline="central"
+                      fontSize="15" fontWeight="800" fill="var(--text-primary)"
+                      style={{ fontFamily: 'var(--font-sans)', letterSpacing: '-0.5px' }}>
                       {`${Math.round(gaugePct * 100)}%`}
                     </text>
-                    <text x="36" y="44" textAnchor="middle" dominantBaseline="central"
+                    <text x="40" y="50" textAnchor="middle" dominantBaseline="central"
                       fontSize="8" fill="var(--text-muted)"
-                      style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                      style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.07em' }}>
                       DIFFUSION
                     </text>
                   </svg>
@@ -678,25 +678,25 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               {(() => {
                 const gaugePct = kpiActive > 0 ? kpiDiffusee / kpiActive : 0
                 const gaugeColor = gaugePct >= 0.8 ? '#16a34a' : gaugePct >= 0.6 ? '#d97706' : '#dc2626'
-                const arcLen = 131.95
+                const arcLen = 150.8
                 const offset = arcLen * (1 - gaugePct)
                 return (
-                  <svg width="72" height="72" viewBox="0 0 72 72" style={{ display: 'block', flexShrink: 0 }}>
-                    <path d="M 16.2 55.8 A 28 28 0 1 1 55.8 55.8"
-                      fill="none" stroke="var(--surface-3)" strokeWidth="6" strokeLinecap="round" />
-                    <path d="M 16.2 55.8 A 28 28 0 1 1 55.8 55.8"
-                      fill="none" stroke={gaugeColor} strokeWidth="6" strokeLinecap="round"
+                  <svg width="80" height="80" viewBox="0 0 80 80" style={{ display: 'block', flexShrink: 0 }}>
+                    <path d="M 17.4 62.6 A 32 32 0 1 1 62.6 62.6"
+                      fill="none" stroke="var(--surface-3)" strokeWidth="7" strokeLinecap="round" />
+                    <path d="M 17.4 62.6 A 32 32 0 1 1 62.6 62.6"
+                      fill="none" stroke={gaugeColor} strokeWidth="7" strokeLinecap="round"
                       strokeDasharray={arcLen} strokeDashoffset={offset}
                       style={{ transition: 'stroke-dashoffset 0.8s ease, stroke 0.5s' }}
                     />
-                    <text x="36" y="31" textAnchor="middle" dominantBaseline="central"
-                      fontSize="13" fontWeight="800" fill="var(--text-primary)"
-                      style={{ fontFamily: 'var(--font-sans)' }}>
+                    <text x="40" y="35" textAnchor="middle" dominantBaseline="central"
+                      fontSize="15" fontWeight="800" fill="var(--text-primary)"
+                      style={{ fontFamily: 'var(--font-sans)', letterSpacing: '-0.5px' }}>
                       {loading ? '…' : `${Math.round(gaugePct * 100)}%`}
                     </text>
-                    <text x="36" y="44" textAnchor="middle" dominantBaseline="central"
+                    <text x="40" y="50" textAnchor="middle" dominantBaseline="central"
                       fontSize="8" fill="var(--text-muted)"
-                      style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.06em' }}>
+                      style={{ fontFamily: 'var(--font-mono)', letterSpacing: '0.07em' }}>
                       DIFFUSION
                     </text>
                   </svg>
