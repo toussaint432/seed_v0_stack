@@ -1834,6 +1834,77 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </button>
             </div>
 
+            {/* Barre d'actions */}
+            {(() => {
+              const drawerArchived = selectedVariety.statutVariete === 'ARCHIVEE'
+              const drawerAllowed  = canEdit(selectedVariety.espece?.codeEspece)
+              const drawerDTitle   = `Non autorisé — spécialisation : ${userSpecialisation ?? 'N/A'}`
+              return (
+                <div style={{ padding: '8px 14px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {isAdminOrSelector && !drawerArchived && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, height: 30, ...(!drawerAllowed ? { opacity: 0.4, cursor: 'not-allowed' } : {}) }}
+                      onClick={() => { if (drawerAllowed) openEdit(selectedVariety) }}
+                      title={drawerAllowed ? 'Modifier' : drawerDTitle}
+                    >
+                      <Edit2 size={12} /> Modifier
+                    </button>
+                  )}
+                  {isAdminOrSelector && !drawerArchived && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, height: 30, color: drawerAllowed ? 'var(--gold-dark)' : undefined, ...(!drawerAllowed ? { opacity: 0.4, cursor: 'not-allowed' } : {}) }}
+                      onClick={() => { if (drawerAllowed) { setArchiveTarget(selectedVariety); setArchiveComment('') } }}
+                      title={drawerAllowed ? 'Archiver' : drawerDTitle}
+                    >
+                      <Archive size={12} /> Archiver
+                    </button>
+                  )}
+                  {isAdminOrSelector && drawerArchived && drawerAllowed && (
+                    <>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, height: 30, color: 'var(--green-700)' }}
+                        onClick={() => setDesarchiveTarget(selectedVariety)}
+                        title="Désarchiver"
+                      >
+                        <RotateCcw size={12} /> Désarchiver
+                      </button>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, height: 30, color: 'var(--red-600)' }}
+                        onClick={() => { setDeleteTarget(selectedVariety); setDeleteComment('') }}
+                        title="Supprimer définitivement"
+                      >
+                        <Trash2 size={12} /> Supprimer
+                      </button>
+                    </>
+                  )}
+                  {isAdminOrSelector && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, height: 30 }}
+                      onClick={() => openHistorique(selectedVariety)}
+                      title="Historique des modifications"
+                    >
+                      <History size={12} /> Historique
+                    </button>
+                  )}
+                  {!drawerArchived && (
+                    <button
+                      className="btn btn-ghost"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, height: 30 }}
+                      onClick={() => openZones(selectedVariety, !drawerAllowed)}
+                      title="Zones agro-écologiques"
+                    >
+                      <MapPin size={12} /> Zones agro-éco
+                    </button>
+                  )}
+                </div>
+              )
+            })()}
+
             <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 14 }}>
 
               {/* KPIs 2×2 */}
