@@ -1246,7 +1246,9 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       const dTitle     = `Non autorisé — spécialisation : ${userSpecialisation ?? 'N/A'}`
                       const dStyle     = !allowed ? { opacity: 0.35, cursor: 'not-allowed' as const } : {}
                       const isSelected = selectedVarietyId === v.id
-                      const statusBorderColor = v.statutVariete === 'DIFFUSEE' ? '#16a34a'
+                      const statusBorderColor = selectedSpecies
+                        ? especeColor(selectedSpecies.codeEspece)
+                        : v.statutVariete === 'DIFFUSEE' ? '#16a34a'
                         : v.statutVariete === 'EN_TEST' ? '#7c3aed'
                         : v.statutVariete === 'ARCHIVEE' ? '#9ca3af' : 'transparent'
                       return (
