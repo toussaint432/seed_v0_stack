@@ -531,7 +531,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             borderRadius: 10, padding: '8px 14px', marginBottom: 12,
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-              {React.createElement(ESPECE_ICONS[selectedSpecies.codeEspece] ?? ESPECE_ICONS.default, { size: 14, color: 'var(--green-600)' })}
+              {React.createElement(ESPECE_ICONS[selectedSpecies.codeEspece] ?? ESPECE_ICONS.default, { size: 14, color: especeColor(selectedSpecies.codeEspece) })}
               <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11.5, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>{selectedSpecies.codeEspece}</code>
               <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{selectedSpecies.nomCommun}</span>
               {selectedSpecies.nomScientifique && (
@@ -885,7 +885,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                       }}>
                         {st.total}
                       </span>
-                      {isActive && <ChevronRight size={12} color="var(--green-600)" style={{ flexShrink: 0 }} />}
+                      {isActive && <ChevronRight size={12} color={especeColor(s.codeEspece)} style={{ flexShrink: 0 }} />}
                     </div>
                   )
                 })
