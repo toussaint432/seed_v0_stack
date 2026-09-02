@@ -966,14 +966,6 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           {s.nomCommun}
                           {isMySpec && <span style={{ fontSize: 9.5, color: '#3b82f6', fontWeight: 700, background: '#dbeafe', padding: '1px 5px', borderRadius: 4 }}>Votre spéc.</span>}
                         </div>
-                        {st.total > 0 && (
-                          <div style={{ marginTop: 3 }}>
-                            <div style={{ height: 3, borderRadius: 99, background: 'var(--surface-3)', overflow: 'hidden', display: 'flex', width: '100%' }}>
-                              {st.diff > 0 && <div style={{ width: `${(st.diff / st.total) * 100}%`, background: '#16a34a' }} />}
-                              {st.enTest > 0 && <div style={{ width: `${(st.enTest / st.total) * 100}%`, background: '#7c3aed' }} />}
-                            </div>
-                          </div>
-                        )}
                       </div>
                       {/* Bouton historique admin — traçabilité espèce */}
                       {isAdmin && (
@@ -1170,7 +1162,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   {[
                     { field: 'codeVariete',   label: 'Code',        paddingLeft: 20 as number | undefined },
                     { field: 'nomVariete',    label: 'Nom variété', paddingLeft: undefined },
-                    { field: 'espece',        label: 'Espèce',      paddingLeft: undefined },
+                    ...(!selectedSpecies ? [{ field: 'espece', label: 'Espèce', paddingLeft: undefined as number | undefined }] : []),
                     { field: 'statutVariete', label: 'Statut',      paddingLeft: undefined },
                   ].map(col => {
                     const active = sortField === col.field
@@ -1195,7 +1187,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 {loading
                   ? [0, 1, 2, 3, 4].map(i => (
                       <tr key={i}>
-                        <td colSpan={5}>
+                        <td colSpan={selectedSpecies ? 4 : 5}>
                           <div className="skeleton" style={{ height: 14, borderRadius: 4 }} />
                         </td>
                       </tr>
@@ -1203,7 +1195,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                   : sorted.length === 0
                   ? (
                       <tr>
-                        <td colSpan={5}>
+                        <td colSpan={selectedSpecies ? 4 : 5}>
                           <div className="empty-state" style={{ padding: '48px 0' }}>
                             <div className="empty-icon"><Sprout size={20} /></div>
                             <div className="empty-title">
@@ -1286,19 +1278,21 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                           </td>
 
                           {/* Espèce */}
-                          <td>
-                            {v.espece ? (
-                              <button
-                                className="species-code"
-                                style={{ cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
-                                title={`Filtrer par ${v.espece.nomCommun}`}
-                                onClick={(e: React.MouseEvent) => { e.stopPropagation(); setSelectedSpeciesId(v.espece.id); setSelectedVarietyId(null) }}
-                              >
-                                {React.createElement(ESPECE_ICONS[v.espece.codeEspece] ?? ESPECE_ICONS.default, { size: 10 })}
-                                {v.espece.codeEspece}
-                              </button>
-                            ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
-                          </td>
+                          {!selectedSpecies && (
+                            <td>
+                              {v.espece ? (
+                                <button
+                                  className="species-code"
+                                  style={{ cursor: 'pointer', border: 'none', display: 'flex', alignItems: 'center', gap: 4 }}
+                                  title={`Filtrer par ${v.espece.nomCommun}`}
+                                  onClick={(e: React.MouseEvent) => { e.stopPropagation(); setSelectedSpeciesId(v.espece.id); setSelectedVarietyId(null) }}
+                                >
+                                  {React.createElement(ESPECE_ICONS[v.espece.codeEspece] ?? ESPECE_ICONS.default, { size: 10 })}
+                                  {v.espece.codeEspece}
+                                </button>
+                              ) : <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                            </td>
+                          )}
 
                           {/* Statut */}
                           <td><span className={`badge ${st.cls}`}>{st.label}</span></td>
