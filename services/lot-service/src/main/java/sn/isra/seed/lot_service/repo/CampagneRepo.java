@@ -8,4 +8,5 @@ import java.util.List;
 public interface CampagneRepo extends JpaRepository<Campagne, Long> {
     List<Campagne> findByAnnee(Integer annee);
     List<Campagne> findByStatut(String statut);
+    boolean existsByCodeCampagne(String codeCampagne);
 }
