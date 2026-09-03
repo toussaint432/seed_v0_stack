@@ -54,6 +54,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [showEspeceForm,  setShowEspeceForm]  = useState(false)
   const [showVarieteForm, setShowVarieteForm] = useState(false)
   const [editVariete,     setEditVariete]     = useState<any>(null)
+  const [codeAutoFilled,  setCodeAutoFilled]  = useState(true)
   const [saving, setSaving] = useState(false)
 
   const [archiveTarget,  setArchiveTarget]  = useState<any>(null)
@@ -167,6 +168,19 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const isAdmin           = roleKey === 'seed-admin'
   const isSelector        = roleKey === 'seed-selector'
   const isAdminOrSelector = isAdmin || isSelector
+
+  function generateVarieteCode(idEspece: string, nomVariete: string): string {
+    if (!idEspece || !nomVariete.trim()) return ''
+    const esp = species.find(s => String(s.id) === idEspece)
+    if (!esp) return ''
+    const prefix = (esp.codeEspece ?? '').substring(0, 3).toUpperCase()
+    let s = nomVariete.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+
+    s = s.replace(/\bVIII\b/gi, '8').replace(/\bVII\b/gi, '7').replace(/\bVI\b/gi, '6')
+         .replace(/\bIX\b/gi, '9').replace(/\bIV\b/gi, '4')
+         .replace(/\bIII\b/gi, '3').replace(/\bII\b/gi, '2')
+    return `${prefix}-${s.toUpperCase().replace(/[^A-Z0-9]/g, '')}`
+  }
 
   function canEdit(codeEspece?: string): boolean {
     if (isAdmin) return true
@@ -410,6 +424,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
 
   function openNewVariete() {
     setEditVariete(null)
+    setCodeAutoFilled(true)
     setVarieteForm({
       codeVariete: '', nomVariete: '',
       idEspece: selectedSpeciesId?.toString() || '',
@@ -1340,11 +1355,27 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
               </div>
             ) : (
               <FormRow>
-                <Field label="Code variété" required hint="ex : MIL-SOUNA3">
-                  <FormInput value={varieteForm.codeVariete} onChange={e => setVarieteForm(f => ({ ...f, codeVariete: e.target.value.toUpperCase() }))} placeholder="MIL-SOUNA3" required />
+                <Field label="Code variété" required hint={codeAutoFilled ? 'Généré automatiquement · modifiable si besoin' : 'ex : MIL-SOUNA3'}>
+                  <FormInput
+                    value={varieteForm.codeVariete}
+                    onChange={e => { setCodeAutoFilled(false); setVarieteForm(f => ({ ...f, codeVariete: e.target.value.toUpperCase() })) }}
+                    placeholder="MIL-SOUNA3"
+                    required
+                  />
                 </Field>
                 <Field label="Nom variété" required>
-                  <FormInput value={varieteForm.nomVariete} onChange={e => setVarieteForm(f => ({ ...f, nomVariete: e.target.value }))} placeholder="Souna III" required />
+                  <FormInput
+                    value={varieteForm.nomVariete}
+                    onChange={e => {
+                      const nom = e.target.value
+                      setVarieteForm(f => ({
+                        ...f, nomVariete: nom,
+                        ...(codeAutoFilled ? { codeVariete: generateVarieteCode(f.idEspece, nom) } : {})
+                      }))
+                    }}
+                    placeholder="Souna III"
+                    required
+                  />
                 </Field>
               </FormRow>
             )}
@@ -1352,7 +1383,16 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
             {/* Espèce — sélection uniquement à la création */}
             {!editVariete && (
               <Field label="Espèce" required>
-                <FormSelect value={varieteForm.idEspece} onChange={e => setVarieteForm(f => ({ ...f, idEspece: e.target.value }))} required>
+                <FormSelect
+                  value={varieteForm.idEspece}
+                  onChange={e => {
+                    const idE = e.target.value
+                    setVarieteForm(f => ({
+                      ...f, idEspece: idE,
+                      ...(codeAutoFilled ? { codeVariete: generateVarieteCode(idE, f.nomVariete) } : {})
+                    }))
+                  }}
+                  required>
                   <option value="">— Sélectionner une espèce —</option>
                   {species.map(s => <option key={s.id} value={s.id}>{s.codeEspece} — {s.nomCommun}</option>)}
                 </FormSelect>
