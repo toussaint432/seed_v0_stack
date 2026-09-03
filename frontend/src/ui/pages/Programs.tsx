@@ -110,6 +110,7 @@ export function Programs({ roleKey, userSpecialisation, username }: Props) {
   const [editItem,     setEditItem]     = useState<any>(null)
   const [deleteTarget, setDeleteTarget] = useState<any>(null)
   const [saving,       setSaving]       = useState(false)
+  const [campagnes,    setCampagnes]    = useState<any[]>([])
   // Modal "Enregistrer le lot résultat"
   const [showLotResultat,  setShowLotResultat]  = useState(false)
   const [lotResultatProg,  setLotResultatProg]  = useState<any>(null)
@@ -125,7 +126,7 @@ export function Programs({ roleKey, userSpecialisation, username }: Props) {
   const FORM_INIT = {
     codeProgramme: '', idLotSource: '', generationCible: '',
     multiplicateur: roleKey === 'seed-multiplicator' ? (username || '') : '',
-    campagne: new Date().getFullYear().toString(),
+    campagne: '',
     surfacePrevueHa: '', quantiteSemenceAllouee: '',
     dateAttribution: new Date().toISOString().split('T')[0],
     statutProgramme: 'PLANIFIE', observations: '',
@@ -135,14 +136,22 @@ export function Programs({ roleKey, userSpecialisation, username }: Props) {
   async function fetchAll() {
     setLoading(true)
     const lotsUrl = roleKey === 'seed-multiplicator' ? endpoints.lotsMesLots : endpoints.lots
-    const [pRes, lRes, vRes] = await Promise.allSettled([
+    const [pRes, lRes, vRes, campRes] = await Promise.allSettled([
       api.get(endpoints.programs),
       api.get(lotsUrl),
       api.get(endpoints.varieties),
+      api.get(endpoints.campagnes),
     ])
     setPrograms(pRes.status === 'fulfilled' ? (pRes.value.data ?? []) : [])
     setLots(extractList(lRes.status === 'fulfilled' ? lRes.value.data : null).map(normalizeLot))
     setVarieties(extractList(vRes.status === 'fulfilled' ? vRes.value.data : null))
+    if (campRes.status === 'fulfilled') {
+      const list: any[] = campRes.value.data ?? []
+      setCampagnes(list)
+      const def = list.find((c: any) => c.statut === 'EN_COURS')?.codeCampagne ?? list[0]?.codeCampagne ?? ''
+      setForm(f => ({ ...f, campagne: f.campagne || def }))
+      setLotResultatForm(f => ({ ...f, campagne: f.campagne || def }))
+    }
     setLoading(false)
   }
 
@@ -598,7 +607,10 @@ export function Programs({ roleKey, userSpecialisation, username }: Props) {
               </FormRow>
               <FormRow>
                 <Field label="Campagne" required>
-                  <FormInput value={lotResultatForm.campagne} onChange={e => setLotResultatForm(f => ({ ...f, campagne: e.target.value }))} required />
+                  <FormSelect value={lotResultatForm.campagne} onChange={e => setLotResultatForm(f => ({ ...f, campagne: e.target.value }))} required>
+                    <option value="">— Choisir une campagne —</option>
+                    {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                  </FormSelect>
                 </Field>
                 <Field label="Date de production">
                   <FormInput type="date" value={lotResultatForm.dateProduction} onChange={e => setLotResultatForm(f => ({ ...f, dateProduction: e.target.value }))} />
@@ -703,11 +715,10 @@ export function Programs({ roleKey, userSpecialisation, username }: Props) {
 
             <FormRow>
               <Field label="Campagne">
-                <FormInput
-                  value={form.campagne}
-                  onChange={e => setForm(f => ({ ...f, campagne: e.target.value }))}
-                  placeholder={`HIV-${new Date().getFullYear()}`}
-                />
+                <FormSelect value={form.campagne} onChange={e => setForm(f => ({ ...f, campagne: e.target.value }))}>
+                  <option value="">— Choisir une campagne —</option>
+                  {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                </FormSelect>
               </Field>
               <Field label="Date d'attribution">
                 <FormInput type="date" value={form.dateAttribution} onChange={e => setForm(f => ({ ...f, dateAttribution: e.target.value }))} />

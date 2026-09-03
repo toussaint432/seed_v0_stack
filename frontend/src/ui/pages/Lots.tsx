@@ -838,9 +838,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [showChildLot, setShowChildLot] = useState(false)
   const [parentLot, setParentLot]       = useState<any>(null)
   const [sites, setSites]               = useState<any[]>([])
+  const [campagnes, setCampagnes]       = useState<any[]>([])
   const MULT_NEW_FORM_INIT = {
     codeLot: '', idVariete: '', generationCode: 'G3',
-    campagne: new Date().getFullYear().toString(),
+    campagne: '',
     dateProduction: '', quantiteNette: '', unite: 'kg',
     tauxGermination: '', puretePhysique: '',
     superficieHa: '', productionBruteKg: '', niveauSemence: ''
@@ -848,7 +849,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [newLotForm, setNewLotForm] = useState(MULT_NEW_FORM_INIT)
   const MULT_CHILD_FORM_INIT = {
     codeLot: '', generationCode: 'R1',
-    campagne: new Date().getFullYear().toString(),
+    campagne: '',
     dateProduction: '', quantiteNette: '', unite: 'kg',
     tauxGermination: '', puretePhysique: '',
     quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '',
@@ -861,6 +862,13 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     api.get(endpoints.sitesMesSites).then(r => {
       setSites(r.data)
       if (r.data.length > 0) setChildForm(f => ({ ...f, siteCode: f.siteCode || r.data[0].codeSite }))
+    }).catch(() => {})
+    api.get(endpoints.campagnes).then(r => {
+      const list: any[] = r.data ?? []
+      setCampagnes(list)
+      const def = list.find((c: any) => c.statut === 'EN_COURS')?.codeCampagne ?? list[0]?.codeCampagne ?? ''
+      setNewLotForm(f => ({ ...f, campagne: f.campagne || def }))
+      setChildForm(f => ({ ...f, campagne: f.campagne || def }))
     }).catch(() => {})
     const [catRes, mesRes, stockRes, varRes, orgRes, trRecus] = await Promise.allSettled([
       api.get(endpoints.lotsCatalogueG3),
@@ -1953,7 +1961,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
             </Field>
             <FormRow>
               <Field label="Campagne" required>
-                <FormInput value={newLotForm.campagne} onChange={e => setNewLotForm(f => ({ ...f, campagne: e.target.value }))} placeholder="2026" required />
+                <FormSelect value={newLotForm.campagne} onChange={e => setNewLotForm(f => ({ ...f, campagne: e.target.value }))} required>
+                  <option value="">— Choisir une campagne —</option>
+                  {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                </FormSelect>
               </Field>
               <Field label="Date de production">
                 <FormInput type="date" value={newLotForm.dateProduction} onChange={e => setNewLotForm(f => ({ ...f, dateProduction: e.target.value }))} />
@@ -2038,7 +2049,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
             </FormRow>
             <FormRow>
               <Field label="Campagne" required>
-                <FormInput value={childForm.campagne} onChange={e => setChildForm(f => ({ ...f, campagne: e.target.value }))} placeholder="2026" required />
+                <FormSelect value={childForm.campagne} onChange={e => setChildForm(f => ({ ...f, campagne: e.target.value }))} required>
+                  <option value="">— Choisir une campagne —</option>
+                  {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                </FormSelect>
               </Field>
               <Field label="Date de production">
                 <FormInput type="date" value={childForm.dateProduction} onChange={e => setChildForm(f => ({ ...f, dateProduction: e.target.value }))} />
@@ -2240,6 +2254,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [showReception, setShowReception] = useState(false)
   const [receptionForm, setReceptionForm] = useState({ siteCode: '', quantite: '', unite: 'kg', dateReception: '' })
   const [sites, setSites] = useState<any[]>([])
+  const [campagnes, setCampagnes] = useState<any[]>([])
   // Cache des Bordereaux générés (lotId → data PDF) pour re-téléchargement
   const [bordereauCache, setBordereauCache] = useState<Map<number, TransferDocData>>(new Map())
   const allowedGens = ROLE_GENERATIONS[roleKey] || ALL_GENS
@@ -2270,9 +2285,9 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   }
   const canReception = roleKey === 'seed-quotataire'
 
-  const NEW_LOT_INIT = { codeLot: '', idVariete: '', generationCode: 'G0', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '' }
+  const NEW_LOT_INIT = { codeLot: '', idVariete: '', generationCode: 'G0', campagne: '', dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', statutLot: 'DISPONIBLE', superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '' }
   const [newLotForm, setNewLotForm] = useState(NEW_LOT_INIT)
-  const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: new Date().getFullYear().toString(), dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '' })
+  const [childForm, setChildForm] = useState({ codeLot: '', generationCode: '', campagne: '', dateProduction: '', quantiteNette: '', unite: 'kg', tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '', superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '' })
   const [transferForm, setTransferForm] = useState({ usernameDestinataire: '', roleDestinataire: '', quantite: '', observations: '' })
   const [membres, setMembres] = useState<any[]>([])
   // Indicateur de chargement des destinataires (rafraîchi à chaque ouverture du modal)
@@ -2310,6 +2325,13 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
     }).catch(() => {})
     if (roleKey === 'seed-upsemcl' || roleKey === 'seed-selector')
       api.get(endpoints.stocksAgrege).then(r => setStockAgrege(extractList(r.data))).catch(() => {})
+    api.get(endpoints.campagnes).then(r => {
+      const list: any[] = r.data ?? []
+      setCampagnes(list)
+      const def = list.find((c: any) => c.statut === 'EN_COURS')?.codeCampagne ?? list[0]?.codeCampagne ?? ''
+      setNewLotForm(f => ({ ...f, campagne: f.campagne || def }))
+      setChildForm(f => ({ ...f, campagne: f.campagne || def }))
+    }).catch(() => {})
   }, [generation])
 
   useEffect(() => {
@@ -3263,7 +3285,12 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   {allowedGens.map(g => <option key={g} value={g}>{g}</option>)}
                 </FormSelect>
               </Field>
-              <Field label="Campagne" required><FormInput value={newLotForm.campagne} onChange={e => setNewLotForm(f => ({ ...f, campagne: e.target.value }))} placeholder="2026" required /></Field>
+              <Field label="Campagne" required>
+                <FormSelect value={newLotForm.campagne} onChange={e => setNewLotForm(f => ({ ...f, campagne: e.target.value }))} required>
+                  <option value="">— Choisir une campagne —</option>
+                  {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                </FormSelect>
+              </Field>
             </FormRow>
             <FormRow>
               <Field label="Date de production"><FormInput type="date" value={newLotForm.dateProduction} onChange={e => setNewLotForm(f => ({ ...f, dateProduction: e.target.value }))} /></Field>
@@ -3367,7 +3394,12 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               </Field>
             </FormRow>
             <FormRow>
-              <Field label="Campagne" required><FormInput value={childForm.campagne} onChange={e => setChildForm(f => ({ ...f, campagne: e.target.value }))} placeholder="2026" required /></Field>
+              <Field label="Campagne" required>
+                <FormSelect value={childForm.campagne} onChange={e => setChildForm(f => ({ ...f, campagne: e.target.value }))} required>
+                  <option value="">— Choisir une campagne —</option>
+                  {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                </FormSelect>
+              </Field>
               <Field label="Date de production"><FormInput type="date" value={childForm.dateProduction} onChange={e => setChildForm(f => ({ ...f, dateProduction: e.target.value }))} /></Field>
             </FormRow>
             <FormRow>
