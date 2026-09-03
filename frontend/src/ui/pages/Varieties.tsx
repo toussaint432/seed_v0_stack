@@ -1354,30 +1354,21 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>Code et espèce immuables</span>
               </div>
             ) : (
-              <FormRow>
-                <Field label="Code variété" required hint={codeAutoFilled ? 'Généré automatiquement · modifiable si besoin' : 'ex : MIL-SOUNA3'}>
-                  <FormInput
-                    value={varieteForm.codeVariete}
-                    onChange={e => { setCodeAutoFilled(false); setVarieteForm(f => ({ ...f, codeVariete: e.target.value.toUpperCase() })) }}
-                    placeholder="MIL-SOUNA3"
-                    required
-                  />
-                </Field>
-                <Field label="Nom variété" required>
-                  <FormInput
-                    value={varieteForm.nomVariete}
-                    onChange={e => {
-                      const nom = e.target.value
-                      setVarieteForm(f => ({
-                        ...f, nomVariete: nom,
-                        ...(codeAutoFilled ? { codeVariete: generateVarieteCode(f.idEspece, nom) } : {})
-                      }))
-                    }}
-                    placeholder="Souna III"
-                    required
-                  />
-                </Field>
-              </FormRow>
+              <Field label="Nom variété" required>
+                <FormInput
+                  value={varieteForm.nomVariete}
+                  onChange={e => {
+                    const nom = e.target.value
+                    setVarieteForm(f => ({
+                      ...f, nomVariete: nom,
+                      ...(codeAutoFilled ? { codeVariete: generateVarieteCode(f.idEspece, nom) } : {})
+                    }))
+                  }}
+                  placeholder="Souna III"
+                  required
+                  autoFocus
+                />
+              </Field>
             )}
 
             {/* Espèce — verrouillée pour le sélectionneur, sélectionnable pour les autres */}
@@ -1408,6 +1399,34 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                     <option value="">— Sélectionner une espèce —</option>
                     {species.map(s => <option key={s.id} value={s.id}>{s.codeEspece} — {s.nomCommun}</option>)}
                   </FormSelect>
+                )}
+              </Field>
+            )}
+
+            {/* Code variété — masqué jusqu'à la génération, puis lecture seule déverrouillable */}
+            {!editVariete && varieteForm.codeVariete && (
+              <Field label="Code variété" required>
+                {codeAutoFilled ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                    <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                      {varieteForm.codeVariete}
+                    </code>
+                    <button
+                      type="button"
+                      onClick={() => setCodeAutoFilled(false)}
+                      style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}
+                    >
+                      <Edit2 size={11} /> Modifier
+                    </button>
+                  </div>
+                ) : (
+                  <FormInput
+                    value={varieteForm.codeVariete}
+                    onChange={e => setVarieteForm(f => ({ ...f, codeVariete: e.target.value.toUpperCase() }))}
+                    placeholder="MIL-SOUNA3"
+                    required
+                    autoFocus
+                  />
                 )}
               </Field>
             )}

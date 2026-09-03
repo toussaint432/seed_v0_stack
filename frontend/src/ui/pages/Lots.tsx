@@ -1929,9 +1929,6 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         <Modal title="Nouveau Lot" subtitle="Enregistrer un lot G3, R1 ou R2 dans votre inventaire" onClose={() => setShowNewLot(false)} size="lg">
           <form onSubmit={submitNewLot}>
             <FormRow>
-              <Field label="Code lot" required hint="Généré automatiquement · modifiable si besoin">
-                <FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G3-MIL-SOUNA3-2026-01" required />
-              </Field>
               <Field label="Génération" required>
                 <FormSelect value={newLotForm.generationCode} onChange={e => {
                   const gen = e.target.value
@@ -1959,6 +1956,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                 {varieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
               </FormSelect>
             </Field>
+            {newLotForm.codeLot && (
+              <Field label="Code lot">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{newLotForm.codeLot}</code>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Généré automatiquement</span>
+                </div>
+              </Field>
+            )}
             <FormRow>
               <Field label="Campagne" required>
                 <FormSelect value={newLotForm.campagne} onChange={e => setNewLotForm(f => ({ ...f, campagne: e.target.value }))} required>
@@ -2036,8 +2041,11 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
           </div>
           <form onSubmit={submitChildLot}>
             <FormRow>
-              <Field label="Code lot enfant" required>
-                <FormInput value={childForm.codeLot} onChange={e => setChildForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder={`${childForm.generationCode}-MIL-SOUNA3-2026`} required />
+              <Field label="Code lot enfant">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{childForm.codeLot}</code>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Généré automatiquement</span>
+                </div>
               </Field>
               <Field label="Génération cible">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
@@ -3258,21 +3266,26 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
         return (
         <Modal title="Nouveau Lot Semencier" subtitle="Enregistrer un nouveau lot dans la chaîne semencière" onClose={() => setShowNewLot(false)}>
           <form onSubmit={submitNewLot}>
-            <FormRow>
-              <Field label="Code lot" required hint="Généré automatiquement · modifiable si besoin"><FormInput value={newLotForm.codeLot} onChange={e => setNewLotForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder="G0-MIL-SOUNA3-2026-01" required /></Field>
-              <Field label="Variété" required hint={roleKey === 'seed-selector' && userSpecialisation ? `Filtrées : ${userSpecialisation}` : undefined}>
-                <FormSelect value={newLotForm.idVariete} onChange={e => {
-                  const varId = e.target.value
-                  const v = formVarieties.find((x: any) => x.id === Number(varId))
-                  const yr = new Date().getFullYear()
-                  const code = v ? generateLotCode(newLotForm.generationCode, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : newLotForm.codeLot
-                  setNewLotForm(f => ({ ...f, idVariete: varId, codeLot: code }))
-                }} required>
-                  <option value="">-- Choisir une variété --</option>
-                  {formVarieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
-                </FormSelect>
+            <Field label="Variété" required hint={roleKey === 'seed-selector' && userSpecialisation ? `Filtrées : ${userSpecialisation}` : undefined}>
+              <FormSelect value={newLotForm.idVariete} onChange={e => {
+                const varId = e.target.value
+                const v = formVarieties.find((x: any) => x.id === Number(varId))
+                const yr = new Date().getFullYear()
+                const code = v ? generateLotCode(newLotForm.generationCode, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : newLotForm.codeLot
+                setNewLotForm(f => ({ ...f, idVariete: varId, codeLot: code }))
+              }} required>
+                <option value="">-- Choisir une variété --</option>
+                {formVarieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
+              </FormSelect>
+            </Field>
+            {newLotForm.codeLot && (
+              <Field label="Code lot">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{newLotForm.codeLot}</code>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Généré automatiquement</span>
+                </div>
               </Field>
-            </FormRow>
+            )}
             <FormRow>
               <Field label="Génération" required>
                 <FormSelect value={newLotForm.generationCode} onChange={e => {
@@ -3383,8 +3396,11 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
           </div>
           <form onSubmit={submitChildLot}>
             <FormRow>
-              <Field label="Code du lot enfant" required>
-                <FormInput value={childForm.codeLot} onChange={e => setChildForm(f => ({ ...f, codeLot: e.target.value.toUpperCase() }))} placeholder={`${childForm.generationCode}-MIL-SOUNA3-2026`} required />
+              <Field label="Code du lot enfant">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{childForm.codeLot}</code>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Généré automatiquement</span>
+                </div>
               </Field>
               <Field label="Génération cible">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
