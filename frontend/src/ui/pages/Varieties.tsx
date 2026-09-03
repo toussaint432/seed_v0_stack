@@ -55,6 +55,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
   const [showVarieteForm, setShowVarieteForm] = useState(false)
   const [editVariete,     setEditVariete]     = useState<any>(null)
   const [codeAutoFilled,  setCodeAutoFilled]  = useState(true)
+  const [showDetails,     setShowDetails]     = useState(false)
   const [saving, setSaving] = useState(false)
 
   const [archiveTarget,  setArchiveTarget]  = useState<any>(null)
@@ -419,12 +420,15 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
       photosensibilite: v.photosensibilite || '',
       synonyme: v.synonyme || '',
     })
+    const hasDetails = !!(v.selectionneurPrincipal || v.typeGrain || v.natureGenetique || v.photosensibilite || v.vocationCulturale || v.synonyme || v.anneeHomologation || v.numeroSelection)
+    setShowDetails(hasDetails)
     setShowVarieteForm(true)
   }
 
   function openNewVariete() {
     setEditVariete(null)
     setCodeAutoFilled(true)
+    setShowDetails(false)
     setVarieteForm({
       codeVariete: '', nomVariete: '',
       idEspece: selectedSpeciesId?.toString() || '',
@@ -1345,119 +1349,125 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
           onClose={() => { setShowVarieteForm(false); setEditVariete(null) }}
         >
           <form onSubmit={submitVariete}>
-            {/* En-tête identité — code (immuable) + espèce (immuable) */}
-            {editVariete ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', marginBottom: 18 }}>
-                <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>{editVariete.codeVariete}</code>
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>·</span>
-                <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{editVariete.espece?.codeEspece} — {editVariete.espece?.nomCommun}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>Code et espèce immuables</span>
-              </div>
-            ) : (
-              <Field label="Nom variété" required>
-                <FormInput
-                  value={varieteForm.nomVariete}
-                  onChange={e => {
-                    const nom = e.target.value
-                    setVarieteForm(f => ({
-                      ...f, nomVariete: nom,
-                      ...(codeAutoFilled ? { codeVariete: generateVarieteCode(f.idEspece, nom) } : {})
-                    }))
-                  }}
-                  placeholder="Souna III"
-                  required
-                  autoFocus
-                />
-              </Field>
-            )}
 
-            {/* Espèce — verrouillée pour le sélectionneur, sélectionnable pour les autres */}
-            {!editVariete && (
-              <Field label="Espèce" required>
-                {isSelector && userSpecialisation ? (() => {
-                  const mySpec = species.find(s => s.codeEspece?.toUpperCase() === userSpecialisation.toUpperCase())
-                  return (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                      <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>
-                        {userSpecialisation.toUpperCase()}
-                      </code>
-                      <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{mySpec?.nomCommun ?? userSpecialisation}</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Votre spécialisation</span>
-                    </div>
-                  )
-                })() : (
-                  <FormSelect
-                    value={varieteForm.idEspece}
+            {/* ── Identification principale ─────────────────────────────── */}
+            {editVariete ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', marginBottom: 18 }}>
+                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>{editVariete.codeVariete}</code>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>·</span>
+                  <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{editVariete.espece?.codeEspece} — {editVariete.espece?.nomCommun}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 5 }}>Code et espèce immuables</span>
+                </div>
+                <FormRow>
+                  <Field label="Nom variété" required>
+                    <FormInput value={varieteForm.nomVariete} onChange={e => setVarieteForm(f => ({ ...f, nomVariete: e.target.value }))} placeholder="Souna III" required autoFocus />
+                  </Field>
+                  <Field label="Statut" required>
+                    <FormSelect value={varieteForm.statutVariete} onChange={e => setVarieteForm(f => ({ ...f, statutVariete: e.target.value }))}>
+                      <option value="DIFFUSEE">Diffusée</option>
+                      <option value="EN_TEST">En test</option>
+                      <option value="RETIREE">Retirée</option>
+                    </FormSelect>
+                  </Field>
+                </FormRow>
+              </>
+            ) : (
+              <>
+                {/* Espèce (contexte) + Statut sur la même ligne */}
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
+                  <Field label="Espèce" required>
+                    {isSelector && userSpecialisation ? (() => {
+                      const mySpec = species.find(s => s.codeEspece?.toUpperCase() === userSpecialisation.toUpperCase())
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                          <code style={{ fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-3)', padding: '1px 6px', borderRadius: 4 }}>
+                            {userSpecialisation.toUpperCase()}
+                          </code>
+                          <span style={{ fontSize: 13, color: 'var(--text-primary)' }}>{mySpec?.nomCommun ?? userSpecialisation}</span>
+                          <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Votre spécialisation</span>
+                        </div>
+                      )
+                    })() : (
+                      <FormSelect
+                        value={varieteForm.idEspece}
+                        onChange={e => {
+                          const idE = e.target.value
+                          setVarieteForm(f => ({
+                            ...f, idEspece: idE,
+                            ...(codeAutoFilled ? { codeVariete: generateVarieteCode(idE, f.nomVariete) } : {})
+                          }))
+                        }}
+                        required>
+                        <option value="">— Sélectionner une espèce —</option>
+                        {species.map(s => <option key={s.id} value={s.id}>{s.codeEspece} — {s.nomCommun}</option>)}
+                      </FormSelect>
+                    )}
+                  </Field>
+                  <Field label="Statut" required>
+                    <FormSelect value={varieteForm.statutVariete} onChange={e => setVarieteForm(f => ({ ...f, statutVariete: e.target.value }))}>
+                      <option value="DIFFUSEE">Diffusée</option>
+                      <option value="EN_TEST">En test</option>
+                      <option value="RETIREE">Retirée</option>
+                    </FormSelect>
+                  </Field>
+                </div>
+                {/* Nom variété */}
+                <Field label="Nom variété" required>
+                  <FormInput
+                    value={varieteForm.nomVariete}
                     onChange={e => {
-                      const idE = e.target.value
+                      const nom = e.target.value
                       setVarieteForm(f => ({
-                        ...f, idEspece: idE,
-                        ...(codeAutoFilled ? { codeVariete: generateVarieteCode(idE, f.nomVariete) } : {})
+                        ...f, nomVariete: nom,
+                        ...(codeAutoFilled ? { codeVariete: generateVarieteCode(f.idEspece, nom) } : {})
                       }))
                     }}
-                    required>
-                    <option value="">— Sélectionner une espèce —</option>
-                    {species.map(s => <option key={s.id} value={s.id}>{s.codeEspece} — {s.nomCommun}</option>)}
-                  </FormSelect>
-                )}
-              </Field>
-            )}
-
-            {/* Code variété — masqué jusqu'à la génération, puis lecture seule déverrouillable */}
-            {!editVariete && varieteForm.codeVariete && (
-              <Field label="Code variété" required>
-                {codeAutoFilled ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                    <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      {varieteForm.codeVariete}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={() => setCodeAutoFilled(false)}
-                      style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}
-                    >
-                      <Edit2 size={11} /> Modifier
-                    </button>
-                  </div>
-                ) : (
-                  <FormInput
-                    value={varieteForm.codeVariete}
-                    onChange={e => setVarieteForm(f => ({ ...f, codeVariete: e.target.value.toUpperCase() }))}
-                    placeholder="MIL-SOUNA3"
+                    placeholder="Souna III"
                     required
                     autoFocus
                   />
+                </Field>
+                {/* Code variété — masqué jusqu'à la génération, puis lecture seule déverrouillable */}
+                {varieteForm.codeVariete && (
+                  <Field label="Code variété" required>
+                    {codeAutoFilled ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                        <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
+                          {varieteForm.codeVariete}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => setCodeAutoFilled(false)}
+                          style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}
+                        >
+                          <Edit2 size={11} /> Modifier
+                        </button>
+                      </div>
+                    ) : (
+                      <FormInput
+                        value={varieteForm.codeVariete}
+                        onChange={e => setVarieteForm(f => ({ ...f, codeVariete: e.target.value.toUpperCase() }))}
+                        placeholder="MIL-SOUNA3"
+                        required
+                        autoFocus
+                      />
+                    )}
+                  </Field>
                 )}
-              </Field>
+              </>
             )}
 
-            {/* Nom variété — affiché séparément en mode édition */}
-            {editVariete && (
-              <Field label="Nom variété" required>
-                <FormInput value={varieteForm.nomVariete} onChange={e => setVarieteForm(f => ({ ...f, nomVariete: e.target.value }))} placeholder="Souna III" required />
-              </Field>
-            )}
-
-            <Field label="Statut" required>
-              <FormSelect value={varieteForm.statutVariete} onChange={e => setVarieteForm(f => ({ ...f, statutVariete: e.target.value }))}>
-                <option value="DIFFUSEE">Diffusée</option>
-                <option value="EN_TEST">En test</option>
-                <option value="RETIREE">Retirée</option>
-              </FormSelect>
-            </Field>
-
+            {/* ── Données clés ──────────────────────────────────────────── */}
             <FormRow>
               <Field label="Origine">
                 <FormInput value={varieteForm.origine} onChange={e => setVarieteForm(f => ({ ...f, origine: e.target.value }))} placeholder="ISRA-CNRA Bambey" />
               </Field>
-              <Field label="Sélectionneur principal">
-                <FormInput value={varieteForm.selectionneurPrincipal} onChange={e => setVarieteForm(f => ({ ...f, selectionneurPrincipal: e.target.value }))} placeholder="Équipe sélection ISRA" />
-              </Field>
-            </FormRow>
-            <FormRow>
               <Field label="Année d'obtention">
                 <FormInput type="number" value={varieteForm.anneeCreation} onChange={e => setVarieteForm(f => ({ ...f, anneeCreation: e.target.value }))} placeholder="1985" min="1900" max="2030" />
               </Field>
+            </FormRow>
+            <FormRow>
               <Field label="Cycle min (j)">
                 <FormInput type="number" value={varieteForm.cycleMin} onChange={e => setVarieteForm(f => ({ ...f, cycleMin: e.target.value }))} placeholder="85" min="1" max="365" />
               </Field>
@@ -1465,13 +1475,7 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <FormInput type="number" value={varieteForm.cycleMax} onChange={e => setVarieteForm(f => ({ ...f, cycleMax: e.target.value }))} placeholder="95" min="1" max="365" />
               </Field>
             </FormRow>
-            <Field label="Pedigree" hint="Généalogie génétique — ex : 55-437 × CE 181-22">
-              <FormInput value={varieteForm.pedigree} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVarieteForm(f => ({ ...f, pedigree: e.target.value }))} placeholder="Sélection ISRA-CNRA Bambey" />
-            </Field>
             <FormRow>
-              <Field label="Type de grain" hint="ex : Virginia (Bold), Grain perlé (Blanc)">
-                <FormInput value={varieteForm.typeGrain} onChange={e => setVarieteForm(f => ({ ...f, typeGrain: e.target.value }))} placeholder="Virginia (Bold)" />
-              </Field>
               <Field label="Rendement min (t/ha)">
                 <FormInput type="number" value={varieteForm.rendementMin} onChange={e => setVarieteForm(f => ({ ...f, rendementMin: e.target.value }))} placeholder="2.5" min="0" step="0.1" />
               </Field>
@@ -1479,43 +1483,61 @@ export function Varieties({ roleKey, userSpecialisation }: Props) {
                 <FormInput type="number" value={varieteForm.rendementMax} onChange={e => setVarieteForm(f => ({ ...f, rendementMax: e.target.value }))} placeholder="3.5" min="0" step="0.1" />
               </Field>
             </FormRow>
-
-            {/* ── Identification officielle ISRA/CNRA ────────── */}
-            <div style={{ marginTop: 18, marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Identification officielle</span>
-            </div>
-            <FormRow>
-              <Field label="Année d'homologation" hint="Inscription au catalogue national">
-                <FormInput type="number" value={varieteForm.anneeHomologation} onChange={e => setVarieteForm(f => ({ ...f, anneeHomologation: e.target.value }))} placeholder="1975" min="1900" max="2030" />
-              </Field>
-              <Field label="N° de sélection" hint="Référence interne ISRA (ex : IS 9830)">
-                <FormInput value={varieteForm.numeroSelection} onChange={e => setVarieteForm(f => ({ ...f, numeroSelection: e.target.value }))} placeholder="IS 9830" />
-              </Field>
-              <Field label="Synonyme(s)" hint="Autre(s) nom(s) connu(s)">
-                <FormInput value={varieteForm.synonyme} onChange={e => setVarieteForm(f => ({ ...f, synonyme: e.target.value }))} placeholder="73-BS" />
-              </Field>
-            </FormRow>
-
-            {/* ── Agronomie ─────────────────────────────────── */}
-            <div style={{ marginTop: 14, marginBottom: 6, paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Agronomie</span>
-            </div>
-            <FormRow>
-              <Field label="Nature génétique" hint="ex : Lignée pure, OPV, Hybride F1">
-                <FormInput value={varieteForm.natureGenetique} onChange={e => setVarieteForm(f => ({ ...f, natureGenetique: e.target.value }))} placeholder="Lignée pure" />
-              </Field>
-              <Field label="Photosensibilité" hint="Réponse à la durée du jour">
-                <FormSelect value={varieteForm.photosensibilite} onChange={e => setVarieteForm(f => ({ ...f, photosensibilite: e.target.value }))}>
-                  <option value="">— Non renseigné —</option>
-                  <option value="Neutre">Neutre</option>
-                  <option value="Sensible">Sensible</option>
-                  <option value="Peu sensible">Peu sensible</option>
-                </FormSelect>
-              </Field>
-            </FormRow>
-            <Field label="Vocation culturale" hint="Systèmes de culture cibles (pluvial, irrigué, bas-fonds…)">
-              <FormInput value={varieteForm.vocationCulturale} onChange={e => setVarieteForm(f => ({ ...f, vocationCulturale: e.target.value }))} placeholder="Pluvial / Bas-fonds" />
+            <Field label="Pedigree" hint="Généalogie génétique — ex : 55-437 × CE 181-22">
+              <FormInput value={varieteForm.pedigree} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setVarieteForm(f => ({ ...f, pedigree: e.target.value }))} placeholder="Sélection ISRA-CNRA Bambey" />
             </Field>
+
+            {/* ── Détails techniques (repliable) ────────────────────────── */}
+            <button
+              type="button"
+              onClick={() => setShowDetails(v => !v)}
+              style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%', marginTop: 4, padding: '7px 10px', borderRadius: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', cursor: 'pointer', textAlign: 'left', letterSpacing: '0.07em', textTransform: 'uppercase' }}
+            >
+              <ChevronRight size={13} style={{ transform: showDetails ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }} />
+              Détails techniques
+              <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 400, color: 'var(--text-muted)', textTransform: 'none', letterSpacing: 0 }}>sélectionneur · agronomie · identification officielle</span>
+            </button>
+            {showDetails && (
+              <>
+                <FormRow>
+                  <Field label="Sélectionneur principal">
+                    <FormInput value={varieteForm.selectionneurPrincipal} onChange={e => setVarieteForm(f => ({ ...f, selectionneurPrincipal: e.target.value }))} placeholder="Équipe sélection ISRA" />
+                  </Field>
+                  <Field label="Type de grain" hint="ex : Virginia (Bold), Grain perlé (Blanc)">
+                    <FormInput value={varieteForm.typeGrain} onChange={e => setVarieteForm(f => ({ ...f, typeGrain: e.target.value }))} placeholder="Virginia (Bold)" />
+                  </Field>
+                </FormRow>
+                <FormRow>
+                  <Field label="Nature génétique" hint="ex : Lignée pure, OPV, Hybride F1">
+                    <FormInput value={varieteForm.natureGenetique} onChange={e => setVarieteForm(f => ({ ...f, natureGenetique: e.target.value }))} placeholder="Lignée pure" />
+                  </Field>
+                  <Field label="Photosensibilité" hint="Réponse à la durée du jour">
+                    <FormSelect value={varieteForm.photosensibilite} onChange={e => setVarieteForm(f => ({ ...f, photosensibilite: e.target.value }))}>
+                      <option value="">— Non renseigné —</option>
+                      <option value="Neutre">Neutre</option>
+                      <option value="Sensible">Sensible</option>
+                      <option value="Peu sensible">Peu sensible</option>
+                    </FormSelect>
+                  </Field>
+                </FormRow>
+                <FormRow>
+                  <Field label="Vocation culturale" hint="Pluvial, irrigué, bas-fonds…">
+                    <FormInput value={varieteForm.vocationCulturale} onChange={e => setVarieteForm(f => ({ ...f, vocationCulturale: e.target.value }))} placeholder="Pluvial / Bas-fonds" />
+                  </Field>
+                  <Field label="Synonyme(s)" hint="Autre(s) nom(s) connu(s)">
+                    <FormInput value={varieteForm.synonyme} onChange={e => setVarieteForm(f => ({ ...f, synonyme: e.target.value }))} placeholder="73-BS" />
+                  </Field>
+                </FormRow>
+                <FormRow>
+                  <Field label="Année d'homologation" hint="Inscription au catalogue national">
+                    <FormInput type="number" value={varieteForm.anneeHomologation} onChange={e => setVarieteForm(f => ({ ...f, anneeHomologation: e.target.value }))} placeholder="1975" min="1900" max="2030" />
+                  </Field>
+                  <Field label="N° de sélection" hint="Référence interne ISRA (ex : IS 9830)">
+                    <FormInput value={varieteForm.numeroSelection} onChange={e => setVarieteForm(f => ({ ...f, numeroSelection: e.target.value }))} placeholder="IS 9830" />
+                  </Field>
+                </FormRow>
+              </>
+            )}
 
             {editVariete && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', borderRadius: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', marginTop: 4 }}>
