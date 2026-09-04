@@ -50,7 +50,7 @@ Concevoir et déployer un **système d'information semencier** pour l'ISRA/CNRA 
 | **Tableau de bord** | KPIs en temps réel, pipeline générationnel G0→R2, lots récents, statuts des commandes |
 | **Catalogue public** | Vitrine des espèces et variétés accessibles sans authentification (cartographie ZAE) |
 | **Variétés & Espèces** | Référentiel variétal ISRA avec archivage traçable (commentaire + auteur + date) |
-| **Lots semenciers** | Cycle de vie G0 → R2, création de lot enfant, traçabilité lineage, certificats PDF |
+| **Lots semenciers** | Cycle de vie G0 → R2, création de lot enfant, traçabilité lineage, certificats PDF, politique d'édition BROUILLON/CONFIRMÉ, audit trail complet |
 | **Mes Sites** | Sites de stockage personnels du multiplicateur — CRUD complet |
 | **Stock** | Inventaire par site et organisation, mouvements IN/OUT/TRANSFER, isolation par acteur |
 | **Commandes** | Passation G3/R2, confirmation, allocation lot → ligne commande, workflow livraison |
@@ -62,6 +62,7 @@ Concevoir et déployer un **système d'information semencier** pour l'ISRA/CNRA 
 | **Utilisateurs** | Gestion des comptes Keycloak et attribution des rôles plateforme (admin) |
 | **Messages** | Messagerie interne entre acteurs de la chaîne |
 | **Analytiques** | Tableaux de bord avancés — vue globale et vue sélectionneur |
+| **Vue d'ensemble CNRA** | Dashboard décisionnel Directeur — KPIs, pipeline G0→R2, certifications, politique d'édition, top variétés, matrice espèce×génération |
 | **Profil** | Informations du compte connecté, rôle actif, tokens JWT |
 
 ---
@@ -114,7 +115,7 @@ La base PostgreSQL `seed` est organisée en **6 schémas distincts** — un par 
 | Schéma | Propriétaire | Tables principales |
 |---|---|---|
 | `catalog` | catalog-service | `espece`, `variete`, `variete_zone`, `espece_historique`, `variete_historique` |
-| `lot` | lot-service | `lot_semencier`, `campagne`, `generation_semence`, `certification`, `transfert_lot`, `outbox_events` |
+| `lot` | lot-service | `lot_semencier`, `campagne`, `generation_semence`, `certification`, `transfert_lot`, `lot_audit_log`, `outbox_events` |
 | `stock` | stock-service | `stock`, `site`, `mouvement_stock`, `transfert`, `outbox_events` |
 | `orders` | order-service | `commande`, `ligne_commande`, `allocation_commande` |
 | `shared` | order-service | `organisation`, `membre_organisation`, `conversation`, `message` |
@@ -347,6 +348,7 @@ docker compose logs -f catalog-service
 | `multiplicateur` | `multi123` | `seed-multiplicator` | Lots G3→R2 + Mes Sites + Stock + Commandes G3 |
 | `multi_fatick` | `multifat123` | `seed-multiplicator` | Idem multiplicateur — organisation Fatick |
 | `quotataire` | `quota123` | `seed-quotataire` | Catalogue semences R2 + Commandes |
+| `directeur` | `directeur123` | `seed-directeur` | Dashboard décisionnel CNRA en lecture seule — vue d'ensemble de la chaîne semencière |
 
 > **Realm Keycloak** : `seed-v0` · **Client** : `seed-frontend`
 
@@ -362,6 +364,7 @@ Chaque acteur est strictement isolé — il ne voit que ses propres ressources :
 | `seed-upsemcl` | Tous les lots G1→G3 de l'UPSemCL | Stock UPSemCL | Commandes reçues (org UPSemCL) |
 | `seed-multiplicator` | Ses propres lots + lots reçus (REC) | Son stock propre (org) | Ses propres commandes G3 passées |
 | `seed-quotataire` | Uniquement les lots R2 DISPONIBLES | — | Ses propres commandes R2 |
+| `seed-directeur` | Lecture seule — tous les lots (indicateurs) | — | — |
 | `seed-admin` | Tout | Tout | Tout |
 
 **Lot REC** : à chaque livraison validée, un lot de réception (`REC-{commandeId}-L{ligneId}`) est créé automatiquement avec l'organisation du multiplicateur comme producteur — il apparaît immédiatement dans « Mes Lots » et dans le stock de l'acheteur.
@@ -383,6 +386,39 @@ R2  Commerciale       ───── Multiplicateur         ──►  Quotatai
 ```
 
 Chaque lot conserve une référence vers son **lot parent**, permettant une traçabilité complète de l'origine génétique (vue lineage disponible dans l'interface). La génération est automatiquement proposée à la création d'un lot enfant.
+
+---
+
+## Politique d'édition des lots
+
+Chaque lot semencier possède un `statutEdition` (**BROUILLON** ou **CONFIRMÉ**) indépendant de son statut de certification. Un lot confirmé n'est plus modifiable — cela garantit l'intégrité des données certifiées.
+
+### Règles par rôle
+
+| Rôle | Verrouillage | Déclencheur |
+|---|---|---|
+| `seed-upsemcl` | Volontaire | Bouton « Valider » dans l'interface — passage manuel en CONFIRMÉ |
+| `seed-selector` | Volontaire | Idem — bouton « Valider » dans l'interface |
+| `seed-multiplicator` | Automatique | Déclenché quand le lot est certifié (UPSemCL confirme la certification) |
+| `seed-admin` | Peut éditer tous les lots | Aucune restriction sur l'admin |
+
+**Auto-lock 30 jours** : un job `@Scheduled` (`LotAutoLockJob`) verrouille automatiquement les lots laissés en BROUILLON depuis plus de 30 jours — évite les lots « oubliés » non finalisés.
+
+### Audit trail
+
+Toutes les modifications de champs d'un lot sont journalisées dans `lot.lot_audit_log` :
+
+| Colonne | Description |
+|---|---|
+| `lot_id` | Référence au lot modifié |
+| `username` | Utilisateur Keycloak auteur de l'action |
+| `action` | Type d'action : `CREATION`, `MODIFICATION`, `SUPPRESSION`, `CONFIRMATION` |
+| `champ` | Nom du champ modifié (ex. `quantiteConditionnee`) |
+| `ancienne_valeur` | Valeur avant modification |
+| `nouvelle_valeur` | Valeur après modification |
+| `created_at` | Horodatage UTC |
+
+L'historique est accessible via l'interface (bouton « Historique » sur chaque lot) et via l'API `GET /api/lots/{id}/audit`.
 
 ---
 
@@ -474,6 +510,7 @@ seed_v0_stack/
 │               ├── Messages.tsx            # Messagerie interne
 │               ├── GlobalAnalytics.tsx     # Tableau de bord analytique global
 │               ├── SelectorAnalytics.tsx   # Analytiques sélectionneur
+│               ├── DirecteurDashboard.tsx  # Dashboard décisionnel Directeur CNRA
 │               ├── Users.tsx               # Gestion Keycloak (admin)
 │               └── Profile.tsx             # Profil utilisateur connecté
 │
@@ -489,7 +526,7 @@ seed_v0_stack/
 │   ├── lot-service/                # :18082 — Cycle de vie des lots
 │   │   ├── Dockerfile              # Multi-stage Maven → eclipse-temurin:21-jre-alpine
 │   │   └── api/
-│   │       ├── LotController           # CRUD lots, création enfant, isolation par rôle
+│   │       ├── LotController           # CRUD lots, création enfant, isolation par rôle, édition BROUILLON/CONFIRMÉ, audit
 │   │       ├── LotDocumentController   # Génération PDF certificat de lot
 │   │       ├── TransfertController     # Transferts entre organisations
 │   │       ├── CampagneController      # Campagnes agricoles
@@ -529,7 +566,7 @@ seed_v0_stack/
 └── README.md
 ```
 
-**Migrations Flyway** : versionnées (V1 → V64+), appliquées automatiquement par `catalog-service` au démarrage. La table `flyway_schema_history` est maintenue dans le schéma `public`.
+**Migrations Flyway** : versionnées (V1 → V72+), appliquées automatiquement par `catalog-service` au démarrage. La table `flyway_schema_history` est maintenue dans le schéma `public`.
 
 ---
 
@@ -656,6 +693,7 @@ triggers {
 | `seed-upsemcl` | Lots G1→G3 · Stock · Programmes · Certifications · Commandes reçues · Transferts |
 | `seed-multiplicator` | Mes Lots G3→R2 · Mes Sites · Mon Stock · Commandes G3 passées · Transferts |
 | `seed-quotataire` | Catalogue R2 · Mes commandes R2 |
+| `seed-directeur` | Vue d'ensemble CNRA · Lots (lecture seule) · Variétés (lecture seule) · Stocks (lecture seule) |
 
 ---
 
@@ -677,8 +715,12 @@ triggers {
 - [x] Messagerie interne entre acteurs
 - [x] Tableaux de bord analytiques (global + sélectionneur)
 - [x] Indicateurs agronomiques en temps réel dans le formulaire lot (rendement kg/ha, taux de conditionnement avec code couleur vert/orange/rouge et description pédagogique)
+- [x] Politique d'édition BROUILLON/CONFIRMÉ sur les lots — verrouillage volontaire (UPSemCL/Sélectionneur) + auto-lock 30 jours + verrouillage automatique à la certification (multiplicateur)
+- [x] Audit trail complet des lots — historique champ par champ de toutes les modifications (qui, quoi, avant, après, quand)
+- [x] Dashboard décisionnel Directeur CNRA — KPIs, pipeline G0→R2, certifications, politique d'édition, top variétés, matrice espèce×génération
+- [x] Rôle `seed-directeur` — lecture seule de l'ensemble de la chaîne semencière, navigation dédiée
 - [x] Monitoring : Prometheus, Grafana, Alertmanager, Kafka UI
-- [x] 64+ migrations Flyway — schéma base de données entièrement versionné
+- [x] 72+ migrations Flyway — schéma base de données entièrement versionné
 - [x] Schema per Service — 6 schémas PostgreSQL distincts (catalog, lot, stock, orders, shared, geo)
 
 ### Réalisé (DevOps — Phase 1)
