@@ -2,11 +2,12 @@ import React, { useEffect, useRef, useState } from 'react'
 import {
   Package, TrendingUp, CheckCircle2, AlertTriangle, Layers, Wheat,
   ArrowRight, Lock, RefreshCw, AlertCircle, Info, ShieldCheck,
-  Activity, BarChart3, Clock,
+  Activity, BarChart3, Clock, Map,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { extractList, normalizeLot, normalizeVariete } from '../../lib/normalizers'
+import { MapSemences } from '../components/MapSemences'
 
 // ── Constantes génération ──────────────────────────────────────────
 const GEN_ORDER = ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
@@ -273,6 +274,11 @@ export function DirecteurDashboard() {
           <EspecesTable lots={lots} varieties={varieties} />
         </Section>
       </div>
+
+      {/* ── Carte agro-écologique ─────────────────────────────── */}
+      <Section title="Répartition géographique nationale" sub="Zones agro-écologiques · sites ISRA · acteurs de la filière" icon={<Map size={14} />}>
+        <MapSemences roleKey="seed-directeur" />
+      </Section>
 
     </div>
   )

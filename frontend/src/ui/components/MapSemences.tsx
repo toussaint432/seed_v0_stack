@@ -45,6 +45,7 @@ interface Props { roleKey: string }
 /* ── Générations visibles par rôle ── */
 const ROLE_GENS: Record<string, string[]> = {
   'seed-admin':         ['G0','G1','G2','G3','G4','R1','R2'],
+  'seed-directeur':     ['G0','G1','G2','G3','G4','R1','R2'],
   'seed-selector':      ['G0','G1'],
   'seed-upsemcl':       ['G1','G2','G3'],
   'seed-multiplicator': ['G3','G4','R1','R2'],
