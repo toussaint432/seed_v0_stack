@@ -1,6 +1,7 @@
 package sn.isra.seed.lot_service.api.dto;
 
 import sn.isra.seed.lot_service.entity.enums.StatutCertification;
+import sn.isra.seed.lot_service.entity.enums.StatutEdition;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 
 import java.math.BigDecimal;
@@ -58,5 +59,9 @@ public record LotSemencierDto(
     StatutCertification statutCertification,
     String            approbateurUsername,
     Instant           dateApprobation,
-    String            motifRejetCert
+    String            motifRejetCert,
+
+    // Politique d'édition
+    StatutEdition     statutEdition,
+    Instant           dateConfirmation
 ) {}

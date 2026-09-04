@@ -1,6 +1,7 @@
 package sn.isra.seed.lot_service.repo;
 
 import sn.isra.seed.lot_service.entity.LotSemencier;
+import sn.isra.seed.lot_service.entity.enums.StatutEdition;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -218,4 +220,10 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         ORDER BY l.generation.codeGeneration
         """)
     List<Object[]> statsParGeneration();
+
+    @Query("SELECT l FROM LotSemencier l WHERE l.statutEdition = :statut AND l.createdAt < :limite")
+    List<LotSemencier> findBrouillonsAnciensDe(
+        @Param("limite") java.time.Instant limite,
+        @Param("statut") StatutEdition statut
+    );
 }

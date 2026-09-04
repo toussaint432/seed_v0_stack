@@ -1,7 +1,10 @@
 package sn.isra.seed.lot_service.api;
 
+import sn.isra.seed.lot_service.entity.LotAuditLog;
 import sn.isra.seed.lot_service.entity.LotSemencier;
 import sn.isra.seed.lot_service.entity.enums.StatutCertification;
+import sn.isra.seed.lot_service.entity.enums.StatutEdition;
+import sn.isra.seed.lot_service.repo.LotAuditLogRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,7 +39,8 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class LotDocumentController {
 
-    private final LotRepo lotRepo;
+    private final LotRepo         lotRepo;
+    private final LotAuditLogRepo auditLogRepo;
 
     @Value("${uploads.dir:/app/uploads}")
     private String uploadsDir;
@@ -173,6 +177,13 @@ public class LotDocumentController {
         lot.setApprobateurUsername(approbateur);
         lot.setDateApprobation(Instant.now());
         lot.setMotifRejetCert(null);
+
+        // Certification UPSemCL = verrou définitif pour le multiplicateur
+        if (lot.getStatutEdition() != StatutEdition.CONFIRME) {
+            lot.setStatutEdition(StatutEdition.CONFIRME);
+            lot.setDateConfirmation(Instant.now());
+            auditLogRepo.save(LotAuditLog.confirmation(lot.getId(), approbateur));
+        }
 
         return ResponseEntity.ok(lotRepo.save(lot));
     }

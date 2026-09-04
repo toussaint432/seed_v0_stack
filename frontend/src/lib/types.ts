@@ -163,6 +163,24 @@ export interface LotSemencier {
   usernameCreateur?: string
   responsableNom?: string
   responsableRole?: string
+  // Certification
+  certificatPath?: string
+  statutCertification?: string
+  approbateurUsername?: string
+  dateApprobation?: string
+  motifRejetCert?: string
+  // Politique d'édition
+  statutEdition?: 'BROUILLON' | 'CONFIRME'
+  dateConfirmation?: string
+  // Champs dénormalisés mapper
+  codeVariete?: string
+  nomVariete?: string
+  generationId?: number
+  generationCode?: string
+  generationOrdre?: number
+  lotParentId?: number
+  lotParentCode?: string
+  idCampagne?: number
 }
 
 // ── Transferts de lots inter-acteurs (lot-service) ──

@@ -15,6 +15,10 @@ import sn.isra.seed.lot_service.api.dto.CreateChildLotRequest;
 import sn.isra.seed.lot_service.api.dto.LineageNode;
 import sn.isra.seed.lot_service.api.dto.LotGenStatsDto;
 import sn.isra.seed.lot_service.api.dto.LotSemencierDto;
+import sn.isra.seed.lot_service.api.dto.UpdateLotRequest;
+import sn.isra.seed.lot_service.entity.LotAuditLog;
+import sn.isra.seed.lot_service.entity.enums.StatutEdition;
+import sn.isra.seed.lot_service.repo.LotAuditLogRepo;
 import sn.isra.seed.lot_service.api.mapper.LotMapper;
 import sn.isra.seed.lot_service.entity.HistoriqueStatutLot;
 import sn.isra.seed.lot_service.entity.LotSemencier;
@@ -31,9 +35,11 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @Slf4j
 @RestController
@@ -46,6 +52,7 @@ public class LotController {
     private final LotService              lotService;
     private final LotMapper               lotMapper;
     private final MembreOrgLotRepo        membreOrgLotRepo;
+    private final LotAuditLogRepo         auditLogRepo;
 
     @GetMapping
     public Page<LotSemencierDto> list(
@@ -178,5 +185,126 @@ public class LotController {
         if (roles.contains("seed-upsemcl"))
             return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findLotsUpsemclAll(orgId)));
         return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findMesLots(orgId, username)));
+    }
+
+    // ── Édition d'un lot (BROUILLON uniquement) ───────────────────────────────────
+
+    @PutMapping("/{id}")
+    public ResponseEntity<LotSemencierDto> update(@PathVariable Long id,
+                                                   @Valid @RequestBody UpdateLotRequest req,
+                                                   @AuthenticationPrincipal Jwt jwt) {
+        String username = JwtHelper.getUsername(jwt);
+        List<String> roles = JwtHelper.extractRoles(jwt);
+        boolean isAdmin = roles.contains("seed-admin");
+
+        return lotRepo.findById(id).map(lot -> {
+            if (lot.getStatutEdition() == StatutEdition.CONFIRME)
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Ce lot est verrouillé — les données ont été confirmées et ne sont plus modifiables");
+            if (!isAdmin && !username.equals(lot.getUsernameCreateur()))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Vous ne pouvez modifier que vos propres lots");
+
+            // Enregistrement des modifications champ par champ
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "campagne",              lot.getCampagne(),                     req.getCampagne());
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "dateProduction",        str(lot.getDateProduction()),           str(req.getDateProduction()));
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "quantiteNette",         str(lot.getQuantiteNette()),            str(req.getQuantiteNette()));
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "unite",                 lot.getUnite(),                         req.getUnite());
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "tauxGermination",       str(lot.getTauxGermination()),          str(req.getTauxGermination()));
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "puretePhysique",        str(lot.getPuretePhysique()),           str(req.getPuretePhysique()));
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "superficieHa",          str(lot.getSuperficieHa()),             str(req.getSuperficieHa()));
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "productionBruteKg",     str(lot.getProductionBruteKg()),        str(req.getProductionBruteKg()));
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "niveauSemence",         lot.getNiveauSemence(),                 req.getNiveauSemence());
+            logIfChanged(auditLogRepo, lot.getId(), username,
+                "quantiteSemenceSrcKg",  str(lot.getQuantiteSemenceSrcKg()),     str(req.getQuantiteSemenceSrcKg()));
+
+            // Application des nouvelles valeurs (null = non modifié)
+            if (req.getCampagne()             != null) lot.setCampagne(req.getCampagne());
+            if (req.getDateProduction()       != null) lot.setDateProduction(req.getDateProduction());
+            if (req.getQuantiteNette()        != null) lot.setQuantiteNette(req.getQuantiteNette());
+            if (req.getUnite()                != null) lot.setUnite(req.getUnite());
+            if (req.getTauxGermination()      != null) lot.setTauxGermination(req.getTauxGermination());
+            if (req.getPuretePhysique()       != null) lot.setPuretePhysique(req.getPuretePhysique());
+            if (req.getSuperficieHa()         != null) lot.setSuperficieHa(req.getSuperficieHa());
+            if (req.getProductionBruteKg()    != null) lot.setProductionBruteKg(req.getProductionBruteKg());
+            if (req.getNiveauSemence()        != null) lot.setNiveauSemence(req.getNiveauSemence());
+            if (req.getQuantiteSemenceSrcKg() != null) lot.setQuantiteSemenceSrcKg(req.getQuantiteSemenceSrcKg());
+
+            return ResponseEntity.ok(lotMapper.toDto(lotRepo.save(lot)));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── Suppression d'un lot (BROUILLON uniquement, créateur ou admin) ───────────
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Long id,
+                                        @AuthenticationPrincipal Jwt jwt) {
+        String username = JwtHelper.getUsername(jwt);
+        List<String> roles = JwtHelper.extractRoles(jwt);
+        boolean isAdmin = roles.contains("seed-admin");
+
+        return lotRepo.findById(id).map(lot -> {
+            if (lot.getStatutEdition() == StatutEdition.CONFIRME)
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Ce lot est verrouillé — impossible de le supprimer");
+            if (!isAdmin && !username.equals(lot.getUsernameCreateur()))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Vous ne pouvez supprimer que vos propres lots");
+
+            auditLogRepo.save(LotAuditLog.suppression(lot.getId(), username));
+            lotRepo.delete(lot);
+            return ResponseEntity.noContent().<Void>build();
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── Confirmation volontaire (UPSemCL / Sélectionneur) ────────────────────────
+
+    @PostMapping("/{id}/confirmer")
+    public ResponseEntity<LotSemencierDto> confirmer(@PathVariable Long id,
+                                                      @AuthenticationPrincipal Jwt jwt) {
+        String username = JwtHelper.getUsername(jwt);
+        List<String> roles = JwtHelper.extractRoles(jwt);
+        boolean isAdmin = roles.contains("seed-admin");
+
+        return lotRepo.findById(id).map(lot -> {
+            if (lot.getStatutEdition() == StatutEdition.CONFIRME)
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Ce lot est déjà verrouillé");
+            if (!isAdmin && !username.equals(lot.getUsernameCreateur()))
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Vous ne pouvez confirmer que vos propres lots");
+
+            lot.setStatutEdition(StatutEdition.CONFIRME);
+            lot.setDateConfirmation(Instant.now());
+            auditLogRepo.save(LotAuditLog.confirmation(lot.getId(), username));
+            return ResponseEntity.ok(lotMapper.toDto(lotRepo.save(lot)));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── Historique des modifications d'un lot ────────────────────────────────────
+
+    @GetMapping("/{id}/audit")
+    public ResponseEntity<List<LotAuditLog>> auditLog(@PathVariable Long id) {
+        if (!lotRepo.existsById(id)) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(auditLogRepo.findByLotIdOrderByCreatedAtDesc(id));
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────────────
+
+    private static String str(Object o) { return o == null ? null : o.toString(); }
+
+    private static void logIfChanged(LotAuditLogRepo repo, Long lotId, String username,
+                                      String champ, String ancien, String nouveau) {
+        if (!Objects.equals(ancien, nouveau))
+            repo.save(LotAuditLog.modification(lotId, username, champ, ancien, nouveau));
     }
 }

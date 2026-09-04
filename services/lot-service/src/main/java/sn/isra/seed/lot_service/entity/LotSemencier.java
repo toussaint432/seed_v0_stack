@@ -10,6 +10,7 @@ import jakarta.validation.constraints.*;
 import lombok.*;
 import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.entity.enums.StatutCertification;
+import sn.isra.seed.lot_service.entity.enums.StatutEdition;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -169,11 +170,21 @@ public class LotSemencier {
     @Column(name = "motif_rejet_cert", columnDefinition = "TEXT")
     private String motifRejetCert;
 
+    // ── Politique d'édition ───────────────────────────────
+    /** BROUILLON = modifiable · CONFIRME = verrouillé définitivement */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "statut_edition", nullable = false, length = 20)
+    private StatutEdition statutEdition = StatutEdition.BROUILLON;
+
+    @Column(name = "date_confirmation")
+    private Instant dateConfirmation;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) createdAt = Instant.now();
         if (statutLot == null) statutLot = StatutLot.DISPONIBLE;
         if (unite == null) unite = "kg";
         if (statutCertification == null) statutCertification = StatutCertification.SANS_CERTIFICAT;
+        if (statutEdition == null) statutEdition = StatutEdition.BROUILLON;
     }
 }

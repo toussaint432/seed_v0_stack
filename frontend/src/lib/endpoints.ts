@@ -43,6 +43,10 @@ export const endpoints = {
   lotsMultCertif:       `${LOT}/lots/mes-lots-certif`,
   lotCertifier:         (id: number) => `${LOT}/lots/${id}/certifier`,
   lotRejeterCert:       (id: number) => `${LOT}/lots/${id}/rejeter-certification`,
+  lotUpdate:            (id: number) => `${LOT}/lots/${id}`,
+  lotDelete:            (id: number) => `${LOT}/lots/${id}`,
+  lotConfirmer:         (id: number) => `${LOT}/lots/${id}/confirmer`,
+  lotAudit:             (id: number) => `${LOT}/lots/${id}/audit`,
 
   controls:         `${LOT}/controls`,
   controlById:      (id: number) => `${LOT}/controls/${id}`,

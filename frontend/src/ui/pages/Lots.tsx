@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX, Shield, MessageCircle, Users } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX, Shield, MessageCircle, Users, Edit2, Lock, Clock } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -856,6 +856,75 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     niveauSemence: '', siteCode: ''
   }
   const [childForm, setChildForm] = useState(MULT_CHILD_FORM_INIT)
+
+  // ── Édition / suppression / audit (multiplicateur) ────────────
+  const [multEditingLot,   setMultEditingLot]   = useState<any | null>(null)
+  const [multEditForm,     setMultEditForm]     = useState<Record<string, any>>({})
+  const [multEditSaving,   setMultEditSaving]   = useState(false)
+  const [multAuditLot,     setMultAuditLot]     = useState<any | null>(null)
+  const [multAuditLog,     setMultAuditLog]     = useState<any[]>([])
+  const [multAuditLoading, setMultAuditLoading] = useState(false)
+
+  function openMultEdit(l: any) {
+    setMultEditingLot(l)
+    setMultEditForm({
+      campagne:             l.campagne             ?? '',
+      dateProduction:       l.dateProduction        ?? '',
+      quantiteNette:        l.quantiteNette         ?? '',
+      unite:                l.unite                 ?? 'kg',
+      tauxGermination:      l.tauxGermination       ?? '',
+      puretePhysique:       l.puretePhysique        ?? '',
+      superficieHa:         l.superficieHa          ?? '',
+      productionBruteKg:    l.productionBruteKg     ?? '',
+      niveauSemence:        l.niveauSemence         ?? '',
+      quantiteSemenceSrcKg: l.quantiteSemenceSrcKg  ?? '',
+    })
+  }
+
+  async function submitMultEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!multEditingLot) return
+    setMultEditSaving(true)
+    try {
+      const body: Record<string, any> = {}
+      Object.entries(multEditForm).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined) body[k] = v
+      })
+      await api.put(endpoints.lotUpdate(multEditingLot.id), body)
+      setToast({ msg: 'Lot mis à jour', type: 'success' })
+      setMultEditingLot(null)
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la mise à jour', type: 'error' })
+    } finally {
+      setMultEditSaving(false)
+    }
+  }
+
+  async function deleteMultLot(l: any) {
+    if (!window.confirm(`Supprimer le lot ${l.codeLot} ? Cette action est irréversible.`)) return
+    try {
+      await api.delete(endpoints.lotDelete(l.id))
+      setToast({ msg: `Lot ${l.codeLot} supprimé`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Impossible de supprimer ce lot', type: 'error' })
+    }
+  }
+
+  async function openMultAuditLog(l: any) {
+    setMultAuditLot(l)
+    setMultAuditLog([])
+    setMultAuditLoading(true)
+    try {
+      const r = await api.get(endpoints.lotAudit(l.id))
+      setMultAuditLog(r.data ?? [])
+    } catch {
+      setMultAuditLog([])
+    } finally {
+      setMultAuditLoading(false)
+    }
+  }
 
   async function fetchAll() {
     setLoadingCat(true); setLoadingMes(true)
@@ -1912,6 +1981,32 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                   title={certButtonTitle(l)}
                                   onClick={() => setCertLotMult(l)}
                                 >{certShieldIcon(l) ?? <Shield size={13} />}</button>
+                                {/* Cadenas / Modifier */}
+                                {l.statutEdition === 'CONFIRME'
+                                  ? <Lock size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} title="Données validées et verrouillées" />
+                                  : (
+                                    <button
+                                      className="btn btn-ghost"
+                                      style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: '#7c3aed' }}
+                                      title="Modifier ce lot"
+                                      onClick={() => openMultEdit(l)}
+                                    ><Edit2 size={13} /></button>
+                                  )
+                                }
+                                <button
+                                  className="btn btn-ghost"
+                                  style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: 'var(--text-muted)' }}
+                                  title="Historique des modifications"
+                                  onClick={() => openMultAuditLog(l)}
+                                ><Clock size={13} /></button>
+                                {l.statutEdition !== 'CONFIRME' && (
+                                  <button
+                                    className="btn btn-ghost"
+                                    style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: '#dc2626' }}
+                                    title="Supprimer ce lot"
+                                    onClick={() => deleteMultLot(l)}
+                                  ><Trash2 size={13} /></button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -2238,6 +2333,104 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
           </div>
         </div>
       )}
+
+      {/* ── Modal Édition lot (multiplicateur) ────────────────────── */}
+      {multEditingLot && (
+        <Modal title="Modifier le lot" subtitle={`${multEditingLot.codeLot} — données éditables`} onClose={() => setMultEditingLot(null)} size="lg">
+          <form onSubmit={submitMultEdit}>
+            <FormRow>
+              <Field label="Campagne">
+                <FormSelect value={multEditForm.campagne} onChange={e => setMultEditForm(f => ({ ...f, campagne: e.target.value }))}>
+                  <option value="">— Campagne —</option>
+                  {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                </FormSelect>
+              </Field>
+              <Field label="Date de production">
+                <FormInput type="date" value={multEditForm.dateProduction} onChange={e => setMultEditForm(f => ({ ...f, dateProduction: e.target.value }))} />
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Quantité conditionnée" required>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <FormInput type="number" value={multEditForm.quantiteNette} onChange={e => setMultEditForm(f => ({ ...f, quantiteNette: e.target.value }))} placeholder="50" min="0" step="0.01" required style={{ flex: 1 }} />
+                  <FormSelect value={multEditForm.unite} onChange={e => setMultEditForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}>
+                    <option value="kg">kg</option><option value="t">t</option><option value="g">g</option>
+                  </FormSelect>
+                </div>
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Taux germination (%)">
+                <FormInput type="number" value={multEditForm.tauxGermination} onChange={e => setMultEditForm(f => ({ ...f, tauxGermination: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" />
+              </Field>
+              <Field label="Pureté physique (%)">
+                <FormInput type="number" value={multEditForm.puretePhysique} onChange={e => setMultEditForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="99.5" min="0" max="100" step="0.1" />
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Superficie (ha)">
+                <FormInput type="number" value={multEditForm.superficieHa} onChange={e => setMultEditForm(f => ({ ...f, superficieHa: e.target.value }))} placeholder="2.5" min="0" step="0.01" />
+              </Field>
+              <Field label="Production brute (kg)">
+                <FormInput type="number" value={multEditForm.productionBruteKg} onChange={e => setMultEditForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1000" min="0" step="0.01" />
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Niveau semence">
+                <FormInput value={multEditForm.niveauSemence} onChange={e => setMultEditForm(f => ({ ...f, niveauSemence: e.target.value }))} placeholder="G4, R1, R2…" />
+              </Field>
+              <Field label="Qté semences source (kg)">
+                <FormInput type="number" value={multEditForm.quantiteSemenceSrcKg} onChange={e => setMultEditForm(f => ({ ...f, quantiteSemenceSrcKg: e.target.value }))} placeholder="10" min="0" step="0.01" />
+              </Field>
+            </FormRow>
+            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 4 }}>
+              Chaque modification est enregistrée dans le journal d'audit du lot.
+            </div>
+            <FormActions onCancel={() => setMultEditingLot(null)} loading={multEditSaving} submitLabel="Enregistrer les modifications" />
+          </form>
+        </Modal>
+      )}
+
+      {/* ── Modal Historique audit (multiplicateur) ──────────────── */}
+      {multAuditLot && (
+        <Modal title="Historique des modifications" subtitle={`Lot ${multAuditLot.codeLot}`} onClose={() => setMultAuditLot(null)} size="lg">
+          {multAuditLoading ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              <RefreshCw size={16} style={{ animation: 'spin 0.8s linear infinite', marginBottom: 8 }} /><br />Chargement…
+            </div>
+          ) : multAuditLog.length === 0 ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              <Clock size={20} style={{ marginBottom: 8, opacity: 0.4 }} /><br />Aucune modification enregistrée pour ce lot.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {multAuditLog.map((entry: any, idx: number) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '120px 1fr', gap: 10, padding: '10px 0', borderBottom: idx < multAuditLog.length - 1 ? '1px solid var(--border)' : 'none', fontSize: 12.5 }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                      {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{entry.createdAt ? new Date(entry.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                    <div style={{ marginTop: 3, fontSize: 11, color: 'var(--text-secondary)' }}>{entry.username}</div>
+                  </div>
+                  <div>
+                    <span style={{ display: 'inline-block', padding: '1px 7px', borderRadius: 4, fontSize: 10.5, fontWeight: 700, marginBottom: 5, background: entry.action === 'MODIFICATION' ? '#7c3aed18' : entry.action === 'CONFIRMATION' ? '#16a34a18' : '#dc262618', color: entry.action === 'MODIFICATION' ? '#7c3aed' : entry.action === 'CONFIRMATION' ? '#16a34a' : '#dc2626' }}>
+                      {entry.action}
+                    </span>
+                    {entry.champ && (
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{entry.champ}</span>
+                        {entry.ancienneValeur != null && <span style={{ color: 'var(--text-muted)' }}> · {entry.ancienneValeur || '—'} → </span>}
+                        {entry.nouvelleValeur != null && <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{entry.nouvelleValeur || '—'}</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }
@@ -2308,6 +2501,101 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [selectedLot,    setSelectedLot]    = useState<any | null>(null)
   const [chartCollapsed, setChartCollapsed] = useState(false)
   const [filterEspece,   setFilterEspece]   = useState('')
+
+  // ── Édition / suppression / confirmation / audit ────────────────
+  const [editingLot,   setEditingLot]   = useState<any | null>(null)
+  const [editLotForm,  setEditLotForm]  = useState<Record<string, any>>({})
+  const [editSaving,   setEditSaving]   = useState(false)
+  const [auditLot,     setAuditLot]     = useState<any | null>(null)
+  const [auditLog,     setAuditLog]     = useState<any[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [confirmingLotId, setConfirmingLotId] = useState<number | null>(null)
+
+  const canEditLot = (l: any) =>
+    l.statutEdition !== 'CONFIRME' &&
+    (roleKey === 'seed-admin' || l.usernameCreateur === keycloak.tokenParsed?.preferred_username)
+
+  const canConfirmLot = (l: any) =>
+    l.statutEdition !== 'CONFIRME' &&
+    ['seed-upsemcl', 'seed-selector', 'seed-admin'].includes(roleKey) &&
+    (roleKey === 'seed-admin' || l.usernameCreateur === keycloak.tokenParsed?.preferred_username)
+
+  function openEditLot(l: any) {
+    setEditingLot(l)
+    setEditLotForm({
+      campagne:             l.campagne             ?? '',
+      dateProduction:       l.dateProduction        ?? '',
+      quantiteNette:        l.quantiteNette         ?? '',
+      unite:                l.unite                 ?? 'kg',
+      tauxGermination:      l.tauxGermination       ?? '',
+      puretePhysique:       l.puretePhysique        ?? '',
+      superficieHa:         l.superficieHa          ?? '',
+      productionBruteKg:    l.productionBruteKg     ?? '',
+      niveauSemence:        l.niveauSemence         ?? '',
+      quantiteSemenceSrcKg: l.quantiteSemenceSrcKg  ?? '',
+    })
+  }
+
+  async function submitEditLot(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingLot) return
+    setEditSaving(true)
+    try {
+      const body: Record<string, any> = {}
+      Object.entries(editLotForm).forEach(([k, v]) => {
+        if (v !== '' && v !== null && v !== undefined) body[k] = v
+      })
+      await api.put(endpoints.lotUpdate(editingLot.id), body)
+      setToast({ msg: 'Lot mis à jour', type: 'success' })
+      setEditingLot(null)
+      fetchLots()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la mise à jour', type: 'error' })
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  async function deleteLot(l: any) {
+    if (!window.confirm(`Supprimer le lot ${l.codeLot} ? Cette action est irréversible.`)) return
+    try {
+      await api.delete(endpoints.lotDelete(l.id))
+      setToast({ msg: `Lot ${l.codeLot} supprimé`, type: 'success' })
+      setSelectedLot(null)
+      fetchLots()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Impossible de supprimer ce lot', type: 'error' })
+    }
+  }
+
+  async function confirmerLot(l: any) {
+    if (!window.confirm(`Valider le lot ${l.codeLot} ? Les données seront verrouillées et ne pourront plus être modifiées.`)) return
+    setConfirmingLotId(l.id)
+    try {
+      await api.post(endpoints.lotConfirmer(l.id), {})
+      setToast({ msg: `Lot ${l.codeLot} validé et verrouillé`, type: 'success' })
+      setSelectedLot(null)
+      fetchLots()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la validation', type: 'error' })
+    } finally {
+      setConfirmingLotId(null)
+    }
+  }
+
+  async function openAuditLog(l: any) {
+    setAuditLot(l)
+    setAuditLog([])
+    setAuditLoading(true)
+    try {
+      const r = await api.get(endpoints.lotAudit(l.id))
+      setAuditLog(r.data ?? [])
+    } catch {
+      setAuditLog([])
+    } finally {
+      setAuditLoading(false)
+    }
+  }
 
   async function fetchLots() {
     setLoading(true)
@@ -3080,6 +3368,24 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                           title={certButtonTitle(l)}
                           onClick={() => setCertLot(l)}
                         >{certShieldIcon(l) ?? <Shield size={13} />}</button>
+                        {/* Cadenas édition */}
+                        {l.statutEdition === 'CONFIRME'
+                          ? <Lock size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} title="Données verrouillées" />
+                          : canEditLot(l) && (
+                            <button
+                              className="btn btn-ghost"
+                              style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: '#7c3aed' }}
+                              title="Modifier ce lot"
+                              onClick={() => { setSelectedLot(null); openEditLot(l) }}
+                            ><Edit2 size={13} /></button>
+                          )
+                        }
+                        <button
+                          className="btn btn-ghost"
+                          style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: 'var(--text-muted)' }}
+                          title="Historique des modifications"
+                          onClick={() => openAuditLog(l)}
+                        ><Clock size={13} /></button>
                       </div>
                     </td>
                   </tr>
@@ -3129,6 +3435,10 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                   <span style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }}>
                     {certShieldIcon(l, 12)} {(l.statutCertification || 'SANS_CERTIFICAT').replace(/_/g, ' ')}
                   </span>
+                  {l.statutEdition === 'CONFIRME'
+                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#16a34a', fontWeight: 600 }}><Lock size={11} /> Validé</span>
+                    : <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text-muted)' }}>Brouillon</span>
+                  }
                 </div>
               </div>
 
@@ -3248,6 +3558,44 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                     <Download size={12} /> Réceptionner
                   </button>
                 )}
+                {/* Bouton Modifier */}
+                {canEditLot(l) && (
+                  <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5, flex: '1 1 auto', color: '#7c3aed' }}
+                    onClick={() => { setSelectedLot(null); openEditLot(l) }}>
+                    <Edit2 size={12} /> Modifier
+                  </button>
+                )}
+                {/* Bouton Valider (UPSemCL, Sélectionneur) */}
+                {canConfirmLot(l) && (
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 12, gap: 5, flex: '1 1 auto', background: '#16a34a', borderColor: '#16a34a' }}
+                    disabled={confirmingLotId === l.id}
+                    onClick={() => confirmerLot(l)}>
+                    <Check size={12} /> Valider
+                  </button>
+                )}
+                {/* Cadenas si déjà verrouillé */}
+                {l.statutEdition === 'CONFIRME' && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: 'var(--text-muted)', padding: '0 8px' }}>
+                    <Lock size={12} /> Données validées
+                    {l.dateConfirmation && (
+                      <span style={{ fontSize: 10 }}>· {new Date(l.dateConfirmation).toLocaleDateString('fr-FR')}</span>
+                    )}
+                  </div>
+                )}
+                {/* Bouton Supprimer */}
+                {canEditLot(l) && (
+                  <button className="btn btn-ghost" style={{ fontSize: 12, gap: 5, flex: '1 1 auto', color: '#dc2626' }}
+                    onClick={() => deleteLot(l)}>
+                    <Trash2 size={12} /> Supprimer
+                  </button>
+                )}
+                {/* Bouton Historique */}
+                <button className="btn btn-ghost" style={{ fontSize: 12, gap: 5, flex: '1 1 auto' }}
+                  onClick={() => openAuditLog(l)}>
+                  <Clock size={12} /> Historique
+                </button>
               </div>
             </div>
           </>
@@ -3599,6 +3947,131 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
           </Modal>
         )
       })()}
+
+      {/* ── Modal Édition lot ──────────────────────────────────────── */}
+      {editingLot && (
+        <Modal
+          title="Modifier le lot"
+          subtitle={`${editingLot.codeLot} — données éditables`}
+          onClose={() => setEditingLot(null)}
+          size="lg"
+        >
+          <form onSubmit={submitEditLot}>
+            <FormRow>
+              <Field label="Campagne">
+                <FormSelect value={editLotForm.campagne} onChange={e => setEditLotForm(f => ({ ...f, campagne: e.target.value }))}>
+                  <option value="">— Campagne —</option>
+                  {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                </FormSelect>
+              </Field>
+              <Field label="Date de production">
+                <FormInput type="date" value={editLotForm.dateProduction} onChange={e => setEditLotForm(f => ({ ...f, dateProduction: e.target.value }))} />
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Quantité conditionnée" required>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <FormInput type="number" value={editLotForm.quantiteNette} onChange={e => setEditLotForm(f => ({ ...f, quantiteNette: e.target.value }))} placeholder="50" min="0" step="0.01" required style={{ flex: 1 }} />
+                  <FormSelect value={editLotForm.unite} onChange={e => setEditLotForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 80 }}>
+                    <option value="kg">kg</option><option value="t">t</option><option value="g">g</option>
+                  </FormSelect>
+                </div>
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Taux germination (%)">
+                <FormInput type="number" value={editLotForm.tauxGermination} onChange={e => setEditLotForm(f => ({ ...f, tauxGermination: e.target.value }))} placeholder="98.5" min="0" max="100" step="0.1" />
+              </Field>
+              <Field label="Pureté physique (%)">
+                <FormInput type="number" value={editLotForm.puretePhysique} onChange={e => setEditLotForm(f => ({ ...f, puretePhysique: e.target.value }))} placeholder="99.5" min="0" max="100" step="0.1" />
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Superficie (ha)">
+                <FormInput type="number" value={editLotForm.superficieHa} onChange={e => setEditLotForm(f => ({ ...f, superficieHa: e.target.value }))} placeholder="2.5" min="0" step="0.01" />
+              </Field>
+              <Field label="Production brute (kg)">
+                <FormInput type="number" value={editLotForm.productionBruteKg} onChange={e => setEditLotForm(f => ({ ...f, productionBruteKg: e.target.value }))} placeholder="1000" min="0" step="0.01" />
+              </Field>
+            </FormRow>
+            <FormRow>
+              <Field label="Niveau semence">
+                <FormInput value={editLotForm.niveauSemence} onChange={e => setEditLotForm(f => ({ ...f, niveauSemence: e.target.value }))} placeholder="Base, R1, R2…" />
+              </Field>
+              <Field label="Qté semences source (kg)">
+                <FormInput type="number" value={editLotForm.quantiteSemenceSrcKg} onChange={e => setEditLotForm(f => ({ ...f, quantiteSemenceSrcKg: e.target.value }))} placeholder="10" min="0" step="0.01" />
+              </Field>
+            </FormRow>
+            <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '8px 12px', fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 4 }}>
+              Chaque modification est enregistrée dans le journal d'audit du lot.
+            </div>
+            <FormActions onCancel={() => setEditingLot(null)} loading={editSaving} submitLabel="Enregistrer les modifications" />
+          </form>
+        </Modal>
+      )}
+
+      {/* ── Modal Historique audit ────────────────────────────────── */}
+      {auditLot && (
+        <Modal
+          title="Historique des modifications"
+          subtitle={`Lot ${auditLot.codeLot}`}
+          onClose={() => setAuditLot(null)}
+          size="lg"
+        >
+          {auditLoading ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              <RefreshCw size={16} style={{ animation: 'spin 0.8s linear infinite', marginBottom: 8 }} /><br />Chargement…
+            </div>
+          ) : auditLog.length === 0 ? (
+            <div style={{ padding: '24px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+              <Clock size={20} style={{ marginBottom: 8, opacity: 0.4 }} /><br />
+              Aucune modification enregistrée pour ce lot.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {auditLog.map((entry: any, idx: number) => (
+                <div key={idx} style={{
+                  display: 'grid', gridTemplateColumns: '120px 1fr',
+                  gap: 10, padding: '10px 0',
+                  borderBottom: idx < auditLog.length - 1 ? '1px solid var(--border)' : 'none',
+                  fontSize: 12.5,
+                }}>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 11 }}>
+                      {entry.createdAt ? new Date(entry.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'}
+                    </div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>
+                      {entry.createdAt ? new Date(entry.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </div>
+                    <div style={{ marginTop: 3, fontSize: 11, color: 'var(--text-secondary)' }}>{entry.username}</div>
+                  </div>
+                  <div>
+                    <span style={{
+                      display: 'inline-block', padding: '1px 7px', borderRadius: 4, fontSize: 10.5, fontWeight: 700,
+                      background: entry.action === 'MODIFICATION' ? '#7c3aed18' : entry.action === 'CONFIRMATION' ? '#16a34a18' : '#dc262618',
+                      color: entry.action === 'MODIFICATION' ? '#7c3aed' : entry.action === 'CONFIRMATION' ? '#16a34a' : '#dc2626',
+                      marginBottom: 5,
+                    }}>
+                      {entry.action}
+                    </span>
+                    {entry.champ && (
+                      <div style={{ color: 'var(--text-secondary)' }}>
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{entry.champ}</span>
+                        {entry.ancienneValeur !== null && entry.ancienneValeur !== undefined && (
+                          <span style={{ color: 'var(--text-muted)' }}> · {entry.ancienneValeur || '—'} → </span>
+                        )}
+                        {entry.nouvelleValeur !== null && entry.nouvelleValeur !== undefined && (
+                          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{entry.nouvelleValeur || '—'}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Modal>
+      )}
     </div>
   )
 }

@@ -23,14 +23,15 @@ import { Programs }       from './pages/Programs'
 import { Profile }          from './pages/Profile'
 import { Users }            from './pages/Users'
 import { CataloguePublic }  from './pages/CataloguePublic'
-import { Messages }          from './pages/Messages'
-import { Certifications }    from './pages/Certifications'
+import { Messages }            from './pages/Messages'
+import { Certifications }      from './pages/Certifications'
+import { DirecteurDashboard }  from './pages/DirecteurDashboard'
 
 type Page =
   | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
   | 'certifications' | 'transfers' | 'campagnes' | 'sites'
   | 'mes-sites' | 'programs' | 'profile' | 'users' | 'catalogue'
-  | 'messages'
+  | 'messages' | 'directeur'
 
 /* ── Auth helpers ── */
 function getUserRoles(): string[] {
@@ -45,6 +46,7 @@ function getUserInfo() {
   const roles = getUserRoles()
   const roleMap: Record<string, { label: string; color: string }> = {
     'seed-admin':         { label: 'Administrateur ISRA', color: '#7c3aed' },
+    'seed-directeur':     { label: 'Directeur CNRA',      color: '#1d4ed8' },
     'seed-selector':      { label: 'Sélectionneur',       color: '#0369a1' },
     'seed-upsemcl':        { label: 'UPSemCL',             color: '#0f766e' },
     'seed-multiplicator': { label: 'Multiplicateur',      color: '#15803d' },
@@ -124,6 +126,16 @@ function getNavSections(roleKey: string): NavSection[] {
         { section: 'Mes Données',    items: [mesSites] },
       ]
 
+    case 'seed-directeur':
+      return [
+        { section: 'Décision', items: [
+          { id: 'directeur' as Page, label: 'Vue d\'ensemble',    icon: LayoutDashboard },
+          { id: 'lots'      as Page, label: 'Lots semenciers',    icon: Package },
+          { id: 'varieties' as Page, label: 'Variétés & Espèces', icon: Leaf },
+          { id: 'stocks'    as Page, label: 'Stocks',             icon: Warehouse },
+        ]},
+      ]
+
     default:
       return [
         { section: 'Navigation', items: [dashboard, varieties, lots, stocks, orders] },
@@ -147,10 +159,12 @@ const pageTitle: Record<Page, { title: string; sub: string }> = {
   users:          { title: 'Gestion des utilisateurs',     sub: 'Comptes et rôles de la plateforme' },
   catalogue:      { title: 'Catalogue des semences',       sub: 'Stocks R1/R2 disponibles chez les multiplicateurs' },
   messages:       { title: 'Messagerie',                   sub: 'Conversations directes avec vos partenaires' },
+  directeur:      { title: 'Vue d\'ensemble CNRA',         sub: 'Indicateurs décisionnels — chaîne semencière ISRA/CNRA' },
 }
 
 const roleDescriptions: Record<string, string> = {
   'seed-admin':         'Supervision globale — accès complet à toute la plateforme',
+  'seed-directeur':     'Tableau de bord décisionnel — vue d\'ensemble de la chaîne semencière CNRA',
   'seed-selector':      'Gestion des variétés · création des lots G0 / G1 · transfert vers UPSemCL',
   'seed-upsemcl':        'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs',
   'seed-multiplicator': 'Réception G3 (depuis UPSemCL) → multiplication R1→R2 → transfert & facturation vers quotataires',
@@ -193,7 +207,8 @@ export function App() {
         // Authentifié (post-login KC ou session existante) → dashboard directement.
         // La landing page ne s'affiche que pour les utilisateurs non authentifiés.
         if (keycloak.authenticated) {
-          navigate('/dashboard')
+          const roles: string[] = (keycloak.tokenParsed as any)?.realm_access?.roles ?? []
+          navigate(roles.includes('seed-directeur') ? '/directeur' : '/dashboard')
         }
       })
       .catch(() => {
@@ -657,6 +672,7 @@ export function App() {
             <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
             <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />
             <Route path="/messages"       element={<Messages roleKey={user.roleKey} username={user.name} />} />
+            <Route path="/directeur"     element={<DirecteurDashboard />} />
             <Route path="*"              element={<Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
           </Routes>
         </main>
