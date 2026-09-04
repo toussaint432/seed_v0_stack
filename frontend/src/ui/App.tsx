@@ -129,7 +129,7 @@ function getNavSections(roleKey: string): NavSection[] {
     case 'seed-directeur':
       return [
         { section: 'Décision', items: [
-          { id: 'directeur' as Page, label: 'Vue d\'ensemble',    icon: LayoutDashboard },
+          { id: 'directeur' as Page, label: 'Tableau de bord',     icon: LayoutDashboard },
           { id: 'lots'      as Page, label: 'Lots semenciers',    icon: Package },
           { id: 'varieties' as Page, label: 'Variétés & Espèces', icon: Leaf },
           { id: 'stocks'    as Page, label: 'Stocks',             icon: Warehouse },
@@ -159,7 +159,7 @@ const pageTitle: Record<Page, { title: string; sub: string }> = {
   users:          { title: 'Gestion des utilisateurs',     sub: 'Comptes et rôles de la plateforme' },
   catalogue:      { title: 'Catalogue des semences',       sub: 'Stocks R1/R2 disponibles chez les multiplicateurs' },
   messages:       { title: 'Messagerie',                   sub: 'Conversations directes avec vos partenaires' },
-  directeur:      { title: 'Vue d\'ensemble CNRA',         sub: 'Indicateurs décisionnels — chaîne semencière ISRA/CNRA' },
+  directeur:      { title: 'Tableau de bord',               sub: 'Indicateurs décisionnels — chaîne semencière ISRA/CNRA' },
 }
 
 const roleDescriptions: Record<string, string> = {
