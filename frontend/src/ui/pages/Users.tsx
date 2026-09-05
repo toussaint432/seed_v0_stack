@@ -15,7 +15,7 @@ const KEYCLOAK_ADMIN = 'http://localhost:18080'
 const REALM = 'seed-v0'
 
 const ROLES_PLATFORM = [
-  { value: 'seed-admin',         label: 'Administrateur ISRA', color: '#7c3aed' },
+  { value: 'seed-admin',         label: 'Administrateur CNRA', color: '#7c3aed' },
   { value: 'seed-directeur',     label: 'Directeur CNRA',      color: '#1d4ed8' },
   { value: 'seed-selector',      label: 'Sélectionneur',       color: '#0369a1' },
   { value: 'seed-upsemcl',       label: 'UPSemCL',             color: '#0f766e' },
@@ -303,7 +303,7 @@ export function Users({ roleKey }: Props) {
 
   function resolveOrgId(role: string, orgId: string): number | null {
     if (['seed-admin', 'seed-directeur', 'seed-selector'].includes(role)) {
-      const isra = organisations.find(o => o.typeOrganisation === 'ISRA')
+      const isra = organisations.find(o => o.typeOrganisation === 'CNRA')
       return isra?.id ?? 1
     }
     return orgId ? Number(orgId) : null
@@ -717,7 +717,7 @@ export function Users({ roleKey }: Props) {
                 background: 'var(--blue-50)', border: '1px solid var(--blue-200)',
                 fontSize: 12, color: 'var(--blue-700)',
               }}>
-                Organisation automatique : <strong>ISRA CNRA Bambey</strong>
+                Organisation automatique : <strong>CNRA Bambey</strong>
               </div>
             )}
 

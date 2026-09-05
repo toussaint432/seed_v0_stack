@@ -280,7 +280,7 @@
     },
     {
       "username": "upsemcl_stlouis",
-      "enabled": true,
+      "enabled": false,
       "email": "upsemcl.stlouis@seed.local",
       "firstName": "Rokhaya",
       "lastName": "UPSemCL-StLouis",

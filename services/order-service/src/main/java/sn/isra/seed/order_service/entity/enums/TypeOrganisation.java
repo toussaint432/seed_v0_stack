@@ -1,8 +1,8 @@
 package sn.isra.seed.order_service.entity.enums;
 
 public enum TypeOrganisation {
-    /** Institut national de recherche agronomique */
-    ISRA,
+    /** Centre National de Recherches Agronomiques de Bambey */
+    CNRA,
     /** Unité de Production de Semences de Céréales et Légumineuses */
     UPSEMCL,
     /** Multiplicateur de semences agréé */

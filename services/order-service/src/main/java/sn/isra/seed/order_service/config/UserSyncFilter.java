@@ -29,7 +29,7 @@ import java.util.Map;
  * dans la table membre_organisation, il est créé automatiquement.
  *
  * Organisation par défaut selon le rôle :
- *   seed-admin / seed-selector  → première org ISRA
+ *   seed-admin / seed-selector  → première org CNRA
  *   seed-upsemcl                → première org UPSEMCL
  *   seed-multiplicator          → première org MULTIPLICATEUR
  *   seed-quotataire             → première org OP
@@ -43,8 +43,8 @@ public class UserSyncFilter extends OncePerRequestFilter {
     private final OrganisationRepo       orgRepo;
 
     private static final Map<String, TypeOrganisation> ROLE_ORG_TYPE = Map.of(
-        "seed-admin",         TypeOrganisation.ISRA,
-        "seed-selector",      TypeOrganisation.ISRA,
+        "seed-admin",         TypeOrganisation.CNRA,
+        "seed-selector",      TypeOrganisation.CNRA,
         "seed-upsemcl",       TypeOrganisation.UPSEMCL,
         "seed-multiplicator", TypeOrganisation.MULTIPLICATEUR,
         "seed-quotataire",    TypeOrganisation.AUTRE

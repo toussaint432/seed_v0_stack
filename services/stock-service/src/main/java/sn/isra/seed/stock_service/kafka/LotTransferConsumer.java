@@ -39,7 +39,7 @@ public class LotTransferConsumer {
         "seed-upsemcl",       "UPSEMCL",
         "seed-multiplicator", "MULTIPLICATEUR",
         "seed-quotataire",    "DISTRIBUTEUR",
-        "seed-admin",         "ISRA"
+        "seed-admin",         "CNRA"
     );
 
     private final StockRepo            stockRepo;
