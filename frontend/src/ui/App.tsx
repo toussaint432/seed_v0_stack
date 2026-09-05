@@ -129,7 +129,7 @@ function getNavSections(roleKey: string): NavSection[] {
     case 'seed-directeur':
       return [
         { section: 'Décision', items: [
-          { id: 'directeur' as Page, label: 'Tableau de bord',     icon: LayoutDashboard },
+          { id: 'dashboard' as Page, label: 'Tableau de bord',     icon: LayoutDashboard },
           { id: 'lots'      as Page, label: 'Lots semenciers',    icon: Package },
           { id: 'varieties' as Page, label: 'Variétés & Espèces', icon: Leaf },
           { id: 'stocks'    as Page, label: 'Stocks',             icon: Warehouse },
@@ -208,7 +208,7 @@ export function App() {
         // La landing page ne s'affiche que pour les utilisateurs non authentifiés.
         if (keycloak.authenticated) {
           const roles: string[] = (keycloak.tokenParsed as any)?.realm_access?.roles ?? []
-          navigate(roles.includes('seed-directeur') ? '/directeur' : '/dashboard')
+          navigate('/dashboard')
         }
       })
       .catch(() => {

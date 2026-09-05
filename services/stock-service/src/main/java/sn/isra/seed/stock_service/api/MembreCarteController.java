@@ -37,10 +37,11 @@ public class MembreCarteController {
             @AuthenticationPrincipal Jwt jwt) {
 
         String username = jwt.getClaimAsString("preferred_username");
-        Optional<String> viewerRole = findRoleByUsername(username);
-        if (viewerRole.isEmpty()) return ResponseEntity.ok(List.of());
+        Optional<String> dbRole = findRoleByUsername(username);
+        String viewerRole = dbRole.orElseGet(() -> extractPrimaryRoleFromJwt(jwt));
+        if (viewerRole == null) return ResponseEntity.ok(List.of());
 
-        List<String> visibleRoles = getVisibleRoles(viewerRole.get());
+        List<String> visibleRoles = getVisibleRoles(viewerRole);
         if (visibleRoles.isEmpty()) return ResponseEntity.ok(List.of());
 
         String placeholders = visibleRoles.stream().map(r -> "?").collect(Collectors.joining(", "));
@@ -95,6 +96,22 @@ public class MembreCarteController {
         return ResponseEntity.ok(result);
     }
 
+    private String extractPrimaryRoleFromJwt(Jwt jwt) {
+        try {
+            Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
+            if (realmAccess == null) return null;
+            @SuppressWarnings("unchecked")
+            List<String> roles = (List<String>) realmAccess.get("roles");
+            if (roles == null) return null;
+            return roles.stream()
+                    .filter(r -> r.startsWith("seed-"))
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private Optional<String> findRoleByUsername(String username) {
         if (username == null || username.isBlank()) return Optional.empty();
         List<String> rows = jdbc.query(
@@ -107,7 +124,7 @@ public class MembreCarteController {
 
     private List<String> getVisibleRoles(String viewerRole) {
         return switch (viewerRole) {
-            case "seed-admin" ->
+            case "seed-admin", "seed-directeur" ->
                 List.of("seed-selector", "seed-upsemcl", "seed-multiplicator", "seed-quotataire");
             case "seed-upsemcl" ->
                 List.of("seed-selector", "seed-multiplicator", "seed-quotataire");

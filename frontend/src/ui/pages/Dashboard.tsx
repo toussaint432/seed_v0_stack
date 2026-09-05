@@ -41,6 +41,7 @@ type StockSortKey = 'nomEspece' | 'nomVariete' | 'generation' | 'stockKg' | 'nbL
 /* ── Couleurs par rôle ── */
 const ROLE_CFG: Record<string, { color: string; label: string }> = {
   'seed-admin':         { color: '#7c3aed', label: 'Administrateur ISRA' },
+  'seed-directeur':     { color: '#1d4ed8', label: 'Directeur CNRA' },
   'seed-selector':      { color: '#0369a1', label: 'Sélectionneur' },
   'seed-upsemcl':       { color: '#0f766e', label: 'UPSemCL' },
   'seed-multiplicator': { color: '#15803d', label: 'Multiplicateur' },
@@ -69,6 +70,7 @@ const GEN_LABEL: Record<string, string> = {
 }
 const ROLE_GENS: Record<string, string[]> = {
   'seed-admin':         ['G0','G1','G2','G3','G4','R1','R2'],
+  'seed-directeur':     ['G0','G1','G2','G3','G4','R1','R2'],
   'seed-selector':      ['G0','G1'],
   'seed-upsemcl':       ['G1','G2','G3'],
   'seed-multiplicator': ['G3','G4','R1','R2'],
@@ -77,6 +79,7 @@ const ROLE_GENS: Record<string, string[]> = {
 
 const GREETINGS: Record<string, { title: string; sub: string }> = {
   'seed-admin':         { title: "Vue d'ensemble complète",   sub: 'Supervision de toute la chaîne semencière G0→R2' },
+  'seed-directeur':     { title: "Vue d'ensemble nationale",  sub: 'Tableau de bord décisionnel — chaîne semencière ISRA/CNRA G0→R2' },
   'seed-selector':      { title: 'Vos lots G0 et G1',         sub: 'Gérez les semences génétiques avant transfert vers UPSemCL' },
   'seed-upsemcl':       { title: 'Centre de multiplication',  sub: 'Suivi des lots G1→G3 et gestion des stocks UPSemCL' },
   'seed-multiplicator': { title: 'Production G3→R2',          sub: 'Vos lots de multiplication et stocks disponibles' },
@@ -859,6 +862,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
   const HERO_CFG: Record<string, { border: string; tagBg: string; tagColor: string; tagBorder: string }> = {
     'seed-admin':         { border: '#6d28d9', tagBg: '#f5f3ff', tagColor: '#5b21b6', tagBorder: '#ddd6fe' },
+    'seed-directeur':     { border: '#1d4ed8', tagBg: '#eff6ff', tagColor: '#1e40af', tagBorder: '#bfdbfe' },
     'seed-selector':      { border: '#0369a1', tagBg: '#eff6ff', tagColor: '#1e40af', tagBorder: '#bfdbfe' },
     'seed-upsemcl':       { border: '#0f766e', tagBg: '#f0fdfa', tagColor: '#0f766e', tagBorder: '#99f6e4' },
     'seed-multiplicator': { border: '#15803d', tagBg: '#f0fdf4', tagColor: '#15803d', tagBorder: '#bbf7d0' },
@@ -870,10 +874,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
 
   const isQuotaire   = roleKey === 'seed-quotataire'
   const showStats    = !isQuotaire
-  const showPipeline = ['seed-admin', 'seed-selector', 'seed-upsemcl'].includes(roleKey)
-  const showLots     = roleKey === 'seed-admin'
-  const showOrders   = isQuotaire || ['seed-admin', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
-  const showStock    = ['seed-admin', 'seed-upsemcl'].includes(roleKey)
+  const showPipeline = ['seed-admin', 'seed-directeur', 'seed-selector', 'seed-upsemcl'].includes(roleKey)
+  const showLots     = ['seed-admin', 'seed-directeur'].includes(roleKey)
+  const showOrders   = isQuotaire || ['seed-admin', 'seed-directeur', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
+  const showStock    = ['seed-admin', 'seed-directeur', 'seed-upsemcl'].includes(roleKey)
 
   const isSelector = roleKey === 'seed-selector'
   const specUp     = userSpecialisation?.toUpperCase()
@@ -1059,7 +1063,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const lotMap: Record<number, any> = Object.fromEntries(rawLots.map((l: any) => [Number(l.id), l]))
 
   /* ── Demande annuelle par variété (UPSemCL · Sélectionneurs · Multiplicateurs) ── */
-  const showDemandWidget = ['seed-upsemcl', 'seed-admin'].includes(roleKey)
+  const showDemandWidget = ['seed-upsemcl', 'seed-admin', 'seed-directeur'].includes(roleKey)
   const DEMAND_DAYS: Record<string, number> = { '1m': 30, '3m': 90, '6m': 180, '1a': 365 }
   const demandCutoff = Date.now() - (DEMAND_DAYS[demandPeriod] ?? 90) * 86_400_000
 
@@ -1117,7 +1121,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     }))
     .filter(d => demandGen === 'G1' ? d.g1kg > 0 : demandGen === 'G3' ? d.g3kg > 0 : demandGen === 'R2' ? d.r2kg > 0 : d.total > 0)
     .sort((a, b) => demandGen === 'G1' ? b.g1kg - a.g1kg : demandGen === 'G3' ? b.g3kg - a.g3kg : demandGen === 'R2' ? b.r2kg - a.r2kg : b.total - a.total)
-    .slice(0, roleKey === 'seed-admin' ? 10 : 6)
+    .slice(0, ['seed-admin', 'seed-directeur'].includes(roleKey) ? 10 : 6)
 
   function demandActiveKg(d: typeof demandEntries[0]) {
     if (demandGen === 'G1') return d.g1kg
@@ -1131,6 +1135,37 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const demandG1Total = demandEntries.reduce((s, d) => s + d.g1kg, 0)
   const demandG3Total = demandEntries.reduce((s, d) => s + d.g3kg, 0)
   const demandR2Total = demandEntries.reduce((s, d) => s + d.r2kg, 0)
+
+  /* ── Statistiques CNRA (directeur uniquement) ── */
+  const isDirecteur = roleKey === 'seed-directeur'
+  const cnraCertifies  = isDirecteur ? rawLots.filter((l: any) => l.statutCertification === 'CERTIFIE').length : 0
+  const cnraEnAttente  = isDirecteur ? rawLots.filter((l: any) => l.statutCertification === 'EN_ATTENTE').length : 0
+  const cnraRejetes    = isDirecteur ? rawLots.filter((l: any) => l.statutCertification === 'REJETE').length : 0
+  const cnraSansCertif = isDirecteur ? rawLots.length - cnraCertifies - cnraEnAttente - cnraRejetes : 0
+  const cnraConfirmes  = isDirecteur ? rawLots.filter((l: any) => l.statutEdition === 'CONFIRME').length : 0
+  const cnraBrouillons = isDirecteur ? rawLots.filter((l: any) => l.statutEdition !== 'CONFIRME').length : 0
+  const cnraTopVarietes = isDirecteur ? (() => {
+    const countByVar: Record<number, { nom: string; espece: string; count: number }> = {}
+    rawLots.forEach((l: any) => {
+      const v = varietyMap[l.idVariete]
+      if (!countByVar[l.idVariete])
+        countByVar[l.idVariete] = { nom: v?.nomVariete ?? `#${l.idVariete}`, espece: v?.espece?.codeEspece ?? '—', count: 0 }
+      countByVar[l.idVariete].count++
+    })
+    return Object.values(countByVar).sort((a: any, b: any) => b.count - a.count).slice(0, 6)
+  })() : []
+  const cnraMatrixData = isDirecteur ? (() => {
+    const matrix: Record<string, Record<string, number>> = {}
+    const gens = new Set<string>()
+    rawLots.forEach((l: any) => {
+      const gen = l.generation?.codeGeneration ?? '?'
+      const esp = varietyMap[l.idVariete]?.espece?.nomEspece ?? varietyMap[l.idVariete]?.espece?.codeEspece ?? '—'
+      if (!matrix[esp]) matrix[esp] = {}
+      matrix[esp][gen] = (matrix[esp][gen] ?? 0) + 1
+      gens.add(gen)
+    })
+    return { matrix, especes: Object.keys(matrix).sort(), genList: ['G0','G1','G2','G3','G4','R1','R2'].filter(g => gens.has(g)) }
+  })() : { matrix: {}, especes: [] as string[], genList: [] as string[] }
 
   return (
     <div>
@@ -1202,7 +1237,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               <RefreshCw size={12} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
               Actualiser
             </button>
-            {roleKey === 'seed-admin' && !loading && (
+            {['seed-admin', 'seed-directeur'].includes(roleKey) && !loading && (
               <button
                 onClick={() => {
                   const today = new Date().toISOString().slice(0, 10)
@@ -1259,7 +1294,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                       rows: rawOrders.map((o: any) => [o.codeCommande ?? '', o.client ?? '', o.statut ?? '', o.usernameAcheteur ?? '', formatDateForExport(o.createdAt), o.observations ?? '']),
                     },
                   ]
-                  downloadXlsx(`senjiw-dashboard-admin-${today}`, sheets)
+                  downloadXlsx(`senjiw-dashboard-${roleKey === 'seed-directeur' ? 'directeur' : 'admin'}-${today}`, sheets)
                 }}
                 style={{
                   background: accent, border: `1px solid ${accent}`,
@@ -2573,6 +2608,180 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════
+          SECTIONS CNRA — directeur uniquement
+      ══════════════════════════════════════════════════════ */}
+      {isDirecteur && (
+        <>
+          {/* Certifications + Politique d'édition */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            {/* Certifications */}
+            <div style={{ background: '#fff', border: `1px solid ${D.line}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ padding: '13px 20px', borderBottom: `1px solid ${D.line}`, background: D.paper2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div>
+                  <div style={{ fontFamily: D.display, fontSize: 13.5, fontWeight: 600, color: D.ink }}>Certifications</div>
+                  <div style={{ fontFamily: D.body, fontSize: 11, color: D.muted, marginTop: 1 }}>Répartition par statut</div>
+                </div>
+              </div>
+              <div style={{ padding: '16px 20px' }}>
+                {rawLots.length === 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '20px 0', color: D.muted }}>
+                    <span style={{ fontSize: 12.5 }}>Aucun lot enregistré</span>
+                  </div>
+                ) : (
+                  <>
+                    {[
+                      { label: 'CERTIFIÉ',     count: cnraCertifies,  color: '#16a34a' },
+                      { label: 'EN ATTENTE',   count: cnraEnAttente,  color: '#d97706' },
+                      { label: 'REJETÉ',       count: cnraRejetes,    color: '#dc2626' },
+                      { label: 'SANS CERTIF.', count: cnraSansCertif, color: '#9ca3af' },
+                    ].map(({ label, count, color }) => {
+                      const pct = rawLots.length > 0 ? (count / rawLots.length) * 100 : 0
+                      return (
+                        <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
+                          <div style={{ width: 90, fontSize: 10, fontWeight: 700, color, flexShrink: 0, fontFamily: D.mono, letterSpacing: '0.04em' }}>{label}</div>
+                          <div style={{ flex: 1, height: 6, borderRadius: 3, background: D.line, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
+                          </div>
+                          <div style={{ width: 66, textAlign: 'right', fontSize: 12, fontWeight: 700, color: D.ink, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                            {count} <span style={{ fontWeight: 400, color: D.muted, fontSize: 10 }}>({pct.toFixed(0)}%)</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Politique d'édition */}
+            <div style={{ background: '#fff', border: `1px solid ${D.line}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ padding: '13px 20px', borderBottom: `1px solid ${D.line}`, background: D.paper2, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div>
+                  <div style={{ fontFamily: D.display, fontSize: 13.5, fontWeight: 600, color: D.ink }}>Politique d'édition</div>
+                  <div style={{ fontFamily: D.body, fontSize: 11, color: D.muted, marginTop: 1 }}>Verrouillage des lots</div>
+                </div>
+              </div>
+              <div style={{ padding: '16px 20px' }}>
+                {rawLots.length === 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '20px 0', color: D.muted }}>
+                    <span style={{ fontSize: 12.5 }}>Aucun lot enregistré</span>
+                  </div>
+                ) : (
+                  <>
+                    {[
+                      { label: 'CONFIRMÉS',  count: cnraConfirmes,  color: '#0369a1' },
+                      { label: 'BROUILLONS', count: cnraBrouillons, color: '#9333ea' },
+                    ].map(({ label, count, color }) => {
+                      const pct = rawLots.length > 0 ? (count / rawLots.length) * 100 : 0
+                      return (
+                        <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
+                          <div style={{ width: 90, fontSize: 10, fontWeight: 700, color, flexShrink: 0, fontFamily: D.mono, letterSpacing: '0.04em' }}>{label}</div>
+                          <div style={{ flex: 1, height: 6, borderRadius: 3, background: D.line, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 3, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
+                          </div>
+                          <div style={{ width: 66, textAlign: 'right', fontSize: 12, fontWeight: 700, color: D.ink, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+                            {count} <span style={{ fontWeight: 400, color: D.muted, fontSize: 10 }}>({pct.toFixed(0)}%)</span>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    <div style={{ marginTop: 14, padding: '10px 12px', background: D.paper2, borderRadius: 7, fontSize: 11.5, color: D.muted, lineHeight: 1.6, borderLeft: `3px solid ${D.line}`, fontFamily: D.body }}>
+                      <strong style={{ color: D.ink }}>BROUILLON</strong> — modifiable · auto-lock à 30 j<br />
+                      <strong style={{ color: D.ink }}>CONFIRMÉ</strong> — verrouillé, données définitives
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Top variétés + Matrice espèces × génération */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+            {/* Top variétés */}
+            <div style={{ background: '#fff', border: `1px solid ${D.line}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ padding: '13px 20px', borderBottom: `1px solid ${D.line}`, background: D.paper2 }}>
+                <div style={{ fontFamily: D.display, fontSize: 13.5, fontWeight: 600, color: D.ink }}>Variétés en production</div>
+                <div style={{ fontFamily: D.body, fontSize: 11, color: D.muted, marginTop: 1 }}>Top 6 par nombre de lots</div>
+              </div>
+              <div style={{ padding: '16px 20px' }}>
+                {cnraTopVarietes.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: D.muted, fontSize: 12.5 }}>Aucune donnée de variété</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {cnraTopVarietes.map((v: any, idx: number) => {
+                      const rankColor = idx === 0 ? '#f59e0b' : idx === 1 ? '#9ca3af' : idx === 2 ? '#b45309' : D.muted
+                      return (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: 5, background: D.paper2, border: `1px solid ${D.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: rankColor, flexShrink: 0 }}>{idx + 1}</div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, gap: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                                <span style={{ fontWeight: 600, fontSize: 12.5, color: D.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.nom}</span>
+                                <span style={{ fontSize: 10, color: D.muted, flexShrink: 0, background: D.paper2, padding: '1px 5px', borderRadius: 4, border: `1px solid ${D.line}`, fontFamily: D.mono }}>{v.espece}</span>
+                              </div>
+                              <span style={{ fontSize: 12, fontWeight: 800, color: D.green, flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontFamily: D.mono }}>{v.count} lot{v.count !== 1 ? 's' : ''}</span>
+                            </div>
+                            <div style={{ height: 4, borderRadius: 3, background: D.line, overflow: 'hidden' }}>
+                              <div style={{ height: '100%', width: `${(v.count / cnraTopVarietes[0].count) * 100}%`, background: D.green, borderRadius: 3, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Matrice espèces × génération */}
+            <div style={{ background: '#fff', border: `1px solid ${D.line}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+              <div style={{ padding: '13px 20px', borderBottom: `1px solid ${D.line}`, background: D.paper2 }}>
+                <div style={{ fontFamily: D.display, fontSize: 13.5, fontWeight: 600, color: D.ink }}>Répartition espèces × génération</div>
+                <div style={{ fontFamily: D.body, fontSize: 11, color: D.muted, marginTop: 1 }}>Nombre de lots par espèce</div>
+              </div>
+              <div style={{ padding: '16px 20px' }}>
+                {cnraMatrixData.especes.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '20px 0', color: D.muted, fontSize: 12.5 }}>Aucune donnée disponible</div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', fontFamily: D.body }}>
+                      <thead>
+                        <tr>
+                          <th style={{ textAlign: 'left', padding: '6px 8px 6px 0', color: D.muted, fontWeight: 600, fontSize: 10.5, borderBottom: `2px solid ${D.line}`, whiteSpace: 'nowrap' }}>Espèce</th>
+                          {cnraMatrixData.genList.map((g: string) => (
+                            <th key={g} style={{ textAlign: 'center', padding: '6px 8px', color: GEN_CFG[g]?.color ?? D.muted, fontWeight: 800, fontSize: 10.5, borderBottom: `2px solid ${D.line}`, whiteSpace: 'nowrap', fontFamily: D.mono }}>{g}</th>
+                          ))}
+                          <th style={{ textAlign: 'center', padding: '6px 8px', color: D.muted, fontWeight: 600, fontSize: 10.5, borderBottom: `2px solid ${D.line}` }}>Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {cnraMatrixData.especes.map((esp: string) => {
+                          const total = Object.values(cnraMatrixData.matrix[esp]).reduce((s: number, n: any) => s + n, 0)
+                          return (
+                            <tr key={esp} style={{ borderBottom: `1px solid ${D.line}` }}>
+                              <td style={{ padding: '8px 8px 8px 0', fontWeight: 600, fontSize: 12, color: D.ink, whiteSpace: 'nowrap' }}>{esp}</td>
+                              {cnraMatrixData.genList.map((g: string) => (
+                                <td key={g} style={{ textAlign: 'center', padding: '8px', fontVariantNumeric: 'tabular-nums' }}>
+                                  {cnraMatrixData.matrix[esp][g]
+                                    ? <span style={{ fontWeight: 700, color: GEN_CFG[g]?.color, background: GEN_CFG[g]?.bg, padding: '2px 7px', borderRadius: 5, fontSize: 11 }}>{cnraMatrixData.matrix[esp][g]}</span>
+                                    : <span style={{ color: D.line, fontSize: 11 }}>—</span>}
+                                </td>
+                              ))}
+                              <td style={{ textAlign: 'center', padding: '8px', fontWeight: 800, fontSize: 13, color: D.ink, fontVariantNumeric: 'tabular-nums' }}>{total}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
       )}
 
       {/* ══════════════════════════════════════════════════════
