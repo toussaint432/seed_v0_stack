@@ -16,6 +16,7 @@ const REALM = 'seed-v0'
 
 const ROLES_PLATFORM = [
   { value: 'seed-admin',         label: 'Administrateur ISRA', color: '#7c3aed' },
+  { value: 'seed-directeur',     label: 'Directeur CNRA',      color: '#1d4ed8' },
   { value: 'seed-selector',      label: 'Sélectionneur',       color: '#0369a1' },
   { value: 'seed-upsemcl',       label: 'UPSemCL',             color: '#0f766e' },
   { value: 'seed-multiplicator', label: 'Multiplicateur',      color: '#15803d' },
@@ -301,7 +302,7 @@ export function Users({ roleKey }: Props) {
   }
 
   function resolveOrgId(role: string, orgId: string): number | null {
-    if (role === 'seed-selector' || role === 'seed-admin') {
+    if (['seed-admin', 'seed-directeur', 'seed-selector'].includes(role)) {
       const isra = organisations.find(o => o.typeOrganisation === 'ISRA')
       return isra?.id ?? 1
     }
@@ -710,7 +711,7 @@ export function Users({ roleKey }: Props) {
               </Field>
             )}
 
-            {(form.role === 'seed-selector' || form.role === 'seed-admin') && (
+            {['seed-admin', 'seed-directeur', 'seed-selector'].includes(form.role) && (
               <div style={{
                 padding: '8px 14px', borderRadius: 8, marginBottom: 16,
                 background: 'var(--blue-50)', border: '1px solid var(--blue-200)',
