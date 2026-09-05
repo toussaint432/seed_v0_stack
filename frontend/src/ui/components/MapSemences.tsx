@@ -697,6 +697,7 @@ export function MapSemences({ roleKey }: Props) {
                 .filter(([role]) => {
                   const visible: Record<string, string[]> = {
                     'seed-admin':        ['seed-selector','seed-upsemcl','seed-multiplicator','seed-quotataire'],
+                    'seed-directeur':    ['seed-selector','seed-upsemcl','seed-multiplicator','seed-quotataire'],
                     'seed-upsemcl':      ['seed-selector','seed-multiplicator','seed-quotataire'],
                     'seed-selector':     ['seed-upsemcl','seed-multiplicator','seed-quotataire'],
                     'seed-multiplicator':['seed-upsemcl','seed-quotataire'],
@@ -966,6 +967,7 @@ export function MapSemences({ roleKey }: Props) {
           .filter(([role]) => {
             const visible: Record<string, string[]> = {
               'seed-admin':        ['seed-selector','seed-upsemcl','seed-multiplicator','seed-quotataire'],
+              'seed-directeur':    ['seed-selector','seed-upsemcl','seed-multiplicator','seed-quotataire'],
               'seed-upsemcl':      ['seed-selector','seed-multiplicator','seed-quotataire'],
               'seed-selector':     ['seed-upsemcl','seed-multiplicator','seed-quotataire'],
               'seed-multiplicator':['seed-upsemcl','seed-quotataire'],
