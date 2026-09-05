@@ -1,30 +1,33 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Package, TrendingUp, CheckCircle2, AlertTriangle, Layers, Wheat,
   ArrowRight, Lock, RefreshCw, AlertCircle, Info, ShieldCheck,
-  Activity, BarChart3, Clock, Map,
+  Activity, BarChart3, Map, Clock,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { extractList, normalizeLot, normalizeVariete } from '../../lib/normalizers'
 import { MapSemences } from '../components/MapSemences'
+import { fmtT } from '../../lib/fmt'
+import { TD as D } from '../../lib/tokens'
+import { GEN_CHART_COLORS } from '../../lib/constants'
 
-// ── Constantes génération ──────────────────────────────────────────
+// ── Génération config ─────────────────────────────────────────────
 const GEN_ORDER = ['G0', 'G1', 'G2', 'G3', 'G4', 'R1', 'R2']
-const GEN_LABEL: Record<string, string> = {
+const GEN_LABELS: Record<string, string> = {
   G0: 'Souche', G1: 'Pré-base', G2: 'Base', G3: 'Certifiée C1',
   G4: 'Certifiée C2', R1: 'Certifiée R1', R2: 'Commerciale',
 }
-const GEN_COLOR: Record<string, string> = {
-  G0: '#7c3aed', G1: '#0369a1', G2: '#0f766e', G3: '#15803d',
-  G4: '#d97706', R1: '#c2410c', R2: '#9333ea',
-}
-const GEN_BG: Record<string, string> = {
-  G0: '#f5f3ff', G1: '#e0f2fe', G2: '#f0fdfa', G3: '#f0fdf4',
-  G4: '#fffbeb', R1: '#fff7ed', R2: '#fdf4ff',
+const GEN_CFG: Record<string, { bg: string; color: string }> = {
+  G0: { bg: '#eef2ff', color: GEN_CHART_COLORS.G0 },
+  G1: { bg: '#f0f9ff', color: GEN_CHART_COLORS.G1 },
+  G2: { bg: '#f0fdf4', color: GEN_CHART_COLORS.G2 },
+  G3: { bg: '#fffbeb', color: GEN_CHART_COLORS.G3 },
+  G4: { bg: '#fff7ed', color: GEN_CHART_COLORS.G4 },
+  R1: { bg: '#fdf2f8', color: GEN_CHART_COLORS.R1 },
+  R2: { bg: '#f0fdfa', color: GEN_CHART_COLORS.R2 },
 }
 
-// ── Helpers ───────────────────────────────────────────────────────
 function kgLabel(kg: number) {
   if (kg >= 1_000_000) return `${(kg / 1_000_000).toFixed(1)} t`
   if (kg >= 1_000)     return `${(kg / 1_000).toFixed(1)} t`
@@ -32,31 +35,33 @@ function kgLabel(kg: number) {
 }
 
 function timeAgo(date: Date): string {
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-  if (seconds < 60) return 'à l\'instant'
-  if (seconds < 3600) return `il y a ${Math.floor(seconds / 60)} min`
-  return `il y a ${Math.floor(seconds / 3600)} h`
+  const s = Math.floor((Date.now() - date.getTime()) / 1000)
+  if (s < 60) return 'à l\'instant'
+  if (s < 3600) return `il y a ${Math.floor(s / 60)} min`
+  return `il y a ${Math.floor(s / 3600)} h`
 }
 
-// ── Hook : compteur animé ─────────────────────────────────────────
-function useCountUp(target: number, duration = 900): number {
-  const [value, setValue] = useState(0)
-  const prev = useRef(0)
+// ── Compteur animé — même pattern que Dashboard.tsx ───────────────
+function useCountUp(target: number, delay = 0, enabled = true) {
+  const [val, setVal] = useState(0)
   useEffect(() => {
-    if (target === prev.current) return
-    const from = prev.current
-    prev.current = target
-    if (target === 0) { setValue(0); return }
-    const start = performance.now()
-    const tick = (now: number) => {
-      const t = Math.min((now - start) / duration, 1)
-      const eased = 1 - Math.pow(1 - t, 3)
-      setValue(Math.round(from + (target - from) * eased))
-      if (t < 1) requestAnimationFrame(tick)
-    }
-    requestAnimationFrame(tick)
-  }, [target, duration])
-  return value
+    if (!enabled) return
+    setVal(0)
+    let raf = 0
+    const tid = setTimeout(() => {
+      const t0 = performance.now()
+      const dur = 700
+      function tick(now: number) {
+        const p = Math.min((now - t0) / dur, 1)
+        const e = 1 - Math.pow(1 - p, 3)
+        setVal(Math.round(e * target))
+        if (p < 1) raf = requestAnimationFrame(tick)
+      }
+      raf = requestAnimationFrame(tick)
+    }, delay)
+    return () => { clearTimeout(tid); cancelAnimationFrame(raf) }
+  }, [target, enabled, delay])
+  return val
 }
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -73,6 +78,7 @@ export function DirecteurDashboard() {
   const [lots,      setLots]      = useState<LotBrief[]>([])
   const [varieties, setVarieties] = useState<any[]>([])
   const [loading,   setLoading]   = useState(true)
+  const [ready,     setReady]     = useState(false)
   const [lastFetch, setLastFetch] = useState<Date | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -85,21 +91,26 @@ export function DirecteurDashboard() {
       api.get(endpoints.varieties),
     ]).then(([statsRes, lotsRes, varRes]) => {
       if (statsRes.status === 'fulfilled') {
+        // ⚠ le DTO backend expose `codeGeneration`, pas `generation`
         setGenStats((statsRes.value.data ?? []).map((d: any) => ({
-          gen: d.generation ?? d[0],
-          count: Number(d.nbLots ?? d[1] ?? 0),
-          totalKg: Number(d.totalKg ?? d[2] ?? 0),
+          gen:     d.codeGeneration ?? d.generation ?? String(d[0] ?? ''),
+          count:   Number(d.nbLots   ?? d[1] ?? 0),
+          totalKg: Number(d.totalKg  ?? d[2] ?? 0),
         })))
       }
       if (lotsRes.status === 'fulfilled') setLots(extractList(lotsRes.value.data).map(normalizeLot))
       if (varRes.status === 'fulfilled')  setVarieties(extractList(varRes.value.data).map(normalizeVariete))
       setLastFetch(new Date())
-    }).finally(() => { setLoading(false); setRefreshing(false) })
+    }).finally(() => {
+      setLoading(false)
+      setRefreshing(false)
+      setTimeout(() => setReady(true), 60)
+    })
   }
 
   useEffect(() => { fetchAll() }, [])
 
-  // ── Métriques dérivées ────────────────────────────────────────
+  // ── Métriques ─────────────────────────────────────────────────
   const totalLots  = genStats.reduce((s, g) => s + g.count, 0)
   const totalKg    = genStats.reduce((s, g) => s + g.totalKg, 0)
   const certifies  = lots.filter(l => l.statutCertification === 'CERTIFIE').length
@@ -109,165 +120,191 @@ export function DirecteurDashboard() {
   const confirmes  = lots.filter(l => l.statutEdition === 'CONFIRME').length
   const brouillons = lots.filter(l => l.statutEdition !== 'CONFIRME').length
 
-  const orderedStats = GEN_ORDER.map(g => genStats.find(s => s.gen === g) ?? { gen: g, count: 0, totalKg: 0 })
-  const maxCount = Math.max(...orderedStats.map(s => s.count), 1)
+  const orderedStats = GEN_ORDER.map(g =>
+    genStats.find(s => s.gen === g) ?? { gen: g, count: 0, totalKg: 0 }
+  )
+  const maxGenCount = Math.max(...orderedStats.map(s => s.count), 1)
 
   const generationActive = orderedStats.reduce(
     (a, g) => g.count > (orderedStats.find(x => x.gen === a)?.count ?? 0) ? g.gen : a, 'G0'
   )
 
-  // Ruptures dans le pipeline (gen intermédiaire vide, voisins actifs)
+  // Ruptures pipeline (gen vide entre deux gens actives)
   const pipelineGaps = orderedStats.filter((s, i) =>
     s.count === 0 && i > 0 && i < orderedStats.length - 1 &&
     (orderedStats[i - 1].count > 0 || orderedStats[i + 1].count > 0)
   )
 
-  // Variétés top 6 par nombre de lots
+  // Top 6 variétés
   const varMap = Object.fromEntries(varieties.map((v: any) => [v.id, v]))
-  const countByVariete: Record<number, { nomVariete: string; codeEspece: string; count: number }> = {}
+  const countByVar: Record<number, { nom: string; espece: string; count: number }> = {}
   lots.forEach(l => {
     if (!l.idVariete) return
     const v = varMap[l.idVariete]
-    if (!countByVariete[l.idVariete])
-      countByVariete[l.idVariete] = { nomVariete: v?.nomVariete ?? `#${l.idVariete}`, codeEspece: v?.espece?.codeEspece ?? l.codeEspece ?? '—', count: 0 }
-    countByVariete[l.idVariete].count++
+    if (!countByVar[l.idVariete])
+      countByVar[l.idVariete] = { nom: v?.nomVariete ?? `#${l.idVariete}`, espece: v?.espece?.codeEspece ?? l.codeEspece ?? '—', count: 0 }
+    countByVar[l.idVariete].count++
   })
-  const topVarietes = Object.values(countByVariete).sort((a, b) => b.count - a.count).slice(0, 6)
+  const topVarietes = Object.values(countByVar).sort((a, b) => b.count - a.count).slice(0, 6)
 
-  // ── Alertes décisionnelles ────────────────────────────────────
+  // Alertes
   const alerts: { level: 'critical' | 'warning' | 'info'; message: string }[] = []
   if (pipelineGaps.length > 0)
-    alerts.push({ level: 'critical', message: `Rupture de pipeline détectée — ${pipelineGaps.map(g => g.gen).join(', ')} sans lots actifs cette campagne` })
+    alerts.push({ level: 'critical', message: `Rupture de pipeline — ${pipelineGaps.map(g => g.gen).join(', ')} sans lots actifs cette campagne` })
   if (enAttente > 0)
     alerts.push({ level: 'warning', message: `${enAttente} lot${enAttente > 1 ? 's' : ''} en attente de certification — action UPSemCL requise` })
   if (rejetes > 0)
     alerts.push({ level: 'warning', message: `${rejetes} lot${rejetes > 1 ? 's' : ''} rejeté${rejetes > 1 ? 's' : ''} à la certification — vérification nécessaire` })
   if (brouillons > 0 && totalLots > 0)
-    alerts.push({ level: 'info', message: `${brouillons} lot${brouillons > 1 ? 's' : ''} en brouillon — non verrouillé${brouillons > 1 ? 's' : ''}, modifiable${brouillons > 1 ? 's' : ''}` })
+    alerts.push({ level: 'info', message: `${brouillons} lot${brouillons > 1 ? 's' : ''} en brouillon — non verrouillé${brouillons > 1 ? 's' : ''}` })
 
-  // ── Loading ───────────────────────────────────────────────────
+  const today = new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const todayCap = today.charAt(0).toUpperCase() + today.slice(1)
+
+  // ── KPI items ─────────────────────────────────────────────────
+  const kpiItems = [
+    { label: 'Lots enregistrés',  value: totalLots,  sub: 'toutes générations', accent: D.blue,    delay: 0,   suffix: undefined },
+    { label: 'Production totale', value: Math.round(totalKg / 1000), sub: `${lots.length} lots total`, accent: D.green, delay: 80, suffix: 't' },
+    { label: 'Lots certifiés',    value: certifies,  sub: enAttente > 0 ? `${enAttente} en attente` : 'aucune attente', accent: '#0f766e', delay: 160, suffix: undefined },
+    { label: 'Lots verrouillés',  value: confirmes,  sub: brouillons > 0 ? `${brouillons} en brouillon` : 'tous verrouillés', accent: '#0369a1', delay: 240, suffix: undefined },
+    { label: 'En attente certif.',value: enAttente,  sub: enAttente > 0 ? 'action requise' : 'aucune alerte', accent: '#d97706', delay: 320, suffix: undefined },
+    { label: 'Génération active', value: orderedStats.find(s => s.gen === generationActive)?.count ?? 0,
+      sub: totalLots > 0 ? generationActive + ' — ' + GEN_LABELS[generationActive] : 'aucun lot', accent: GEN_CFG[generationActive]?.color ?? D.muted, delay: 400, suffix: undefined },
+  ]
+
   if (loading) return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, minHeight: 320, color: 'var(--text-muted)' }}>
-      <div style={{ width: 36, height: 36, border: '3px solid var(--border)', borderTopColor: '#1d4ed8', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-      <span style={{ fontSize: 13 }}>Chargement du tableau de bord…</span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, minHeight: 320, color: D.muted }}>
+      <div style={{ width: 36, height: 36, border: `3px solid ${D.line}`, borderTopColor: D.blue, borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <span style={{ fontFamily: D.body, fontSize: 13 }}>Chargement du tableau de bord…</span>
     </div>
   )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-      {/* ── En-tête avec horodatage & refresh ─────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {lastFetch && (
-            <span style={{ fontSize: 11.5, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Clock size={12} />
-              Données actualisées {timeAgo(lastFetch)}
-            </span>
-          )}
+      {/* ── En-tête ───────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', paddingBottom: 4 }}>
+        <div>
+          <h1 style={{ fontFamily: D.display, fontSize: 22, fontWeight: 700, letterSpacing: '-0.025em', color: D.ink, lineHeight: 1.1, marginBottom: 5 }}>
+            Vue décisionnelle CNRA
+          </h1>
+          <p style={{ fontFamily: D.body, fontSize: 12.5, color: D.muted }}>
+            {todayCap}
+            {lastFetch && (
+              <span style={{ marginLeft: 10, opacity: 0.7, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Clock size={11} /> actualisé {timeAgo(lastFetch)}
+              </span>
+            )}
+          </p>
         </div>
         <button
-          onClick={() => fetchAll(true)}
-          disabled={refreshing}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-muted)', fontSize: 12, cursor: refreshing ? 'default' : 'pointer', opacity: refreshing ? 0.6 : 1, transition: 'all .15s' }}
+          onClick={() => fetchAll(true)} disabled={refreshing}
+          style={{ background: '#fff', border: `1px solid ${D.line}`, color: D.muted, fontFamily: D.body, fontSize: 12, fontWeight: 500, borderRadius: 8, padding: '7px 14px', cursor: refreshing ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: refreshing ? 0.6 : 1 }}
         >
           <RefreshCw size={12} style={{ animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
           Actualiser
         </button>
       </div>
 
-      {/* ── Bannière d'alertes décisionnelles ─────────────────── */}
+      {/* ── Bannière alertes ──────────────────────────────────── */}
       {alerts.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {alerts.map((a, i) => (
-            <AlertBanner key={i} level={a.level} message={a.message} />
-          ))}
+          {alerts.map((a, i) => <AlertBanner key={i} level={a.level} message={a.message} />)}
         </div>
       )}
 
-      {/* ── KPIs ──────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(155px, 1fr))', gap: 12 }}>
-        <KpiCard
-          icon={<Package size={15} />} label="Lots enregistrés"
-          value={totalLots} color="#1d4ed8"
-          status={totalLots === 0 ? 'neutral' : 'good'}
-        />
-        <KpiCard
-          icon={<Wheat size={15} />} label="Production totale"
-          value={kgLabel(totalKg)} rawValue={totalKg} color="#15803d"
-          status={totalKg === 0 ? 'neutral' : 'good'}
-        />
-        <KpiCard
-          icon={<CheckCircle2 size={15} />} label="Lots certifiés"
-          value={certifies} color="#0f766e"
-          sub={enAttente > 0 ? `${enAttente} en attente` : undefined}
-          status={certifies === 0 && totalLots > 0 ? 'warning' : certifies > 0 ? 'good' : 'neutral'}
-        />
-        <KpiCard
-          icon={<Lock size={15} />} label="Lots verrouillés"
-          value={confirmes} color="#0369a1"
-          sub={brouillons > 0 ? `${brouillons} en brouillon` : undefined}
-          status={confirmes === 0 && totalLots > 0 ? 'warning' : confirmes > 0 ? 'good' : 'neutral'}
-        />
-        <KpiCard
-          icon={<AlertTriangle size={15} />} label="En attente certif."
-          value={enAttente} color="#d97706"
-          status={enAttente > 0 ? 'warning' : 'neutral'}
-        />
-        <KpiCard
-          icon={<Activity size={15} />} label="Génération active"
-          value={totalLots > 0 ? generationActive : '—'} color={GEN_COLOR[generationActive] ?? '#6b7280'}
-          status={totalLots > 0 ? 'good' : 'neutral'}
-          isText
-        />
+      {/* ── KPI Cards — même design que Dashboard.tsx ─────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: `repeat(${kpiItems.length}, 1fr)`, gap: 14 }}>
+        {kpiItems.map((item, i) => (
+          <KpiCard key={i} index={i} label={item.label} value={item.value}
+            sub={item.sub} accent={item.accent} delay={item.delay} suffix={item.suffix}
+            ready={ready}
+          />
+        ))}
       </div>
 
       {/* ── Pipeline G0 → R2 ──────────────────────────────────── */}
-      <PipelineSection stats={orderedStats} maxCount={maxCount} lots={lots} />
+      <div style={{ background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+        <div style={{ padding: '14px 24px', borderBottom: `1px solid ${D.line}`, display: 'flex', alignItems: 'center', gap: 12, background: D.paper2 }}>
+          <span style={{ fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', color: D.green, background: D.greenSoft, padding: '3px 10px', borderRadius: 999 }}>Pipeline</span>
+          <span style={{ fontFamily: D.display, fontSize: 15, fontWeight: 600, color: D.ink }}>Production semencière · G0 → R2</span>
+          <span style={{ marginLeft: 'auto', fontFamily: D.mono, fontSize: 10, fontWeight: 500, color: D.muted, background: D.paper2, border: `1px solid ${D.line}`, borderRadius: 999, padding: '3px 12px' }}>
+            {totalLots.toLocaleString('fr-FR')} lots · {kgLabel(totalKg)}
+          </span>
+        </div>
+        <div style={{ padding: '24px 28px', display: 'flex', alignItems: 'center' }}>
+          {orderedStats.map((stat, idx, arr) => {
+            const cfg    = GEN_CFG[stat.gen] ?? { bg: D.paper2, color: D.muted }
+            const active = stat.count > 0
+            const pct    = Math.round((stat.count / maxGenCount) * 100)
+            return (
+              <div key={stat.gen} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+                  {/* Cercle */}
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: active ? cfg.bg : D.paper2, border: `2px solid ${active ? cfg.color : D.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: D.mono, fontSize: 11, fontWeight: 700, color: active ? cfg.color : D.muted, boxShadow: active ? `0 2px 10px ${cfg.color}28` : 'none', transition: 'all 0.3s ease' }}>
+                    {stat.gen}
+                  </div>
+                  {/* Compteur */}
+                  <div style={{ textAlign: 'center', lineHeight: 1 }}>
+                    <AnimatedNum value={stat.count} ready={ready} delay={idx * 60} style={{ fontFamily: D.display, fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em', color: active ? cfg.color : D.muted, transition: 'color 0.3s' }} />
+                    <div style={{ fontFamily: D.mono, fontSize: 9, color: D.muted, marginTop: 2 }}>lot{stat.count !== 1 ? 's' : ''}</div>
+                    {stat.totalKg > 0 && (
+                      <div style={{ fontFamily: D.mono, fontSize: 9, color: active ? cfg.color : D.muted, marginTop: 3, fontWeight: 600 }}>{fmtT(stat.totalKg)}</div>
+                    )}
+                  </div>
+                  {/* Barre proportion */}
+                  <div style={{ width: '70%', height: 3, background: D.line, borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: ready ? `${pct}%` : '0%', background: cfg.color, borderRadius: 99, transition: 'width 0.9s cubic-bezier(0.4,0,0.2,1)' }} />
+                  </div>
+                  {/* Label */}
+                  <div style={{ fontFamily: D.body, fontSize: 9, color: active ? cfg.color : D.muted, textAlign: 'center', fontWeight: active ? 600 : 400, lineHeight: 1.3, maxWidth: 64 }}>
+                    {GEN_LABELS[stat.gen]}
+                  </div>
+                </div>
+                {idx < arr.length - 1 && (
+                  <div style={{ color: D.line, opacity: active ? 1 : 0.4, flexShrink: 0, paddingBottom: 28 }}>
+                    <ArrowRight size={12} />
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
 
-      {/* ── Certifications + Édition ──────────────────────────── */}
+      {/* ── Certifications + Politique d'édition ──────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <Section title="Certifications" sub="Répartition par statut" icon={<ShieldCheck size={14} />}>
-          {lots.length === 0 ? (
-            <EmptyState message="Aucun lot enregistré" />
-          ) : (
-            <>
-              <ProgressRow label="CERTIFIÉ"     count={certifies}  total={lots.length} color="#16a34a" />
-              <ProgressRow label="EN ATTENTE"   count={enAttente}  total={lots.length} color="#d97706" />
-              <ProgressRow label="REJETÉ"       count={rejetes}    total={lots.length} color="#dc2626" />
-              <ProgressRow label="SANS CERTIF." count={sansCertif} total={lots.length} color="#9ca3af" />
-            </>
-          )}
+          {lots.length === 0 ? <EmptyState message="Aucun lot enregistré" /> : <>
+            <ProgressRow label="CERTIFIÉ"     count={certifies}  total={lots.length} color="#16a34a" ready={ready} />
+            <ProgressRow label="EN ATTENTE"   count={enAttente}  total={lots.length} color="#d97706" ready={ready} />
+            <ProgressRow label="REJETÉ"       count={rejetes}    total={lots.length} color="#dc2626" ready={ready} />
+            <ProgressRow label="SANS CERTIF." count={sansCertif} total={lots.length} color="#9ca3af" ready={ready} />
+          </>}
         </Section>
 
         <Section title="Politique d'édition" sub="Verrouillage des lots" icon={<Lock size={14} />}>
-          {lots.length === 0 ? (
-            <EmptyState message="Aucun lot enregistré" />
-          ) : (
-            <>
-              <ProgressRow label="CONFIRMÉS"  count={confirmes}  total={lots.length} color="#0369a1" />
-              <ProgressRow label="BROUILLONS" count={brouillons} total={lots.length} color="#9333ea" />
-              <div style={{ marginTop: 14, padding: '10px 12px', background: 'var(--surface-2)', borderRadius: 7, fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.6, borderLeft: '3px solid var(--border)' }}>
-                <strong style={{ color: 'var(--text-primary)' }}>BROUILLON</strong> — modifiable · auto-lock à 30 jours<br />
-                <strong style={{ color: 'var(--text-primary)' }}>CONFIRMÉ</strong> — verrouillé, données définitives
-              </div>
-            </>
-          )}
+          {lots.length === 0 ? <EmptyState message="Aucun lot enregistré" /> : <>
+            <ProgressRow label="CONFIRMÉS"  count={confirmes}  total={lots.length} color={D.blue}   ready={ready} />
+            <ProgressRow label="BROUILLONS" count={brouillons} total={lots.length} color="#9333ea" ready={ready} />
+            <div style={{ marginTop: 14, padding: '10px 12px', background: D.paper2, borderRadius: 7, fontSize: 11.5, color: D.muted, lineHeight: 1.6, borderLeft: `3px solid ${D.line}`, fontFamily: D.body }}>
+              <strong style={{ color: D.ink }}>BROUILLON</strong> — modifiable · auto-lock à 30 j<br />
+              <strong style={{ color: D.ink }}>CONFIRMÉ</strong> — verrouillé, données définitives
+            </div>
+          </>}
         </Section>
       </div>
 
       {/* ── Top variétés + Matrice ────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
         <Section title="Variétés en production" sub="Top 6 par nombre de lots" icon={<BarChart3 size={14} />}>
-          {topVarietes.length === 0
-            ? <EmptyState message="Aucune donnée de variété" />
-            : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {topVarietes.map((v, idx) => (
-                  <VarieteRow key={idx} rank={idx + 1} name={v.nomVariete} espece={v.codeEspece} count={v.count} max={topVarietes[0].count} />
-                ))}
-              </div>
-            )}
+          {topVarietes.length === 0 ? <EmptyState message="Aucune donnée de variété" /> : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {topVarietes.map((v, idx) => (
+                <VarieteRow key={idx} rank={idx + 1} name={v.nom} espece={v.espece} count={v.count} max={topVarietes[0].count} ready={ready} />
+              ))}
+            </div>
+          )}
         </Section>
 
         <Section title="Répartition espèces × génération" sub="Nombre de lots par espèce" icon={<Layers size={14} />}>
@@ -275,11 +312,12 @@ export function DirecteurDashboard() {
         </Section>
       </div>
 
-      {/* ── Carte agro-écologique ─────────────────────────────── */}
+      {/* ── Carte agro-écologique nationale ───────────────────── */}
       <Section title="Répartition géographique nationale" sub="Zones agro-écologiques · sites ISRA · acteurs de la filière" icon={<Map size={14} />}>
         <MapSemences roleKey="seed-directeur" />
       </Section>
 
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   )
 }
@@ -287,202 +325,109 @@ export function DirecteurDashboard() {
 // ══════════════════════════════════════════════════════════════════
 // ── Sous-composants ───────────────────────────────────────────────
 
+function AnimatedNum({ value, ready, delay, style }: { value: number; ready: boolean; delay: number; style: React.CSSProperties }) {
+  const displayed = useCountUp(value, delay, ready)
+  return <div style={style}>{displayed.toLocaleString('fr-FR')}</div>
+}
+
+/** KpiCard — design identique à Dashboard.tsx */
+function KpiCard({ index, label, value, sub, accent, delay, suffix, ready }: {
+  index: number; label: string; value: number
+  sub?: string; accent: string; delay: number; suffix?: string; ready: boolean
+}) {
+  const [vis, setVis] = useState(false)
+  useEffect(() => { const t = setTimeout(() => setVis(true), delay + 60); return () => clearTimeout(t) }, [delay])
+  const displayed = useCountUp(value, delay + 80, vis && ready)
+  return (
+    <div className="kpi-card-outer">
+      <div className="kpi-card-dot" />
+      <div className="kpi-card-inner" style={{ background: '#fff', borderRadius: 12, border: `1px solid ${D.line}`, padding: '18px 22px 20px', opacity: vis ? 1 : 0, transform: vis ? 'translateY(0)' : 'translateY(18px)', transition: 'opacity 0.44s ease, transform 0.44s ease' }}>
+        {/* Label */}
+        <div style={{ fontFamily: D.mono, fontSize: 10, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.12em', color: D.muted, marginBottom: 12 }}>
+          {label}
+        </div>
+        {/* Valeur */}
+        <div style={{ lineHeight: 1, marginBottom: sub ? 10 : 0 }}>
+          <span style={{ fontFamily: D.display, fontSize: 34, fontWeight: 700, letterSpacing: '-0.03em', color: D.ink, fontVariantNumeric: 'tabular-nums' }}>
+            {displayed.toLocaleString('fr-FR')}
+          </span>
+          {suffix && <span style={{ fontFamily: D.mono, fontSize: 13, fontWeight: 500, color: D.muted, marginLeft: 5 }}>{suffix}</span>}
+        </div>
+        {/* Sous-info */}
+        {sub && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 4, height: 4, borderRadius: '50%', background: accent, display: 'inline-block', opacity: 0.8 }} />
+            <span style={{ fontFamily: D.body, fontSize: 11, color: D.muted, lineHeight: 1 }}>{sub}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function AlertBanner({ level, message }: { level: 'critical' | 'warning' | 'info'; message: string }) {
   const cfg = {
-    critical: { bg: '#fef2f2', border: '#fca5a5', color: '#b91c1c', icon: <AlertCircle size={14} />, label: 'Critique' },
-    warning:  { bg: '#fffbeb', border: '#fcd34d', color: '#92400e', icon: <AlertTriangle size={14} />, label: 'Attention' },
-    info:     { bg: '#eff6ff', border: '#93c5fd', color: '#1e40af', icon: <Info size={14} />, label: 'Info' },
+    critical: { bg: '#fef2f2', border: '#fca5a5', color: '#b91c1c', icon: <AlertCircle size={13} /> },
+    warning:  { bg: '#fffbeb', border: '#fcd34d', color: '#92400e', icon: <AlertTriangle size={13} /> },
+    info:     { bg: '#eff6ff', border: '#93c5fd', color: '#1e40af', icon: <Info size={13} /> },
   }[level]
+  const levelLabel = { critical: 'Critique', warning: 'Attention', info: 'Info' }[level]
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '10px 14px', borderRadius: 8, background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color }}>
       <span style={{ flexShrink: 0, marginTop: 1 }}>{cfg.icon}</span>
-      <div style={{ flex: 1, fontSize: 12.5, lineHeight: 1.4 }}>
-        <strong style={{ fontWeight: 700 }}>{cfg.label} — </strong>{message}
-      </div>
-    </div>
-  )
-}
-
-function KpiCard({ icon, label, value, color, sub, status, isText }: {
-  icon: React.ReactNode; label: string; value: string | number; color: string
-  sub?: string; status: 'good' | 'warning' | 'neutral'; isText?: boolean
-}) {
-  const animated = useCountUp(typeof value === 'number' ? value : 0, 900)
-  const displayed = isText ? value : typeof value === 'number' ? animated : value
-  const statusColor = status === 'good' ? '#16a34a' : status === 'warning' ? '#d97706' : 'var(--border)'
-  return (
-    <div style={{
-      background: 'var(--surface)', border: '1px solid var(--border)',
-      borderTop: `3px solid ${statusColor}`,
-      borderRadius: 10, padding: '14px 16px',
-      display: 'flex', flexDirection: 'column', gap: 8,
-      boxShadow: 'var(--shadow-xs)', transition: 'box-shadow .2s',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-        <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 6, background: `${color}18`, color }}>{icon}</span>
-        <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', lineHeight: 1.2 }}>{label}</span>
-      </div>
-      <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-        {displayed}
-      </div>
-      {sub && (
-        <div style={{ fontSize: 11, color: status === 'warning' ? '#d97706' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-          {status === 'warning' && <AlertTriangle size={10} />}
-          {sub}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function PipelineSection({ stats, maxCount, lots }: { stats: GenStat[]; maxCount: number; lots: LotBrief[] }) {
-  const [hovered, setHovered] = useState<string | null>(null)
-  return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 20px', boxShadow: 'var(--shadow-xs)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-            <TrendingUp size={14} />
-            Pipeline semencier
-          </div>
-          <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>Volume de lots actifs par génération</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#16a34a', display: 'inline-block' }} />Actif</span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#dc2626', display: 'inline-block', opacity: 0.5 }} />Rupture</span>
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 0, overflowX: 'auto', paddingBottom: 4 }}>
-        {stats.map((stat, i) => {
-          const barH = Math.max(6, (stat.count / maxCount) * 100)
-          const color = GEN_COLOR[stat.gen] ?? '#6b7280'
-          const bg    = GEN_BG[stat.gen] ?? '#f9fafb'
-          const isEmpty = stat.count === 0
-          const isGap = isEmpty && i > 0 && i < stats.length - 1 &&
-            (stats[i - 1].count > 0 || stats[i + 1].count > 0)
-          const isActive = hovered === stat.gen
-
-          return (
-            <React.Fragment key={stat.gen}>
-              <div
-                onMouseEnter={() => setHovered(stat.gen)}
-                onMouseLeave={() => setHovered(null)}
-                style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flex: 1, minWidth: 72, cursor: 'default', padding: '0 4px' }}
-              >
-                {/* Barre */}
-                <div style={{ width: '100%', position: 'relative', height: 110, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-                  {/* Tooltip hover */}
-                  {isActive && stat.totalKg > 0 && (
-                    <div style={{
-                      position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)',
-                      background: '#1e293b', color: '#fff', fontSize: 11, padding: '4px 8px',
-                      borderRadius: 5, whiteSpace: 'nowrap', marginBottom: 4, zIndex: 10,
-                      boxShadow: '0 2px 8px rgba(0,0,0,.2)',
-                    }}>
-                      {kgLabel(stat.totalKg)}
-                    </div>
-                  )}
-                  <div style={{
-                    width: '100%', background: 'var(--surface-2)', borderRadius: 6, overflow: 'hidden',
-                    border: isGap ? '1.5px dashed #dc2626' : `1px solid ${isEmpty ? 'var(--border)' : color + '44'}`,
-                    height: '100%', display: 'flex', alignItems: 'flex-end',
-                    transition: 'transform .15s',
-                    transform: isActive ? 'scaleX(1.04)' : 'scaleX(1)',
-                  }}>
-                    <div style={{
-                      width: '100%', height: `${barH}px`,
-                      background: isGap ? '#dc262618' : isEmpty ? 'transparent' : color,
-                      opacity: isEmpty ? 0.3 : isActive ? 1 : 0.85,
-                      borderRadius: '0 0 4px 4px',
-                      transition: 'height .5s cubic-bezier(.4,0,.2,1), opacity .2s',
-                    }} />
-                  </div>
-                </div>
-
-                {/* Code génération */}
-                <div style={{ fontSize: 13, fontWeight: 800, color: isEmpty ? 'var(--text-muted)' : color, letterSpacing: '.04em' }}>{stat.gen}</div>
-
-                {/* Compteur */}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: isEmpty ? 'var(--text-muted)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-                    {stat.count}
-                  </div>
-                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>lot{stat.count !== 1 ? 's' : ''}</div>
-                </div>
-
-                {/* Badge catégorie */}
-                <div style={{
-                  fontSize: 10, padding: '2px 7px', borderRadius: 10, fontWeight: 600, whiteSpace: 'nowrap',
-                  background: isEmpty ? 'var(--surface-2)' : bg,
-                  color: isEmpty ? 'var(--text-muted)' : color,
-                  border: `1px solid ${isEmpty ? 'var(--border)' : color + '33'}`,
-                }}>
-                  {GEN_LABEL[stat.gen]}
-                </div>
-              </div>
-
-              {i < stats.length - 1 && (
-                <div style={{ display: 'flex', alignItems: 'center', paddingBottom: 48, color: 'var(--text-muted)', opacity: 0.35, flexShrink: 0 }}>
-                  <ArrowRight size={13} />
-                </div>
-              )}
-            </React.Fragment>
-          )
-        })}
-      </div>
+      <span style={{ flex: 1, fontSize: 12.5, lineHeight: 1.4, fontFamily: D.body }}>
+        <strong style={{ fontWeight: 700 }}>{levelLabel} — </strong>{message}
+      </span>
     </div>
   )
 }
 
 function Section({ title, sub, icon, children }: { title: string; sub: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 20px', boxShadow: 'var(--shadow-xs)' }}>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>
-          {icon && <span style={{ color: 'var(--text-muted)' }}>{icon}</span>}
-          {title}
+    <div style={{ background: '#fff', border: `1px solid ${D.line}`, borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 4px rgba(0,0,0,0.04)' }}>
+      <div style={{ padding: '13px 20px', borderBottom: `1px solid ${D.line}`, background: D.paper2, display: 'flex', alignItems: 'center', gap: 8 }}>
+        {icon && <span style={{ color: D.green }}>{icon}</span>}
+        <div>
+          <div style={{ fontFamily: D.display, fontSize: 13.5, fontWeight: 600, color: D.ink }}>{title}</div>
+          <div style={{ fontFamily: D.body, fontSize: 11, color: D.muted, marginTop: 1 }}>{sub}</div>
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-muted)', marginTop: 2 }}>{sub}</div>
       </div>
-      {children}
+      <div style={{ padding: '16px 20px' }}>{children}</div>
     </div>
   )
 }
 
-function ProgressRow({ label, count, total, color }: { label: string; count: number; total: number; color: string }) {
+function ProgressRow({ label, count, total, color, ready }: { label: string; count: number; total: number; color: string; ready: boolean }) {
   const pct = total > 0 ? (count / total) * 100 : 0
-  const animated = useCountUp(count, 700)
+  const displayed = useCountUp(count, 0, ready)
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-      <div style={{ width: 90, fontSize: 10.5, fontWeight: 700, color, flexShrink: 0 }}>{label}</div>
-      <div style={{ flex: 1, height: 7, borderRadius: 4, background: 'var(--border)', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 4, transition: 'width .6s cubic-bezier(.4,0,.2,1)' }} />
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 11 }}>
+      <div style={{ width: 90, fontSize: 10, fontWeight: 700, color, flexShrink: 0, fontFamily: D.mono, letterSpacing: '0.04em' }}>{label}</div>
+      <div style={{ flex: 1, height: 6, borderRadius: 3, background: D.line, overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: ready ? `${pct}%` : '0%', background: color, borderRadius: 3, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
       </div>
-      <div style={{ width: 66, textAlign: 'right', fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
-        {animated} <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 10 }}>({pct.toFixed(0)}%)</span>
+      <div style={{ width: 66, textAlign: 'right', fontSize: 12, fontWeight: 700, color: D.ink, fontVariantNumeric: 'tabular-nums', flexShrink: 0 }}>
+        {displayed} <span style={{ fontWeight: 400, color: D.muted, fontSize: 10 }}>({pct.toFixed(0)}%)</span>
       </div>
     </div>
   )
 }
 
-function VarieteRow({ rank, name, espece, count, max }: { rank: number; name: string; espece: string; count: number; max: number }) {
-  const rankColor = rank === 1 ? '#f59e0b' : rank === 2 ? '#9ca3af' : rank === 3 ? '#b45309' : 'var(--text-muted)'
+function VarieteRow({ rank, name, espece, count, max, ready }: { rank: number; name: string; espece: string; count: number; max: number; ready: boolean }) {
+  const rankColor = rank === 1 ? '#f59e0b' : rank === 2 ? '#9ca3af' : rank === 3 ? '#b45309' : D.muted
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-      <div style={{ width: 24, height: 24, borderRadius: 5, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: rankColor, flexShrink: 0 }}>
-        {rank}
-      </div>
+      <div style={{ width: 24, height: 24, borderRadius: 5, background: D.paper2, border: `1px solid ${D.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: rankColor, flexShrink: 0 }}>{rank}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4, gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-            <span style={{ fontWeight: 600, fontSize: 12.5, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-            <span style={{ fontSize: 10, color: 'var(--text-muted)', flexShrink: 0, background: 'var(--surface-2)', padding: '1px 5px', borderRadius: 4, border: '1px solid var(--border)' }}>{espece}</span>
+            <span style={{ fontWeight: 600, fontSize: 12.5, color: D.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontFamily: D.body }}>{name}</span>
+            <span style={{ fontSize: 10, color: D.muted, flexShrink: 0, background: D.paper2, padding: '1px 5px', borderRadius: 4, border: `1px solid ${D.line}`, fontFamily: D.mono }}>{espece}</span>
           </div>
-          <span style={{ fontSize: 12, fontWeight: 800, color: '#15803d', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{count} lot{count !== 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 12, fontWeight: 800, color: D.green, flexShrink: 0, fontVariantNumeric: 'tabular-nums', fontFamily: D.mono }}>{count} lot{count !== 1 ? 's' : ''}</span>
         </div>
-        <div style={{ height: 5, borderRadius: 3, background: 'var(--border)', overflow: 'hidden' }}>
-          <div style={{ height: '100%', width: `${(count / max) * 100}%`, background: '#15803d', borderRadius: 3, transition: 'width .5s cubic-bezier(.4,0,.2,1)' }} />
+        <div style={{ height: 4, borderRadius: 3, background: D.line, overflow: 'hidden' }}>
+          <div style={{ height: '100%', width: ready ? `${(count / max) * 100}%` : '0%', background: D.green, borderRadius: 3, transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)' }} />
         </div>
       </div>
     </div>
@@ -491,11 +436,11 @@ function VarieteRow({ rank, name, espece, count, max }: { rank: number; name: st
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '28px 0', color: 'var(--text-muted)' }}>
-      <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '28px 0', color: D.muted }}>
+      <div style={{ width: 36, height: 36, borderRadius: 10, background: D.paper2, border: `1px solid ${D.line}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <Package size={16} style={{ opacity: 0.4 }} />
       </div>
-      <span style={{ fontSize: 12.5 }}>{message}</span>
+      <span style={{ fontSize: 12.5, fontFamily: D.body }}>{message}</span>
     </div>
   )
 }
@@ -511,37 +456,37 @@ function EspecesTable({ lots, varieties }: { lots: any[]; varieties: any[] }) {
     matrix[esp][gen] = (matrix[esp][gen] ?? 0) + 1
     gens.add(gen)
   })
-  const especes  = Object.keys(matrix).sort()
-  const genList  = GEN_ORDER.filter(g => gens.has(g))
+  const especes = Object.keys(matrix).sort()
+  const genList = GEN_ORDER.filter(g => gens.has(g))
 
   if (especes.length === 0) return <EmptyState message="Aucune donnée disponible" />
 
   return (
     <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', fontFamily: D.body }}>
         <thead>
           <tr>
-            <th style={{ textAlign: 'left', padding: '6px 8px 6px 0', color: 'var(--text-muted)', fontWeight: 600, fontSize: 10.5, borderBottom: '2px solid var(--border)', whiteSpace: 'nowrap' }}>Espèce</th>
+            <th style={{ textAlign: 'left', padding: '6px 8px 6px 0', color: D.muted, fontWeight: 600, fontSize: 10.5, borderBottom: `2px solid ${D.line}`, whiteSpace: 'nowrap' }}>Espèce</th>
             {genList.map(g => (
-              <th key={g} style={{ textAlign: 'center', padding: '6px 8px', color: GEN_COLOR[g] ?? 'var(--text-muted)', fontWeight: 800, fontSize: 10.5, borderBottom: '2px solid var(--border)', whiteSpace: 'nowrap' }}>{g}</th>
+              <th key={g} style={{ textAlign: 'center', padding: '6px 8px', color: GEN_CFG[g]?.color ?? D.muted, fontWeight: 800, fontSize: 10.5, borderBottom: `2px solid ${D.line}`, whiteSpace: 'nowrap', fontFamily: D.mono }}>{g}</th>
             ))}
-            <th style={{ textAlign: 'center', padding: '6px 8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: 10.5, borderBottom: '2px solid var(--border)' }}>Total</th>
+            <th style={{ textAlign: 'center', padding: '6px 8px', color: D.muted, fontWeight: 600, fontSize: 10.5, borderBottom: `2px solid ${D.line}` }}>Total</th>
           </tr>
         </thead>
         <tbody>
           {especes.map(esp => {
             const total = Object.values(matrix[esp]).reduce((s, n) => s + n, 0)
             return (
-              <tr key={esp} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '8px 8px 8px 0', fontWeight: 600, fontSize: 12, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{esp}</td>
+              <tr key={esp} style={{ borderBottom: `1px solid ${D.line}` }}>
+                <td style={{ padding: '8px 8px 8px 0', fontWeight: 600, fontSize: 12, color: D.ink, whiteSpace: 'nowrap' }}>{esp}</td>
                 {genList.map(g => (
                   <td key={g} style={{ textAlign: 'center', padding: '8px', fontVariantNumeric: 'tabular-nums' }}>
                     {matrix[esp][g]
-                      ? <span style={{ fontWeight: 700, color: GEN_COLOR[g], background: GEN_BG[g], padding: '2px 7px', borderRadius: 5, fontSize: 11 }}>{matrix[esp][g]}</span>
-                      : <span style={{ color: 'var(--border)', fontSize: 11 }}>—</span>}
+                      ? <span style={{ fontWeight: 700, color: GEN_CFG[g]?.color, background: GEN_CFG[g]?.bg, padding: '2px 7px', borderRadius: 5, fontSize: 11 }}>{matrix[esp][g]}</span>
+                      : <span style={{ color: D.line, fontSize: 11 }}>—</span>}
                   </td>
                 ))}
-                <td style={{ textAlign: 'center', padding: '8px', fontWeight: 800, fontSize: 13, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{total}</td>
+                <td style={{ textAlign: 'center', padding: '8px', fontWeight: 800, fontSize: 13, color: D.ink, fontVariantNumeric: 'tabular-nums' }}>{total}</td>
               </tr>
             )
           })}
