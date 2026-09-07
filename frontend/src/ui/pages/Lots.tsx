@@ -1091,13 +1091,9 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     stockByLotId[lid].push({ qty: Number(st.quantiteDisponible || 0), site: st.site?.nomSite || st.site?.codeSite || '' })
   })
 
-  // Org ID du multiplicateur lui-même, dérivé de ses propres lots G4/R1/R2
-  // (ces générations sont TOUJOURS produites par le multiplicateur, jamais reçues de l'extérieur)
-  // Permet de détecter les lots reçus sans dépendre de l'endpoint organisations.
-  const multOwnOrgId: number | null =
-    mesLots.find(l =>
-      ['G4','R1','R2'].includes(l.generation?.codeGeneration ?? '') && l.idOrgProducteur != null
-    )?.idOrgProducteur ?? null
+  // Org ID du multiplicateur : tous les lots de mesLots appartiennent à son org
+  // (filtre côté API : id_org_producteur = orgId du multiplicateur connecté)
+  const multOwnOrgId: number | null = mesLots.find(l => l.idOrgProducteur != null)?.idOrgProducteur ?? null
 
   // Retourne true si le lot a été produit par une org externe (reçu par transfert)
   const isExternalLot = (lot: any): boolean =>

@@ -24,6 +24,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.transaction.annotation.Transactional;
@@ -216,6 +217,7 @@ public class OrderController {
   }
 
   /** Changer le statut d'une commande. Déclenche un mouvement de stock sur LIVREE. */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-multiplicator','ROLE_seed-admin')")
   @Transactional
   @PutMapping("/{id}/statut")
   public ResponseEntity<Commande> updateStatut(@PathVariable Long id,
@@ -309,6 +311,7 @@ public class OrderController {
    * L'agent UPSemCL propose un lot et une quantité pour chaque ligne.
    * Pré-condition : commande SOUMISE ou déjà EN_NEGOCIATION (re-proposition autorisée).
    */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-admin')")
   @Transactional
   @PatchMapping("/{id}/proposer")
   public ResponseEntity<Commande> proposer(
@@ -344,6 +347,7 @@ public class OrderController {
    * Le multiplicateur accepte la proposition de l'UPSemCL.
    * Pré-condition : commande EN_NEGOCIATION.
    */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
   @Transactional
   @PatchMapping("/{id}/accepter-proposition")
   public ResponseEntity<Commande> accepterProposition(
@@ -371,6 +375,7 @@ public class OrderController {
    * Le multiplicateur refuse la proposition — effacement des propositions, retour à SOUMISE.
    * Pré-condition : commande EN_NEGOCIATION.
    */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
   @Transactional
   @PatchMapping("/{id}/refuser-proposition")
   public ResponseEntity<Commande> refuserProposition(@PathVariable Long id) {
@@ -397,6 +402,7 @@ public class OrderController {
    * Déclenche la livraison physique : débite le lot UPSemCL, crée un transfert_lot EN_ATTENTE.
    * Pré-condition : commande ACCORDEE.
    */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-admin')")
   @Transactional
   @PostMapping("/{id}/faire-transfert")
   public ResponseEntity<Commande> faireTransfert(
@@ -482,6 +488,7 @@ public class OrderController {
    * Crédite son stock, valide le transfert (→ ACCEPTE), passe la commande en LIVREE.
    * Pré-condition : commande EN_LIVRAISON.
    */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
   @Transactional
   @PatchMapping("/{id}/accuser-reception")
   public ResponseEntity<Commande> accuserReception(
@@ -562,6 +569,7 @@ public class OrderController {
    *
    * Pré-condition : la commande doit être SOUMISE (pas encore acceptée).
    */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-admin')")
   @Transactional
   @PostMapping("/{id}/valider-et-livrer")
   public ResponseEntity<Commande> validerEtLivrer(

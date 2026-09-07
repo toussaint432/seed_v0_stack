@@ -136,6 +136,29 @@ public class TransfertController {
             }
         }
 
+        // 3c. Transfert UPSemCL → Multiplicateur sans commande (transfert direct) : lot REC pour le multiplicateur
+        if (commandeOpt.isEmpty() && "seed-upsemcl".equals(t.getRoleEmetteur())
+                && "seed-multiplicator".equals(t.getRoleDestinataire())) {
+            try {
+                Long orgDest = stockCreditRepo.findOrgIdByUsername(t.getUsernameDestinataire()).orElse(null);
+                if (orgDest != null) {
+                    String codeLot = "REC-DIRECT-" + t.getCodeTransfert();
+                    Long newLotId = stockCreditRepo.createReceptionLot(
+                        sourceLotId, codeLot, orgDest, t.getUsernameDestinataire(), t.getQuantite(), "kg"
+                    );
+                    t.setIdLot(newLotId);
+                    log.info("Lot REC {} (id={}) créé pour multiplicateur org={} — transfert direct UPSemCL {}",
+                        codeLot, newLotId, orgDest, t.getCodeTransfert());
+                } else {
+                    log.warn("Org multiplicateur introuvable pour {} — lot REC non créé (transfert direct {})",
+                        t.getUsernameDestinataire(), t.getCodeTransfert());
+                }
+            } catch (Exception e) {
+                log.error("Impossible de créer le lot REC direct pour transfert {} : {}",
+                    t.getCodeTransfert(), e.getMessage());
+            }
+        }
+
         TransfertLot saved = transfertRepo.save(t);
 
         // 4. Résoudre le site de stockage du destinataire
