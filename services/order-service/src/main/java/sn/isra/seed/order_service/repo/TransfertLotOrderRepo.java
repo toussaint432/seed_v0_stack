@@ -22,8 +22,8 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
            username_destinataire, role_destinataire, generation_transferee,
            quantite, statut, date_demande, date_acceptation, created_at)
         SELECT
-          :code, :idLot, :emetteur, 'seed-upsemcl',
-          :destinataire, 'seed-multiplicator',
+          :code, :idLot, :emetteur, :roleEmetteur,
+          :destinataire, :roleDestinataire,
           g.code_generation,
           :quantite, 'ACCEPTE', CURRENT_DATE, CURRENT_DATE, now()
         FROM lot_semencier l
@@ -33,10 +33,12 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
     int createAutoTransfert(@Param("code") String code,
                             @Param("idLot") Long idLot,
                             @Param("emetteur") String emetteur,
+                            @Param("roleEmetteur") String roleEmetteur,
                             @Param("destinataire") String destinataire,
+                            @Param("roleDestinataire") String roleDestinataire,
                             @Param("quantite") BigDecimal quantite);
 
-    /** Crée un transfert en attente de validation par le multiplicateur (statut EN_ATTENTE). */
+    /** Crée un transfert en attente de validation par le destinataire (statut EN_ATTENTE). */
     @Modifying
     @Query(value = """
         INSERT INTO transfert_lot
@@ -44,8 +46,8 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
            username_destinataire, role_destinataire, generation_transferee,
            quantite, statut, date_demande, created_at)
         SELECT
-          :code, :idLot, :emetteur, 'seed-upsemcl',
-          :destinataire, 'seed-multiplicator',
+          :code, :idLot, :emetteur, :roleEmetteur,
+          :destinataire, :roleDestinataire,
           g.code_generation,
           :quantite, 'EN_ATTENTE', CURRENT_DATE, now()
         FROM lot_semencier l
@@ -55,7 +57,9 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
     int createPendingTransfert(@Param("code") String code,
                                @Param("idLot") Long idLot,
                                @Param("emetteur") String emetteur,
+                               @Param("roleEmetteur") String roleEmetteur,
                                @Param("destinataire") String destinataire,
+                               @Param("roleDestinataire") String roleDestinataire,
                                @Param("quantite") BigDecimal quantite);
 
     /**

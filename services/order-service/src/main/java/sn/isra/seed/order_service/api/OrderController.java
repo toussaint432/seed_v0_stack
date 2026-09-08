@@ -105,6 +105,28 @@ public class OrderController {
     return false;
   }
 
+  /** Extrait le premier rôle seed-* du JWT. */
+  private String extractRole(Jwt jwt) {
+    if (jwt == null) return "seed-upsemcl";
+    try {
+      java.util.Map<String, Object> ra = jwt.getClaim("realm_access");
+      if (ra == null) return "seed-upsemcl";
+      Object roles = ra.get("roles");
+      if (roles instanceof java.util.List<?> list) {
+        return list.stream()
+            .filter(r -> r instanceof String s && s.startsWith("seed-"))
+            .map(Object::toString)
+            .findFirst().orElse("seed-upsemcl");
+      }
+    } catch (Exception ignored) {}
+    return "seed-upsemcl";
+  }
+
+  /** Déduit le rôle attendu du destinataire selon celui de l'émetteur. */
+  private String roleDestinataire(String roleEmetteur) {
+    return "seed-upsemcl".equals(roleEmetteur) ? "seed-multiplicator" : "seed-quotataire";
+  }
+
   /** Commandes passées par le quotataire connecté */
   @GetMapping("/mes-commandes")
   public Page<Commande> mesCommandes(
@@ -286,10 +308,12 @@ public class OrderController {
               ligne.getIdVariete(), ligne.getIdGeneration(), alloc.getQuantiteAllouee());
 
           // 5. Transfert_lot ACCEPTE pointant sur le lot REC (pas sur le lot UPSemCL)
+          // updateStatut est réservé à UPSemCL/Multiplicateur/admin — on dérive le rôle dest.
           String codeTransfert = "AUTO-TL-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
           transfertLotOrderRepo.createAutoTransfert(
-              codeTransfert, newLotId, emetteur,
-              commande.getUsernameAcheteur(), alloc.getQuantiteAllouee()
+              codeTransfert, newLotId, emetteur, "seed-upsemcl",
+              commande.getUsernameAcheteur(), "seed-multiplicator",
+              alloc.getQuantiteAllouee()
           );
 
           log.info("Livraison (updateStatut) : lot REC {} créé pour org {} à partir du lot UPSemCL {}",
@@ -311,7 +335,7 @@ public class OrderController {
    * L'agent UPSemCL propose un lot et une quantité pour chaque ligne.
    * Pré-condition : commande SOUMISE ou déjà EN_NEGOCIATION (re-proposition autorisée).
    */
-  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-admin')")
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-multiplicator','ROLE_seed-admin')")
   @Transactional
   @PatchMapping("/{id}/proposer")
   public ResponseEntity<Commande> proposer(
@@ -347,7 +371,7 @@ public class OrderController {
    * Le multiplicateur accepte la proposition de l'UPSemCL.
    * Pré-condition : commande EN_NEGOCIATION.
    */
-  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-quotataire','ROLE_seed-admin')")
   @Transactional
   @PatchMapping("/{id}/accepter-proposition")
   public ResponseEntity<Commande> accepterProposition(
@@ -375,7 +399,7 @@ public class OrderController {
    * Le multiplicateur refuse la proposition — effacement des propositions, retour à SOUMISE.
    * Pré-condition : commande EN_NEGOCIATION.
    */
-  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-quotataire','ROLE_seed-admin')")
   @Transactional
   @PatchMapping("/{id}/refuser-proposition")
   public ResponseEntity<Commande> refuserProposition(@PathVariable Long id) {
@@ -402,7 +426,7 @@ public class OrderController {
    * Déclenche la livraison physique : débite le lot UPSemCL, crée un transfert_lot EN_ATTENTE.
    * Pré-condition : commande ACCORDEE.
    */
-  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-admin')")
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-multiplicator','ROLE_seed-admin')")
   @Transactional
   @PostMapping("/{id}/faire-transfert")
   public ResponseEntity<Commande> faireTransfert(
@@ -420,7 +444,9 @@ public class OrderController {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Acheteur non identifié — impossible de créer le transfert");
     }
 
-    String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+    String emetteur      = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+    String roleEmett     = extractRole(jwt);
+    String roleDest      = roleDestinataire(roleEmett);
     // Code de base stocké sur la commande ; chaque ligne reçoit un code unique suffixé "-L{id}"
     String baseCode = "TL-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
 
@@ -466,8 +492,8 @@ public class OrderController {
       transfertLotOrderRepo.createPendingTransfert(
           codeLigne,
           ligne.getIdLotPropose(),
-          emetteur,
-          commande.getUsernameAcheteur(),
+          emetteur, roleEmett,
+          commande.getUsernameAcheteur(), roleDest,
           ligne.getQuantiteProposee()
       );
 
@@ -488,7 +514,7 @@ public class OrderController {
    * Crédite son stock, valide le transfert (→ ACCEPTE), passe la commande en LIVREE.
    * Pré-condition : commande EN_LIVRAISON.
    */
-  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-quotataire','ROLE_seed-admin')")
   @Transactional
   @PatchMapping("/{id}/accuser-reception")
   public ResponseEntity<Commande> accuserReception(
@@ -569,7 +595,7 @@ public class OrderController {
    *
    * Pré-condition : la commande doit être SOUMISE (pas encore acceptée).
    */
-  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-admin')")
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-multiplicator','ROLE_seed-admin')")
   @Transactional
   @PostMapping("/{id}/valider-et-livrer")
   public ResponseEntity<Commande> validerEtLivrer(
@@ -598,7 +624,9 @@ public class OrderController {
           "Organisation acheteur non renseignée — impossible de créditer le stock");
     }
 
-    String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+    String emetteur  = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+    String roleEmett = extractRole(jwt);
+    String roleDest  = roleDestinataire(roleEmett);
 
     // 2. Pour chaque allocation : enregistrement + mouvements de stock + transfert
     for (ValiderCommandeRequest.AllocationItem item : req.allocations()) {
@@ -615,8 +643,12 @@ public class OrderController {
       alloc.setCreatedAt(Instant.now());
       allocationRepo.save(alloc);
 
-      // 2b. Débiter le stock UPSemCL (table stock) — no-op si pas encore d'entrée stock
-      stockOrderRepo.debitUpsemcl(item.idLot(), item.quantite());
+      // 2b. Débiter le stock du fournisseur réel : multiplicateur ou UPSemCL selon la commande
+      if (commande.getIdOrganisationFournisseur() != null) {
+        stockOrderRepo.debitByOrg(item.idLot(), commande.getIdOrganisationFournisseur(), item.quantite());
+      } else {
+        stockOrderRepo.debitUpsemcl(item.idLot(), item.quantite());
+      }
 
       // 2c. Créer un lot de réception pour le multiplicateur + créditer son site principal
       String uniteItem = ligne.getUnite() != null ? ligne.getUnite() : "kg";
@@ -657,8 +689,8 @@ public class OrderController {
       transfertLotOrderRepo.createAutoTransfert(
           codeTransfert,
           newLotId,
-          emetteur,
-          commande.getUsernameAcheteur(),
+          emetteur, roleEmett,
+          commande.getUsernameAcheteur(), roleDest,
           item.quantite()
       );
 

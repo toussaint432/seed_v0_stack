@@ -101,15 +101,20 @@ public class StockCreditRepo {
      */
     public void marquerCommandeLivree(String codeTransfert) {
         if (codeTransfert == null || codeTransfert.isBlank()) return;
+        // Supporte les deux formats : code exact (mono-ligne) ET code prefixé -L{id} (multi-lignes)
         jdbc.update(
-            "UPDATE commande SET statut = 'LIVREE' WHERE code_transfert_genere = ? AND statut != 'LIVREE'",
-            codeTransfert
+            "UPDATE commande SET statut = 'LIVREE'" +
+            " WHERE (code_transfert_genere = ? OR ? LIKE (code_transfert_genere || '-%'))" +
+            "   AND statut != 'LIVREE'",
+            codeTransfert, codeTransfert
         );
     }
 
     /**
      * Vérifie si un transfert a été généré par le order-service (présence d'une commande liée).
-     * Retourne les informations nécessaires pour créer le lot REC côté lot-service.
+     * Supporte les deux formats de code :
+     *   - exact (mono-ligne) : WHERE code_transfert_genere = 'TL-XXX'
+     *   - prefixé (multi-lignes) : WHERE 'TL-XXX-L40' LIKE (code_transfert_genere || '-%')
      */
     public Optional<CommandeTransfertInfo> findCommandeByTransfert(String codeTransfert) {
         if (codeTransfert == null || codeTransfert.isBlank()) return Optional.empty();
@@ -119,7 +124,7 @@ public class StockCreditRepo {
                    c.id_organisation_acheteur, c.username_acheteur
             FROM commande c
             JOIN ligne_commande l ON l.id_commande = c.id
-            WHERE c.code_transfert_genere = ?
+            WHERE (c.code_transfert_genere = ? OR ? LIKE (c.code_transfert_genere || '-%'))
             LIMIT 1
             """,
             (rs, i) -> new CommandeTransfertInfo(
@@ -128,7 +133,7 @@ public class StockCreditRepo {
                 rs.getLong("id_organisation_acheteur"),
                 rs.getString("username_acheteur")
             ),
-            codeTransfert
+            codeTransfert, codeTransfert
         );
         return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
     }

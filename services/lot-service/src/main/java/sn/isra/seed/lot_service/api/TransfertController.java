@@ -136,9 +136,12 @@ public class TransfertController {
             }
         }
 
-        // 3c. Transfert UPSemCL → Multiplicateur sans commande (transfert direct) : lot REC pour le multiplicateur
-        if (commandeOpt.isEmpty() && "seed-upsemcl".equals(t.getRoleEmetteur())
-                && "seed-multiplicator".equals(t.getRoleDestinataire())) {
+        // 3c. Transfert direct sans commande (UPSemCL→Mult ou Mult→Quot) : lot REC pour le destinataire
+        // Ne s'active que si la commande n'a pas été trouvée ET que l'émetteur n'est pas le sélectionneur
+        if (commandeOpt.isEmpty()
+                && !"seed-selector".equals(t.getRoleEmetteur())
+                && ("seed-multiplicator".equals(t.getRoleDestinataire())
+                    || "seed-quotataire".equals(t.getRoleDestinataire()))) {
             try {
                 Long orgDest = stockCreditRepo.findOrgIdByUsername(t.getUsernameDestinataire()).orElse(null);
                 if (orgDest != null) {
@@ -147,10 +150,10 @@ public class TransfertController {
                         sourceLotId, codeLot, orgDest, t.getUsernameDestinataire(), t.getQuantite(), "kg"
                     );
                     t.setIdLot(newLotId);
-                    log.info("Lot REC {} (id={}) créé pour multiplicateur org={} — transfert direct UPSemCL {}",
-                        codeLot, newLotId, orgDest, t.getCodeTransfert());
+                    log.info("Lot REC {} (id={}) créé pour org={} (role={}) — transfert direct {}",
+                        codeLot, newLotId, orgDest, t.getRoleDestinataire(), t.getCodeTransfert());
                 } else {
-                    log.warn("Org multiplicateur introuvable pour {} — lot REC non créé (transfert direct {})",
+                    log.warn("Org destinataire introuvable pour {} — lot REC non créé (transfert direct {})",
                         t.getUsernameDestinataire(), t.getCodeTransfert());
                 }
             } catch (Exception e) {
