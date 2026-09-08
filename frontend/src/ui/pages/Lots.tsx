@@ -2508,6 +2508,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [auditLog,     setAuditLog]     = useState<any[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [confirmingLotId, setConfirmingLotId] = useState<number | null>(null)
+  const [confirmModal,    setConfirmModal]    = useState<{ lot: any } | null>(null)
 
   const canEditLot = (l: any) =>
     l.statutEdition !== 'CONFIRME' &&
@@ -2567,7 +2568,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   }
 
   async function confirmerLot(l: any) {
-    if (!window.confirm(`Valider le lot ${l.codeLot} ? Les données seront verrouillées et ne pourront plus être modifiées.`)) return
+    setConfirmModal(null)
     setConfirmingLotId(l.id)
     try {
       await api.post(endpoints.lotConfirmer(l.id), {})
@@ -3248,6 +3249,10 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-start' }}>
                         <span className={`badge ${GEN_COLORS[gen] || 'badge-gray'}`} style={{ fontSize: 11 }}>{gen}</span>
                         <span className={`badge ${l.statutLot === 'DISPONIBLE' ? 'badge-green' : l.statutLot === 'TRANSFERE' ? 'badge-blue' : 'badge-gray'}`} style={{ fontSize: 10 }}>{l.statutLot}</span>
+                        {l.statutEdition === 'CONFIRME'
+                          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 600, color: '#16a34a' }}><Lock size={9} /> Validé</span>
+                          : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 600, color: '#D97706', background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 3, padding: '1px 5px' }}>Brouillon</span>
+                        }
                       </div>
                     </td>
                     <td>
@@ -3368,7 +3373,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                         >{certShieldIcon(l) ?? <Shield size={13} />}</button>
                         {/* Cadenas édition */}
                         {l.statutEdition === 'CONFIRME'
-                          ? <Lock size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} title="Données verrouillées" />
+                          ? <Lock size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} title="Données verrouillées — lot validé définitivement" />
                           : canEditLot(l) && (
                             <button
                               className="btn btn-ghost"
@@ -3378,6 +3383,16 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                             ><Edit2 size={13} /></button>
                           )
                         }
+                        {/* Bouton Valider — visible uniquement pour le créateur (UPSemCL / Sélectionneur) */}
+                        {canConfirmLot(l) && (
+                          <button
+                            className="btn btn-ghost"
+                            style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: '#16a34a' }}
+                            title="Valider définitivement ce lot"
+                            disabled={confirmingLotId === l.id}
+                            onClick={() => setConfirmModal({ lot: l })}
+                          ><Check size={13} /></button>
+                        )}
                         <button
                           className="btn btn-ghost"
                           style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: 'var(--text-muted)' }}
@@ -3569,8 +3584,8 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                     className="btn btn-primary"
                     style={{ fontSize: 12, gap: 5, flex: '1 1 auto', background: '#16a34a', borderColor: '#16a34a' }}
                     disabled={confirmingLotId === l.id}
-                    onClick={() => confirmerLot(l)}>
-                    <Check size={12} /> Valider
+                    onClick={() => setConfirmModal({ lot: l })}>
+                    <Check size={12} /> Valider définitivement
                   </button>
                 )}
                 {/* Cadenas si déjà verrouillé */}
@@ -4070,6 +4085,74 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
           )}
         </Modal>
       )}
+
+      {/* ── Modal confirmation validation définitive ─────────────────── */}
+      {confirmModal && (() => {
+        const l = confirmModal.lot
+        const gen = l.generation?.codeGeneration || '?'
+        const hex = GEN_HEX[gen] ?? '#6b7280'
+        return (
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+            onClick={() => setConfirmModal(null)}
+          >
+            <div
+              style={{ background: 'var(--surface)', borderRadius: 14, width: '100%', maxWidth: 440, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid var(--border)', background: hex + '0d' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: hex + '20', border: `1.5px solid ${hex}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Lock size={17} style={{ color: hex }} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Valider définitivement</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Cette action est irréversible</div>
+                  </div>
+                </div>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px', background: hex + '15', borderRadius: 6, border: `1px solid ${hex}30` }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{l.codeLot}</span>
+                  <span className={`badge ${GEN_COLORS[gen] || 'badge-gray'}`} style={{ fontSize: 10 }}>{gen}</span>
+                </div>
+              </div>
+
+              <div style={{ padding: '18px 24px 20px' }}>
+                <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 14 }}>
+                  Une fois validé, ce lot sera <strong>verrouillé</strong> — ses données ne pourront plus être modifiées ou supprimées.
+                  Il deviendra visible dans le catalogue et pourra faire l'objet de commandes.
+                </p>
+                <div style={{ background: '#FFFBEB', border: '1px solid #FDE68A', borderRadius: 8, padding: '10px 14px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 15, flexShrink: 0, marginTop: 1 }}>⚠️</span>
+                  <span style={{ fontSize: 12, color: '#92400E', lineHeight: 1.5 }}>
+                    Vérifiez que toutes les données qualité (germination, pureté, quantité) sont correctes avant de valider.
+                  </span>
+                </div>
+              </div>
+
+              <div style={{ padding: '0 24px 20px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 13, minWidth: 90 }}
+                  onClick={() => setConfirmModal(null)}
+                >
+                  Annuler
+                </button>
+                <button
+                  className="btn btn-primary"
+                  style={{ fontSize: 13, gap: 6, minWidth: 160, background: '#16a34a', borderColor: '#16a34a' }}
+                  disabled={confirmingLotId === l.id}
+                  onClick={() => confirmerLot(l)}
+                >
+                  {confirmingLotId === l.id
+                    ? <><RefreshCw size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> Validation…</>
+                    : <><Check size={13} /> Valider définitivement</>
+                  }
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
