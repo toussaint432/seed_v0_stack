@@ -481,15 +481,6 @@ export function App() {
             </>
           )}
 
-          <div className="nav-section-label">Compte</div>
-          <button
-            className={`nav-item ${validPage === 'profile' ? 'active' : ''}`}
-            onClick={() => navigate('/profile')}
-            title={collapsed ? 'Mon profil' : undefined}
-          >
-            <span className="nav-icon"><CircleUser size={16} /></span>
-            <span className="nav-label">Mon profil</span>
-          </button>
         </nav>
 
         {/* User footer */}
