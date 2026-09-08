@@ -445,6 +445,12 @@ export function App() {
                   <span className="nav-label">{label}</span>
                   {badge && <span className="nav-badge">{badge}</span>}
                   {id === 'messages' && unread > 0 && <span className="nav-badge">{unread}</span>}
+                  {id === 'certifications' && (() => {
+                    const actionCount = user.roleKey === 'seed-upsemcl' || user.roleKey === 'seed-admin'
+                      ? certifNotifs.length
+                      : certifNotifs.filter((l: any) => l.statutCertification === 'REJETE').length
+                    return actionCount > 0 ? <span className="nav-badge">{actionCount}</span> : null
+                  })()}
                 </button>
               ))}
             </React.Fragment>
@@ -709,7 +715,7 @@ export function App() {
             <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
             <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />
             <Route path="/messages"       element={<Messages roleKey={user.roleKey} username={user.name} />} />
-            <Route path="/directeur"     element={<DirecteurDashboard />} />
+            <Route path="/directeur"     element={currentRole === 'seed-directeur' || currentRole === 'seed-admin' ? <DirecteurDashboard /> : <Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
             <Route path="*"              element={<Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
           </Routes>
         </main>

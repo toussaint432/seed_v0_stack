@@ -224,6 +224,30 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         """)
     List<Object[]> statsParGeneration();
 
+    /** Agrégats filtrés par organisation productrice (UPSemCL / multiplicateur). */
+    @Query("""
+        SELECT l.generation.codeGeneration,
+               COUNT(l),
+               SUM(COALESCE(l.quantiteNette, 0))
+        FROM LotSemencier l
+        WHERE l.idOrgProducteur = :orgId
+        GROUP BY l.generation.codeGeneration
+        ORDER BY l.generation.codeGeneration
+        """)
+    List<Object[]> statsParGenerationForOrg(@Param("orgId") Long orgId);
+
+    /** Agrégats filtrés par créateur (sélectionneur). */
+    @Query("""
+        SELECT l.generation.codeGeneration,
+               COUNT(l),
+               SUM(COALESCE(l.quantiteNette, 0))
+        FROM LotSemencier l
+        WHERE l.usernameCreateur = :username
+        GROUP BY l.generation.codeGeneration
+        ORDER BY l.generation.codeGeneration
+        """)
+    List<Object[]> statsParGenerationForUser(@Param("username") String username);
+
     @Query("SELECT l FROM LotSemencier l WHERE l.statutEdition = :statut AND l.createdAt < :limite")
     List<LotSemencier> findBrouillonsAnciensDe(
         @Param("limite") java.time.Instant limite,

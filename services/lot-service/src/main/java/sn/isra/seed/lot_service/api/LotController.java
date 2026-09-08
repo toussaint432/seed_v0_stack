@@ -150,8 +150,20 @@ public class LotController {
     }
 
     @GetMapping("/stats")
-    public List<LotGenStatsDto> stats() {
-        return lotRepo.statsParGeneration().stream()
+    public List<LotGenStatsDto> stats(@AuthenticationPrincipal Jwt jwt) {
+        List<String> roles = JwtHelper.extractRoles(jwt);
+        boolean isGlobal = roles.contains("seed-admin") || roles.contains("seed-directeur");
+        List<Object[]> rows;
+        if (isGlobal) {
+            rows = lotRepo.statsParGeneration();
+        } else if (roles.contains("seed-selector")) {
+            String username = JwtHelper.getUsername(jwt);
+            rows = username != null ? lotRepo.statsParGenerationForUser(username) : List.of();
+        } else {
+            Long orgId = lotService.resolveOrgId(jwt);
+            rows = orgId != null ? lotRepo.statsParGenerationForOrg(orgId) : List.of();
+        }
+        return rows.stream()
             .map(row -> new LotGenStatsDto(
                 (String) row[0],
                 ((Number) row[1]).longValue(),
@@ -160,11 +172,13 @@ public class LotController {
             .toList();
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl','ROLE_seed-multiplicator','ROLE_seed-directeur')")
     @GetMapping("/catalogue-g3")
     public List<LotSemencierDto> catalogueG3() {
         return lotMapper.toDtoList(lotRepo.findCatalogueG3(StatutLot.DISPONIBLE));
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl','ROLE_seed-selector','ROLE_seed-directeur')")
     @GetMapping("/catalogue-g1")
     public List<LotSemencierDto> catalogueG1() {
         return lotMapper.toDtoList(lotRepo.findCatalogueG1(StatutLot.DISPONIBLE));
