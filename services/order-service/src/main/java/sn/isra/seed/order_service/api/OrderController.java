@@ -573,6 +573,7 @@ public class OrderController {
     return ResponseEntity.ok(commandeRepo.save(commande));
   }
 
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl','ROLE_seed-multiplicator')")
   @PostMapping("/allocate")
   public AllocationCommande allocate(@Valid @RequestBody AllocateRequest req) {
     LigneCommande ligne = ligneRepo.findById(req.idLigne()).orElseThrow();

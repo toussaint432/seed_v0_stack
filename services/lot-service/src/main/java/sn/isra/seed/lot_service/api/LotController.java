@@ -70,6 +70,7 @@ public class LotController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-upsemcl','ROLE_seed-multiplicator')")
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public LotSemencierDto create(@Valid @RequestBody LotSemencier lot,
@@ -85,7 +86,7 @@ public class LotController {
         return lotMapper.toDto(lotService.createChild(id, req, jwt));
     }
 
-    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-multiplicator')")
+    @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-upsemcl','ROLE_seed-multiplicator')")
     @PatchMapping("/{id}/statut")
     public ResponseEntity<LotSemencierDto> updateStatut(@PathVariable Long id,
                                                          @RequestBody Map<String, String> body,

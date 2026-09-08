@@ -1,5 +1,7 @@
 package sn.isra.seed.lot_service.api;
 
+import sn.isra.seed.lot_service.api.dto.LotSemencierDto;
+import sn.isra.seed.lot_service.api.mapper.LotMapper;
 import sn.isra.seed.lot_service.entity.LotAuditLog;
 import sn.isra.seed.lot_service.entity.LotSemencier;
 import sn.isra.seed.lot_service.entity.enums.StatutCertification;
@@ -41,6 +43,7 @@ public class LotDocumentController {
 
     private final LotRepo         lotRepo;
     private final LotAuditLogRepo auditLogRepo;
+    private final LotMapper       lotMapper;
 
     @Value("${uploads.dir:/app/uploads}")
     private String uploadsDir;
@@ -135,25 +138,25 @@ public class LotDocumentController {
 
     @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl')")
     @GetMapping("/a-certifier")
-    public List<LotSemencier> lotsACertifier() {
-        return lotRepo.findLotsACertifier();
+    public List<LotSemencierDto> lotsACertifier() {
+        return lotMapper.toDtoList(lotRepo.findLotsACertifier());
     }
 
     /** Tous les lots G4/R1/R2 (tous statuts) — vue complète certification UPSemCL/Admin */
     @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl')")
     @GetMapping("/certifiables")
-    public List<LotSemencier> lotsCertifiables() {
-        return lotRepo.findAllCertifiables();
+    public List<LotSemencierDto> lotsCertifiables() {
+        return lotMapper.toDtoList(lotRepo.findAllCertifiables());
     }
 
     /** Lots G4/R1/R2 DU multiplicateur connecté uniquement — isolation individuelle */
     @PreAuthorize("hasAuthority('ROLE_seed-multiplicator')")
     @GetMapping("/mes-lots-certif")
-    public List<LotSemencier> mesLotsCertif(@AuthenticationPrincipal Jwt jwt) {
+    public List<LotSemencierDto> mesLotsCertif(@AuthenticationPrincipal Jwt jwt) {
         if (jwt == null) return List.of();
         String username = jwt.getClaimAsString("preferred_username");
         if (username == null || username.isBlank()) return List.of();
-        return lotRepo.findMesLotsCertif(username);
+        return lotMapper.toDtoList(lotRepo.findMesLotsCertif(username));
     }
 
     // ══════════════════════════════════════════════════════════════════
