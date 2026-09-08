@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { ShoppingCart, Mic, Play, Pause } from 'lucide-react'
+import { api } from '../../lib/api'
 
 interface MessageData {
   id: number
@@ -29,6 +30,35 @@ function fmt(s: number) {
   return `${Math.floor(s / 60)}:${Math.floor(s % 60).toString().padStart(2, '0')}`
 }
 
+/** Récupère un fichier protégé via axios (JWT) et retourne une Blob URL locale. */
+function useAuthMediaUrl(urlMedia: string | undefined): { blobUrl: string | null; error: boolean } {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    if (!urlMedia) return
+    let revoked = false
+    let objectUrl: string | null = null
+
+    api.get(`${ORDER_BASE}${urlMedia}`, { responseType: 'blob' })
+      .then(res => {
+        if (revoked) return
+        objectUrl = URL.createObjectURL(res.data as Blob)
+        setBlobUrl(objectUrl)
+      })
+      .catch(() => {
+        if (!revoked) setError(true)
+      })
+
+    return () => {
+      revoked = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [urlMedia])
+
+  return { blobUrl, error }
+}
+
 function CommandeCard({ contenu }: { contenu: string }) {
   try {
     const data = JSON.parse(contenu)
@@ -49,12 +79,12 @@ function CommandeCard({ contenu }: { contenu: string }) {
   }
 }
 
-function AudioPlayer({ src, isMine }: { src: string; isMine: boolean }) {
+function AudioPlayer({ urlMedia, isMine }: { urlMedia: string; isMine: boolean }) {
+  const { blobUrl, error } = useAuthMediaUrl(urlMedia)
   const audioRef = useRef<HTMLAudioElement>(null)
   const [playing, setPlaying]     = useState(false)
   const [duration, setDuration]   = useState(0)
   const [currentTime, setCurrent] = useState(0)
-  const [hasError, setHasError]   = useState(false)
 
   useEffect(() => {
     return () => { audioRef.current?.pause() }
@@ -63,11 +93,7 @@ function AudioPlayer({ src, isMine }: { src: string; isMine: boolean }) {
   function toggle() {
     const a = audioRef.current
     if (!a) return
-    if (playing) {
-      a.pause()
-    } else {
-      a.play().catch(() => setHasError(true))
-    }
+    if (playing) { a.pause() } else { a.play().catch(() => {}) }
   }
 
   function seek(e: React.MouseEvent<HTMLDivElement>) {
@@ -79,7 +105,7 @@ function AudioPlayer({ src, isMine }: { src: string; isMine: boolean }) {
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
-  if (hasError) {
+  if (error) {
     return (
       <div className="audio-player-error">
         <Mic size={14} />
@@ -88,11 +114,21 @@ function AudioPlayer({ src, isMine }: { src: string; isMine: boolean }) {
     )
   }
 
+  if (!blobUrl) {
+    return (
+      <div className={`audio-player ${isMine ? 'mine' : 'other'}`} style={{ opacity: 0.5 }}>
+        <button className="audio-play-btn" disabled><Play size={14} fill="currentColor" /></button>
+        <div className="audio-track-wrap"><div className="audio-track-bg" /></div>
+        <span className="audio-time-label">…</span>
+      </div>
+    )
+  }
+
   return (
     <div className={`audio-player ${isMine ? 'mine' : 'other'}`}>
       <audio
         ref={audioRef}
-        src={src}
+        src={blobUrl}
         preload="metadata"
         onLoadedMetadata={() => {
           const a = audioRef.current
@@ -102,10 +138,7 @@ function AudioPlayer({ src, isMine }: { src: string; isMine: boolean }) {
           const a = audioRef.current
           if (a && isFinite(a.duration) && a.duration > 0) setDuration(a.duration)
         }}
-        onTimeUpdate={() => {
-          const a = audioRef.current
-          if (a) setCurrent(a.currentTime)
-        }}
+        onTimeUpdate={() => { const a = audioRef.current; if (a) setCurrent(a.currentTime) }}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onEnded={() => {
@@ -113,20 +146,16 @@ function AudioPlayer({ src, isMine }: { src: string; isMine: boolean }) {
           setCurrent(0)
           if (audioRef.current) audioRef.current.currentTime = 0
         }}
-        onError={() => setHasError(true)}
       />
-
       <button className="audio-play-btn" onClick={toggle} title={playing ? 'Pause' : 'Lecture'}>
         {playing ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
       </button>
-
       <div className="audio-track-wrap" onClick={seek}>
         <div className="audio-track-bg">
           <div className="audio-track-fill" style={{ width: `${progress}%` }} />
           <div className="audio-track-thumb" style={{ left: `${progress}%` }} />
         </div>
       </div>
-
       <span className="audio-time-label">
         {playing || currentTime > 0 ? fmt(currentTime) : fmt(duration)}
       </span>
@@ -134,22 +163,38 @@ function AudioPlayer({ src, isMine }: { src: string; isMine: boolean }) {
   )
 }
 
+function AuthImage({ urlMedia, nomFichier }: { urlMedia: string; nomFichier?: string }) {
+  const { blobUrl, error } = useAuthMediaUrl(urlMedia)
+
+  if (error) {
+    return (
+      <div style={{ padding: '12px 16px', color: 'var(--text-muted)', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span>🖼</span> Image non disponible
+      </div>
+    )
+  }
+
+  if (!blobUrl) {
+    return <div style={{ width: 200, height: 120, background: 'var(--bg-muted, #f1f5f9)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>⏳</div>
+  }
+
+  return <img src={blobUrl} alt={nomFichier || 'image'} />
+}
+
 export function ChatBubble({ message, isMine }: Props) {
   const [lightbox, setLightbox] = useState(false)
+  const { blobUrl: lightboxUrl } = useAuthMediaUrl(
+    lightbox && message.type === 'IMAGE' ? message.urlMedia : undefined
+  )
 
   const content = (() => {
     switch (message.type) {
       case 'AUDIO':
-        return <AudioPlayer src={`${ORDER_BASE}${message.urlMedia}`} isMine={isMine} />
+        return <AudioPlayer urlMedia={message.urlMedia ?? ''} isMine={isMine} />
       case 'IMAGE':
         return (
-          <div className="bubble-image">
-            <img
-              src={`${ORDER_BASE}${message.urlMedia}`}
-              alt={message.nomFichier || 'image'}
-              onClick={() => setLightbox(true)}
-              loading="lazy"
-            />
+          <div className="bubble-image" onClick={() => setLightbox(true)} style={{ cursor: 'zoom-in' }}>
+            <AuthImage urlMedia={message.urlMedia ?? ''} nomFichier={message.nomFichier} />
           </div>
         )
       case 'COMMANDE':
@@ -171,11 +216,10 @@ export function ChatBubble({ message, isMine }: Props) {
       {lightbox && (
         <div className="lightbox-overlay" onClick={() => setLightbox(false)}>
           <button className="lightbox-close" onClick={() => setLightbox(false)}>✕</button>
-          <img
-            src={`${ORDER_BASE}${message.urlMedia}`}
-            alt={message.nomFichier || 'image'}
-            onClick={e => e.stopPropagation()}
-          />
+          {lightboxUrl
+            ? <img src={lightboxUrl} alt={message.nomFichier || 'image'} onClick={e => e.stopPropagation()} />
+            : <div style={{ color: '#fff' }}>Chargement…</div>
+          }
         </div>
       )}
     </>
