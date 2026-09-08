@@ -22,6 +22,7 @@ public interface StockOrderRepo extends JpaRepository<Stock, Long> {
           AND l.id_generation = :idGeneration
           AND s.quantite_disponible > 0
           AND l.statut_lot IN ('DISPONIBLE','CERTIFIE','EN_COURS_CERT')
+          AND l.statut_certification = 'CERTIFIE'
         """, nativeQuery = true)
     BigDecimal sumDisponibleR1R2(@Param("idVariete") Long idVariete,
                                  @Param("idGeneration") Long idGeneration);

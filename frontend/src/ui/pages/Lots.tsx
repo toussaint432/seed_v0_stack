@@ -1971,12 +1971,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                     }}
                                   ><GitBranch size={13} /></button>
                                 )}
-                                <button
-                                  className="btn btn-ghost"
-                                  style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: certButtonColor(l) }}
-                                  title={certButtonTitle(l)}
-                                  onClick={() => setCertLotMult(l)}
-                                >{certShieldIcon(l) ?? <Shield size={13} />}</button>
+                                {['G4','R1','R2'].includes(l.generation?.codeGeneration) && (
+                                  <button
+                                    className="btn btn-ghost"
+                                    style={{ width: 30, height: 30, padding: 0, borderRadius: 6, color: certButtonColor(l) }}
+                                    title={certButtonTitle(l)}
+                                    onClick={() => setCertLotMult(l)}
+                                  >{certShieldIcon(l) ?? <Shield size={13} />}</button>
+                                )}
                                 {/* Cadenas / Modifier */}
                                 {l.statutEdition === 'CONFIRME'
                                   ? <Lock size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} title="Données validées et verrouillées" />

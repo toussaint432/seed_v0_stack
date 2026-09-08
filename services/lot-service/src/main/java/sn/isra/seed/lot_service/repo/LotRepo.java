@@ -62,6 +62,7 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
           AND l.statutLot = :statut
           AND l.quantiteNette > 0
           AND l.codeLot NOT LIKE 'REC-%'
+          AND l.statutEdition = sn.isra.seed.lot_service.entity.enums.StatutEdition.CONFIRME
         ORDER BY l.dateProduction DESC, l.createdAt DESC
         """)
     List<LotSemencier> findCatalogueG3(@Param("statut") StatutLot statut);
@@ -118,6 +119,7 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         WHERE l.generation.codeGeneration = 'R2'
           AND l.statutLot = 'DISPONIBLE'
           AND l.quantiteNette > 0
+          AND l.statutCertification = sn.isra.seed.lot_service.entity.enums.StatutCertification.CERTIFIE
         ORDER BY l.createdAt DESC
         """)
     List<LotSemencier> findR2Disponible();
@@ -127,6 +129,7 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         WHERE l.generation.codeGeneration = 'R2'
           AND l.statutLot = 'DISPONIBLE'
           AND l.quantiteNette > 0
+          AND l.statutCertification = sn.isra.seed.lot_service.entity.enums.StatutCertification.CERTIFIE
         ORDER BY l.createdAt DESC
         """)
     Page<LotSemencier> findR2Disponible(Pageable pageable);

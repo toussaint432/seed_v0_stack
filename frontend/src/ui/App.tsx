@@ -188,7 +188,8 @@ export function App() {
   // LandingPage immédiatement sans attendre l'init KC.
   const [isKcCallback] = useState(() => new URLSearchParams(window.location.search).has('code'))
   const [collapsed, setCollapsed] = useState(false)
-  const [unread,    setUnread]    = useState(0)
+  const [unread,        setUnread]        = useState(0)
+  const [certifNotifs,  setCertifNotifs]  = useState<any[]>([])
   const unreadTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const [theme,     setTheme]     = useState<'system' | 'light' | 'dark'>(() => (localStorage.getItem('seed-theme') as any) || 'system')
   const [sessionWarning, setSessionWarning] = useState(false)
@@ -274,7 +275,7 @@ export function App() {
     return () => clearInterval(t)
   }, [ready])
 
-  // Polling badge non-lus (toutes les 30s, démarré après login authentifié uniquement)
+  // Polling badge non-lus + notifications certification (toutes les 30s)
   useEffect(() => {
     if (!ready || !keycloak.authenticated) return
     async function fetchUnread() {
@@ -285,8 +286,24 @@ export function App() {
         setUnread(r.data?.count || 0)
       } catch { /* ignoré */ }
     }
+    async function fetchCertifNotifs() {
+      try {
+        const { api } = await import('../lib/api')
+        const { endpoints } = await import('../lib/endpoints')
+        const roles: string[] = (keycloak.tokenParsed as any)?.realm_access?.roles ?? []
+        const role = roles.find((r: string) => r.startsWith('seed-')) ?? ''
+        if (role === 'seed-multiplicator') {
+          const r = await api.get(endpoints.lotsMultCertif)
+          setCertifNotifs(r.data ?? [])
+        } else if (role === 'seed-upsemcl' || role === 'seed-admin') {
+          const r = await api.get(endpoints.lotsACertifier)
+          setCertifNotifs(r.data ?? [])
+        }
+      } catch { /* ignoré */ }
+    }
     fetchUnread()
-    unreadTimer.current = setInterval(fetchUnread, 30_000)
+    fetchCertifNotifs()
+    unreadTimer.current = setInterval(() => { fetchUnread(); fetchCertifNotifs() }, 30_000)
     return () => { if (unreadTimer.current) clearInterval(unreadTimer.current) }
   }, [ready])
 
@@ -344,9 +361,30 @@ export function App() {
     transfer:      '/transfers',
     order:         '/orders',
     lot:           '/lots',
-    certification: '/lots',
+    certification: '/certifications',
     system:        '/dashboard',
   }
+
+  const roles: string[] = (keycloak.tokenParsed as any)?.realm_access?.roles ?? []
+  const currentRole = roles.find((r: string) => r.startsWith('seed-')) ?? ''
+
+  const certifNotifItems: Notif[] = (() => {
+    if (currentRole === 'seed-multiplicator') {
+      const rejetes  = certifNotifs.filter((l: any) => l.statutCertification === 'REJETE')
+      const certifies = certifNotifs.filter((l: any) => l.statutCertification === 'CERTIFIE')
+      const items: Notif[] = []
+      if (rejetes.length > 0)
+        items.push({ id: 100, type: 'certification', title: `${rejetes.length} lot${rejetes.length > 1 ? 's' : ''} rejeté${rejetes.length > 1 ? 's' : ''}`, sub: 'Corrections requises — voir Contrôle & Certif.', time: 'récent', read: false, href: NOTIF_HREF.certification })
+      if (certifies.length > 0)
+        items.push({ id: 101, type: 'certification', title: `${certifies.length} lot${certifies.length > 1 ? 's' : ''} certifié${certifies.length > 1 ? 's' : ''}`, sub: 'Validé par UPSemCL', time: 'récent', read: true, href: NOTIF_HREF.certification })
+      return items
+    }
+    if (currentRole === 'seed-upsemcl' || currentRole === 'seed-admin') {
+      if (certifNotifs.length === 0) return []
+      return [{ id: 100, type: 'certification' as const, title: `${certifNotifs.length} lot${certifNotifs.length > 1 ? 's' : ''} en attente de certification`, sub: 'Certificats à valider — voir Contrôle & Certif.', time: 'maintenant', read: false, href: NOTIF_HREF.certification }]
+    }
+    return []
+  })()
 
   const notifications: Notif[] = [
     ...(unread > 0 ? [{
@@ -355,8 +393,7 @@ export function App() {
       sub: 'Messagerie plateforme', time: 'maintenant', read: false,
       href: NOTIF_HREF.message,
     }] : []),
-    { id: 2, type: 'transfer', title: 'Transfert en attente de validation', sub: 'Un lot G3 attend votre approbation',     time: 'il y a 2h', read: false, href: NOTIF_HREF.transfer },
-    { id: 3, type: 'system',   title: 'Plateforme Sen Jiwu opérationnelle', sub: 'Tous les services sont actifs',         time: 'il y a 5h', read: true,  href: NOTIF_HREF.system   },
+    ...certifNotifItems,
   ]
   const unreadNotif = notifications.filter(n => !n.read).length
 

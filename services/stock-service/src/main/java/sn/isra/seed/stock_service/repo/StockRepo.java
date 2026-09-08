@@ -287,6 +287,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
       WHERE g.code_generation IN ('R1','R2')
         AND s.quantite_disponible > 0
         AND ls.statut_lot = 'DISPONIBLE'
+        AND ls.statut_certification = 'CERTIFIE'
         AND o.active = true
         AND o.type_organisation = 'MULTIPLICATEUR'
         AND (:codeEspece IS NULL OR e.code_espece = :codeEspece)
@@ -352,6 +353,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
           WHERE g.code_generation IN ('R1','R2')
             AND s.quantite_disponible > 0
             AND ls.statut_lot = 'DISPONIBLE'
+            AND ls.statut_certification = 'CERTIFIE'
             AND o.active = true
             AND o.type_organisation = 'MULTIPLICATEUR'
             /* Au moins une source de coordonnées disponible */
