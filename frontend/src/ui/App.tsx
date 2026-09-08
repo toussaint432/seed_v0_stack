@@ -193,13 +193,16 @@ export function App() {
   const unreadTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const [theme,     setTheme]     = useState<'system' | 'light' | 'dark'>(() => (localStorage.getItem('seed-theme') as any) || 'system')
   const [sessionWarning, setSessionWarning] = useState(false)
-  const [notifOpen, setNotifOpen] = useState(false)
-  const [cmdOpen,   setCmdOpen]   = useState(false)
-  const [cmdQuery,  setCmdQuery]  = useState('')
-  const [cmdIdx,    setCmdIdx]    = useState(0)
-  const notifRef  = useRef<HTMLDivElement>(null)
-  const searchRef = useRef<HTMLDivElement>(null)
-  const inputRef  = useRef<HTMLInputElement>(null)
+  const [notifOpen,    setNotifOpen]    = useState(false)
+  const [cmdOpen,      setCmdOpen]      = useState(false)
+  const [cmdQuery,     setCmdQuery]     = useState('')
+  const [cmdIdx,       setCmdIdx]       = useState(0)
+  const [userMenuOpen, setUserMenuOpen] = useState(false)
+  const [logoutModal,  setLogoutModal]  = useState(false)
+  const notifRef   = useRef<HTMLDivElement>(null)
+  const searchRef  = useRef<HTMLDivElement>(null)
+  const inputRef   = useRef<HTMLInputElement>(null)
+  const userMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     initKeycloak()
@@ -250,16 +253,18 @@ export function App() {
 
   // ── Fermer search ou notif si clic à l'extérieur ──
   useEffect(() => {
-    if (!cmdOpen && !notifOpen) return
+    if (!cmdOpen && !notifOpen && !userMenuOpen) return
     const handler = (e: MouseEvent) => {
-      if (cmdOpen   && searchRef.current && !searchRef.current.contains(e.target as Node))
+      if (cmdOpen      && searchRef.current   && !searchRef.current.contains(e.target as Node))
         { setCmdOpen(false); setCmdQuery('') }
-      if (notifOpen && notifRef.current  && !notifRef.current.contains(e.target as Node))
+      if (notifOpen    && notifRef.current    && !notifRef.current.contains(e.target as Node))
         setNotifOpen(false)
+      if (userMenuOpen && userMenuRef.current && !userMenuRef.current.contains(e.target as Node))
+        setUserMenuOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
-  }, [cmdOpen, notifOpen])
+  }, [cmdOpen, notifOpen, userMenuOpen])
 
   // Surveillance expiration session — avertissement 2 min avant
   useEffect(() => {
@@ -488,8 +493,41 @@ export function App() {
         </nav>
 
         {/* User footer */}
-        <div className="sidebar-footer">
-          <div className="user-card">
+        <div className="sidebar-footer" ref={userMenuRef} style={{ position: 'relative' }}>
+          {userMenuOpen && (
+            <div style={{
+              position: 'absolute', bottom: 'calc(100% + 6px)', left: 8, right: 8,
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              borderRadius: 10, boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+              overflow: 'hidden', zIndex: 200,
+            }}>
+              <button
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: 'var(--text-primary)', textAlign: 'left' }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-muted)')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                onClick={() => { navigate('/profile'); setUserMenuOpen(false) }}
+              >
+                <CircleUser size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                Mon profil
+              </button>
+              <div style={{ height: 1, background: 'var(--border)', margin: '0 10px' }} />
+              <button
+                style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#dc2626', textAlign: 'left' }}
+                onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                onClick={() => { setUserMenuOpen(false); setLogoutModal(true) }}
+              >
+                <LogOut size={15} style={{ flexShrink: 0 }} />
+                Se déconnecter
+              </button>
+            </div>
+          )}
+          <button
+            className="user-card"
+            style={{ width: '100%', cursor: 'pointer', background: userMenuOpen ? 'var(--bg-muted)' : undefined, border: 'none', textAlign: 'left' }}
+            onClick={() => setUserMenuOpen(o => !o)}
+            title={collapsed ? user.name : undefined}
+          >
             <div
               className="user-avatar"
               style={{ background: `linear-gradient(135deg, ${user.roleColor}, #0c1f15)` }}
@@ -502,14 +540,7 @@ export function App() {
                 <div className="user-role">{user.role}</div>
               </div>
             )}
-            <button
-              className="logout-btn"
-              title="Déconnexion"
-              onClick={() => keycloak.logout({ redirectUri: window.location.origin })}
-            >
-              <LogOut size={14} />
-            </button>
-          </div>
+          </button>
         </div>
       </aside>
 
@@ -656,27 +687,6 @@ export function App() {
               )}
             </div>
 
-            {/* Avatar cliquable → profil */}
-            <button
-              onClick={() => navigate('/profile')}
-              title={`${user.name} — Mon profil`}
-              style={{
-                width: 34, height: 34, borderRadius: '50%', border: 'none',
-                background: `linear-gradient(135deg, ${user.roleColor}, #0c1f15)`,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
-                boxShadow: '0 0 0 2px var(--border)',
-                overflow: 'hidden',
-              }}
-            >
-              {(() => {
-                const storedPhoto = (window as any).__profilePhoto ||
-                  localStorage.getItem(`seed-avatar-${(keycloak.tokenParsed as any)?.sub}`)
-                return storedPhoto
-                  ? <img src={storedPhoto} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : user.initials
-              })()}
-            </button>
           </div>
         </header>
 
@@ -721,6 +731,50 @@ export function App() {
         </main>
       </div>
     </div>
+
+    {/* ── Modal confirmation déconnexion ──────────────────────────── */}
+    {logoutModal && (
+      <div
+        style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(0,0,0,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
+        onClick={() => setLogoutModal(false)}
+      >
+        <div
+          style={{ background: 'var(--surface)', borderRadius: 14, width: '100%', maxWidth: 380, boxShadow: '0 20px 60px rgba(0,0,0,0.25)', overflow: 'hidden' }}
+          onClick={e => e.stopPropagation()}
+        >
+          <div style={{ padding: '22px 24px 18px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: '#fee2e2', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <LogOut size={18} style={{ color: '#dc2626' }} />
+              </div>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>Se déconnecter</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Votre session sera fermée</div>
+              </div>
+            </div>
+            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
+              Voulez-vous vraiment vous déconnecter de <strong>Sen Jiwu</strong> ?
+            </p>
+          </div>
+          <div style={{ padding: '0 24px 22px', display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 13, minWidth: 90 }}
+              onClick={() => setLogoutModal(false)}
+            >
+              Annuler
+            </button>
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 13, minWidth: 150, background: '#dc2626', borderColor: '#dc2626', gap: 7 }}
+              onClick={() => keycloak.logout({ redirectUri: window.location.origin })}
+            >
+              <LogOut size={13} /> Se déconnecter
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
 
     </>
   )
