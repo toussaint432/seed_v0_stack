@@ -794,11 +794,22 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         if (!genStats[g]) genStats[g] = { nbLots: 0, totalKg: 0 }
         genStats[g].nbLots++
       })
-      agrege.forEach((s: any) => {
-        const g = s.codeGeneration ?? 'N/A'
-        if (!genStats[g]) genStats[g] = { nbLots: 0, totalKg: 0 }
-        genStats[g].totalKg += parseFloat(s.quantiteTotale) || 0
-      })
+      if (agrege.length > 0) {
+        agrege.forEach((s: any) => {
+          const g = s.codeGeneration ?? 'N/A'
+          if (!genStats[g]) genStats[g] = { nbLots: 0, totalKg: 0 }
+          genStats[g].totalKg += parseFloat(s.quantiteTotale) || 0
+        })
+      } else if (stocks.length > 0) {
+        // agrege indisponible : reconstituer totalKg depuis stocks + jointure lot→génération
+        const lotGenMap: Record<number, string> = {}
+        lots.forEach((l: any) => { if (l.id) lotGenMap[l.id] = l.generation?.codeGeneration ?? 'N/A' })
+        stocks.forEach((s: any) => {
+          const g = lotGenMap[s.idLot] ?? 'N/A'
+          if (!genStats[g]) genStats[g] = { nbLots: 0, totalKg: 0 }
+          genStats[g].totalKg += parseFloat(s.quantiteDisponible) || 0
+        })
+      }
     } else {
       rawStats.forEach((s: any) => {
         genStats[s.codeGeneration] = { nbLots: Number(s.nbLots ?? 0), totalKg: Number(s.totalKg ?? 0) }
@@ -809,10 +820,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       ? lots.length
       : Object.values(genStats).reduce((s, g) => s + g.nbLots, 0)
 
-    // stockTotal : agrege (filtré par org pour UPSemCL/multiplicateur) > mon-stock > fallback stocks paginé
-    const stockTotal = (isMulti || isUpsemcl)
-      ? agrege.reduce((s: number, x: any) => s + (parseFloat(x.quantiteTotale) || 0), 0)
-      : stocks.reduce((s: number, x: any) => s + (parseFloat(x.quantiteDisponible) || 0), 0)
+    // stockTotal : stocks (/mon-stock) source primaire, agrege en fallback
+    const stockTotal = stocks.length > 0
+      ? stocks.reduce((s: number, x: any) => s + (parseFloat(x.quantiteDisponible) || 0), 0)
+      : agrege.reduce((s: number, x: any) => s + (parseFloat(x.quantiteTotale) || 0), 0)
     const ordersPending = orders.filter((o: any) => o.statut === 'SOUMISE').length
     const recentLots    = [...lots].sort((a: any, b: any) => (b.id || 0) - (a.id || 0)).slice(0, 8)
 
