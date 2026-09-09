@@ -666,10 +666,9 @@ public class OrderController {
       m.put("campagne",        row[3]);
       m.put("createdAt",       row[4]);
       m.put("statutLot",       row[5]);
-      m.put("nomVariete",      row[6]);
-      m.put("puretePhysique",  row[7]);
-      m.put("tauxGermination", row[8]);
-      m.put("tauxHumidite",    row[9]);
+      m.put("puretePhysique",  row[6]);
+      m.put("tauxGermination", row[7]);
+      m.put("tauxHumidite",    row[8]);
       return m;
     }).toList();
   }

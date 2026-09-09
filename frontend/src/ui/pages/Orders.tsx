@@ -2673,12 +2673,12 @@ function PropositionFifoDssModal({
             )}
             {lots.length === 0 && (
               <div style={{ padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, fontSize: 12.5, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <XCircle size={13} /> Aucun lot G3 disponible pour cette variété.
+                <XCircle size={13} /> Aucun lot G3 UPSEMCL disponible — cette ligne ne peut pas être proposée.
               </div>
             )}
 
-            {/* Override */}
-            {p.overrideActif && (
+            {/* Override — masqué si aucun lot dispo */}
+            {p.overrideActif && lots.length > 0 && (
               <div style={{ marginTop: 10 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 7 }}>Lot de remplacement</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -2714,25 +2714,38 @@ function PropositionFifoDssModal({
               </div>
             )}
 
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0 }}>Quantité proposée</div>
-              <input
-                type="number" value={p.quantiteSelectionnee} min={1}
-                max={lotSelectionne ? Number(lotSelectionne.quantiteNette) : undefined}
-                onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], quantiteSelectionnee: e.target.value } }))}
-                style={{ padding: '6px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: 130, outline: 'none', background: 'var(--surface)' }}
-              />
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ligne.unite} sur {ligne.quantiteDemandee} demandés{lotSelectionne ? ` · ${Number(lotSelectionne.quantiteNette).toFixed(0)} kg dispo` : ''}</span>
-            </div>
+            {lots.length > 0 && (
+              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0 }}>Quantité proposée</div>
+                <input
+                  type="number" value={p.quantiteSelectionnee} min={1}
+                  max={lotSelectionne ? Number(lotSelectionne.quantiteNette) : undefined}
+                  onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], quantiteSelectionnee: e.target.value } }))}
+                  style={{ padding: '6px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: 130, outline: 'none', background: 'var(--surface)' }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ligne.unite} sur {ligne.quantiteDemandee} demandés{lotSelectionne ? ` · ${Number(lotSelectionne.quantiteNette).toFixed(0)} kg dispo` : ''}</span>
+              </div>
+            )}
           </div>
         )
       })}
 
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
-        <button className="btn btn-primary" style={{ background: isValid && !saving ? 'linear-gradient(135deg, #1d4ed8, #1e40af)' : undefined, border: 'none', display: 'flex', alignItems: 'center', gap: 7, opacity: !isValid ? 0.6 : 1 }} onClick={submit} disabled={!isValid || saving}>
-          {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><Zap size={13} /> Envoyer la proposition FIFO</>}
-        </button>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        {!isValid && !loading && (
+          <span style={{ fontSize: 11.5, color: '#d97706', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <XCircle size={13} /> Sélectionnez un lot pour chaque variété avant d'envoyer
+          </span>
+        )}
+        <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
+          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+          <button
+            className="btn btn-primary"
+            style={{ background: isValid && !saving ? 'linear-gradient(135deg, #1d4ed8, #1e40af)' : '#9ca3af', border: 'none', display: 'flex', alignItems: 'center', gap: 7, cursor: isValid ? 'pointer' : 'not-allowed' }}
+            onClick={submit} disabled={!isValid || saving}
+          >
+            {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><Zap size={13} /> Envoyer la proposition FIFO</>}
+          </button>
+        </div>
       </div>
     </Modal>
   )

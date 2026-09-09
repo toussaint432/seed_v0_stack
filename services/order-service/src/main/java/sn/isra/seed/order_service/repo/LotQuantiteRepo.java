@@ -137,7 +137,6 @@ public interface LotQuantiteRepo extends JpaRepository<LotSemencierOrder, Long> 
             l.campagne,
             l.created_at,
             l.statut_lot,
-            l.nom_variete_cache,
             cq.purete_physique,
             cq.taux_germination,
             cq.taux_humidite
