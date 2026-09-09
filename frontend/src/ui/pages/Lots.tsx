@@ -796,12 +796,11 @@ function CatalogueG1UPSemCL({ setToast }: { setToast: (t: { msg: string; type: '
 /* ══════════════════════════════════════════════════════════════
    VUE MULTIPLICATEUR — Catalogue G3 + Mes Lots isolés
    ══════════════════════════════════════════════════════════════ */
-type CartLotItem = {
-  lotId: number; codeLot: string; idVariete: number
-  nomVariete: string; codeVariete: string
-  quantiteDispo: number; unite: string
-  tauxGermination: number | null; puretePhysique: number | null
-  quantite: number
+type CartVarieteItem = {
+  idVariete: number
+  nomVariete: string; codeVariete: string; nomEspece: string
+  quantiteTotale: number; nbLots: number
+  quantite: number; unite: string
 }
 
 function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type: 'success'|'error' }) => void }) {
@@ -813,12 +812,10 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [upsemclOrgId, setUpsemclOrgId] = useState<number | null>(null)
   const [loadingCat, setLoadingCat]   = useState(true)
   const [loadingMes, setLoadingMes]   = useState(true)
-  const [cart, setCart]               = useState<CartLotItem[]>([])
+  const [cart, setCart]               = useState<CartVarieteItem[]>([])
   const [cartObs, setCartObs]         = useState('')
-  const [cartAddLot, setCartAddLot]   = useState<any | null>(null)
-  const [cartAddQty, setCartAddQty]   = useState('')
-  const [cartAddUnite, setCartAddUnite] = useState('kg')
-  const [showCartModal, setShowCartModal] = useState(false)
+  const [cartQty,   setCartQty]       = useState<Record<number, string>>({})
+  const [cartUnite, setCartUnite]     = useState<Record<number, string>>({})
   const [saving, setSaving]           = useState(false)
   const [lineageChain, setLineageChain]   = useState<any[] | null>(null)
   const [lineageLotCode, setLineageLotCode] = useState('')
@@ -940,7 +937,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       setChildForm(f => ({ ...f, campagne: f.campagne || def }))
     }).catch(() => {})
     const [catRes, mesRes, stockRes, varRes, orgRes, trRecus] = await Promise.allSettled([
-      api.get(endpoints.lotsCatalogueG3),
+      api.get(endpoints.orderCatalogueG3),
       api.get(endpoints.lotsMesLots),
       api.get(endpoints.stockMonStock),
       api.get(endpoints.varieties),
@@ -948,7 +945,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       // Transferts G3 EN_ATTENTE destinés au multiplicateur connecté
       api.get(endpoints.transfertsRecus),
     ])
-    setCatalogueG3(extractList(catRes.status === 'fulfilled' ? catRes.value.data : null).map(normalizeLot))
+    setCatalogueG3(catRes.status === 'fulfilled' ? (Array.isArray(catRes.value.data) ? catRes.value.data : []) : [])
     setLoadingCat(false)
     // Tri: lots propres par createdAt DESC, lots reçus par transfert remontés selon leur stock
     const rawLots: any[] = extractList(mesRes.status === 'fulfilled' ? mesRes.value.data : null).map(normalizeLot)
@@ -1062,14 +1059,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     } finally { setSaving(false) }
   }
 
-  // Catalogue G3 filtré par recherche
-  const catFiltered = catalogueG3.filter(l => {
+  // Catalogue G3 agrégé filtré par recherche (par variété)
+  const catFiltered = catalogueG3.filter((v: any) => {
     if (!searchCat) return true
-    const v = varietyMap[l.idVariete]
     const term = searchCat.toLowerCase()
-    return l.codeLot?.toLowerCase().includes(term)
-        || v?.nomVariete?.toLowerCase().includes(term)
-        || v?.codeVariete?.toLowerCase().includes(term)
+    return v.nomVariete?.toLowerCase().includes(term)
+        || v.codeVariete?.toLowerCase().includes(term)
+        || v.nomEspece?.toLowerCase().includes(term)
+        || v.codeEspece?.toLowerCase().includes(term)
   })
 
   // KPIs mes lots
@@ -1159,24 +1156,19 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     }
   }
 
-  // ── Panier multi-lots G3 ─────────────────────────────────────────────────
+  // ── Panier G3 par variété ────────────────────────────────────────────────
   const cartTotalKg = cart.reduce((s, i) => s + (i.unite === 't' ? i.quantite * 1000 : i.quantite), 0)
-  function cartIncludes(lotId: number) { return cart.some(i => i.lotId === lotId) }
-  function cartRemove(lotId: number) { setCart(c => c.filter(i => i.lotId !== lotId)) }
-  function openCartAdd(lot: any) { setCartAddLot(lot); setCartAddQty(''); setCartAddUnite('kg'); setShowCartModal(true) }
-  function cartAdd() {
-    if (!cartAddLot) return
-    const qty = Number(cartAddQty)
+  function cartIncludes(idVariete: number) { return cart.some(i => i.idVariete === idVariete) }
+  function cartRemove(idVariete: number) { setCart(c => c.filter(i => i.idVariete !== idVariete)); setCartQty(q => { const next = { ...q }; delete next[idVariete]; return next }) }
+  function cartAdd(variety: any) {
+    const qty = Number(cartQty[variety.idVariete] ?? 0)
+    const unite = cartUnite[variety.idVariete] ?? 'kg'
     if (!qty || qty <= 0) return
-    const v = varietyMap[cartAddLot.idVariete]
-    setCart(c => [...c.filter(i => i.lotId !== cartAddLot.id), {
-      lotId: cartAddLot.id, codeLot: cartAddLot.codeLot, idVariete: cartAddLot.idVariete,
-      nomVariete: v?.nomVariete ?? '', codeVariete: v?.codeVariete ?? '',
-      quantiteDispo: Number(cartAddLot.quantiteNette), unite: cartAddUnite,
-      tauxGermination: cartAddLot.tauxGermination ?? null, puretePhysique: cartAddLot.puretePhysique ?? null,
-      quantite: qty,
+    setCart(c => [...c.filter(i => i.idVariete !== variety.idVariete), {
+      idVariete: Number(variety.idVariete), nomVariete: variety.nomVariete ?? '', codeVariete: variety.codeVariete ?? '',
+      nomEspece: variety.nomEspece ?? '', quantiteTotale: Number(variety.quantiteTotale ?? 0),
+      nbLots: Number(variety.nbLots ?? 0), quantite: qty, unite,
     }])
-    setShowCartModal(false)
   }
   async function submitCart(e: React.FormEvent) {
     e.preventDefault(); if (cart.length === 0) return; setSaving(true)
@@ -1185,23 +1177,15 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       await api.post(endpoints.orders, {
         codeCommande: code, client: 'Multiplicateur',
         idOrganisationFournisseur: upsemclOrgId,
-        observations: cartObs || `Demande G3 — ${cart.length} lot${cart.length > 1 ? 's' : ''} sélectionné${cart.length > 1 ? 's' : ''}`,
-        // Agrégation par variété : plusieurs lots de la même variété → une seule ligne (kg)
-        lignes: Object.values(
-          cart.reduce<Record<string, { idVariete: number; idGeneration: number; quantite: number; unite: string }>>(
-            (acc, item) => {
-              const key = String(item.idVariete)
-              const kgQty = item.unite === 't' ? item.quantite * 1000 : item.quantite
-              if (!acc[key]) acc[key] = { idVariete: item.idVariete, idGeneration: 4, quantite: 0, unite: 'kg' }
-              acc[key].quantite += kgQty
-              return acc
-            },
-            {}
-          )
-        ),
+        observations: cartObs || `Demande G3 — ${cart.length} variété${cart.length > 1 ? 's' : ''}`,
+        lignes: cart.map(item => ({
+          idVariete: item.idVariete, idGeneration: 4,
+          quantite: item.unite === 't' ? item.quantite * 1000 : item.quantite,
+          unite: 'kg',
+        })),
       })
-      setToast({ msg: `Commande ${code} soumise — ${cart.length} lot${cart.length > 1 ? 's' : ''} à l'UPSemCL`, type: 'success' })
-      setCart([]); setCartObs(''); fetchAll()
+      setToast({ msg: `Commande ${code} soumise — ${cart.length} variété${cart.length > 1 ? 's' : ''} à l'UPSemCL`, type: 'success' })
+      setCart([]); setCartObs(''); setCartQty({}); fetchAll()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message || 'Erreur lors de la commande', type: 'error' })
     } finally { setSaving(false) }
@@ -1408,47 +1392,24 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         </button>
       </div>
 
-      {/* ── Onglet Catalogue G3 ───────────────────────────────── */}
+      {/* ── Onglet Catalogue G3 — Vue agrégée par variété ──────── */}
       {onglet === 'catalogue' && (
         <div className="card" style={{ borderRadius: '0 0 var(--radius) var(--radius)', borderTop: 'none' }}>
           <div className="card-header">
-            <span className="card-title"><span className="card-title-icon"><Store size={15} /></span>Lots G3 disponibles à l'UPSemCL</span>
+            <span className="card-title"><span className="card-title-icon"><Store size={15} /></span>Semences G3 disponibles à l'UPSemCL <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{catFiltered.length} variété{catFiltered.length > 1 ? 's' : ''}</span></span>
             <div style={{ display: 'flex', gap: 8 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', height: 32 }}>
-                <Package size={12} color="var(--text-muted)" />
-                <input value={searchCat} onChange={e => setSearchCat(e.target.value)} placeholder="Rechercher variété, code lot…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'var(--font-sans)', width: 180 }} />
+                <Search size={12} color="var(--text-muted)" />
+                <input value={searchCat} onChange={e => setSearchCat(e.target.value)} placeholder="Variété, espèce…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'var(--font-sans)', width: 160 }} />
                 {searchCat && <button onClick={() => setSearchCat('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>}
               </div>
               {catFiltered.length > 0 && (
-                <button
-                  className="btn btn-secondary"
-                  style={{ gap: 5, fontSize: 12 }}
+                <button className="btn btn-secondary" style={{ gap: 5, fontSize: 12 }}
                   onClick={() => {
                     const date = new Date().toISOString().slice(0, 10)
-                    const lotsRows = catFiltered.map(l => {
-                      const v = varietyMap[l.idVariete]
-                      const kg = Number(l.quantiteNette) || 0
-                      return [l.codeLot ?? '', v?.nomVariete ?? '', v?.codeVariete ?? '', 'G3', formatDateForExport(l.dateProduction), kg, parseFloat((kg / 1000).toFixed(3)), l.tauxGermination ?? '', l.puretePhysique ?? '', l.statutLot ?? '']
-                    })
-                    const totalKg = catFiltered.reduce((s, l) => s + (Number(l.quantiteNette) || 0), 0)
-                    lotsRows.push(['TOTAL', '', '', '', '', Math.round(totalKg), parseFloat((totalKg / 1000).toFixed(3)), '', '', ''])
-
-                    const varMap2: Record<string, { nom: string; code: string; nb: number; kg: number; germ: number[]; purete: number[] }> = {}
-                    catFiltered.forEach(l => {
-                      const v = varietyMap[l.idVariete]; const code = v?.codeVariete ?? String(l.idVariete)
-                      if (!varMap2[code]) varMap2[code] = { nom: v?.nomVariete ?? '', code, nb: 0, kg: 0, germ: [], purete: [] }
-                      varMap2[code].nb++; varMap2[code].kg += Number(l.quantiteNette) || 0
-                      if (l.tauxGermination != null) varMap2[code].germ.push(Number(l.tauxGermination))
-                      if (l.puretePhysique  != null) varMap2[code].purete.push(Number(l.puretePhysique))
-                    })
-                    const varRows = Object.values(varMap2).sort((a, b) => b.kg - a.kg).map(e => [e.nom, e.code, e.nb, Math.round(e.kg), parseFloat((e.kg / 1000).toFixed(3)), e.germ.length ? parseFloat((e.germ.reduce((a, b) => a + b, 0) / e.germ.length).toFixed(1)) : '', e.purete.length ? parseFloat((e.purete.reduce((a, b) => a + b, 0) / e.purete.length).toFixed(1)) : ''])
-
-                    downloadXlsx(`senjiw-catalogue-g3-${date}`, [
-                      { name: 'Catalogue G3', headers: ['Code lot', 'Variété', 'Code variété', 'Génération', 'Date production', 'Quantité (kg)', 'Quantité (t)', 'Germination (%)', 'Pureté (%)', 'Statut'], rows: lotsRows },
-                      { name: 'Par variété',  headers: ['Variété', 'Code variété', 'Nb lots', 'Total (kg)', 'Total (t)', 'Germination moy. (%)', 'Pureté moy. (%)'], rows: varRows },
-                    ])
-                  }}
-                >
+                    const rows = catFiltered.map((v: any) => [v.nomEspece ?? '', v.nomVariete ?? '', v.codeVariete ?? '', Number(v.nbLots ?? 0), Math.round(Number(v.quantiteTotale ?? 0)), parseFloat((Number(v.quantiteTotale ?? 0) / 1000).toFixed(3))])
+                    downloadXlsx(`senjiw-catalogue-g3-${date}`, [{ name: 'Catalogue G3', headers: ['Espèce', 'Variété', 'Code variété', 'Nb lots', 'Total (kg)', 'Total (t)'], rows }])
+                  }}>
                   <Download size={13} /> Export .xls
                 </button>
               )}
@@ -1456,108 +1417,100 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
             </div>
           </div>
 
-          <div style={{ padding: '10px 22px 6px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ padding: '10px 22px 8px', fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
             <ShoppingCart size={13} />
-            Sélectionnez un ou plusieurs lots G3, définissez les quantités souhaitées, puis soumettez votre commande groupée à l'UPSemCL.
+            Saisissez la quantité souhaitée par variété et ajoutez-la au panier. L'UPSemCL sélectionnera les lots selon l'algorithme FIFO.
           </div>
 
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>Code Lot</th>
-                  <th>Variété</th>
-                  <th>Génération</th>
-                  <th>Date production</th>
-                  <th>Quantité disponible</th>
-                  <th>Germination</th>
-                  <th>Pureté</th>
-                  <th>Statut</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loadingCat
-                  ? [0,1,2,3].map(i => <tr key={i}><td colSpan={9}><div className="skeleton" style={{ height: 14, borderRadius: 4 }} /></td></tr>)
-                  : catFiltered.length === 0
-                    ? <tr><td colSpan={9}><div className="empty-state"><div className="empty-icon"><Store size={20} /></div><div className="empty-title">{searchCat ? 'Aucun résultat' : 'Aucun lot G3 disponible pour le moment'}</div></div></td></tr>
-                    : catFiltered.map(l => {
-                        const v = varietyMap[l.idVariete]
-                        const inCart = cartIncludes(l.id)
+          {loadingCat ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 12, padding: 20 }}>
+              {[0,1,2,3,4,5].map(i => <div key={i} className="skeleton" style={{ height: 120, borderRadius: 10 }} />)}
+            </div>
+          ) : catFiltered.length === 0 ? (
+            <div className="empty-state"><div className="empty-icon"><Store size={20} /></div><div className="empty-title">{searchCat ? 'Aucun résultat' : 'Aucune semence G3 disponible pour le moment'}</div></div>
+          ) : (() => {
+            // Grouper par espèce
+            const byEspece: Record<string, any[]> = {}
+            catFiltered.forEach((v: any) => {
+              const k = v.nomEspece ?? 'Autre'
+              if (!byEspece[k]) byEspece[k] = []
+              byEspece[k].push(v)
+            })
+            return (
+              <div style={{ padding: '12px 20px 80px' }}>
+                {Object.entries(byEspece).sort(([a], [b]) => a.localeCompare(b)).map(([espece, vars]) => (
+                  <div key={espece} style={{ marginBottom: 24 }}>
+                    <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--text-secondary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ height: 1, background: 'var(--border)', flex: 1 }} />{espece}<div style={{ height: 1, background: 'var(--border)', flex: 1 }} />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 12 }}>
+                      {vars.map((v: any) => {
+                        const id = Number(v.idVariete)
+                        const inCart = cartIncludes(id)
+                        const qtyVal = cartQty[id] ?? ''
+                        const uniteVal = cartUnite[id] ?? 'kg'
+                        const maxKg = Number(v.quantiteTotale ?? 0)
                         return (
-                          <tr key={l.id} style={{ background: inCart ? 'var(--green-50,#f0fdf4)' : undefined, transition: 'background .15s' }}>
-                            <td>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                <span className="td-mono" style={{ fontWeight: 700 }}>{l.codeLot}</span>
-                                {certShieldIcon(l)}
+                          <div key={id} style={{ border: `2px solid ${inCart ? '#86efac' : 'var(--border)'}`, borderRadius: 12, padding: 16, background: inCart ? '#f0fdf4' : 'var(--surface)', transition: 'all .15s', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                            {/* Entête variété */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <div>
+                                <div style={{ fontWeight: 700, fontSize: 14 }}>{v.nomVariete}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{v.codeVariete}</div>
                               </div>
-                            </td>
-                            <td>
-                              {v ? (
-                                <div>
-                                  <div style={{ fontWeight: 600, fontSize: 13 }}>{v.nomVariete}</div>
-                                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{v.codeVariete}</div>
+                              <span className="badge badge-gold" style={{ flexShrink: 0 }}>G3</span>
+                            </div>
+                            {/* Stats dispo */}
+                            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12.5 }}>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Disponible</span>
+                                <span style={{ fontWeight: 800, fontSize: 16, color: '#15803d' }}>{Number(maxKg).toLocaleString('fr-FR')} <span style={{ fontSize: 11, fontWeight: 500 }}>kg</span></span>
+                              </div>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Lots</span>
+                                <span style={{ fontWeight: 700, fontSize: 15 }}>{Number(v.nbLots ?? 0)}</span>
+                              </div>
+                            </div>
+                            {/* Zone saisie quantité + action */}
+                            {inCart ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ flex: 1, fontSize: 12.5, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <CheckCircle2 size={14} /> {cart.find(c => c.idVariete === id)?.quantite?.toLocaleString('fr-FR')} {cart.find(c => c.idVariete === id)?.unite} commandés
                                 </div>
-                              ) : <span style={{ color: 'var(--text-muted)' }}>#{l.idVariete}</span>}
-                            </td>
-                            <td><span className="badge badge-gold">G3</span></td>
-                            <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{l.dateProduction || '—'}</td>
-                            <td><span style={{ fontWeight: 700, fontSize: 13 }}>{Number(l.quantiteNette).toLocaleString('fr-FR')}</span> <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{l.unite}</span></td>
-                            <td>
-                              {l.tauxGermination != null
-                                ? <span style={{ fontWeight: 600, color: Number(l.tauxGermination) >= 95 ? 'var(--green-700)' : 'var(--amber-600)' }}>{l.tauxGermination}%</span>
-                                : '—'}
-                            </td>
-                            <td>
-                              {l.puretePhysique != null
-                                ? <span style={{ fontWeight: 600, color: Number(l.puretePhysique) >= 98 ? 'var(--green-700)' : 'var(--amber-600)' }}>{l.puretePhysique}%</span>
-                                : '—'}
-                            </td>
-                            <td>
-                              {(() => {
-                                const stListBadge = stockByLotId[l.id] ?? []
-                                const stTotalBadge = stListBadge.reduce((s, x) => s + x.qty, 0)
-                                const isRecu = isExternalLot(l) && stTotalBadge > 0
-                                return (
-                                  <span className={`badge ${isRecu || l.statutLot === 'DISPONIBLE' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 11 }}>
-                                    {isRecu ? 'REÇU' : l.statutLot}
-                                  </span>
-                                )
-                              })()}
-                            </td>
-                            <td>
-                              <div style={{ display: 'flex', gap: 4 }}>
-                                <button className="btn btn-ghost" style={{ width: 30, height: 30, padding: 0, borderRadius: 6 }} title="Traçabilité" onClick={() => showLineage(l)}><Eye size={13} /></button>
-                                {l.statutLot === 'DISPONIBLE' && (
-                                  inCart ? (
-                                    <button
-                                      className="btn"
-                                      style={{ height: 30, padding: '0 10px', fontSize: 11, gap: 4, display: 'flex', alignItems: 'center', color: '#15803d', border: '1.5px solid #86efac', background: '#f0fdf4', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
-                                      title="Retirer du panier"
-                                      onClick={() => cartRemove(l.id)}
-                                    >
-                                      <CheckCircle2 size={12} /> Dans le panier <X size={10} style={{ marginLeft: 2, opacity: 0.6 }} />
-                                    </button>
-                                  ) : (
-                                    <button
-                                      className="btn btn-primary"
-                                      style={{ height: 30, padding: '0 10px', fontSize: 11, gap: 4 }}
-                                      title="Ajouter au panier"
-                                      onClick={() => openCartAdd(l)}
-                                    >
-                                      <ShoppingCart size={12} /> Ajouter
-                                    </button>
-                                  )
-                                )}
+                                <button style={{ background: 'none', border: '1px solid #fca5a5', borderRadius: 6, padding: '4px 8px', cursor: 'pointer', color: '#dc2626', display: 'flex', alignItems: 'center', gap: 4, fontSize: 11 }} onClick={() => cartRemove(id)}>
+                                  <X size={11} /> Retirer
+                                </button>
                               </div>
-                            </td>
-                          </tr>
+                            ) : (
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                <input
+                                  type="number" value={qtyVal} min={1} max={maxKg} placeholder="Quantité…"
+                                  onChange={e => setCartQty(q => ({ ...q, [id]: e.target.value }))}
+                                  style={{ flex: 1, padding: '6px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--surface)', minWidth: 0 }}
+                                />
+                                <select value={uniteVal} onChange={e => setCartUnite(u => ({ ...u, [id]: e.target.value }))}
+                                  style={{ padding: '6px 8px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', outline: 'none', cursor: 'pointer' }}>
+                                  <option value="kg">kg</option><option value="t">t</option>
+                                </select>
+                                <button
+                                  className="btn btn-primary"
+                                  style={{ height: 34, padding: '0 12px', fontSize: 12, gap: 5, flexShrink: 0, opacity: !qtyVal || Number(qtyVal) <= 0 ? 0.5 : 1 }}
+                                  disabled={!qtyVal || Number(qtyVal) <= 0}
+                                  onClick={() => cartAdd(v)}
+                                >
+                                  <ShoppingCart size={12} /> Ajouter
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         )
-                      })
-                }
-              </tbody>
-            </table>
-          </div>
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
       )}
 
@@ -2233,47 +2186,6 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
         </Modal>
       )}
 
-      {/* Modal ajout au panier */}
-      {showCartModal && cartAddLot && (() => {
-        const v = varietyMap[cartAddLot.idVariete]
-        return (
-          <Modal
-            title="Ajouter au panier"
-            subtitle={`${cartAddLot.codeLot}${v ? ` — ${v.nomVariete}` : ''}`}
-            onClose={() => setShowCartModal(false)}
-            size="sm"
-          >
-            <div style={{ background: 'var(--green-50,#f0fdf4)', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#14532d' }}>
-              <div style={{ display: 'grid', gap: 3 }}>
-                {v && <div><strong>Variété :</strong> {v.nomVariete} · <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{v.codeVariete}</span></div>}
-                <div><strong>Stock disponible :</strong> {Number(cartAddLot.quantiteNette).toLocaleString('fr-FR')} {cartAddLot.unite}</div>
-                {cartAddLot.tauxGermination != null && <div><strong>Germination :</strong> {cartAddLot.tauxGermination}% · <strong>Pureté :</strong> {cartAddLot.puretePhysique ?? '—'}%</div>}
-              </div>
-            </div>
-            <form onSubmit={e => { e.preventDefault(); cartAdd() }}>
-              <Field label="Quantité souhaitée" required>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <FormInput
-                    type="number"
-                    value={cartAddQty}
-                    onChange={e => setCartAddQty(e.target.value)}
-                    placeholder={`Max ${Number(cartAddLot.quantiteNette).toLocaleString('fr-FR')}`}
-                    min="1" max={cartAddLot.quantiteNette} step="0.01"
-                    autoFocus
-                    style={{ flex: 1 }}
-                  />
-                  <FormSelect value={cartAddUnite} onChange={e => setCartAddUnite(e.target.value)} style={{ width: 80 }}>
-                    <option value="kg">kg</option>
-                    <option value="t">t</option>
-                  </FormSelect>
-                </div>
-              </Field>
-              <FormActions onCancel={() => setShowCartModal(false)} loading={false} submitLabel="Ajouter au panier" />
-            </form>
-          </Modal>
-        )
-      })()}
-
       {/* Barre panier sticky */}
       {cart.length > 0 && (
         <div style={{
@@ -2282,51 +2194,35 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
           boxShadow: '0 -4px 24px rgba(0,0,0,0.12)',
           display: 'flex', alignItems: 'stretch', gap: 0,
         }}>
-          {/* Résumé panier */}
           <div style={{ flex: 1, padding: '12px 24px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <ShoppingCart size={16} style={{ color: '#16a34a' }} />
               <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>
-                {cart.length} lot{cart.length > 1 ? 's' : ''} sélectionné{cart.length > 1 ? 's' : ''}
+                {cart.length} variété{cart.length > 1 ? 's' : ''} sélectionnée{cart.length > 1 ? 's' : ''}
               </span>
-              <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                · {cartTotalKg.toLocaleString('fr-FR')} kg
-              </span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>· {cartTotalKg.toLocaleString('fr-FR')} kg total</span>
             </div>
-            {/* Chips des lots sélectionnés */}
             <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
               {cart.map(item => (
-                <span key={item.lotId} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 20, padding: '2px 8px 2px 10px', fontSize: 11.5, color: '#15803d', fontWeight: 600 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10.5 }}>{item.codeLot}</span>
-                  <span style={{ opacity: 0.7 }}>· {item.quantite.toLocaleString('fr-FR')} {item.unite}</span>
-                  <button onClick={() => cartRemove(item.lotId)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: '#15803d', opacity: 0.6, marginLeft: 2 }}><X size={11} /></button>
+                <span key={item.idVariete} style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 20, padding: '2px 10px 2px 12px', fontSize: 11.5, color: '#15803d', fontWeight: 600 }}>
+                  {item.nomVariete}
+                  <span style={{ opacity: 0.7, marginLeft: 3 }}>· {item.quantite.toLocaleString('fr-FR')} {item.unite}</span>
+                  <button onClick={() => cartRemove(item.idVariete)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', color: '#15803d', opacity: 0.6, marginLeft: 4 }}><X size={11} /></button>
                 </span>
               ))}
             </div>
           </div>
-          {/* Zone observations + bouton submit */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderLeft: '1px solid var(--border)', background: 'var(--surface-2)' }}>
             <input
-              value={cartObs}
-              onChange={e => setCartObs(e.target.value)}
-              placeholder="Observations (optionnel)"
-              style={{ width: 220, height: 36, padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--surface)', color: 'var(--text-primary)' }}
+              value={cartObs} onChange={e => setCartObs(e.target.value)} placeholder="Observations (optionnel)"
+              style={{ width: 200, height: 36, padding: '0 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', outline: 'none', background: 'var(--surface)', color: 'var(--text-primary)' }}
             />
-            <button
-              className="btn btn-ghost"
-              style={{ height: 36, padding: '0 12px', fontSize: 12, color: 'var(--text-muted)' }}
-              onClick={() => setCart([])}
-            >
+            <button className="btn btn-ghost" style={{ height: 36, padding: '0 12px', fontSize: 12, color: 'var(--text-muted)' }} onClick={() => { setCart([]); setCartQty({}) }}>
               <X size={13} /> Vider
             </button>
-            <button
-              className="btn btn-primary"
-              style={{ height: 36, padding: '0 18px', fontSize: 13, fontWeight: 700, gap: 6 }}
-              disabled={saving}
-              onClick={e => { e.preventDefault(); submitCart(e as any) }}
-            >
+            <button className="btn btn-primary" style={{ height: 36, padding: '0 18px', fontSize: 13, fontWeight: 700, gap: 6 }} disabled={saving} onClick={e => { e.preventDefault(); submitCart(e as any) }}>
               <ShoppingCart size={14} />
-              {saving ? 'Envoi…' : `Commander (${cart.length})`}
+              {saving ? 'Envoi…' : `Soumettre la demande (${cart.length})`}
             </button>
           </div>
         </div>
