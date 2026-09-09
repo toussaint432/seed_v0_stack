@@ -190,6 +190,10 @@ export function App() {
   const [collapsed, setCollapsed] = useState(false)
   const [unread,        setUnread]        = useState(0)
   const [certifNotifs,  setCertifNotifs]  = useState<any[]>([])
+  const [alertLots,       setAlertLots]       = useState(0)
+  const [alertTransferts, setAlertTransferts] = useState(0)
+  const [alertStock,      setAlertStock]      = useState(0)
+  const [alertCommandes,  setAlertCommandes]  = useState(0)
   const unreadTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const [theme,     setTheme]     = useState<'system' | 'light' | 'dark'>(() => (localStorage.getItem('seed-theme') as any) || 'system')
   const [sessionWarning, setSessionWarning] = useState(false)
@@ -306,9 +310,30 @@ export function App() {
         }
       } catch { /* ignoré */ }
     }
+    async function fetchAlertCounts() {
+      try {
+        const { api } = await import('../lib/api')
+        const { endpoints } = await import('../lib/endpoints')
+        const [lots, transferts, stock, commandes] = await Promise.allSettled([
+          api.get(endpoints.alertsCountLots),
+          api.get(endpoints.alertsCountTransferts),
+          api.get(endpoints.alertsCountStock),
+          api.get(endpoints.alertsCountCommandes),
+        ])
+        if (lots.status       === 'fulfilled') setAlertLots(lots.value.data?.count       || 0)
+        if (transferts.status === 'fulfilled') setAlertTransferts(transferts.value.data?.count || 0)
+        if (stock.status      === 'fulfilled') setAlertStock(stock.value.data?.count      || 0)
+        if (commandes.status  === 'fulfilled') setAlertCommandes(commandes.value.data?.count  || 0)
+      } catch { /* ignoré */ }
+    }
     fetchUnread()
     fetchCertifNotifs()
-    unreadTimer.current = setInterval(() => { fetchUnread(); fetchCertifNotifs() }, 30_000)
+    fetchAlertCounts()
+    unreadTimer.current = setInterval(() => {
+      fetchUnread()
+      fetchCertifNotifs()
+      fetchAlertCounts()
+    }, 30_000)
     return () => { if (unreadTimer.current) clearInterval(unreadTimer.current) }
   }, [ready])
 
@@ -449,7 +474,11 @@ export function App() {
                   <span className="nav-icon"><Icon size={16} /></span>
                   <span className="nav-label">{label}</span>
                   {badge && <span className="nav-badge">{badge}</span>}
-                  {id === 'messages' && unread > 0 && <span className="nav-badge">{unread}</span>}
+                  {id === 'messages'      && unread         > 0 && <span className="nav-badge">{unread}</span>}
+                  {id === 'lots'          && alertLots       > 0 && <span className="nav-badge">{alertLots}</span>}
+                  {id === 'transfers'     && alertTransferts > 0 && <span className="nav-badge">{alertTransferts}</span>}
+                  {id === 'stocks'        && alertStock      > 0 && <span className="nav-badge">{alertStock}</span>}
+                  {id === 'orders'        && alertCommandes  > 0 && <span className="nav-badge">{alertCommandes}</span>}
                   {id === 'certifications' && (() => {
                     const actionCount = user.roleKey === 'seed-upsemcl' || user.roleKey === 'seed-admin'
                       ? certifNotifs.length

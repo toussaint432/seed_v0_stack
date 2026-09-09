@@ -370,4 +370,22 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
       @Param("rayonKm")   double rayonKm,
       @Param("idVariete") Long idVariete
   );
+
+  @Query(value = """
+      SELECT COUNT(DISTINCT s.id_lot)
+      FROM stock s
+      JOIN site si ON si.id = s.id_site
+      WHERE si.id_organisation = :orgId
+        AND s.quantite_disponible > 0
+        AND s.quantite_disponible < :seuil
+      """, nativeQuery = true)
+  long countLowStockByOrg(@Param("orgId") Long orgId, @Param("seuil") BigDecimal seuil);
+
+  @Query(value = """
+      SELECT COUNT(DISTINCT s.id_lot)
+      FROM stock s
+      WHERE s.quantite_disponible > 0
+        AND s.quantite_disponible < :seuil
+      """, nativeQuery = true)
+  long countLowStock(@Param("seuil") BigDecimal seuil);
 }

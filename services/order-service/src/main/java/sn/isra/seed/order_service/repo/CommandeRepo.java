@@ -5,6 +5,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface CommandeRepo extends JpaRepository<Commande, Long> {
@@ -24,4 +25,15 @@ public interface CommandeRepo extends JpaRepository<Commande, Long> {
            "(SELECT o.id FROM Organisation o WHERE o.typeOrganisation = sn.isra.seed.order_service.entity.enums.TypeOrganisation.UPSEMCL) " +
            "OR c.idOrganisationFournisseur IS NULL ORDER BY c.createdAt DESC")
     Page<Commande> findForAnyUpsemcl(Pageable pageable);
+
+    // ── Compteurs pour badges d'alerte ────────────────────────────────────────
+
+    @Query("SELECT COUNT(c) FROM Commande c WHERE c.idOrganisationFournisseur = :orgId AND c.statut = sn.isra.seed.order_service.entity.enums.StatutCommande.SOUMISE")
+    long countSoumisesFournisseur(@Param("orgId") Long orgId);
+
+    @Query("SELECT COUNT(c) FROM Commande c WHERE c.usernameAcheteur = :username AND c.statut = sn.isra.seed.order_service.entity.enums.StatutCommande.SOUMISE")
+    long countSoumisesAcheteur(@Param("username") String username);
+
+    @Query("SELECT COUNT(c) FROM Commande c WHERE (c.idOrganisationFournisseur IN (SELECT o.id FROM Organisation o WHERE o.typeOrganisation = sn.isra.seed.order_service.entity.enums.TypeOrganisation.UPSEMCL) OR c.idOrganisationFournisseur IS NULL) AND c.statut = sn.isra.seed.order_service.entity.enums.StatutCommande.SOUMISE")
+    long countSoumisesForUpsemcl();
 }

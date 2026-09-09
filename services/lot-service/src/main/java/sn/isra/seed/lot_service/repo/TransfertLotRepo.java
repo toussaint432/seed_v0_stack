@@ -32,4 +32,10 @@ public interface TransfertLotRepo extends JpaRepository<TransfertLot, Long> {
      */
     @Query("SELECT t FROM TransfertLot t WHERE t.roleDestinataire = :role AND t.statut = 'EN_ATTENTE' ORDER BY t.createdAt DESC")
     List<TransfertLot> findPendingForRole(@Param("role") String role);
+
+    @Query("SELECT COUNT(t) FROM TransfertLot t WHERE t.usernameDestinataire = :username AND t.statut = sn.isra.seed.lot_service.entity.enums.StatutTransfert.EN_ATTENTE")
+    long countPendingForDestinataire(@Param("username") String username);
+
+    @Query("SELECT COUNT(t) FROM TransfertLot t WHERE t.roleDestinataire = :role AND t.statut = sn.isra.seed.lot_service.entity.enums.StatutTransfert.EN_ATTENTE")
+    long countPendingForRole(@Param("role") String role);
 }

@@ -253,4 +253,21 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
         @Param("limite") java.time.Instant limite,
         @Param("statut") StatutEdition statut
     );
+
+    // ── Compteurs pour badges d'alerte ────────────────────────────────────────
+
+    @Query("SELECT COUNT(l) FROM LotSemencier l WHERE l.usernameCreateur = :username AND l.statutEdition = sn.isra.seed.lot_service.entity.enums.StatutEdition.BROUILLON AND l.createdAt < :limite")
+    long countBrouillonsForUser(@Param("username") String username, @Param("limite") java.time.Instant limite);
+
+    @Query("SELECT COUNT(l) FROM LotSemencier l WHERE l.idOrgProducteur = :orgId AND l.statutEdition = sn.isra.seed.lot_service.entity.enums.StatutEdition.BROUILLON AND l.createdAt < :limite")
+    long countBrouillonsForOrg(@Param("orgId") Long orgId, @Param("limite") java.time.Instant limite);
+
+    @Query("SELECT COUNT(l) FROM LotSemencier l WHERE l.usernameCreateur = :username AND l.statutCertification = sn.isra.seed.lot_service.entity.enums.StatutCertification.REJETE")
+    long countRejetesForUser(@Param("username") String username);
+
+    @Query("SELECT COUNT(l) FROM LotSemencier l WHERE l.statutCertification = sn.isra.seed.lot_service.entity.enums.StatutCertification.EN_ATTENTE AND l.generation.codeGeneration IN ('G4','R1','R2')")
+    long countLotsACertifier();
+
+    @Query("SELECT COUNT(l) FROM LotSemencier l WHERE l.statutEdition = sn.isra.seed.lot_service.entity.enums.StatutEdition.BROUILLON AND l.createdAt < :limite")
+    long countAllBrouillons(@Param("limite") java.time.Instant limite);
 }

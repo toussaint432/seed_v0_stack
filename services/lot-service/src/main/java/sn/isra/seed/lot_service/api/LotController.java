@@ -36,6 +36,7 @@ import org.springframework.data.web.PageableDefault;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +54,28 @@ public class LotController {
     private final LotMapper               lotMapper;
     private final MembreOrgLotRepo        membreOrgLotRepo;
     private final LotAuditLogRepo         auditLogRepo;
+
+    @GetMapping("/alerts/count")
+    public Map<String, Long> alertsCount(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) return Map.of("count", 0L);
+        String username = jwt.getClaimAsString("preferred_username");
+        Instant limite48h = Instant.now().minus(48, ChronoUnit.HOURS);
+        long count = 0;
+        if (JwtHelper.hasRole(jwt, "seed-selector")) {
+            count = lotRepo.countBrouillonsForUser(username, limite48h);
+        } else if (JwtHelper.hasRole(jwt, "seed-multiplicator")) {
+            Long orgId = membreOrgLotRepo.findOrgIdByUsername(username).orElse(null);
+            count = (orgId != null ? lotRepo.countBrouillonsForOrg(orgId, limite48h) : 0)
+                  + lotRepo.countRejetesForUser(username);
+        } else if (JwtHelper.hasRole(jwt, "seed-upsemcl")) {
+            Long orgId = membreOrgLotRepo.findOrgIdByUsername(username).orElse(null);
+            count = (orgId != null ? lotRepo.countBrouillonsForOrg(orgId, limite48h) : 0)
+                  + lotRepo.countLotsACertifier();
+        } else if (JwtHelper.hasRole(jwt, "seed-admin") || JwtHelper.hasRole(jwt, "seed-directeur")) {
+            count = lotRepo.countAllBrouillons(limite48h) + lotRepo.countLotsACertifier();
+        }
+        return Map.of("count", count);
+    }
 
     @GetMapping
     public Page<LotSemencierDto> list(

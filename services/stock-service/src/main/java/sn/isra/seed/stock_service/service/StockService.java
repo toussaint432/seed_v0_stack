@@ -45,12 +45,9 @@ public class StockService {
     // ── Liste avec isolation par rôle ────────────────────────────────────────
 
     public Page<Stock> list(String site, Jwt jwt, Pageable pageable) {
-        if (jwt != null && JwtHelper.hasRole(jwt, "seed-multiplicator")) {
-            Long orgId = resolveOrgId(jwt);
-            if (orgId == null) return Page.empty(pageable);
-            return stockRepo.findByOrganisation(orgId, pageable);
-        }
-        if (jwt != null && JwtHelper.hasRole(jwt, "seed-upsemcl")) {
+        if (jwt != null && (JwtHelper.hasRole(jwt, "seed-multiplicator")
+                          || JwtHelper.hasRole(jwt, "seed-upsemcl")
+                          || JwtHelper.hasRole(jwt, "seed-quotataire"))) {
             Long orgId = resolveOrgId(jwt);
             if (orgId == null) return Page.empty(pageable);
             return stockRepo.findByOrganisation(orgId, pageable);
@@ -76,6 +73,10 @@ public class StockService {
             String username = JwtHelper.getUsername(jwt);
             if (username == null) return List.of();
             views = stockRepo.findAgregeByUsernameCreateur(username);
+        } else if (jwt != null && JwtHelper.hasRole(jwt, "seed-quotataire")) {
+            Long orgId = resolveOrgId(jwt);
+            if (orgId == null) return List.of();
+            views = stockRepo.findAgregeByOrganisation(orgId);
         } else {
             views = stockRepo.findAllAgrege();
         }

@@ -33,6 +33,18 @@ public class TransfertController {
     private final HistoriqueStatutLotRepo historiqueRepo;
     private final StockCreditRepo         stockCreditRepo;
 
+    /* ── GET /api/transferts/alerts/count — badge nav ── */
+    @GetMapping("/alerts/count")
+    public Map<String, Long> alertsCount(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) return Map.of("count", 0L);
+        String username = jwt.getClaimAsString("preferred_username");
+        String role = extractRole(jwt);
+        long count = "seed-upsemcl".equals(role)
+            ? transfertRepo.countPendingForRole("seed-upsemcl")
+            : transfertRepo.countPendingForDestinataire(username);
+        return Map.of("count", count);
+    }
+
     /* ── GET /api/transferts — tous les transferts du connecté ── */
     @GetMapping
     public List<TransfertLot> mesTransferts(@AuthenticationPrincipal Jwt jwt) {
@@ -95,6 +107,20 @@ public class TransfertController {
                     + t.getQuantite() + " kg)"));
             }
         });
+
+        // Débit synchrone du stock source avant toute création de lot REC
+        stockCreditRepo.findSiteCodeForLot(sourceLotId, t.getUsernameEmetteur())
+            .ifPresentOrElse(
+                srcSite -> {
+                    boolean ok = stockCreditRepo.debiterSite(sourceLotId, srcSite, t.getQuantite());
+                    if (ok) log.info("Stock source débité : lot={} site={} qte={} ({})",
+                                     sourceLotId, srcSite, t.getQuantite(), t.getCodeTransfert());
+                    else    log.warn("Débit source sans effet — lot={} site={} ({})",
+                                     sourceLotId, srcSite, t.getCodeTransfert());
+                },
+                () -> log.warn("Site source introuvable — lot={} emetteur={} ({}) stock non débité",
+                               sourceLotId, t.getUsernameEmetteur(), t.getCodeTransfert())
+            );
 
         // 3a. Transfert lié à une commande (UPSemCL → Multiplicateur) : lot REC pour le multiplicateur
         var commandeOpt = stockCreditRepo.findCommandeByTransfert(t.getCodeTransfert());

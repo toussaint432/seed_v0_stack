@@ -71,6 +71,35 @@ public class StockCreditRepo {
     }
 
     /**
+     * Trouve le code du site qui détient actuellement un stock positif du lot,
+     * appartenant à l'organisation de l'émetteur. Utilisé pour débiter la source
+     * lors de l'acceptation d'un transfert.
+     */
+    public Optional<String> findSiteCodeForLot(Long idLot, String usernameEmetteur) {
+        if (idLot == null || usernameEmetteur == null || usernameEmetteur.isBlank())
+            return Optional.empty();
+        List<String> rows = jdbc.query("""
+            SELECT si.code_site
+            FROM stock s
+            JOIN site si ON si.id = s.id_site
+            WHERE s.id_lot = ?
+              AND si.id_organisation = (
+                  SELECT mo.id_organisation
+                  FROM membre_organisation mo
+                  WHERE mo.keycloak_username = ?
+                  LIMIT 1
+              )
+              AND s.quantite_disponible > 0
+            ORDER BY s.created_at ASC
+            LIMIT 1
+            """,
+            (rs, i) -> rs.getString("code_site"),
+            idLot, usernameEmetteur
+        );
+        return rows.isEmpty() ? Optional.empty() : Optional.of(rows.get(0));
+    }
+
+    /**
      * Résout le code du site principal d'une organisation (le plus ancien par id).
      */
     public Optional<String> findPrimarySiteByOrgId(Long idOrg) {

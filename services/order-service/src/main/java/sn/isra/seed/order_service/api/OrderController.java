@@ -38,6 +38,7 @@ import org.springframework.data.web.PageableDefault;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import sn.isra.seed.order_service.entity.MembreOrganisation;
@@ -59,6 +60,24 @@ public class OrderController {
   private final sn.isra.seed.order_service.repo.GenerationSemenceRepo generationRepo;
   private final OrderEventProducer producer;
   private final ObjectMapper om;
+
+  /** Badge d'alerte — commandes SOUMISE en attente d'action selon le rôle */
+  @GetMapping("/alerts/count")
+  public Map<String, Long> alertsCount(@AuthenticationPrincipal Jwt jwt) {
+    if (jwt == null) return Map.of("count", 0L);
+    String username = jwt.getClaimAsString("preferred_username");
+    long count = 0;
+    if (isMultiplicateur(jwt)) {
+      count = membreRepo.findByKeycloakUsername(username)
+          .map(m -> commandeRepo.countSoumisesFournisseur(m.getOrganisation().getId()))
+          .orElse(0L);
+    } else if (isUpsemcl(jwt)) {
+      count = commandeRepo.countSoumisesForUpsemcl();
+    } else if (isQuotaire(jwt)) {
+      count = commandeRepo.countSoumisesAcheteur(username);
+    }
+    return Map.of("count", count);
+  }
 
   /** Détail d'une commande par ID */
   @GetMapping("/{id}")

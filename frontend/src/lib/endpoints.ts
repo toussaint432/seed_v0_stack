@@ -74,6 +74,12 @@ export const endpoints = {
   lotsCatalogueG1: `${LOT}/lots/catalogue-g1`,
   lotsMesLots:     `${LOT}/lots/mes-lots`,
 
+  // ── Alertes — badges de navigation ──
+  alertsCountLots:       `${LOT}/lots/alerts/count`,
+  alertsCountTransferts: `${LOT}/transferts/alerts/count`,
+  alertsCountStock:      `${STOCK}/stocks/alerts/count`,
+  alertsCountCommandes:  `${ORDER}/orders/alerts/count`,
+
   // ── Lot Service — Transferts de lots (Phase 2bis) ──
   transfertsLot:          `${LOT}/transferts`,
   transfertsRecus:        `${LOT}/transferts/recus`,

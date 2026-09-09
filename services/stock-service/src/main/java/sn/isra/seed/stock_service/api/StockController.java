@@ -24,7 +24,9 @@ import sn.isra.seed.stock_service.repo.MouvementRepo;
 import sn.isra.seed.stock_service.repo.StockRepo;
 import sn.isra.seed.stock_service.service.StockService;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -42,6 +44,18 @@ public class StockController {
       @AuthenticationPrincipal Jwt jwt,
       @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
     return stockService.list(site, jwt, pageable).map(stockMapper::toDto);
+  }
+
+  private static final BigDecimal SEUIL_ALERTE_STOCK = new BigDecimal("50");
+
+  @GetMapping("/stocks/alerts/count")
+  public Map<String, Long> alertsCount(@AuthenticationPrincipal Jwt jwt) {
+    if (jwt == null) return Map.of("count", 0L);
+    Long orgId = stockService.resolveOrgId(jwt);
+    long count = (orgId != null)
+        ? stockRepo.countLowStockByOrg(orgId, SEUIL_ALERTE_STOCK)
+        : stockRepo.countLowStock(SEUIL_ALERTE_STOCK);
+    return Map.of("count", count);
   }
 
   @GetMapping("/stocks/agrege")
