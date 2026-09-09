@@ -20,7 +20,7 @@ public class Programme {
 
     @NotBlank(message = "Le code programme est obligatoire")
     @Size(max = 80)
-    @Column(name = "code_programme", unique = true, nullable = false, length = 80)
+    @Column(name = "code_programme", nullable = false, length = 80)
     private String codeProgramme;
 
     /** Lot semencier source de la multiplication */

@@ -6,14 +6,18 @@ import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.entity.enums.StatutProgramme;
 import sn.isra.seed.lot_service.repo.HistoriqueStatutLotRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
+import sn.isra.seed.lot_service.repo.MembreOrgLotRepo;
 import sn.isra.seed.lot_service.repo.ProgrammeRepo;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -26,6 +30,7 @@ public class ProgrammeController {
     private final ProgrammeRepo        programmeRepo;
     private final LotRepo              lotRepo;
     private final HistoriqueStatutLotRepo historiqueRepo;
+    private final MembreOrgLotRepo     membreOrgRepo;
 
     @GetMapping
     public List<Programme> list(
@@ -55,15 +60,23 @@ public class ProgrammeController {
 
     @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-upsemcl','ROLE_seed-multiplicator')")
     @PostMapping
-    public Programme create(@Valid @RequestBody Programme programme,
-                            @AuthenticationPrincipal Jwt jwt) {
+    public ResponseEntity<Programme> create(@Valid @RequestBody Programme programme,
+                                            @AuthenticationPrincipal Jwt jwt) {
         if (jwt != null) {
-            programme.setUsernameCreateur(jwt.getClaimAsString("preferred_username"));
+            String username = jwt.getClaimAsString("preferred_username");
+            programme.setUsernameCreateur(username);
             programme.setRoleCreateur(extractRole(jwt));
+            if (programme.getIdOrganisation() == null)
+                membreOrgRepo.findOrgIdByUsername(username).ifPresent(programme::setIdOrganisation);
         }
-        // Statut toujours PLANIFIE à la création
         programme.setStatut(StatutProgramme.PLANIFIE);
-        return programmeRepo.save(programme);
+        try {
+            return ResponseEntity.status(HttpStatus.CREATED).body(programmeRepo.save(programme));
+        } catch (DataIntegrityViolationException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                "Un programme avec le code '" + programme.getCodeProgramme()
+                + "' existe déjà dans votre organisation.");
+        }
     }
 
     @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-selector','ROLE_seed-upsemcl','ROLE_seed-multiplicator')")

@@ -34,7 +34,7 @@ public class LotSemencier {
 
     @NotBlank(message = "Le code lot est obligatoire")
     @Size(max = 80)
-    @Column(name = "code_lot", unique = true, nullable = false, length = 80)
+    @Column(name = "code_lot", nullable = false, length = 80)
     private String codeLot;
 
     @NotNull(message = "La variété est obligatoire")
