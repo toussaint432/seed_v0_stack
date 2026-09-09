@@ -891,6 +891,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
   const showStock    = ['seed-admin', 'seed-directeur', 'seed-upsemcl'].includes(roleKey)
 
   const isSelector = roleKey === 'seed-selector'
+  const isMulti    = roleKey === 'seed-multiplicator'
   const specUp     = userSpecialisation?.toUpperCase()
 
   const displayStockTotal = useMemo(() => {
@@ -922,9 +923,9 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
         sub: 'tous statuts',
         accent, delay: 0, suffix: undefined },
       { label: isSelector && specUp ? `Stock ${specUp}` : 'Stock total',
-        value: isSelector ? Math.round(displayStockTotal) : Math.round(displayStockTotal / 1000),
+        value: (isSelector || isMulti) ? Math.round(displayStockTotal) : Math.round(displayStockTotal / 1000),
         sub: isSelector && specUp ? 'votre spécialisation' : undefined,
-        accent, delay: 80, suffix: isSelector ? 'kg' : 't' },
+        accent, delay: 80, suffix: (isSelector || isMulti) ? 'kg' : 't' },
     ] : []),
     { label: isSelector && specUp ? `Variétés ${specUp}` : 'Variétés actives',
       value: displayVarietiesCount,
