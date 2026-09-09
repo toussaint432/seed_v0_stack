@@ -2,13 +2,21 @@ package sn.isra.seed.order_service.api;
 
 import sn.isra.seed.order_service.api.dto.AllocateRequest;
 import sn.isra.seed.order_service.api.dto.CreateOrderRequest;
+import sn.isra.seed.order_service.api.dto.DecisionMultiplicateurRequest;
+import sn.isra.seed.order_service.api.dto.PropositionG3Request;
 import sn.isra.seed.order_service.api.dto.ProposeRequest;
+import sn.isra.seed.order_service.api.dto.ReceptionConfirmationRequest;
 import sn.isra.seed.order_service.api.dto.StatutRequest;
 import sn.isra.seed.order_service.api.dto.ValiderCommandeRequest;
 import sn.isra.seed.order_service.entity.AllocationCommande;
 import sn.isra.seed.order_service.entity.Commande;
 import sn.isra.seed.order_service.entity.LigneCommande;
+import sn.isra.seed.order_service.entity.PropositionLigne;
+import sn.isra.seed.order_service.entity.PropositionLotSource;
+import sn.isra.seed.order_service.entity.ReceptionCommande;
+import sn.isra.seed.order_service.entity.ReceptionEcart;
 import sn.isra.seed.order_service.entity.enums.StatutCommande;
+import sn.isra.seed.order_service.entity.enums.StatutLigne;
 import sn.isra.seed.order_service.kafka.OrderEventProducer;
 import sn.isra.seed.order_service.repo.AllocationRepo;
 import sn.isra.seed.order_service.repo.CommandeRepo;
@@ -16,6 +24,8 @@ import sn.isra.seed.order_service.repo.LigneRepo;
 import sn.isra.seed.order_service.repo.LotQuantiteRepo;
 import sn.isra.seed.order_service.repo.LotReceptionRepo;
 import sn.isra.seed.order_service.repo.MembreOrganisationRepo;
+import sn.isra.seed.order_service.repo.PropositionLigneRepo;
+import sn.isra.seed.order_service.repo.ReceptionCommandeRepo;
 import sn.isra.seed.order_service.repo.StockOrderRepo;
 import sn.isra.seed.order_service.repo.TransfertLotOrderRepo;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -58,6 +68,8 @@ public class OrderController {
   private final LotReceptionRepo lotReceptionRepo;
   private final TransfertLotOrderRepo transfertLotOrderRepo;
   private final sn.isra.seed.order_service.repo.GenerationSemenceRepo generationRepo;
+  private final PropositionLigneRepo propositionLigneRepo;
+  private final ReceptionCommandeRepo receptionCommandeRepo;
   private final OrderEventProducer producer;
   private final ObjectMapper om;
 
@@ -469,10 +481,26 @@ public class OrderController {
     // Code de base stocké sur la commande ; chaque ligne reçoit un code unique suffixé "-L{id}"
     String baseCode = "TL-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
 
-    for (LigneCommande ligne : commande.getLignes()) {
+    // Dans le nouveau flux G3, seules les lignes ACCORDEE sont transférées.
+    // Pour la compatibilité avec l'ancien flux (sans statutLigne), on utilise toutes les lignes.
+    List<LigneCommande> lignesATransferer = commande.getLignes().stream()
+        .filter(l -> l.getStatutLigne() == StatutLigne.ACCORDEE)
+        .toList();
+    if (lignesATransferer.isEmpty()) {
+      lignesATransferer = commande.getLignes(); // ancien flux
+    }
+
+    for (LigneCommande ligne : lignesATransferer) {
       if (ligne.getIdLotPropose() == null || ligne.getQuantiteProposee() == null) {
-        throw new ResponseStatusException(HttpStatus.CONFLICT,
-            "La ligne #" + ligne.getId() + " n'a pas de proposition enregistrée — re-proposez avant de faire le transfert");
+        // Fallback : chercher dans proposition_ligne
+        PropositionLigne prop = propositionLigneRepo.findByLigneCommande_Id(ligne.getId()).orElse(null);
+        if (prop != null) {
+          ligne.setIdLotPropose(prop.getIdLotSelectionne());
+          ligne.setQuantiteProposee(prop.getQuantiteSelectionnee());
+        } else {
+          throw new ResponseStatusException(HttpStatus.CONFLICT,
+              "La ligne #" + ligne.getId() + " n'a pas de proposition enregistrée — re-proposez avant de faire le transfert");
+        }
       }
 
       // Charger le lot avant débit pour l'historique et le calcul du nouveau statut
@@ -515,6 +543,9 @@ public class OrderController {
           commande.getUsernameAcheteur(), roleDest,
           ligne.getQuantiteProposee()
       );
+
+      ligne.setStatutLigne(StatutLigne.LIVREE);
+      ligneRepo.save(ligne);
 
       log.info("Transfert EN_ATTENTE créé : lot={} → {} ({} {}) — restant: {} kg",
           ligne.getIdLotPropose(), commande.getUsernameAcheteur(),
@@ -590,6 +621,377 @@ public class OrderController {
 
     commande.setStatut(StatutCommande.LIVREE);
     return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     FLUX G3 FIFO-DSS
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * GET /api/orders/catalogue-g3
+   * Catalogue G3 agrégé par variété, pour que les multiplicateurs voient
+   * les quantités totales disponibles sans détail lot par lot.
+   */
+  @GetMapping("/catalogue-g3")
+  public List<Map<String, Object>> catalogueG3() {
+    return lotQuantiteRepo.findCatalogueG3Agrege().stream().map(row -> {
+      Map<String, Object> m = new java.util.LinkedHashMap<>();
+      m.put("idVariete",          row[0]);
+      m.put("nomVariete",         row[1]);
+      m.put("codeVariete",        row[2]);
+      m.put("idEspece",           row[3]);
+      m.put("nomEspece",          row[4]);
+      m.put("codeEspece",         row[5]);
+      m.put("idGeneration",       row[6]);
+      m.put("codeGeneration",     row[7]);
+      m.put("quantiteTotale",     row[8]);
+      m.put("nbLots",             row[9]);
+      m.put("datePlusAncienLot",  row[10]);
+      return m;
+    }).toList();
+  }
+
+  /**
+   * GET /api/orders/lots-g3/{idVariete}
+   * Lots G3 UPSemCL pour une variété, ordonnés FIFO (plus ancien en premier).
+   * Utilisé par l'interface de proposition de l'agent UPSemCL.
+   */
+  @GetMapping("/lots-g3/{idVariete}")
+  public List<Map<String, Object>> lotsG3Fifo(@PathVariable Long idVariete) {
+    return lotQuantiteRepo.findLotsG3FifoPourVariete(idVariete).stream().map(row -> {
+      Map<String, Object> m = new java.util.LinkedHashMap<>();
+      m.put("id",              row[0]);
+      m.put("codeLot",         row[1]);
+      m.put("quantiteNette",   row[2]);
+      m.put("campagne",        row[3]);
+      m.put("createdAt",       row[4]);
+      m.put("statutLot",       row[5]);
+      m.put("nomVariete",      row[6]);
+      m.put("puretePhysique",  row[7]);
+      m.put("tauxGermination", row[8]);
+      m.put("tauxHumidite",    row[9]);
+      return m;
+    }).toList();
+  }
+
+  /**
+   * POST /api/orders/{id}/propositions-g3  (UPSemCL)
+   * L'agent soumet sa proposition FIFO-DSS pour chaque ligne de la commande.
+   * Crée ou remplace les PropositionLigne existantes + leurs sources d'audit.
+   * Pré-condition : commande SOUMISE ou EN_NEGOCIATION.
+   */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-admin')")
+  @Transactional
+  @PostMapping("/{id}/propositions-g3")
+  public ResponseEntity<Commande> propositionsG3(
+      @PathVariable Long id,
+      @Valid @RequestBody PropositionG3Request req,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.SOUMISE && commande.getStatut() != StatutCommande.EN_NEGOCIATION) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Seule une commande SOUMISE ou EN_NEGOCIATION accepte une proposition (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    String usernameAgent = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+
+    for (PropositionG3Request.LigneProposition item : req.propositions()) {
+      LigneCommande ligne = ligneRepo.findById(item.idLigne())
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ligne #" + item.idLigne() + " introuvable"));
+      if (!ligne.getCommande().getId().equals(id)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ligne #" + item.idLigne() + " n'appartient pas à cette commande");
+      }
+      if (item.idLotSelectionne() != item.idLotSuggereFifo()
+          && item.idLotSuggereFifo() != null
+          && (item.motifOverride() == null || item.motifOverride().isBlank())) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+            "Un motif est obligatoire lorsque l'agent sélectionne un lot différent de la suggestion FIFO (ligne #" + item.idLigne() + ")");
+      }
+
+      // Supprimer l'ancienne proposition si elle existe (re-proposition)
+      propositionLigneRepo.findByLigneCommande_Id(item.idLigne()).ifPresent(old -> propositionLigneRepo.delete(old));
+
+      PropositionLigne prop = new PropositionLigne();
+      prop.setLigneCommande(ligne);
+      prop.setIdLotSuggereFifo(item.idLotSuggereFifo());
+      prop.setQuantiteSuggere(item.quantiteSuggere());
+      prop.setIdLotSelectionne(item.idLotSelectionne());
+      prop.setQuantiteSelectionnee(item.quantiteSelectionnee());
+      prop.setMotifOverride(item.motifOverride());
+      prop.setUsernameAgent(usernameAgent);
+      prop.setStatutProposition("PROPOSEE");
+      prop.setCreatedAt(Instant.now());
+      PropositionLigne savedProp = propositionLigneRepo.save(prop);
+
+      // Source FIFO suggérée
+      if (item.idLotSuggereFifo() != null) {
+        PropositionLotSource src = new PropositionLotSource();
+        src.setPropositionLigne(savedProp);
+        src.setIdLot(item.idLotSuggereFifo());
+        src.setQuantite(item.quantiteSuggere() != null ? item.quantiteSuggere() : item.quantiteSelectionnee());
+        src.setFifoSuggere(true);
+        src.setOrdrePriorite(1);
+        savedProp.getSources().add(src);
+      }
+
+      // Source réelle si différente de la suggestion
+      if (!item.idLotSelectionne().equals(item.idLotSuggereFifo())) {
+        PropositionLotSource srcReal = new PropositionLotSource();
+        srcReal.setPropositionLigne(savedProp);
+        srcReal.setIdLot(item.idLotSelectionne());
+        srcReal.setQuantite(item.quantiteSelectionnee());
+        srcReal.setFifoSuggere(false);
+        srcReal.setOrdrePriorite(2);
+        savedProp.getSources().add(srcReal);
+      }
+      propositionLigneRepo.save(savedProp);
+
+      // Mise à jour du lot proposé sur la ligne (compatibilité ancien flux)
+      ligne.setIdLotPropose(item.idLotSelectionne());
+      ligne.setQuantiteProposee(item.quantiteSelectionnee());
+      ligne.setStatutLigne(StatutLigne.EN_NEGOCIATION);
+      ligneRepo.save(ligne);
+    }
+
+    commande.setStatut(StatutCommande.EN_NEGOCIATION);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * PATCH /api/orders/{id}/decision-multiplicateur  (Multiplicateur)
+   * Le multiplicateur accepte ou refuse chaque ligne individuellement.
+   * Si au moins une ligne est acceptée → commande ACCORDEE.
+   * Si toutes refusées → commande revient à SOUMISE.
+   */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
+  @Transactional
+  @PatchMapping("/{id}/decision-multiplicateur")
+  public ResponseEntity<Commande> decisionMultiplicateur(
+      @PathVariable Long id,
+      @Valid @RequestBody DecisionMultiplicateurRequest req) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.EN_NEGOCIATION) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être EN_NEGOCIATION pour soumettre une décision (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    if (req.siteDestinationCode() != null && !req.siteDestinationCode().isBlank()) {
+      commande.setSiteDestinationCode(req.siteDestinationCode());
+    }
+
+    long nbAccordees = 0;
+    for (DecisionMultiplicateurRequest.DecisionLigne dec : req.decisions()) {
+      LigneCommande ligne = ligneRepo.findById(dec.idLigne())
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ligne #" + dec.idLigne() + " introuvable"));
+      if (!ligne.getCommande().getId().equals(id)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ligne #" + dec.idLigne() + " n'appartient pas à cette commande");
+      }
+
+      StatutLigne nouveauStatutLigne = dec.accepte() ? StatutLigne.ACCORDEE : StatutLigne.REFUSEE;
+      ligne.setStatutLigne(nouveauStatutLigne);
+      ligneRepo.save(ligne);
+
+      propositionLigneRepo.findByLigneCommande_Id(dec.idLigne()).ifPresent(prop -> {
+        prop.setStatutProposition(dec.accepte() ? "ACCEPTEE" : "REFUSEE");
+        propositionLigneRepo.save(prop);
+      });
+
+      if (dec.accepte()) nbAccordees++;
+    }
+
+    StatutCommande nouveauStatut = nbAccordees > 0 ? StatutCommande.ACCORDEE : StatutCommande.SOUMISE;
+    commande.setStatut(nouveauStatut);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * POST /api/orders/{id}/confirmer-reception  (Multiplicateur)
+   * Confirme la réception physique des semences. Crédite le stock du multiplicateur,
+   * enregistre les écarts éventuels, passe la commande en LIVREE.
+   */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
+  @Transactional
+  @PostMapping("/{id}/confirmer-reception")
+  public ResponseEntity<Commande> confirmerReception(
+      @PathVariable Long id,
+      @RequestBody(required = false) ReceptionConfirmationRequest req,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.EN_LIVRAISON) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être EN_LIVRAISON pour confirmer la réception (statut actuel : " + commande.getStatut() + ")");
+    }
+    if (commande.getIdOrganisationAcheteur() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Organisation acheteur non renseignée — impossible de créditer le stock");
+    }
+
+    String usernameRecepteur = jwt != null ? jwt.getClaimAsString("preferred_username") : commande.getUsernameAcheteur();
+    String siteDestCode = commande.getSiteDestinationCode();
+
+    boolean avecEcart = req != null && req.ecarts() != null && !req.ecarts().isEmpty();
+
+    for (LigneCommande ligne : commande.getLignes()) {
+      if (ligne.getIdLotPropose() == null || ligne.getQuantiteProposee() == null) continue;
+
+      String unite = ligne.getUnite() != null ? ligne.getUnite() : "kg";
+      String codeLot = "REC-" + commande.getId() + "-L" + ligne.getId();
+      Long newLotId = lotReceptionRepo.createReceptionLot(
+          ligne.getIdLotPropose(), codeLot,
+          commande.getIdOrganisationAcheteur(),
+          commande.getUsernameAcheteur(),
+          ligne.getQuantiteProposee(), unite);
+
+      if (siteDestCode != null && !siteDestCode.isBlank()) {
+        stockOrderRepo.creditSiteCode(newLotId, siteDestCode, ligne.getQuantiteProposee(), unite);
+      } else {
+        stockOrderRepo.creditOrg(newLotId, commande.getIdOrganisationAcheteur(), ligne.getQuantiteProposee(), unite);
+      }
+
+      if (commande.getCodeTransfertGenere() != null) {
+        transfertLotOrderRepo.updateTransfertIdLot(
+            commande.getCodeTransfertGenere(), ligne.getIdLotPropose(), newLotId);
+      }
+    }
+
+    if (commande.getCodeTransfertGenere() != null) {
+      transfertLotOrderRepo.accepterTransfert(commande.getCodeTransfertGenere());
+    }
+
+    // Enregistrer la réception
+    ReceptionCommande reception = new ReceptionCommande();
+    reception.setCommande(commande);
+    reception.setUsernameRecepteur(usernameRecepteur);
+    reception.setDateReception(Instant.now());
+    reception.setStatutReception(avecEcart ? "AVEC_ECART" : "COMPLET");
+    reception.setObservations(req != null ? req.observations() : null);
+    reception.setCreatedAt(Instant.now());
+    ReceptionCommande savedReception = receptionCommandeRepo.save(reception);
+
+    if (avecEcart) {
+      for (ReceptionConfirmationRequest.EcartLot e : req.ecarts()) {
+        ReceptionEcart ecart = new ReceptionEcart();
+        ecart.setReceptionCommande(savedReception);
+        ecart.setIdLotSource(e.idLotSource());
+        ecart.setQuantiteTransferee(e.quantiteTransferee());
+        ecart.setQuantiteRecue(e.quantiteRecue());
+        ecart.setObservations(e.observations());
+        savedReception.getEcarts().add(ecart);
+      }
+      receptionCommandeRepo.save(savedReception);
+    }
+
+    commande.setStatut(StatutCommande.LIVREE);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * GET /api/orders/{id}/bordereau-transfert  (UPSemCL)
+   * Données du Bordereau de Transfert (BT) couvrant toutes les variétés.
+   */
+  @GetMapping("/{id}/bordereau-transfert")
+  public ResponseEntity<Map<String, Object>> bordereauTransfert(@PathVariable Long id) {
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    List<Map<String, Object>> lignesDetail = commande.getLignes().stream().map(ligne -> {
+      Map<String, Object> m = new java.util.LinkedHashMap<>();
+      m.put("idLigne",          ligne.getId());
+      m.put("idVariete",        ligne.getIdVariete());
+      m.put("idGeneration",     ligne.getIdGeneration());
+      m.put("quantiteDemandee", ligne.getQuantiteDemandee());
+      m.put("quantiteProposee", ligne.getQuantiteProposee());
+      m.put("idLotPropose",     ligne.getIdLotPropose());
+      m.put("statutLigne",      ligne.getStatutLigne());
+      m.put("unite",            ligne.getUnite() != null ? ligne.getUnite() : "kg");
+
+      propositionLigneRepo.findByLigneCommande_Id(ligne.getId()).ifPresent(prop -> {
+        m.put("proposition", Map.of(
+            "idLotSuggereFifo",    prop.getIdLotSuggereFifo(),
+            "quantiteSuggere",     prop.getQuantiteSuggere(),
+            "idLotSelectionne",    prop.getIdLotSelectionne(),
+            "quantiteSelectionnee",prop.getQuantiteSelectionnee(),
+            "motifOverride",       prop.getMotifOverride() != null ? prop.getMotifOverride() : "",
+            "usernameAgent",       prop.getUsernameAgent() != null ? prop.getUsernameAgent() : "",
+            "statutProposition",   prop.getStatutProposition(),
+            "sources",             prop.getSources().stream().map(s -> Map.of(
+                "idLot",        s.getIdLot(),
+                "quantite",     s.getQuantite(),
+                "fifoSuggere",  s.isFifoSuggere(),
+                "ordrePriorite",s.getOrdrePriorite()
+            )).toList()
+        ));
+      });
+      return m;
+    }).toList();
+
+    Map<String, Object> bt = new java.util.LinkedHashMap<>();
+    bt.put("codeCommande",             commande.getCodeCommande());
+    bt.put("statut",                   commande.getStatut());
+    bt.put("codeTransfertGenere",      commande.getCodeTransfertGenere());
+    bt.put("nomOrganisationAcheteur",  commande.getNomOrganisationAcheteur());
+    bt.put("nomCompletAcheteur",       commande.getNomCompletAcheteur());
+    bt.put("localisationAcheteur",     commande.getLocalisationAcheteur());
+    bt.put("siteDestinationCode",      commande.getSiteDestinationCode());
+    bt.put("createdAt",                commande.getCreatedAt());
+    bt.put("lignes",                   lignesDetail);
+    return ResponseEntity.ok(bt);
+  }
+
+  /**
+   * GET /api/orders/{id}/bordereau-reception  (Multiplicateur)
+   * Données du Bordereau de Réception (BR) avec confirmation et écarts.
+   */
+  @GetMapping("/{id}/bordereau-reception")
+  public ResponseEntity<Map<String, Object>> bordereauReception(@PathVariable Long id) {
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    Map<String, Object> br = new java.util.LinkedHashMap<>();
+    br.put("codeCommande",             commande.getCodeCommande());
+    br.put("statut",                   commande.getStatut());
+    br.put("codeTransfertGenere",      commande.getCodeTransfertGenere());
+    br.put("nomOrganisationAcheteur",  commande.getNomOrganisationAcheteur());
+    br.put("nomCompletAcheteur",       commande.getNomCompletAcheteur());
+    br.put("siteDestinationCode",      commande.getSiteDestinationCode());
+    br.put("createdAt",                commande.getCreatedAt());
+
+    br.put("lignes", commande.getLignes().stream().map(l -> {
+      Map<String, Object> m = new java.util.LinkedHashMap<>();
+      m.put("idLigne",          l.getId());
+      m.put("idVariete",        l.getIdVariete());
+      m.put("idGeneration",     l.getIdGeneration());
+      m.put("quantiteDemandee", l.getQuantiteDemandee());
+      m.put("quantiteProposee", l.getQuantiteProposee());
+      m.put("statutLigne",      l.getStatutLigne());
+      m.put("unite",            l.getUnite() != null ? l.getUnite() : "kg");
+      return m;
+    }).toList());
+
+    receptionCommandeRepo.findByCommande_Id(id).ifPresent(rec -> {
+      Map<String, Object> recMap = new java.util.LinkedHashMap<>();
+      recMap.put("dateReception",      rec.getDateReception());
+      recMap.put("usernameRecepteur",  rec.getUsernameRecepteur());
+      recMap.put("statutReception",    rec.getStatutReception());
+      recMap.put("observations",       rec.getObservations());
+      recMap.put("ecarts", rec.getEcarts().stream().map(e -> Map.of(
+          "idLotSource",       e.getIdLotSource(),
+          "quantiteTransferee",e.getQuantiteTransferee(),
+          "quantiteRecue",     e.getQuantiteRecue(),
+          "observations",      e.getObservations() != null ? e.getObservations() : ""
+      )).toList());
+      br.put("reception", recMap);
+    });
+
+    return ResponseEntity.ok(br);
   }
 
   @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl','ROLE_seed-multiplicator')")

@@ -92,4 +92,69 @@ public interface LotQuantiteRepo extends JpaRepository<LotSemencierOrder, Long> 
                                    @Param("nouveauStatut") String nouveauStatut,
                                    @Param("username") String username,
                                    @Param("commentaire") String commentaire);
+
+    /**
+     * Catalogue G3 agrégé par variété — pour les multiplicateurs.
+     * Retourne la quantité totale certifiée disponible par variété G3 UPSemCL.
+     * Ordre : espèce alphabétique puis variété alphabétique.
+     */
+    @Query(value = """
+        SELECT
+            v.id           AS id_variete,
+            v.nom_variete,
+            v.code_variete,
+            e.id           AS id_espece,
+            e.nom_commun   AS nom_espece,
+            e.code_espece,
+            g.id           AS id_generation,
+            g.code_generation,
+            COALESCE(SUM(l.quantite_nette), 0) AS quantite_totale,
+            COUNT(l.id)    AS nb_lots,
+            MIN(l.created_at) AS date_plus_ancien_lot
+        FROM lot.lot_semencier l
+        JOIN lot.generation_semence g   ON l.id_generation  = g.id
+        JOIN catalog.variete        v   ON l.id_variete     = v.id
+        JOIN catalog.espece         e   ON v.id_espece      = e.id
+        LEFT JOIN shared.organisation o ON l.id_org_producteur = o.id
+        WHERE g.code_generation = 'G3'
+          AND l.statut_lot IN ('DISPONIBLE','CERTIFIE','EN_COURS_CERT')
+          AND (o.type_organisation = 'UPSEMCL' OR l.id_org_producteur IS NULL)
+        GROUP BY v.id, v.nom_variete, v.code_variete, e.id, e.nom_commun, e.code_espece, g.id, g.code_generation
+        HAVING COALESCE(SUM(l.quantite_nette), 0) > 0
+        ORDER BY e.nom_commun, v.nom_variete
+        """, nativeQuery = true)
+    java.util.List<Object[]> findCatalogueG3Agrege();
+
+    /**
+     * Lots G3 UPSemCL disponibles pour une variété, ordonnés FIFO (plus ancien en premier).
+     * Inclut les métriques qualité du dernier contrôle.
+     */
+    @Query(value = """
+        SELECT
+            l.id,
+            l.code_lot,
+            l.quantite_nette,
+            l.campagne,
+            l.created_at,
+            l.statut_lot,
+            l.nom_variete_cache,
+            cq.purete_physique,
+            cq.taux_germination,
+            cq.taux_humidite
+        FROM lot.lot_semencier l
+        LEFT JOIN shared.organisation o ON l.id_org_producteur = o.id
+        LEFT JOIN LATERAL (
+            SELECT purete_physique, taux_germination, taux_humidite
+            FROM lot.controle_qualite
+            WHERE id_lot = l.id
+            ORDER BY date_controle DESC
+            LIMIT 1
+        ) cq ON true
+        WHERE l.id_variete = :idVariete
+          AND l.id_generation = 4
+          AND l.statut_lot IN ('DISPONIBLE','CERTIFIE','EN_COURS_CERT')
+          AND (o.type_organisation = 'UPSEMCL' OR l.id_org_producteur IS NULL)
+        ORDER BY l.created_at ASC
+        """, nativeQuery = true)
+    java.util.List<Object[]> findLotsG3FifoPourVariete(@Param("idVariete") Long idVariete);
 }

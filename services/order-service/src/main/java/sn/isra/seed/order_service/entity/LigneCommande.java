@@ -3,6 +3,8 @@ package sn.isra.seed.order_service.entity;
 import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.*;
+import sn.isra.seed.order_service.entity.enums.StatutLigne;
+
 import java.math.BigDecimal;
 
 @Entity
@@ -37,4 +39,8 @@ public class LigneCommande {
 
   @Column(name="id_lot_propose")
   private Long idLotPropose;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "statut_ligne", length = 20)
+  private StatutLigne statutLigne = StatutLigne.SOUMISE;
 }

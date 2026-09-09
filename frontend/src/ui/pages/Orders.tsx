@@ -1267,6 +1267,8 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
   const [formSaving,    setFormSaving]    = useState(false)
   const [voirPropModal,    setVoirPropModal]    = useState<any | null>(null)
   const [proposerRecuModal, setProposerRecuModal] = useState<any | null>(null)
+  const [decisionMulModal,  setDecisionMulModal]  = useState<any | null>(null)
+  const [receptionConfModal, setReceptionConfModal] = useState<any | null>(null)
   const [membresMap,       setMembresMap]       = useState<Record<string, any>>({})
   const [form, setForm] = useState({
     observations: '',
@@ -1526,20 +1528,19 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
                 if (o.statut === 'EN_NEGOCIATION') {
                   return (
                     <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #d97706, #b45309)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
-                      onClick={() => setVoirPropModal(o)} disabled={actioning === o.id}>
-                      <Eye size={11} /> Voir proposition
+                      onClick={() => setDecisionMulModal(o)} disabled={actioning === o.id}>
+                      <CheckCircle2 size={11} /> Décider
                     </button>
                   )
                 }
                 if (o.statut === 'ACCORDEE') {
-                  return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={11} /> Accordée</span>
+                  return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={11} /> Accordée — en attente transfert</span>
                 }
                 if (o.statut === 'EN_LIVRAISON') {
                   return (
                     <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
-                      onClick={() => accuserReception(o.id, o.codeCommande)} disabled={actioning === o.id}>
-                      {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <PackageCheck size={11} />}
-                      Accuser réception
+                      onClick={() => setReceptionConfModal(o)} disabled={actioning === o.id}>
+                      <PackageCheck size={11} /> Confirmer réception
                     </button>
                   )
                 }
@@ -1648,6 +1649,26 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
           commande={proposerRecuModal}
           varieties={varieties}
           onClose={() => setProposerRecuModal(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
+        />
+      )}
+
+      {decisionMulModal && (
+        <DecisionMultiplicateurModal
+          commande={decisionMulModal}
+          varieties={varieties}
+          onClose={() => setDecisionMulModal(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
+        />
+      )}
+
+      {receptionConfModal && (
+        <ReceptionConfirmationModal
+          commande={receptionConfModal}
+          varieties={varieties}
+          onClose={() => setReceptionConfModal(null)}
           onSuccess={fetchAll}
           setToast={setToast}
         />
@@ -2511,12 +2532,431 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
         <TraiterCommandeG3Modal commande={commandeATraiter} varieties={varieties} onClose={() => setCommandeATraiter(null)} onSuccess={fetchAll} setToast={setToast} />
       )}
       {commandeAProposer && (
-        <ProposeModal commande={commandeAProposer} varieties={varieties} onClose={() => setCommandeAProposer(null)} onSuccess={fetchAll} setToast={setToast} />
+        <PropositionFifoDssModal commande={commandeAProposer} varieties={varieties} onClose={() => setCommandeAProposer(null)} onSuccess={fetchAll} setToast={setToast} />
       )}
       {commandeTransfert && (
         <ProposeModal commande={commandeTransfert} varieties={varieties} onClose={() => setCommandeTransfert(null)} onSuccess={fetchAll} setToast={setToast} />
       )}
     </div>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : PROPOSITION FIFO-DSS (UPSemCL → Multiplicateur, nouveau flux G3)
+   ══════════════════════════════════════════════════════════════════════════════ */
+function PropositionFifoDssModal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const lignes: any[] = (commande.lignes ?? []).filter((l: any) => l.idGeneration === 4)
+  const [lotsParVariete, setLotsParVariete] = useState<Record<number, any[]>>({})
+  const [loading,  setLoading]  = useState(true)
+  const [saving,   setSaving]   = useState(false)
+  const [props, setProps] = useState<Record<number, {
+    idLotSuggereFifo: number | null
+    quantiteSuggere: string
+    idLotSelectionne: number | null
+    quantiteSelectionnee: string
+    motifOverride: string
+    overrideActif: boolean
+  }>>({})
+
+  useEffect(() => {
+    const init: typeof props = {}
+    for (const l of lignes) init[l.id] = { idLotSuggereFifo: null, quantiteSuggere: '', idLotSelectionne: null, quantiteSelectionnee: String(l.quantiteDemandee ?? ''), motifOverride: '', overrideActif: false }
+    setProps(init)
+
+    Promise.all(lignes.map(l =>
+      api.get(endpoints.orderLotsG3Fifo(l.idVariete))
+        .then(r => ({ idVariete: l.idVariete, lots: r.data }))
+        .catch(() => ({ idVariete: l.idVariete, lots: [] }))
+    )).then(results => {
+      const map: Record<number, any[]> = {}
+      for (const { idVariete, lots } of results) map[idVariete] = lots
+
+      // Pré-sélectionner le 1er lot FIFO par ligne
+      setProps(prev => {
+        const next = { ...prev }
+        for (const l of lignes) {
+          const lots = map[l.idVariete] ?? []
+          const premier = lots[0]
+          if (premier) {
+            next[l.id] = { ...next[l.id], idLotSuggereFifo: premier.id, quantiteSuggere: String(l.quantiteDemandee ?? ''), idLotSelectionne: premier.id, quantiteSelectionnee: String(l.quantiteDemandee ?? '') }
+          }
+        }
+        return next
+      })
+      setLotsParVariete(map)
+    }).finally(() => setLoading(false))
+  }, [])
+
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+
+  const isValid = lignes.every(l => {
+    const p = props[l.id]
+    if (!p || !p.idLotSelectionne || !p.quantiteSelectionnee || Number(p.quantiteSelectionnee) <= 0) return false
+    if (p.overrideActif && p.idLotSelectionne !== p.idLotSuggereFifo && !p.motifOverride.trim()) return false
+    return true
+  })
+
+  async function submit() {
+    if (!isValid) return; setSaving(true)
+    try {
+      const propositions = lignes.map(l => {
+        const p = props[l.id]
+        return {
+          idLigne:              l.id,
+          idLotSuggereFifo:     p.idLotSuggereFifo,
+          quantiteSuggere:      Number(p.quantiteSuggere) || null,
+          idLotSelectionne:     p.idLotSelectionne,
+          quantiteSelectionnee: Number(p.quantiteSelectionnee),
+          motifOverride:        p.overrideActif && p.idLotSelectionne !== p.idLotSuggereFifo ? p.motifOverride : null,
+        }
+      })
+      await api.post(endpoints.orderPropositionsG3(commande.id), { propositions })
+      setToast({ msg: `Proposition FIFO envoyée pour ${commande.codeCommande} — le multiplicateur va décider ligne par ligne`, type: 'success' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la proposition', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal title="Proposition FIFO-DSS" subtitle={`${commande.codeCommande} · ${commande.usernameAcheteur ?? '—'}`} onClose={onClose} size="lg">
+      <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#1e40af', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Zap size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>Le système a présélectionné les lots les plus anciens (<strong>FIFO</strong>). Vous pouvez conserver ou remplacer chaque lot — un motif est obligatoire en cas de remplacement.</span>
+      </div>
+
+      {loading ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {[0,1].map(i => <div key={i} className="skeleton" style={{ height: 120, borderRadius: 10 }} />)}
+        </div>
+      ) : lignes.map((ligne: any) => {
+        const lots = lotsParVariete[ligne.idVariete] ?? []
+        const p = props[ligne.id] ?? { idLotSuggereFifo: null, quantiteSuggere: '', idLotSelectionne: null, quantiteSelectionnee: '', motifOverride: '', overrideActif: false }
+        const lotSuggere = lots.find((l: any) => l.id === p.idLotSuggereFifo)
+        const lotSelectionne = lots.find((l: any) => l.id === p.idLotSelectionne)
+        const needsMotif = p.overrideActif && p.idLotSelectionne !== p.idLotSuggereFifo
+
+        return (
+          <div key={ligne.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 14, background: 'var(--surface-2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{varNom(ligne.idVariete)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>G3 · Demandé : <strong style={{ color: 'var(--text-primary)' }}>{ligne.quantiteDemandee} {ligne.unite}</strong></div>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#d97706', fontWeight: 600, cursor: 'pointer' }}>
+                <input type="checkbox" checked={p.overrideActif} onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], overrideActif: e.target.checked } }))} style={{ accentColor: '#d97706' }} />
+                Remplacer le lot FIFO
+              </label>
+            </div>
+
+            {/* Suggestion FIFO */}
+            {lotSuggere && (
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 12 }}>
+                <div style={{ fontWeight: 700, color: '#1e40af', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Zap size={11} /> Suggestion FIFO
+                </div>
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                  <span><strong style={{ fontFamily: 'monospace' }}>{lotSuggere.codeLot}</strong></span>
+                  <span style={{ color: 'var(--text-muted)' }}>Campagne : {lotSuggere.campagne ?? '—'}</span>
+                  <span style={{ color: '#15803d', fontWeight: 600 }}>{Number(lotSuggere.quantiteNette).toFixed(0)} kg disponibles</span>
+                  {lotSuggere.tauxGermination && <span style={{ color: 'var(--text-muted)' }}>Germ. : {lotSuggere.tauxGermination}%</span>}
+                  {lotSuggere.puretePhysique && <span style={{ color: 'var(--text-muted)' }}>Pureté : {lotSuggere.puretePhysique}%</span>}
+                </div>
+              </div>
+            )}
+            {lots.length === 0 && (
+              <div style={{ padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 7, fontSize: 12.5, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <XCircle size={13} /> Aucun lot G3 disponible pour cette variété.
+              </div>
+            )}
+
+            {/* Override */}
+            {p.overrideActif && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 7 }}>Lot de remplacement</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {lots.map((lot: any) => {
+                    const isSel = p.idLotSelectionne === lot.id
+                    const isFifo = lot.id === p.idLotSuggereFifo
+                    return (
+                      <label key={lot.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: `2px solid ${isSel ? '#d97706' : 'var(--border)'}`, borderRadius: 8, cursor: 'pointer', background: isSel ? '#fefce8' : 'var(--surface)', transition: 'all .12s' }}>
+                        <input type="radio" name={`lot-fifo-${ligne.id}`} checked={isSel} onChange={() => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], idLotSelectionne: lot.id } }))} style={{ accentColor: '#d97706', width: 14, height: 14 }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <span style={{ fontWeight: 700, fontSize: 12.5, fontFamily: 'monospace' }}>{lot.codeLot}</span>
+                          {isFifo && <span style={{ marginLeft: 7, fontSize: 10, background: '#eff6ff', color: '#1e40af', borderRadius: 4, padding: '1px 6px', fontWeight: 700 }}>FIFO</span>}
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>Campagne {lot.campagne ?? '—'}</span>
+                        </div>
+                        <span style={{ fontWeight: 700, fontSize: 12.5, color: '#15803d', flexShrink: 0 }}>{Number(lot.quantiteNette).toFixed(0)} kg</span>
+                        {lot.tauxGermination && <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>Germ. {lot.tauxGermination}%</span>}
+                      </label>
+                    )
+                  })}
+                </div>
+                {needsMotif && (
+                  <div style={{ marginTop: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 5 }}>Motif de remplacement <span style={{ color: '#dc2626' }}>*</span></div>
+                    <textarea
+                      value={p.motifOverride}
+                      onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], motifOverride: e.target.value } }))}
+                      placeholder="Expliquez pourquoi ce lot n'est pas utilisé selon le classement FIFO…"
+                      rows={2}
+                      style={{ width: '100%', padding: '8px 12px', border: '1px solid #fecaca', borderRadius: 6, fontSize: 12.5, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0 }}>Quantité proposée</div>
+              <input
+                type="number" value={p.quantiteSelectionnee} min={1}
+                max={lotSelectionne ? Number(lotSelectionne.quantiteNette) : undefined}
+                onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], quantiteSelectionnee: e.target.value } }))}
+                style={{ padding: '6px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: 130, outline: 'none', background: 'var(--surface)' }}
+              />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ligne.unite} sur {ligne.quantiteDemandee} demandés{lotSelectionne ? ` · ${Number(lotSelectionne.quantiteNette).toFixed(0)} kg dispo` : ''}</span>
+            </div>
+          </div>
+        )
+      })}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+        <button className="btn btn-primary" style={{ background: isValid && !saving ? 'linear-gradient(135deg, #1d4ed8, #1e40af)' : undefined, border: 'none', display: 'flex', alignItems: 'center', gap: 7, opacity: !isValid ? 0.6 : 1 }} onClick={submit} disabled={!isValid || saving}>
+          {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><Zap size={13} /> Envoyer la proposition FIFO</>}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : DÉCISION MULTIPLICATEUR — per-line accept/refuse
+   ══════════════════════════════════════════════════════════════════════════════ */
+function DecisionMultiplicateurModal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const lignesG3: any[] = (commande.lignes ?? []).filter((l: any) => l.idGeneration === 4)
+  const [decisions, setDecisions] = useState<Record<number, { accepte: boolean }>>(() => {
+    const init: Record<number, { accepte: boolean }> = {}
+    for (const l of lignesG3) init[l.id] = { accepte: true }
+    return init
+  })
+  const [siteCode,  setSiteCode]  = useState('')
+  const [mesSites,  setMesSites]  = useState<any[]>([])
+  const [lotsInfo,  setLotsInfo]  = useState<Record<number, any>>({})
+  const [saving,    setSaving]    = useState(false)
+
+  useEffect(() => {
+    api.get(endpoints.sitesMesSites).then(r => {
+      const sites = Array.isArray(r.data) ? r.data : (r.data?.content ?? [])
+      setMesSites(sites)
+      const principal = sites.find((s: any) => s.estPrincipal)
+      if (principal) setSiteCode(principal.codeSite)
+    }).catch(() => {})
+
+    // Charger les infos des lots proposés (qualité)
+    const ids = lignesG3.map((l: any) => l.idLotPropose).filter(Boolean)
+    Promise.all(ids.map(id => api.get(endpoints.lotById(id)).then(r => [id, r.data] as [number, any]).catch(() => null)))
+      .then(results => {
+        const map: Record<number, any> = {}
+        results.forEach(r => { if (r) map[r[0]] = r[1] })
+        setLotsInfo(map)
+      })
+  }, [])
+
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+
+  const nbAcceptes = Object.values(decisions).filter(d => d.accepte).length
+
+  async function submit() {
+    setSaving(true)
+    try {
+      const decs = lignesG3.map(l => ({ idLigne: l.id, accepte: decisions[l.id]?.accepte ?? true }))
+      await api.patch(endpoints.orderDecisionMultiplicateur(commande.id), { decisions: decs, siteDestinationCode: siteCode || null })
+      const msg = nbAcceptes === 0 ? `Toutes les lignes refusées — commande renvoyée à l'UPSemCL` : `Décision envoyée : ${nbAcceptes} ligne${nbAcceptes > 1 ? 's' : ''} acceptée${nbAcceptes > 1 ? 's' : ''}`
+      setToast({ msg, type: nbAcceptes > 0 ? 'success' : 'warning' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal title="Décision par variété" subtitle={`${commande.codeCommande} — Acceptez ou refusez chaque variété proposée`} onClose={onClose} size="lg">
+      <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Settings2 size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>Vérifiez les détails de chaque lot proposé. <strong>Acceptez ou refusez</strong> ligne par ligne avant d'envoyer votre décision finale.</span>
+      </div>
+
+      {lignesG3.map((ligne: any) => {
+        const lot = lotsInfo[ligne.idLotPropose]
+        const dec = decisions[ligne.id] ?? { accepte: true }
+        return (
+          <div key={ligne.id} style={{ border: `2px solid ${dec.accepte ? '#bbf7d0' : '#fca5a5'}`, borderRadius: 10, padding: 16, marginBottom: 14, background: dec.accepte ? '#f0fdf4' : '#fef2f2', transition: 'all .15s' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{varNom(ligne.idVariete)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>G3 · Demandé : {ligne.quantiteDemandee} {ligne.unite}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 7 }}>
+                <button onClick={() => setDecisions(d => ({ ...d, [ligne.id]: { accepte: true } }))}
+                  style={{ padding: '5px 14px', borderRadius: 7, border: `2px solid ${dec.accepte ? '#16a34a' : 'var(--border)'}`, background: dec.accepte ? '#dcfce7' : 'var(--surface)', color: dec.accepte ? '#15803d' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all .12s' }}>
+                  <CheckCircle2 size={13} /> Accepter
+                </button>
+                <button onClick={() => setDecisions(d => ({ ...d, [ligne.id]: { accepte: false } }))}
+                  style={{ padding: '5px 14px', borderRadius: 7, border: `2px solid ${!dec.accepte ? '#dc2626' : 'var(--border)'}`, background: !dec.accepte ? '#fee2e2' : 'var(--surface)', color: !dec.accepte ? '#dc2626' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all .12s' }}>
+                  <XCircle size={13} /> Refuser
+                </button>
+              </div>
+            </div>
+
+            {ligne.idLotPropose && (
+              <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6, fontFamily: 'monospace' }}>
+                  {lot?.codeLot ?? `Lot #${ligne.idLotPropose}`}
+                </div>
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', color: 'var(--text-muted)' }}>
+                  {lot?.campagne && <span>Campagne : <strong style={{ color: 'var(--text-primary)' }}>{lot.campagne}</strong></span>}
+                  <span>Qté proposée : <strong style={{ color: '#15803d' }}>{ligne.quantiteProposee ?? ligne.quantiteDemandee} kg</strong></span>
+                  {lot?.controleQualite?.tauxGermination && <span>Germination : <strong style={{ color: '#1d4ed8' }}>{lot.controleQualite.tauxGermination}%</strong></span>}
+                  {lot?.controleQualite?.puretePhysique && <span>Pureté : <strong>{lot.controleQualite.puretePhysique}%</strong></span>}
+                  {lot?.controleQualite?.tauxHumidite && <span>Humidité : <strong>{lot.controleQualite.tauxHumidite}%</strong></span>}
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      <Field label="Site de destination">
+        <select value={siteCode} onChange={e => setSiteCode(e.target.value)} style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, background: 'var(--surface)', color: 'var(--text-primary)', outline: 'none' }}>
+          <option value="">— Site par défaut —</option>
+          {mesSites.map((s: any) => <option key={s.codeSite} value={s.codeSite}>{s.codeSite} — {s.nomSite}{s.estPrincipal ? ' ★' : ''}</option>)}
+        </select>
+      </Field>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 8 }}>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+        <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 7 }} onClick={submit} disabled={saving}>
+          {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><CheckCircle2 size={13} /> Envoyer ma décision</>}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : CONFIRMATION DE RÉCEPTION (Multiplicateur)
+   ══════════════════════════════════════════════════════════════════════════════ */
+function ReceptionConfirmationModal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const lignesAccordees: any[] = (commande.lignes ?? []).filter((l: any) => ['ACCORDEE','LIVREE'].includes(l.statutLigne) || l.idLotPropose)
+  const [observations, setObservations] = useState('')
+  const [avecEcart, setAvecEcart] = useState(false)
+  const [ecarts, setEcarts] = useState<Array<{ idLotSource: number; quantiteTransferee: string; quantiteRecue: string; observations: string }>>(
+    () => lignesAccordees.map(l => ({ idLotSource: l.idLotPropose, quantiteTransferee: String(l.quantiteProposee ?? 0), quantiteRecue: String(l.quantiteProposee ?? 0), observations: '' }))
+  )
+  const [saving, setSaving] = useState(false)
+
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+
+  async function submit() {
+    setSaving(true)
+    try {
+      const body = {
+        observations: observations || null,
+        ecarts: avecEcart ? ecarts.filter(e => e.idLotSource).map(e => ({
+          idLotSource: e.idLotSource,
+          quantiteTransferee: Number(e.quantiteTransferee),
+          quantiteRecue: Number(e.quantiteRecue),
+          observations: e.observations || null,
+        })) : null,
+      }
+      await api.post(endpoints.orderConfirmerReception(commande.id), body)
+      setToast({ msg: `Réception confirmée pour ${commande.codeCommande} — semences créditées dans votre stock`, type: 'success' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la confirmation', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal title="Confirmer la réception" subtitle={`${commande.codeCommande} · Bordereau de Réception`} onClose={onClose} size="md">
+      <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#15803d', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <PackageCheck size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>En confirmant, vous certifiez avoir physiquement reçu les semences. Les lots seront crédités dans votre stock.</span>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>Semences reçues</div>
+        <table style={{ width: '100%', fontSize: 12.5, borderCollapse: 'collapse' }}>
+          <thead><tr style={{ background: 'var(--surface-2)', borderBottom: '1px solid var(--border)' }}>
+            <th style={{ padding: '6px 10px', textAlign: 'left', fontWeight: 600, color: 'var(--text-secondary)' }}>Variété</th>
+            <th style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>Qté transférée</th>
+          </tr></thead>
+          <tbody>
+            {lignesAccordees.map((l: any, i: number) => (
+              <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: '6px 10px', fontWeight: 500 }}>{varNom(l.idVariete)}</td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 600, color: '#15803d' }}>{l.quantiteProposee ?? '—'} {l.unite}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <Field label="Observations">
+        <textarea value={observations} onChange={e => setObservations(e.target.value)} placeholder="Conditions de réception, remarques…" rows={2} style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
+      </Field>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-primary)', cursor: 'pointer', marginBottom: 14, marginTop: 4 }}>
+        <input type="checkbox" checked={avecEcart} onChange={e => setAvecEcart(e.target.checked)} style={{ accentColor: '#d97706', width: 15, height: 15 }} />
+        Déclarer un écart de quantité
+      </label>
+
+      {avecEcart && lignesAccordees.map((l: any, i: number) => (
+        <div key={i} style={{ border: '1px solid #fde68a', borderRadius: 8, padding: 12, marginBottom: 10, background: '#fefce8' }}>
+          <div style={{ fontWeight: 600, fontSize: 12.5, marginBottom: 8 }}>{varNom(l.idVariete)}</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 5 }}>Qté transférée (kg)</div>
+              <input type="number" value={ecarts[i]?.quantiteTransferee} readOnly style={{ padding: '6px 10px', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13, width: '100%', background: 'var(--surface-2)', outline: 'none', boxSizing: 'border-box' }} />
+            </div>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#d97706', marginBottom: 5 }}>Qté réellement reçue (kg)</div>
+              <input type="number" value={ecarts[i]?.quantiteRecue} onChange={e => setEcarts(prev => prev.map((ec, j) => j === i ? { ...ec, quantiteRecue: e.target.value } : ec))} style={{ padding: '6px 10px', border: '1px solid #fde68a', borderRadius: 6, fontSize: 13, width: '100%', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }} />
+            </div>
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 8 }}>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+        <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 7 }} onClick={submit} disabled={saving}>
+          {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Confirmation…</> : <><PackageCheck size={13} /> Confirmer la réception</>}
+        </button>
+      </div>
+    </Modal>
   )
 }
 

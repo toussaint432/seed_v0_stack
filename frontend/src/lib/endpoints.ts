@@ -118,6 +118,14 @@ export const endpoints = {
   orderRefuserProposition: (id: number) => `${ORDER}/orders/${id}/refuser-proposition`,
   orderFaireTransfert:     (id: number) => `${ORDER}/orders/${id}/faire-transfert`,
   orderAccuserReception:   (id: number) => `${ORDER}/orders/${id}/accuser-reception`,
+  /** Flux G3 FIFO-DSS — nouveaux endpoints */
+  orderPropositionsG3:         (id: number) => `${ORDER}/orders/${id}/propositions-g3`,
+  orderDecisionMultiplicateur: (id: number) => `${ORDER}/orders/${id}/decision-multiplicateur`,
+  orderConfirmerReception:     (id: number) => `${ORDER}/orders/${id}/confirmer-reception`,
+  orderBordereauTransfert:     (id: number) => `${ORDER}/orders/${id}/bordereau-transfert`,
+  orderBordereauReception:     (id: number) => `${ORDER}/orders/${id}/bordereau-reception`,
+  orderCatalogueG3:            `${ORDER}/orders/catalogue-g3`,
+  orderLotsG3Fifo:             (idVariete: number) => `${ORDER}/orders/lots-g3/${idVariete}`,
   organisations:    `${ORDER}/organisations`,
   organisationById: (id: number) => `${ORDER}/organisations/${id}`,
 
