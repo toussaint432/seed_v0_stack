@@ -1019,8 +1019,9 @@ function VueQuotataire({ setToast }: { setToast: any }) {
   const [saving,       setSaving]       = useState(false)
   const [kpiFilter,    setKpiFilter]    = useState<KpiKey | null>(null)
   const [search,       setSearch]       = useState('')
-  const [voirPropModal, setVoirPropModal] = useState<any | null>(null)
-  const [actioning,    setActioning]    = useState<number | null>(null)
+  const [decisionQuotModal,  setDecisionQuotModal]  = useState<any | null>(null)
+  const [receptionR2Modal,   setReceptionR2Modal]   = useState<any | null>(null)
+  const [actioning,          setActioning]           = useState<number | null>(null)
 
   const [form, setForm] = useState({
     idOrganisationFournisseur: '',
@@ -1148,8 +1149,8 @@ function VueQuotataire({ setToast }: { setToast: any }) {
               if (o.statut === 'EN_NEGOCIATION') {
                 return (
                   <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #d97706, #b45309)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
-                    onClick={() => setVoirPropModal(o)} disabled={actioning === o.id}>
-                    <Eye size={11} /> Voir proposition
+                    onClick={() => setDecisionQuotModal(o)} disabled={actioning === o.id}>
+                    <CheckCircle2 size={11} /> Décider
                   </button>
                 )
               }
@@ -1159,9 +1160,8 @@ function VueQuotataire({ setToast }: { setToast: any }) {
               if (o.statut === 'EN_LIVRAISON') {
                 return (
                   <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #7c3aed, #5b21b6)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
-                    onClick={() => accuserReceptionQ(o.id, o.codeCommande)} disabled={actioning === o.id}>
-                    {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <PackageCheck size={11} />}
-                    Accuser réception
+                    onClick={() => setReceptionR2Modal(o)} disabled={actioning === o.id}>
+                    <PackageCheck size={11} /> Confirmer réception
                   </button>
                 )
               }
@@ -1171,14 +1171,23 @@ function VueQuotataire({ setToast }: { setToast: any }) {
         />
       </div>
 
-      {voirPropModal && (
-        <VoirPropositionModal
-          commande={voirPropModal}
+      {decisionQuotModal && (
+        <DecisionQuotataireModal
+          commande={decisionQuotModal}
           varieties={varieties}
-          onClose={() => setVoirPropModal(null)}
+          onClose={() => setDecisionQuotModal(null)}
           onSuccess={fetchAll}
           setToast={setToast}
-          fournisseurLabel="Le multiplicateur"
+        />
+      )}
+
+      {receptionR2Modal && (
+        <ReceptionConfirmationModal
+          commande={receptionR2Modal}
+          varieties={varieties}
+          onClose={() => setReceptionR2Modal(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
         />
       )}
 
@@ -1645,7 +1654,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
       )}
 
       {proposerRecuModal && (
-        <ProposeMulModal
+        <PropositionR2Modal
           commande={proposerRecuModal}
           varieties={varieties}
           onClose={() => setProposerRecuModal(null)}
@@ -2967,6 +2976,323 @@ function ReceptionConfirmationModal({
         <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
         <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 7 }} onClick={submit} disabled={saving}>
           {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Confirmation…</> : <><PackageCheck size={13} /> Confirmer la réception</>}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : PROPOSER une allocation R2 avec prix (Multiplicateur → Quotataire)
+   ══════════════════════════════════════════════════════════════════════════════ */
+function PropositionR2Modal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const [mesLots,    setMesLots]    = useState<any[]>([])
+  const [loading,    setLoading]    = useState(true)
+  const [saving,     setSaving]     = useState(false)
+  const [selections, setSelections] = useState<Record<number, { idLot: number | null; quantite: string; prix: string; tva: string }>>({})
+
+  const lignes: any[] = commande.lignes ?? []
+
+  useEffect(() => {
+    const init: Record<number, { idLot: number | null; quantite: string; prix: string; tva: string }> = {}
+    for (const l of lignes) {
+      init[l.id] = {
+        idLot: l.idLotPropose ?? null,
+        quantite: l.quantiteProposee != null ? String(l.quantiteProposee) : String(l.quantiteDemandee ?? ''),
+        prix: '', tva: '0',
+      }
+    }
+    setSelections(init)
+    api.get(endpoints.lotsMesLots)
+      .then(r => {
+        const all = Array.isArray(r.data) ? r.data : (r.data?.content ?? [])
+        setMesLots(all.filter((l: any) =>
+          l.generationCode === 'R2' &&
+          ['DISPONIBLE','CERTIFIE'].includes(l.statutLot) &&
+          Number(l.quantiteNette) > 0
+        ))
+      })
+      .catch(() => setMesLots([]))
+      .finally(() => setLoading(false))
+  }, [])
+
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+  function lotsForLigne(idVariete: number) {
+    return mesLots.filter((lot: any) => lot.idVariete === idVariete)
+  }
+
+  const isValid = lignes.length > 0 && lignes.every((l: any) => {
+    const sel = selections[l.id]
+    return sel && sel.idLot !== null && sel.quantite && Number(sel.quantite) > 0
+      && sel.prix && Number(sel.prix) >= 0
+  })
+
+  async function submit() {
+    if (!isValid) return; setSaving(true)
+    try {
+      const propositions = lignes.map((l: any) => ({
+        idLigne: l.id,
+        idLotSelectionne: selections[l.id].idLot,
+        quantiteSelectionnee: Number(selections[l.id].quantite),
+        prixUnitaireHt: Number(selections[l.id].prix),
+        tauxTva: Number(selections[l.id].tva ?? 0),
+      }))
+      await api.post(endpoints.orderPropositionsR2(commande.id), { propositions })
+      setToast({ msg: `Proposition R2 envoyée pour ${commande.codeCommande} — le quotataire va examiner votre offre`, type: 'success' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la proposition R2', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal
+      title="Proposition R2 — Catalogue"
+      subtitle={`${commande.codeCommande} · Acheteur : ${commande.nomCompletAcheteur ?? commande.usernameAcheteur ?? '—'}`}
+      onClose={onClose} size="lg"
+    >
+      <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Settings2 size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>Sélectionnez votre lot <strong>R2</strong> disponible, indiquez la quantité et le <strong>prix unitaire HT</strong>. Le quotataire pourra accepter ou refuser avant le transfert physique.</span>
+      </div>
+
+      {lignes.map((ligne: any) => {
+        const lots  = lotsForLigne(ligne.idVariete)
+        const sel   = selections[ligne.id] ?? { idLot: null, quantite: '', prix: '', tva: '0' }
+        const lotSel = lots.find((l: any) => l.id === sel.idLot)
+        const montantHT = sel.prix && sel.quantite ? Number(sel.prix) * Number(sel.quantite) : null
+        return (
+          <div key={ligne.id} style={{ border: '1px solid var(--border)', borderRadius: 10, padding: 16, marginBottom: 14, background: 'var(--surface-2)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{varNom(ligne.idVariete)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                  Demandé : <strong style={{ color: 'var(--text-primary)' }}>{ligne.quantiteDemandee} {ligne.unite}</strong>
+                </div>
+              </div>
+              <span style={{ background: '#f0fdf4', color: '#15803d', borderRadius: 99, padding: '3px 11px', fontSize: 11.5, fontWeight: 700 }}>R2</span>
+            </div>
+
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>Lot à proposer</div>
+              {loading ? (
+                <div className="skeleton" style={{ height: 44, borderRadius: 8 }} />
+              ) : lots.length === 0 ? (
+                <div style={{ padding: '11px 14px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <XCircle size={14} /> Aucun lot R2 disponible pour cette variété.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  {lots.map((lot: any) => (
+                    <label key={lot.id} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 14px', border: `2px solid ${sel.idLot === lot.id ? '#d97706' : 'var(--border)'}`, borderRadius: 9, cursor: 'pointer', background: sel.idLot === lot.id ? '#fefce8' : 'var(--surface)', transition: 'all .12s' }}>
+                      <input type="radio" name={`lot-r2-${ligne.id}`} checked={sel.idLot === lot.id} onChange={() => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], idLot: lot.id } }))} style={{ accentColor: '#d97706', width: 15, height: 15 }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, fontFamily: 'monospace' }}>{lot.codeLot}</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{lot.campagne ?? '—'}</span>
+                      </div>
+                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#15803d' }}>{lot.quantiteNette} kg</div>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>disponible</div>
+                      </div>
+                      <span style={{ fontSize: 10.5, background: '#dcfce7', color: '#15803d', borderRadius: 99, padding: '2px 9px', fontWeight: 600 }}>{lot.statutLot}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 12 }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Quantité ({ligne.unite})</div>
+                <input type="number" value={sel.quantite} min={1} max={lotSel ? lotSel.quantiteNette : undefined}
+                  onChange={e => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], quantite: e.target.value } }))}
+                  disabled={sel.idLot === null}
+                  placeholder={String(ligne.quantiteDemandee ?? '')}
+                  style={{ padding: '8px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, width: '100%', outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : 'var(--surface)', boxSizing: 'border-box' }}
+                />
+                {lotSel && <div style={{ fontSize: 10.5, color: '#15803d', marginTop: 3 }}>{lotSel.quantiteNette} kg dispo</div>}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Prix unitaire HT (FCFA/kg) *</div>
+                <input type="number" value={sel.prix} min={0} step="0.01"
+                  onChange={e => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], prix: e.target.value } }))}
+                  disabled={sel.idLot === null}
+                  placeholder="ex : 450"
+                  style={{ padding: '8px 10px', border: '1px solid #fde68a', borderRadius: 6, fontSize: 13, width: '100%', outline: 'none', background: sel.idLot === null ? 'var(--surface-2)' : '#fefce8', boxSizing: 'border-box' }}
+                />
+                {montantHT !== null && <div style={{ fontSize: 10.5, color: '#d97706', marginTop: 3, fontWeight: 600 }}>Montant HT : {montantHT.toLocaleString('fr-SN')} FCFA</div>}
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>TVA (%)</div>
+                <input type="number" value={sel.tva} min={0} max={30} step="0.5"
+                  onChange={e => setSelections(s => ({ ...s, [ligne.id]: { ...s[ligne.id], tva: e.target.value } }))}
+                  placeholder="0"
+                  style={{ padding: '8px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, width: '100%', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        {!isValid && !saving && (
+          <span style={{ fontSize: 11.5, color: '#d97706', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <XCircle size={13} /> Sélectionnez un lot et indiquez la quantité et le prix pour chaque variété
+          </span>
+        )}
+        <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>
+          <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+          <button
+            className="btn btn-primary"
+            style={{ background: isValid && !saving ? 'linear-gradient(135deg, #d97706, #b45309)' : '#9ca3af', border: 'none', fontSize: 13, display: 'flex', alignItems: 'center', gap: 7, cursor: isValid ? 'pointer' : 'not-allowed' }}
+            onClick={submit} disabled={!isValid || saving}
+          >
+            {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><Settings2 size={13} /> Envoyer proposition R2</>}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : DÉCISION QUOTATAIRE sur proposition R2 (ACCORD / REFUS par ligne)
+   ══════════════════════════════════════════════════════════════════════════════ */
+function DecisionQuotataireModal({
+  commande, varieties, onClose, onSuccess, setToast,
+}: {
+  commande: any; varieties: any[]; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const lignesR2: any[] = commande.lignes ?? []
+  const [decisions, setDecisions] = useState<Record<number, { accepte: boolean }>>(() => {
+    const init: Record<number, { accepte: boolean }> = {}
+    for (const l of lignesR2) init[l.id] = { accepte: true }
+    return init
+  })
+  const [propositions, setPropositions] = useState<Record<number, any>>({})
+  const [lotsInfo, setLotsInfo] = useState<Record<number, any>>({})
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    // Charger le bordereau pour obtenir les prix proposés
+    api.get(endpoints.orderBordereauTransfert(commande.id))
+      .then(r => {
+        const propMap: Record<number, any> = {}
+        ;(r.data?.lignes ?? []).forEach((l: any) => { if (l.proposition) propMap[l.idLigne] = l.proposition })
+        setPropositions(propMap)
+      }).catch(() => {})
+
+    const ids = lignesR2.map((l: any) => l.idLotPropose).filter(Boolean)
+    Promise.all(ids.map(id => api.get(endpoints.lotById(id)).then(r => [id, r.data] as [number, any]).catch(() => null)))
+      .then(results => {
+        const map: Record<number, any> = {}
+        results.forEach(r => { if (r) map[r[0]] = r[1] })
+        setLotsInfo(map)
+      })
+  }, [])
+
+  function varNom(idVariete: number) {
+    const v = varieties.find((vv: any) => vv.id === idVariete)
+    return v ? `${v.nomVariete} (${v.codeVariete})` : `Variété #${idVariete}`
+  }
+
+  const nbAcceptes = Object.values(decisions).filter(d => d.accepte).length
+
+  async function submit() {
+    setSaving(true)
+    try {
+      const decs = lignesR2.map(l => ({ idLigne: l.id, accepte: decisions[l.id]?.accepte ?? true }))
+      await api.patch(endpoints.orderDecisionQuotataire(commande.id), { decisions: decs })
+      const msg = nbAcceptes === 0
+        ? `Toutes les lignes refusées — le multiplicateur pourra re-proposer`
+        : `Décision envoyée : ${nbAcceptes} ligne${nbAcceptes > 1 ? 's' : ''} acceptée${nbAcceptes > 1 ? 's' : ''}`
+      setToast({ msg, type: nbAcceptes > 0 ? 'success' : 'warning' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal title="Ma décision par variété" subtitle={`${commande.codeCommande} — Examinez la proposition du multiplicateur`} onClose={onClose} size="lg">
+      <div style={{ background: '#fefce8', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#92400e', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <Settings2 size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>Vérifiez les lots proposés, les quantités et les <strong>prix unitaires HT</strong>. Acceptez ou refusez ligne par ligne.</span>
+      </div>
+
+      {lignesR2.map((ligne: any) => {
+        const lot  = lotsInfo[ligne.idLotPropose]
+        const prop = propositions[ligne.id]
+        const dec  = decisions[ligne.id] ?? { accepte: true }
+        const prix = prop?.prixUnitaireHt ?? null
+        const qte  = ligne.quantiteProposee ?? ligne.quantiteDemandee
+        const montantHT = prix !== null && qte ? Number(prix) * Number(qte) : null
+        return (
+          <div key={ligne.id} style={{ border: `2px solid ${dec.accepte ? '#bbf7d0' : '#fca5a5'}`, borderRadius: 10, padding: 16, marginBottom: 14, background: dec.accepte ? '#f0fdf4' : '#fef2f2', transition: 'all .15s' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{varNom(ligne.idVariete)}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  R2 · Demandé : {ligne.quantiteDemandee} {ligne.unite}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 7 }}>
+                <button onClick={() => setDecisions(d => ({ ...d, [ligne.id]: { accepte: true } }))}
+                  style={{ padding: '5px 14px', borderRadius: 7, border: `2px solid ${dec.accepte ? '#16a34a' : 'var(--border)'}`, background: dec.accepte ? '#dcfce7' : 'var(--surface)', color: dec.accepte ? '#15803d' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all .12s' }}>
+                  <CheckCircle2 size={13} /> Accepter
+                </button>
+                <button onClick={() => setDecisions(d => ({ ...d, [ligne.id]: { accepte: false } }))}
+                  style={{ padding: '5px 14px', borderRadius: 7, border: `2px solid ${!dec.accepte ? '#dc2626' : 'var(--border)'}`, background: !dec.accepte ? '#fee2e2' : 'var(--surface)', color: !dec.accepte ? '#dc2626' : 'var(--text-muted)', fontWeight: 700, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, transition: 'all .12s' }}>
+                  <XCircle size={13} /> Refuser
+                </button>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
+              <div style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, fontFamily: 'monospace' }}>
+                {lot?.codeLot ?? `Lot #${ligne.idLotPropose ?? '—'}`}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
+                <div>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 2 }}>Quantité proposée</div>
+                  <div style={{ fontWeight: 700, color: '#15803d', fontSize: 13 }}>{qte} {ligne.unite}</div>
+                </div>
+                {prix !== null && (
+                  <div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 2 }}>Prix unitaire HT</div>
+                    <div style={{ fontWeight: 700, color: '#d97706', fontSize: 13 }}>{Number(prix).toLocaleString('fr-SN')} FCFA/kg</div>
+                  </div>
+                )}
+                {montantHT !== null && (
+                  <div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 2 }}>Montant HT estimé</div>
+                    <div style={{ fontWeight: 700, color: '#1d4ed8', fontSize: 13 }}>{montantHT.toLocaleString('fr-SN')} FCFA</div>
+                  </div>
+                )}
+                {lot?.campagne && (
+                  <div>
+                    <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 2 }}>Campagne</div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{lot.campagne}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)', marginTop: 8 }}>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+        <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 7 }} onClick={submit} disabled={saving}>
+          {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><CheckCircle2 size={13} /> Envoyer ma décision</>}
         </button>
       </div>
     </Modal>
