@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 import jakarta.validation.constraints.*;
 import lombok.*;
 import sn.isra.seed.order_service.entity.enums.StatutCommande;
+import sn.isra.seed.order_service.entity.enums.TypeCommande;
 
 import java.time.Instant;
 import java.util.List;
@@ -65,6 +66,10 @@ public class Commande {
 
     @Column(columnDefinition = "TEXT")
     private String observations;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "type_commande", nullable = false, length = 30)
+    private TypeCommande typeCommande = TypeCommande.R2_MULT_QUOTATAIRE;
 
     @Column(name = "code_transfert_genere", length = 80)
     private String codeTransfertGenere;

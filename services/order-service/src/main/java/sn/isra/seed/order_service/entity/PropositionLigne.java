@@ -44,6 +44,14 @@ public class PropositionLigne {
     @Column(name = "statut_proposition", length = 20)
     private String statutProposition = "PROPOSEE";
 
+    /** Prix unitaire HT en FCFA/kg — saisi par le vendeur lors de la proposition */
+    @Column(name = "prix_unitaire_ht", precision = 12, scale = 2)
+    private java.math.BigDecimal prixUnitaireHt;
+
+    /** Taux de TVA en % (0 pour les semences certifiées subventionnées) */
+    @Column(name = "taux_tva", precision = 5, scale = 2)
+    private java.math.BigDecimal tauxTva = java.math.BigDecimal.ZERO;
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
