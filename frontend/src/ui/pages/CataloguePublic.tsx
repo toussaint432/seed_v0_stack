@@ -874,11 +874,14 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
                   .map(zi => ({ zone: zoneMap.get(zi.idZone), niveau: zi.niveau }))
                   .filter(z => z.zone != null) as Array<{ zone: ZoneAgro; niveau: string }>
 
-                /* Fournisseur le plus proche via lookup dans les données de proximité */
-                const closestLot = geoMode
-                  ? [...v.lots].sort((a, b) => (distanceByOrgId.get(a.organisationId) ?? Infinity) - (distanceByOrgId.get(b.organisationId) ?? Infinity)).find(l => distanceByOrgId.has(l.organisationId)) ?? null
-                  : null
-                const closestDist = closestLot ? distanceByOrgId.get(closestLot.organisationId) : null
+                /* Agréger les lots par fournisseur pour cette variété */
+                const orgMap = new Map<number, { orgId: number; orgNom: string; nomComplet?: string; distanceKm?: number; stockTotal: number }>()
+                for (const lot of v.lots) {
+                  const ex = orgMap.get(lot.organisationId)
+                  if (!ex) orgMap.set(lot.organisationId, { orgId: lot.organisationId, orgNom: lot.nomOrganisation, nomComplet: lot.nomComplet, distanceKm: distanceByOrgId.get(lot.organisationId), stockTotal: lot.quantiteDisponible })
+                  else ex.stockTotal += lot.quantiteDisponible
+                }
+                const fournisseursVariete = Array.from(orgMap.values()).sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
 
                 return (
                   <div key={v.varieteId} style={{ background: 'var(--surface)', borderRadius: 14, border: inCart ? '2px solid #16a34a' : '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.15s, border-color 0.15s' }}>
@@ -949,25 +952,35 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
                         </div>
                       )}
 
-                      {/* Fournisseur le plus proche (mode géoloc) */}
-                      {closestLot && closestDist != null && (() => {
-                        const km = Math.round(closestDist)
-                        const h  = Math.ceil(closestDist / 50)
-                        const isNear = km < 80
-                        const isMed  = km < 150
-                        const bg  = isNear ? '#f0fdf4' : isMed ? '#fffbeb' : '#f9fafb'
-                        const col = isNear ? '#15803d' : isMed ? '#b45309' : '#6b7280'
-                        const bdr = isNear ? '#bbf7d0' : isMed ? '#fde68a' : '#e5e7eb'
-                        return (
-                          <div style={{ background: bg, border: `1px solid ${bdr}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, color: col, display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Navigation size={11} style={{ color: col, flexShrink: 0 }} />
-                            <span style={{ fontWeight: 600, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {closestLot.nomComplet || closestLot.nomOrganisation}
-                            </span>
-                            <span style={{ fontWeight: 700, flexShrink: 0 }}>{km} km · ~{h}h</span>
-                          </div>
-                        )
-                      })()}
+                      {/* Tous les fournisseurs disponibles pour cette variété */}
+                      {fournisseursVariete.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          {fournisseursVariete.map(f => {
+                            const km  = f.distanceKm != null ? Math.round(f.distanceKm) : null
+                            const h   = km != null ? Math.ceil(km / 50) : null
+                            const bg  = km == null ? '#f9fafb' : km < 80 ? '#f0fdf4' : km < 150 ? '#fffbeb' : '#f9fafb'
+                            const col = km == null ? '#6b7280' : km < 80 ? '#15803d' : km < 150 ? '#b45309' : '#6b7280'
+                            const bdr = km == null ? '#e5e7eb' : km < 80 ? '#bbf7d0' : km < 150 ? '#fde68a' : '#e5e7eb'
+                            return (
+                              <div key={f.orgId} style={{ background: bg, border: `1px solid ${bdr}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Navigation size={11} style={{ color: col, flexShrink: 0 }} />
+                                <span style={{ fontWeight: 600, flex: 1, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {f.nomComplet || f.orgNom}
+                                </span>
+                                <span style={{ fontWeight: 700, color: '#16a34a', flexShrink: 0 }}>{f.stockTotal.toLocaleString('fr-FR')} kg</span>
+                                {km != null && (
+                                  <span style={{ fontWeight: 600, color: col, flexShrink: 0, marginLeft: 4 }}>{km} km · ~{h}h</span>
+                                )}
+                                <button
+                                  onClick={e => { e.stopPropagation(); setSelectedVariete(v); setGeoMode(false); setShowFournisseurs(true) }}
+                                  style={{ height: 22, padding: '0 7px', borderRadius: 5, border: `1px solid ${bdr}`, background: 'transparent', color: col, cursor: 'pointer', fontSize: 10, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
+                                  Contact
+                                </button>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
 
                       {/* In-cart badge */}
                       {inCart && (
@@ -989,11 +1002,6 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
                             {isAdded ? <><CheckCircle2 size={13} /> Ajouté !</> : <><ShoppingCart size={13} /> Ajouter</>}
                           </button>
                         </div>
-                        <button onClick={() => { setSelectedVariete(v); setGeoMode(false); setShowFournisseurs(true) }}
-                          style={{ width: '100%', height: 30, borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontWeight: 500 }}>
-                          <MapPin size={12} style={{ color: accent }} />
-                          Voir les {v.nombreFournisseurs} fournisseur{v.nombreFournisseurs > 1 ? 's' : ''} →
-                        </button>
                       </div>
                     </div>
                   </div>
