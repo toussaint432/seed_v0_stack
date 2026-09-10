@@ -36,6 +36,21 @@ interface VarieteGroup {
   zonesAdaptation: ZoneInfo[]
 }
 
+interface VarieteAgg {
+  varieteId: number; nomVariete: string; codeVariete: string
+  nomEspece: string; codeEspece: string; generation: string
+  stockTotal: number; tauxGermination: number
+  niveauAdaptation: string | null; zonesAdaptation: ZoneInfo[]
+  representant: CatalogueItem
+}
+
+interface MultGroup {
+  orgId: number; orgNom: string; nomComplet?: string
+  region: string; distanceKm?: number
+  varietes: VarieteAgg[]
+  stockTotal: number
+}
+
 interface CartItem {
   varieteId: number; nomVariete: string; codeVariete: string
   nomEspece: string; idGeneration: number; generation: string
@@ -63,6 +78,16 @@ const NIVEAU_CONFIG: Record<string, { label: string; color: string; bg: string }
   OPTIMAL:    { label: 'Zone optimale',   color: '#16a34a', bg: '#f0fdf4' },
   ACCEPTABLE: { label: 'Zone acceptable', color: '#d97706', bg: '#fffbeb' },
   MARGINALE:  { label: 'Zone marginale',  color: '#ea580c', bg: '#fff7ed' },
+}
+
+function getInitials(name: string): string {
+  const parts = name.split(/\s+/).slice(0, 2)
+  return parts.map(w => w[0] ?? '').join('').toUpperCase() || '?'
+}
+
+const AVATAR_COLORS = ['#16a34a', '#0284c7', '#7c3aed', '#dc2626', '#ea580c', '#0891b2', '#65a30d', '#d97706']
+function getAvatarColor(orgId: number): string {
+  return AVATAR_COLORS[orgId % AVATAR_COLORS.length]
 }
 
 function groupByOrg(items: CatalogueItem[]): FournisseurEntry[] {
@@ -155,6 +180,25 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
       if (existing) return prev.map(c => c.varieteId === lot.varieteId ? { ...c, quantite: c.quantite + qty } : c)
       return [...prev, { varieteId: lot.varieteId, nomVariete: lot.nomVariete, codeVariete: lot.codeVariete, nomEspece: lot.nomEspece, idGeneration: idGen, generation: lot.generation, quantite: qty, unite: lot.unite || 'kg', disponible, organisationId: lot.organisationId }]
     })
+  }
+
+  function addToCartFromMult(variete: VarieteAgg, mult: MultGroup, qty: number) {
+    if (!qty || qty <= 0) return
+    const lot = variete.representant
+    const gen = lot.generation ?? 'R2'
+    if (roleKey === 'seed-quotataire' && gen !== 'R2') {
+      setOrderFeedback({ msg: `Seules les semences R2 peuvent être commandées. Ce lot est en ${gen}.`, type: 'error' })
+      return
+    }
+    const idGen = GEN_ID_MAP[gen] ?? 7
+    setCart(prev => {
+      const existing = prev.find(c => c.varieteId === variete.varieteId)
+      if (existing) return prev.map(c => c.varieteId === variete.varieteId ? { ...c, quantite: c.quantite + qty } : c)
+      return [...prev, { varieteId: variete.varieteId, nomVariete: variete.nomVariete, codeVariete: variete.codeVariete, nomEspece: variete.nomEspece, idGeneration: idGen, generation: gen, quantite: qty, unite: lot.unite || 'kg', disponible: variete.stockTotal, organisationId: mult.orgId }]
+    })
+    setAddedIds(prev => { const s = new Set(prev); s.add(variete.varieteId); return s })
+    setTimeout(() => setAddedIds(prev => { const s = new Set(prev); s.delete(variete.varieteId); return s }), 1800)
+    setQtyInputs(prev => ({ ...prev, [`${mult.orgId}-${variete.varieteId}`]: '' }))
   }
 
   function removeFromCart(varieteId: number) {
@@ -399,6 +443,54 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
     () => groupByOrg(geoMode ? proximiteItems : (selectedVariete?.lots ?? [])),
     [geoMode, proximiteItems, selectedVariete]
   )
+
+  const multGroups: MultGroup[] = useMemo(() => {
+    const map = new Map<number, MultGroup>()
+    for (const item of catalogue) {
+      const distKm = distanceByOrgId.get(item.organisationId)
+      const ex = map.get(item.organisationId)
+      if (!ex) {
+        let zones: ZoneInfo[] = []
+        try { zones = item.zonesAdaptation ? JSON.parse(item.zonesAdaptation) : [] } catch { zones = [] }
+        map.set(item.organisationId, {
+          orgId: item.organisationId, orgNom: item.nomOrganisation,
+          nomComplet: item.nomComplet, region: item.region, distanceKm: distKm,
+          varietes: [{ varieteId: item.varieteId, nomVariete: item.nomVariete, codeVariete: item.codeVariete, nomEspece: item.nomEspece, codeEspece: item.codeEspece ?? selectedEspece?.codeEspece ?? '', generation: item.generation, stockTotal: item.quantiteDisponible, tauxGermination: item.tauxGermination, niveauAdaptation: item.niveauAdaptation, zonesAdaptation: zones, representant: item }],
+          stockTotal: item.quantiteDisponible,
+        })
+      } else {
+        const exV = ex.varietes.find(v => v.varieteId === item.varieteId)
+        if (!exV) {
+          let zones: ZoneInfo[] = []
+          try { zones = item.zonesAdaptation ? JSON.parse(item.zonesAdaptation) : [] } catch { zones = [] }
+          ex.varietes.push({ varieteId: item.varieteId, nomVariete: item.nomVariete, codeVariete: item.codeVariete, nomEspece: item.nomEspece, codeEspece: item.codeEspece ?? selectedEspece?.codeEspece ?? '', generation: item.generation, stockTotal: item.quantiteDisponible, tauxGermination: item.tauxGermination, niveauAdaptation: item.niveauAdaptation, zonesAdaptation: zones, representant: item })
+        } else {
+          exV.stockTotal += item.quantiteDisponible
+          if (item.tauxGermination > exV.tauxGermination) { exV.tauxGermination = item.tauxGermination; exV.representant = item }
+        }
+        ex.stockTotal += item.quantiteDisponible
+      }
+    }
+    for (const mg of map.values()) mg.varietes.sort((a, b) => b.stockTotal - a.stockTotal)
+    return Array.from(map.values())
+  }, [catalogue, distanceByOrgId, selectedEspece])
+
+  const filteredMultGroups = useMemo(() => {
+    if (!search) return multGroups
+    const s = search.toLowerCase()
+    return multGroups.map(mg => {
+      const orgMatch = (mg.orgNom + ' ' + (mg.nomComplet ?? '')).toLowerCase().includes(s)
+      if (orgMatch) return mg
+      const fv = mg.varietes.filter(v => v.nomVariete.toLowerCase().includes(s) || v.codeVariete.toLowerCase().includes(s) || v.nomEspece.toLowerCase().includes(s))
+      return fv.length > 0 ? { ...mg, varietes: fv } : null
+    }).filter((mg): mg is MultGroup => mg !== null)
+  }, [multGroups, search])
+
+  const sortedMultGroups = useMemo(() => {
+    const mgs = [...filteredMultGroups]
+    if (geoMode) return mgs.sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
+    return mgs.sort((a, b) => b.stockTotal - a.stockTotal)
+  }, [filteredMultGroups, geoMode])
 
   /* Données carte : items de proximité filtrés par espèce sélectionnée (si applicable),
      ou catalogue filtré par espèce en mode liste. Recherche textuelle dans les deux cas. */
@@ -668,9 +760,9 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
                   </div>
                   <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{e.codeEspece}</div>
                 </div>
-                {isActive && varieteGroups.length > 0 && (
+                {isActive && multGroups.length > 0 && (
                   <span style={{ background: '#16a34a', color: '#fff', borderRadius: 99, padding: '1px 7px', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                    {varieteGroups.length}
+                    {multGroups.length}
                   </span>
                 )}
               </div>
@@ -703,8 +795,8 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
               {selectedEspece ? selectedEspece.nomCommun : 'Catalogue des semences'}
             </div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {selectedEspece && !loading
-                ? `${varieteGroups.length} variété${varieteGroups.length > 1 ? 's' : ''} disponible${varieteGroups.length > 1 ? 's' : ''}${selectedZone ? ` · ${selectedZone.nom}` : ''}`
+              {!loading && sortedMultGroups.length > 0
+                ? `${sortedMultGroups.length} multiplicateur${sortedMultGroups.length > 1 ? 's' : ''} disponible${sortedMultGroups.length > 1 ? 's' : ''}${selectedZone ? ` · ${selectedZone.nom}` : ''}`
                 : 'Stocks R1 / R2 certifiés chez les multiplicateurs agréés'
               }
               {/* Indicateur de fraîcheur des données */}
@@ -816,10 +908,10 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
           )}
 
           {/* Empty */}
-          {!loading && sortedFilteredVarietes.length === 0 && (
+          {!loading && sortedMultGroups.length === 0 && (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
               <Package size={44} style={{ opacity: 0.2, marginBottom: 14, display: 'block', margin: '0 auto 14px' }} />
-              <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>Aucune variété disponible</p>
+              <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>Aucun multiplicateur disponible</p>
               <p style={{ fontSize: 13 }}>
                 {selectedZone
                   ? `Aucun stock R2${selectedEspece ? ` de ${selectedEspece.nomCommun}` : ''} en ${selectedZone.nom}`
@@ -829,180 +921,140 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
             </div>
           )}
 
-          {/* Barre de tri */}
-          {!loading && sortedFilteredVarietes.length > 0 && (
+          {/* Compteur + indicateur tri */}
+          {!loading && sortedMultGroups.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
-                <strong style={{ color: 'var(--text-primary)' }}>{sortedFilteredVarietes.length} variété{sortedFilteredVarietes.length > 1 ? 's' : ''}</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>{sortedMultGroups.length} multiplicateur{sortedMultGroups.length > 1 ? 's' : ''}</strong>
                 {selectedEspece ? ` · ${selectedEspece.nomCommun}` : ' · Toutes espèces'}
                 {selectedZone ? ` · ${selectedZone.nom}` : ' · Toutes zones'}
-                {geoMode && <span style={{ color: '#2563eb', marginLeft: 6, fontSize: 11 }}>📡 Proximité</span>}
+                {geoMode
+                  ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#2563eb', marginLeft: 8, fontSize: 11 }}><Navigation size={10} /> Triés par distance</span>
+                  : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#16a34a', marginLeft: 8, fontSize: 11 }}><Package size={10} /> Triés par stock</span>
+                }
               </span>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)', flexShrink: 0 }}>Trier :</span>
-              {(['stock', 'distance', 'germination'] as const).map(s => {
-                const labels: Record<string, string> = { stock: 'Stock', distance: 'Distance', germination: 'Germination' }
-                const icons:  Record<string, string> = { stock: '📦', distance: '📍', germination: '⭐' }
-                const active   = sortBy === s
-                const disabled = s === 'distance' && !geoMode
-                return (
-                  <button key={s} onClick={() => !disabled && setSortBy(s)} disabled={disabled}
-                    style={{ padding: '4px 10px', borderRadius: 6, fontSize: 11.5, fontWeight: 600, cursor: disabled ? 'not-allowed' : 'pointer',
-                      border: '1px solid', fontFamily: 'inherit',
-                      background:   active ? '#f0fdf4' : 'var(--surface)',
-                      color:        active ? '#15803d' : disabled ? 'var(--text-muted)' : 'var(--text-secondary)',
-                      borderColor:  active ? '#bbf7d0' : 'var(--border)',
-                      opacity:      disabled ? 0.5 : 1,
-                    }}>
-                    {icons[s]} {labels[s]}
-                  </button>
-                )
-              })}
             </div>
           )}
 
-          {/* Variety cards grid */}
-          {!loading && sortedFilteredVarietes.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
-              {sortedFilteredVarietes.map(v => {
-                const isAdded  = addedIds.has(v.varieteId)
-                const inCart   = cart.find(c => c.varieteId === v.varieteId)
-                const nCfg     = v.niveauAdaptation ? NIVEAU_CONFIG[v.niveauAdaptation] : null
-                const accent   = nCfg?.color ?? '#6b7280'
-                const stockTonnes = `${v.stockTotal.toLocaleString('fr-FR')} kg`
-                /* Badges ZAE : toutes les zones de la variété */
-                const zonesBadges = v.zonesAdaptation
-                  .map(zi => ({ zone: zoneMap.get(zi.idZone), niveau: zi.niveau }))
-                  .filter(z => z.zone != null) as Array<{ zone: ZoneAgro; niveau: string }>
-
-                /* Agréger les lots par fournisseur pour cette variété */
-                const orgMap = new Map<number, { orgId: number; orgNom: string; nomComplet?: string; distanceKm?: number; stockTotal: number }>()
-                for (const lot of v.lots) {
-                  const ex = orgMap.get(lot.organisationId)
-                  if (!ex) orgMap.set(lot.organisationId, { orgId: lot.organisationId, orgNom: lot.nomOrganisation, nomComplet: lot.nomComplet, distanceKm: distanceByOrgId.get(lot.organisationId), stockTotal: lot.quantiteDisponible })
-                  else ex.stockTotal += lot.quantiteDisponible
-                }
-                const fournisseursVariete = Array.from(orgMap.values()).sort((a, b) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity))
+          {/* Grille multiplicateurs */}
+          {!loading && sortedMultGroups.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
+              {sortedMultGroups.map(mult => {
+                const initials    = getInitials(mult.nomComplet || mult.orgNom)
+                const avatarColor = getAvatarColor(mult.orgId)
+                const distKm      = mult.distanceKm != null ? Math.round(mult.distanceKm) : null
+                const distH       = distKm != null ? Math.ceil(distKm / 50) : null
+                const distBg      = distKm == null ? '#f9fafb' : distKm < 80 ? '#f0fdf4' : distKm < 150 ? '#fffbeb' : '#f9fafb'
+                const distCol     = distKm == null ? '#6b7280' : distKm < 80 ? '#15803d' : distKm < 150 ? '#b45309' : '#6b7280'
+                const distBdr     = distKm == null ? '#e5e7eb' : distKm < 80 ? '#bbf7d0' : distKm < 150 ? '#fde68a' : '#e5e7eb'
 
                 return (
-                  <div key={v.varieteId} style={{ background: 'var(--surface)', borderRadius: 14, border: inCart ? '2px solid #16a34a' : '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'box-shadow 0.15s, border-color 0.15s' }}>
-                    {/* Accent strip */}
-                    <div style={{ height: 4, background: accent, flexShrink: 0 }} />
-
-                    <div style={{ padding: '14px 16px 14px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                      {/* Header */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                        <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
-                          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.25, marginBottom: 3 }}>
-                            {v.nomVariete}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{v.codeVariete}</div>
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-                          <span style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
-                            {v.codeEspece || selectedEspece?.codeEspece}
+                  <div key={mult.orgId} style={{ background: 'var(--surface)', borderRadius: 14, border: '1px solid var(--border)', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+                    {/* En-tête multiplicateur */}
+                    <div style={{ padding: '14px 16px 12px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: avatarColor, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 15, flexShrink: 0, letterSpacing: '0.03em' }}>
+                        {initials}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 4 }}>
+                          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.2 }}>{mult.nomComplet || mult.orgNom}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', borderRadius: 99, padding: '1px 7px', fontSize: 10, fontWeight: 600, flexShrink: 0 }}>
+                            <CheckCircle2 size={9} /> Agréé
                           </span>
-                          {!selectedEspece && (
-                            <span style={{ background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 7px', borderRadius: 6, fontSize: 10, fontWeight: 500 }}>
-                              {v.nomEspece}
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={10} /> {mult.region}</span>
+                          {distKm != null && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: distBg, color: distCol, border: `1px solid ${distBdr}`, borderRadius: 99, padding: '1px 7px', fontWeight: 600 }}>
+                              <Navigation size={9} /> {distKm} km · ~{distH}h
                             </span>
                           )}
-                          {nCfg && (
-                            <span style={{ background: nCfg.bg, color: nCfg.color, border: `1px solid ${nCfg.color}40`, padding: '2px 7px', borderRadius: 6, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>
-                              {nCfg.label}
-                            </span>
-                          )}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Package size={10} /> <strong style={{ color: 'var(--text-primary)' }}>{mult.stockTotal.toLocaleString('fr-FR')} kg</strong> total</span>
                         </div>
                       </div>
+                      <button onClick={() => handleContacter(mult.orgId)} disabled={contactingOrg === mult.orgId}
+                        style={{ height: 30, padding: '0 10px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: 11, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        <MessageCircle size={11} />
+                        {contactingOrg === mult.orgId ? 'Connexion…' : 'Contacter'}
+                      </button>
+                    </div>
 
-                      {/* Stats */}
-                      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)' }}>
-                          <Package size={12} style={{ color: accent }} />
-                          <strong style={{ color: 'var(--text-primary)' }}>{stockTonnes}</strong>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-secondary)' }}>
-                          <MapPin size={12} style={{ color: accent }} />
-                          <span><strong>{v.nombreFournisseurs}</strong> fournisseur{v.nombreFournisseurs > 1 ? 's' : ''}</span>
-                        </div>
-                        {v.tauxGerminationMoyen > 0 && (
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--text-secondary)' }}>
-                            <Star size={12} style={{ color: '#d97706' }} />
-                            <strong>{v.tauxGerminationMoyen}%</strong>
-                          </div>
-                        )}
-                      </div>
+                    {/* Liste des variétés */}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      {mult.varietes.map((variete, idx) => {
+                        const qKey    = `${mult.orgId}-${variete.varieteId}`
+                        const isAdded = addedIds.has(variete.varieteId)
+                        const inCart  = cart.find(c => c.varieteId === variete.varieteId)
+                        const nCfg    = variete.niveauAdaptation ? NIVEAU_CONFIG[variete.niveauAdaptation] : null
+                        const zonesBadges = variete.zonesAdaptation
+                          .map(zi => ({ zone: zoneMap.get(zi.idZone), niveau: zi.niveau }))
+                          .filter(z => z.zone != null) as Array<{ zone: ZoneAgro; niveau: string }>
 
-                      {/* Zones agro-écologiques de la variété */}
-                      {zonesBadges.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                          {zonesBadges.slice(0, 3).map(({ zone, niveau }) => {
-                            const cfg = NIVEAU_CONFIG[niveau]
-                            return (
-                              <span key={zone.id} title={cfg?.label ?? niveau}
-                                style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 600, border: `1px solid ${cfg?.color ?? '#9ca3af'}40`, background: cfg?.bg ?? '#f9fafb', color: cfg?.color ?? '#6b7280', whiteSpace: 'nowrap' }}>
-                                {zone.nom}
-                              </span>
-                            )
-                          })}
-                          {zonesBadges.length > 3 && (
-                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 600, background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb' }}>
-                              +{zonesBadges.length - 3} zones
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {/* Tous les fournisseurs disponibles pour cette variété */}
-                      {fournisseursVariete.length > 0 && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                          {fournisseursVariete.map(f => {
-                            const km  = f.distanceKm != null ? Math.round(f.distanceKm) : null
-                            const h   = km != null ? Math.ceil(km / 50) : null
-                            const bg  = km == null ? '#f9fafb' : km < 80 ? '#f0fdf4' : km < 150 ? '#fffbeb' : '#f9fafb'
-                            const col = km == null ? '#6b7280' : km < 80 ? '#15803d' : km < 150 ? '#b45309' : '#6b7280'
-                            const bdr = km == null ? '#e5e7eb' : km < 80 ? '#bbf7d0' : km < 150 ? '#fde68a' : '#e5e7eb'
-                            return (
-                              <div key={f.orgId} style={{ background: bg, border: `1px solid ${bdr}`, borderRadius: 8, padding: '6px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <Navigation size={11} style={{ color: col, flexShrink: 0 }} />
-                                <span style={{ fontWeight: 600, flex: 1, color: col, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {f.nomComplet || f.orgNom}
-                                </span>
-                                <span style={{ fontWeight: 700, color: '#16a34a', flexShrink: 0 }}>{f.stockTotal.toLocaleString('fr-FR')} kg</span>
-                                {km != null && (
-                                  <span style={{ fontWeight: 600, color: col, flexShrink: 0, marginLeft: 4 }}>{km} km · ~{h}h</span>
+                        return (
+                          <div key={variete.varieteId} style={{ padding: '12px 16px', borderTop: idx === 0 ? 'none' : '1px solid var(--border)' }}>
+                            <div style={{ marginBottom: 8 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginBottom: 3 }}>
+                                <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{variete.nomVariete}</span>
+                                <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--text-muted)' }}>{variete.codeVariete}</span>
+                                <span style={{ background: '#dcfce7', color: '#15803d', padding: '1px 6px', borderRadius: 4, fontWeight: 700, fontSize: 10 }}>{variete.generation}</span>
+                                {!selectedEspece && variete.nomEspece && (
+                                  <span style={{ background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 500 }}>{variete.nomEspece}</span>
                                 )}
-                                <button
-                                  onClick={e => { e.stopPropagation(); setSelectedVariete(v); setGeoMode(false); setShowFournisseurs(true) }}
-                                  style={{ height: 22, padding: '0 7px', borderRadius: 5, border: `1px solid ${bdr}`, background: 'transparent', color: col, cursor: 'pointer', fontSize: 10, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
-                                  Contact
-                                </button>
+                                {nCfg && (
+                                  <span style={{ background: nCfg.bg, color: nCfg.color, border: `1px solid ${nCfg.color}40`, padding: '1px 6px', borderRadius: 4, fontSize: 10, fontWeight: 600 }}>{nCfg.label}</span>
+                                )}
                               </div>
-                            )
-                          })}
-                        </div>
-                      )}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 11, color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                  <Package size={10} style={{ color: '#16a34a' }} />
+                                  <strong style={{ color: 'var(--text-primary)' }}>{variete.stockTotal.toLocaleString('fr-FR')} kg</strong>
+                                </span>
+                                {variete.tauxGermination > 0 && (
+                                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                                    <Star size={10} style={{ color: '#d97706' }} /> {variete.tauxGermination}%
+                                  </span>
+                                )}
+                              </div>
+                              {zonesBadges.length > 0 && (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3, marginTop: 5 }}>
+                                  {zonesBadges.slice(0, 3).map(({ zone, niveau }) => {
+                                    const cfg = NIVEAU_CONFIG[niveau]
+                                    return (
+                                      <span key={zone.id} title={cfg?.label ?? niveau}
+                                        style={{ fontSize: 9.5, padding: '1px 6px', borderRadius: 99, fontWeight: 600, border: `1px solid ${cfg?.color ?? '#9ca3af'}40`, background: cfg?.bg ?? '#f9fafb', color: cfg?.color ?? '#6b7280', whiteSpace: 'nowrap' }}>
+                                        {zone.nom}
+                                      </span>
+                                    )
+                                  })}
+                                  {zonesBadges.length > 3 && (
+                                    <span style={{ fontSize: 9.5, padding: '1px 6px', borderRadius: 99, fontWeight: 600, background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb' }}>
+                                      +{zonesBadges.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
 
-                      {/* In-cart badge */}
-                      {inCart && (
-                        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#15803d', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
-                          <CheckCircle2 size={13} /> {inCart.quantite.toLocaleString('fr-FR')} kg dans votre panier
-                        </div>
-                      )}
+                            {inCart && (
+                              <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 7, padding: '5px 9px', fontSize: 11, color: '#15803d', display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600, marginBottom: 7 }}>
+                                <CheckCircle2 size={11} /> {inCart.quantite.toLocaleString('fr-FR')} kg dans votre panier
+                              </div>
+                            )}
 
-                      {/* Actions */}
-                      <div style={{ marginTop: 'auto' }}>
-                        <div style={{ display: 'flex', gap: 8, marginBottom: 7 }}>
-                          <input type="number"
-                            value={qtyInputs[v.varieteId] ?? ''}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQtyInputs(prev => ({ ...prev, [v.varieteId]: e.target.value }))}
-                            placeholder="Qté (kg)" min="1"
-                            style={{ flex: 1, height: 36, borderRadius: 8, border: '1px solid var(--border)', padding: '0 10px', fontSize: 13, fontFamily: 'inherit', background: 'var(--surface-2)', color: 'var(--text-primary)' }} />
-                          <button onClick={(e: React.MouseEvent) => { e.stopPropagation(); addToCart(v) }}
-                            style={{ height: 36, padding: '0 14px', borderRadius: 8, border: 'none', cursor: 'pointer', background: isAdded ? '#15803d' : '#16a34a', color: '#fff', fontWeight: 600, fontSize: 13, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', transition: 'background 0.15s' }}>
-                            {isAdded ? <><CheckCircle2 size={13} /> Ajouté !</> : <><ShoppingCart size={13} /> Ajouter</>}
-                          </button>
-                        </div>
-                      </div>
+                            <div style={{ display: 'flex', gap: 7 }}>
+                              <input type="number"
+                                value={qtyInputs[qKey] ?? ''}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQtyInputs(prev => ({ ...prev, [qKey]: e.target.value }))}
+                                placeholder="Qté (kg)" min="1"
+                                style={{ flex: 1, height: 34, borderRadius: 7, border: '1px solid var(--border)', padding: '0 10px', fontSize: 12, fontFamily: 'inherit', background: 'var(--surface-2)', color: 'var(--text-primary)' }} />
+                              <button onClick={(e: React.MouseEvent) => { e.stopPropagation(); addToCartFromMult(variete, mult, Number(qtyInputs[qKey] || 500)) }}
+                                style={{ height: 34, padding: '0 12px', borderRadius: 7, border: 'none', cursor: 'pointer', background: isAdded ? '#15803d' : '#16a34a', color: '#fff', fontWeight: 600, fontSize: 12, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', transition: 'background 0.15s' }}>
+                                {isAdded ? <><CheckCircle2 size={12} /> Ajouté</> : <><ShoppingCart size={12} /> Ajouter</>}
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )
