@@ -393,9 +393,14 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
             const icon        = createMultiplicateurIcon(site.nomComplet || site.orgNom, site.stockTotal, maxStock, isSelected)
             const uniqueVar   = new Set(site.lots.map(l => l.varieteId)).size
             const travelHours = site.distanceKm != null ? Math.round(site.distanceKm / 50) : null
-            const allVarietes = site.lots
-              .slice().sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)
-              .filter((l, i, arr) => arr.findIndex(x => x.varieteId === l.varieteId) === i)
+            /* Agréger les lots par variété pour afficher le stock total par variété */
+            const varAggMap = new Map<number, { lot: CatalogueItem; stockTotal: number }>()
+            for (const l of site.lots) {
+              const ex = varAggMap.get(l.varieteId)
+              if (!ex) varAggMap.set(l.varieteId, { lot: l, stockTotal: l.quantiteDisponible })
+              else { ex.stockTotal += l.quantiteDisponible; if (l.tauxGermination > ex.lot.tauxGermination) ex.lot = l }
+            }
+            const allVarietes = Array.from(varAggMap.values()).sort((a, b) => b.stockTotal - a.stockTotal)
 
             return (
               <Marker
@@ -457,7 +462,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                         </span>
                       </div>
                       <div style={{ padding: '0 10px 10px', display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 260, overflowY: 'auto' }}>
-                        {allVarietes.map(l => {
+                        {allVarietes.map(({ lot: l, stockTotal: vTotal }) => {
                           const inCartV  = cart.find(c => c.varieteId === l.varieteId)
                           const isAddedV = addedIds.has(l.varieteId)
                           return (
@@ -468,7 +473,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                                 {l.tauxGermination > 0 && (
                                   <span style={{ color: '#d97706', fontSize: 10, flexShrink: 0 }}>☆{l.tauxGermination}%</span>
                                 )}
-                                <span style={{ color: '#16a34a', fontWeight: 700, fontSize: 10, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{l.quantiteDisponible.toLocaleString('fr-FR')} kg</span>
+                                <span style={{ color: '#16a34a', fontWeight: 700, fontSize: 10, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{vTotal.toLocaleString('fr-FR')} kg</span>
                               </div>
                               {inCartV && (
                                 <div style={{ fontSize: 10, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3, marginBottom: 4 }}>
@@ -807,14 +812,19 @@ function SiteLots({ site, cart, qtyInputs, addedIds, onQtyChange, onAdd }: {
   onQtyChange: (id: number, val: string) => void
   onAdd: (lot: CatalogueItem) => void
 }) {
-  /* Dédoublonner par variété (afficher la meilleure entrée) */
+  /* Agréger par variété — somme de tous les lots, lot le plus frais comme représentant */
   const byVariete = useMemo(() => {
-    const map = new Map<number, CatalogueItem>()
+    const map = new Map<number, { lot: CatalogueItem; stockTotal: number }>()
     for (const lot of site.lots) {
       const ex = map.get(lot.varieteId)
-      if (!ex || lot.quantiteDisponible > ex.quantiteDisponible) map.set(lot.varieteId, lot)
+      if (!ex) {
+        map.set(lot.varieteId, { lot, stockTotal: lot.quantiteDisponible })
+      } else {
+        ex.stockTotal += lot.quantiteDisponible
+        if (lot.tauxGermination > ex.lot.tauxGermination) ex.lot = lot
+      }
     }
-    return Array.from(map.values()).sort((a, b) => b.quantiteDisponible - a.quantiteDisponible)
+    return Array.from(map.values()).sort((a, b) => b.stockTotal - a.stockTotal)
   }, [site.lots])
 
   return (
@@ -823,7 +833,7 @@ function SiteLots({ site, cart, qtyInputs, addedIds, onQtyChange, onAdd }: {
         {byVariete.length} variété{byVariete.length > 1 ? 's' : ''} disponibles
       </div>
 
-      {byVariete.map(lot => {
+      {byVariete.map(({ lot, stockTotal }) => {
         const inCart  = cart.find(c => c.varieteId === lot.varieteId)
         const isAdded = addedIds.has(lot.varieteId)
         const nCfg    = lot.niveauAdaptation ? NIVEAU_CFG[lot.niveauAdaptation] : null
@@ -849,7 +859,7 @@ function SiteLots({ site, cart, qtyInputs, addedIds, onQtyChange, onAdd }: {
             {/* Méta */}
             <div style={{ display: 'flex', gap: 10, marginBottom: 7, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a' }}>
-                {lot.quantiteDisponible.toLocaleString('fr-FR')} kg
+                {stockTotal.toLocaleString('fr-FR')} kg
               </span>
               {lot.tauxGermination > 0 && (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#d97706' }}>

@@ -147,10 +147,13 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
       return
     }
     const idGen = GEN_ID_MAP[lot.generation] ?? 7
+    /* Utiliser le stock total de la variété (tous lots confondus) comme limite disponible */
+    const vGroup = varieteGroups.find(v => v.varieteId === lot.varieteId)
+    const disponible = vGroup?.stockTotal ?? lot.quantiteDisponible
     setCart(prev => {
       const existing = prev.find(c => c.varieteId === lot.varieteId)
       if (existing) return prev.map(c => c.varieteId === lot.varieteId ? { ...c, quantite: c.quantite + qty } : c)
-      return [...prev, { varieteId: lot.varieteId, nomVariete: lot.nomVariete, codeVariete: lot.codeVariete, nomEspece: lot.nomEspece, idGeneration: idGen, generation: lot.generation, quantite: qty, unite: lot.unite || 'kg', disponible: lot.quantiteDisponible, organisationId: lot.organisationId }]
+      return [...prev, { varieteId: lot.varieteId, nomVariete: lot.nomVariete, codeVariete: lot.codeVariete, nomEspece: lot.nomEspece, idGeneration: idGen, generation: lot.generation, quantite: qty, unite: lot.unite || 'kg', disponible, organisationId: lot.organisationId }]
     })
   }
 
