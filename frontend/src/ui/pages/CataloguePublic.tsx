@@ -55,7 +55,7 @@ interface CartItem {
   varieteId: number; nomVariete: string; codeVariete: string
   nomEspece: string; idGeneration: number; generation: string
   quantite: number; unite: string; disponible: number
-  organisationId?: number
+  organisationId?: number; nomOrganisation?: string
 }
 
 type FournisseurEntry = {
@@ -126,6 +126,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
   const [userCoords,       setUserCoords]       = useState<[number, number] | null>(null)
 
   const [cart,            setCart]            = useState<CartItem[]>([])
+  const [cartConflict,    setCartConflict]    = useState<{ current: string; blocked: string } | null>(null)
   const [qtyInputs,       setQtyInputs]       = useState<Record<number, string>>({})
   const [addedIds,        setAddedIds]        = useState<Set<number>>(new Set())
   const [sortBy,          setSortBy]          = useState<'stock' | 'distance' | 'germination'>('stock')
@@ -141,28 +142,28 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
   const [refreshing,   setRefreshing]   = useState(false)
   const [refreshLabel, setRefreshLabel] = useState<string | null>(null)
 
-  /* ── Cart actions ── */
-  function addToCart(v: VarieteGroup) {
-    const qty = Number(qtyInputs[v.varieteId] || 500)
+  /* ── Ajout panier depuis la vue liste (par multiplicateur) ── */
+  function addToCartFromMult(variete: VarieteAgg, mult: MultGroup, qty: number) {
     if (!qty || qty <= 0) return
-    const r2 = v.lots.find(l => l.generation === 'R2')
-    const r1 = v.lots.find(l => l.generation === 'R1')
-    const best = r2 ?? r1 ?? v.lots[0]
-    const gen = best?.generation ?? 'R2'
+    const lot = variete.representant
+    const gen = lot.generation ?? 'R2'
     if (roleKey === 'seed-quotataire' && gen !== 'R2') {
-      setOrderFeedback({ msg: 'Seules les semences R2 peuvent être commandées par un Quotataire. Ce lot est en ' + gen + '.', type: 'error' })
+      setOrderFeedback({ msg: `Seules les semences R2 peuvent être commandées. Ce lot est en ${gen}.`, type: 'error' })
+      return
+    }
+    if (cart.length > 0 && cart[0].organisationId && cart[0].organisationId !== mult.orgId) {
+      setCartConflict({ current: cart[0].nomOrganisation ?? 'ce multiplicateur', blocked: mult.nomComplet || mult.orgNom })
       return
     }
     const idGen = GEN_ID_MAP[gen] ?? 7
-    const organisationId = best?.organisationId ?? undefined
     setCart(prev => {
-      const existing = prev.find(c => c.varieteId === v.varieteId)
-      if (existing) return prev.map(c => c.varieteId === v.varieteId ? { ...c, quantite: c.quantite + qty } : c)
-      return [...prev, { varieteId: v.varieteId, nomVariete: v.nomVariete, codeVariete: v.codeVariete, nomEspece: v.nomEspece, idGeneration: idGen, generation: gen, quantite: qty, unite: 'kg', disponible: v.stockTotal, organisationId }]
+      const existing = prev.find(c => c.varieteId === variete.varieteId)
+      if (existing) return prev.map(c => c.varieteId === variete.varieteId ? { ...c, quantite: c.quantite + qty } : c)
+      return [...prev, { varieteId: variete.varieteId, nomVariete: variete.nomVariete, codeVariete: variete.codeVariete, nomEspece: variete.nomEspece, idGeneration: idGen, generation: gen, quantite: qty, unite: lot.unite || 'kg', disponible: variete.stockTotal, organisationId: mult.orgId, nomOrganisation: mult.nomComplet || mult.orgNom }]
     })
-    setAddedIds(prev => { const s = new Set(prev); s.add(v.varieteId); return s })
-    setTimeout(() => setAddedIds(prev => { const s = new Set(prev); s.delete(v.varieteId); return s }), 1800)
-    setQtyInputs(prev => ({ ...prev, [v.varieteId]: '' }))
+    setAddedIds(prev => { const s = new Set(prev); s.add(variete.varieteId); return s })
+    setTimeout(() => setAddedIds(prev => { const s = new Set(prev); s.delete(variete.varieteId); return s }), 1800)
+    setQtyInputs(prev => ({ ...prev, [`${mult.orgId}-${variete.varieteId}`]: '' }))
   }
 
   /* ── Ajout panier depuis la vue carte ── */
@@ -171,14 +172,17 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
       setOrderFeedback({ msg: 'En tant que Quotataire, vous ne pouvez commander que des semences R2. Ce lot est en ' + lot.generation + '.', type: 'error' })
       return
     }
+    if (cart.length > 0 && cart[0].organisationId && cart[0].organisationId !== lot.organisationId) {
+      setCartConflict({ current: cart[0].nomOrganisation ?? 'ce multiplicateur', blocked: lot.nomOrganisation })
+      return
+    }
     const idGen = GEN_ID_MAP[lot.generation] ?? 7
-    /* Utiliser le stock total de la variété (tous lots confondus) comme limite disponible */
     const vGroup = varieteGroups.find(v => v.varieteId === lot.varieteId)
     const disponible = vGroup?.stockTotal ?? lot.quantiteDisponible
     setCart(prev => {
       const existing = prev.find(c => c.varieteId === lot.varieteId)
       if (existing) return prev.map(c => c.varieteId === lot.varieteId ? { ...c, quantite: c.quantite + qty } : c)
-      return [...prev, { varieteId: lot.varieteId, nomVariete: lot.nomVariete, codeVariete: lot.codeVariete, nomEspece: lot.nomEspece, idGeneration: idGen, generation: lot.generation, quantite: qty, unite: lot.unite || 'kg', disponible, organisationId: lot.organisationId }]
+      return [...prev, { varieteId: lot.varieteId, nomVariete: lot.nomVariete, codeVariete: lot.codeVariete, nomEspece: lot.nomEspece, idGeneration: idGen, generation: lot.generation, quantite: qty, unite: lot.unite || 'kg', disponible, organisationId: lot.organisationId, nomOrganisation: lot.nomOrganisation }]
     })
   }
 
@@ -513,6 +517,14 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
   /* Lookup rapide zone id → zone (pour les badges ZAE sur les cartes) */
   const zoneMap = useMemo(() => new Map(zones.map(z => [z.id, z])), [zones])
 
+  /* Multiplicateur actif du panier (null si panier vide) */
+  const cartMult = useMemo<{ orgId: number; orgNom: string } | null>(() => {
+    if (cart.length === 0) return null
+    const first = cart[0]
+    if (!first.organisationId) return null
+    return { orgId: first.organisationId, orgNom: first.nomOrganisation ?? 'Multiplicateur' }
+  }, [cart])
+
   /* ── Fournisseurs drawer ── */
   const FournisseursDrawer = () => (
     <>
@@ -633,20 +645,31 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
         transition: 'transform 0.3s cubic-bezier(0.4,0,0.2,1)',
         zIndex: 1100, display: 'flex', flexDirection: 'column',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 20px 16px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a', flexShrink: 0 }}>
-            <ShoppingCart size={18} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Mon panier</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {cart.length} variété{cart.length > 1 ? 's' : ''} · {totalCartKg.toLocaleString('fr-FR')} kg
+        <div style={{ borderBottom: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 20px 14px' }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a', flexShrink: 0 }}>
+              <ShoppingCart size={18} />
             </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Mon panier</div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {cart.length} variété{cart.length > 1 ? 's' : ''} · {totalCartKg.toLocaleString('fr-FR')} kg
+              </div>
+            </div>
+            <button onClick={() => setShowCart(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 6, display: 'flex' }}>
+              <X size={18} />
+            </button>
           </div>
-          <button onClick={() => setShowCart(false)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 6, display: 'flex' }}>
-            <X size={18} />
-          </button>
+          {cartMult && (
+            <div style={{ margin: '0 20px 14px', padding: '8px 12px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 7 }}>
+              <CheckCircle2 size={12} style={{ color: '#16a34a', flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 1 }}>Commande en cours chez</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#166534', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{cartMult.orgNom}</div>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
@@ -778,7 +801,9 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
               <div style={{ fontSize: 12, fontWeight: 700, lineHeight: 1.3 }}>
                 Mon panier · {cart.length} variété{cart.length > 1 ? 's' : ''}
               </div>
-              <div style={{ fontSize: 11, opacity: 0.8 }}>{totalCartKg.toLocaleString('fr-FR')} kg</div>
+              <div style={{ fontSize: 11, opacity: 0.8 }}>
+                {totalCartKg.toLocaleString('fr-FR')} kg{cartMult ? ` · ${cartMult.orgNom}` : ''}
+              </div>
             </div>
             <ChevronRight size={15} style={{ opacity: 0.7, flexShrink: 0 }} />
           </div>
@@ -1064,6 +1089,35 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
         </div>
         )}
       </div>
+
+      {/* Toast conflit multiplicateur */}
+      {cartConflict && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#1e293b', color: '#fff', padding: '16px 20px', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.25)', zIndex: 2100, maxWidth: 460, width: 'calc(100vw - 48px)' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+            <X size={16} style={{ color: '#f87171', marginTop: 1, flexShrink: 0 }} />
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>
+                Panier réservé à {cartConflict.current}
+              </div>
+              <div style={{ fontSize: 12, color: '#cbd5e1', lineHeight: 1.5 }}>
+                Validez ou videz d'abord votre commande en cours avant de commander chez <strong style={{ color: '#fff' }}>{cartConflict.blocked}</strong>.
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => { setCartConflict(null); setShowCart(true) }}
+              style={{ height: 32, padding: '0 14px', borderRadius: 7, border: '1px solid #475569', background: 'transparent', color: '#e2e8f0', cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <ShoppingCart size={12} /> Voir mon panier
+            </button>
+            <button
+              onClick={() => { setCart([]); setCartConflict(null) }}
+              style={{ height: 32, padding: '0 14px', borderRadius: 7, border: 'none', background: '#ef4444', color: '#fff', cursor: 'pointer', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <Trash2 size={12} /> Vider le panier
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Feedback toast */}
       {orderFeedback && (
