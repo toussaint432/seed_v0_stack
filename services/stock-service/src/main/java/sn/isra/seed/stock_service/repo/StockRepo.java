@@ -245,9 +245,10 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
   List<StockAgregeView> findAgregeByUsernameCreateur(@Param("username") String username);
 
   /**
-   * Catalogue public : stocks R1/R2 disponibles chez les multiplicateurs.
+   * Catalogue public : stocks R2 disponibles chez les multiplicateurs.
    * Filtre optionnel par code espèce et zone agro-écologique.
-   * Tri : niveau adaptation (OPTIMAL→ACCEPTABLE→MARGINALE→sans zone) puis quantité DESC.
+   * Chaque ligne porte toutes les ZAE de la variété (JSON) pour affichage côté frontend.
+   * Tri : niveau adaptation pour la zone sélectionnée (OPTIMAL→ACCEPTABLE→MARGINALE→sans) puis quantité DESC.
    */
   @Query(value = """
       SELECT
@@ -268,32 +269,37 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
           si.region              AS region,
           o.id                   AS organisationId,
           o.nom_organisation     AS nomOrganisation,
-          /* Coordonnées : site en priorité, fallback organisation */
           COALESCE(si.latitude,  o.latitude)  AS latitude,
           COALESCE(si.longitude, o.longitude) AS longitude,
-          vz.niveau_adaptation   AS niveauAdaptation,
+          vz_sel.niveau_adaptation AS niveauAdaptation,
+          (SELECT CAST(json_agg(json_build_object(
+                     'idZone', vz2.id_zone,
+                     'niveau', vz2.niveau_adaptation
+                 ) ORDER BY vz2.niveau_adaptation) AS text)
+           FROM variete_zone vz2
+           WHERE vz2.id_variete = v.id)      AS zonesAdaptation,
           COALESCE(mo.nom_complet, o.nom_organisation) AS nomComplet
       FROM stock s
-      JOIN lot_semencier ls   ON s.id_lot = ls.id
-      JOIN generation_semence g ON ls.id_generation = g.id
-      JOIN variete v          ON ls.id_variete = v.id
-      JOIN espece e           ON v.id_espece = e.id
-      JOIN site si            ON s.id_site = si.id
-      JOIN organisation o     ON si.id_organisation = o.id
+      JOIN lot_semencier ls       ON s.id_lot           = ls.id
+      JOIN generation_semence g   ON ls.id_generation   = g.id
+      JOIN variete v              ON ls.id_variete       = v.id
+      JOIN espece e               ON v.id_espece         = e.id
+      JOIN site si                ON s.id_site           = si.id
+      JOIN organisation o         ON si.id_organisation  = o.id
       LEFT JOIN shared.membre_organisation mo ON mo.keycloak_username = ls.username_createur
-      LEFT JOIN variete_zone vz
-          ON v.id = vz.id_variete
-          AND vz.id_zone = CAST(:idZone AS BIGINT)
-      WHERE g.code_generation IN ('R1','R2')
+      LEFT JOIN variete_zone vz_sel
+          ON v.id = vz_sel.id_variete
+          AND vz_sel.id_zone = CAST(:idZone AS BIGINT)
+      WHERE g.code_generation = 'R2'
         AND s.quantite_disponible > 0
         AND ls.statut_lot = 'DISPONIBLE'
         AND ls.statut_certification = 'CERTIFIE'
         AND o.active = true
         AND o.type_organisation = 'MULTIPLICATEUR'
         AND (:codeEspece IS NULL OR e.code_espece = :codeEspece)
-        AND (:idZone IS NULL OR vz.id_zone IS NOT NULL)
+        AND (:idZone IS NULL OR vz_sel.id_zone IS NOT NULL)
       ORDER BY
-          CASE vz.niveau_adaptation
+          CASE vz_sel.niveau_adaptation
               WHEN 'OPTIMAL'    THEN 1
               WHEN 'ACCEPTABLE' THEN 2
               WHEN 'MARGINALE'  THEN 3
@@ -334,6 +340,12 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
               COALESCE(si.latitude,  o.latitude)  AS latitude,
               COALESCE(si.longitude, o.longitude) AS longitude,
               NULL::text             AS niveauAdaptation,
+              (SELECT CAST(json_agg(json_build_object(
+                         'idZone', vz2.id_zone,
+                         'niveau', vz2.niveau_adaptation
+                     ) ORDER BY vz2.niveau_adaptation) AS text)
+               FROM variete_zone vz2
+               WHERE vz2.id_variete = v.id) AS zonesAdaptation,
               COALESCE(mo.nom_complet, o.nom_organisation) AS nomComplet,
               6371.0 * acos(LEAST(1.0,
                   cos(radians(CAST(:lat AS double precision)))
@@ -350,7 +362,7 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
           JOIN site si                ON s.id_site = si.id
           JOIN organisation o         ON si.id_organisation = o.id
           LEFT JOIN shared.membre_organisation mo ON mo.keycloak_username = ls.username_createur
-          WHERE g.code_generation IN ('R1','R2')
+          WHERE g.code_generation = 'R2'
             AND s.quantite_disponible > 0
             AND ls.statut_lot = 'DISPONIBLE'
             AND ls.statut_certification = 'CERTIFIE'

@@ -9,6 +9,8 @@ import { MapCatalogue } from '../components/MapCatalogue'
 /* ── Types ─────────────────────────────────────────────── */
 interface Espece { id: number; codeEspece: string; nomCommun: string }
 
+type ZoneInfo = { idZone: number; niveau: string }
+
 interface CatalogueItem {
   varieteId: number; nomVariete: string; codeVariete: string
   nomEspece: string; codeEspece: string
@@ -18,6 +20,7 @@ interface CatalogueItem {
   organisationId: number; nomOrganisation: string
   latitude: number; longitude: number
   niveauAdaptation: string | null
+  zonesAdaptation?: string   // JSON : [{idZone, niveau}]
   distanceKm?: number
   nomComplet?: string
 }
@@ -30,6 +33,7 @@ interface VarieteGroup {
   stockTotal: number; nombreFournisseurs: number
   tauxGerminationMoyen: number
   lots: CatalogueItem[]
+  zonesAdaptation: ZoneInfo[]
 }
 
 interface CartItem {
@@ -278,11 +282,12 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
       .catch(() => {})
   }, [])
 
-  /* Fonction de chargement du catalogue (utilisée au changement d'espèce et au refresh) */
-  const chargerCatalogue = useCallback((espece: Espece, zone: ZoneAgro | null, silent = false) => {
+  /* Fonction de chargement du catalogue — espèce et zone sont toutes deux optionnelles */
+  const chargerCatalogue = useCallback((espece: Espece | null, zone: ZoneAgro | null, silent = false) => {
     if (!silent) setLoading(true)
     else setRefreshing(true)
-    const params = new URLSearchParams({ espece: espece.codeEspece })
+    const params = new URLSearchParams()
+    if (espece) params.set('espece', espece.codeEspece)
     if (zone) params.set('idZone', String(zone.id))
     fetch(`${STOCK}/stocks/catalogue?${params}`, { headers })
       .then(r => r.json())
@@ -296,13 +301,11 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
   }, [token]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!selectedEspece) return
     chargerCatalogue(selectedEspece, selectedZone)
   }, [selectedEspece, selectedZone])
 
-  /* Auto-refresh toutes les 60s quand une espèce est sélectionnée */
+  /* Auto-refresh toutes les 60s */
   useEffect(() => {
-    if (!selectedEspece) return
     const interval = setInterval(() => {
       chargerCatalogue(selectedEspece, selectedZone, true /* silent */)
     }, 60000)
@@ -325,6 +328,8 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
     for (const item of catalogue) {
       const existing = map.get(item.varieteId)
       if (!existing) {
+        let zones: ZoneInfo[] = []
+        try { zones = item.zonesAdaptation ? JSON.parse(item.zonesAdaptation) : [] } catch { zones = [] }
         map.set(item.varieteId, {
           varieteId: item.varieteId, nomVariete: item.nomVariete,
           codeVariete: item.codeVariete, nomEspece: item.nomEspece,
@@ -332,7 +337,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
           niveauAdaptation: item.niveauAdaptation,
           stockTotal: item.quantiteDisponible, nombreFournisseurs: 1,
           tauxGerminationMoyen: item.tauxGermination || 0,
-          lots: [item],
+          lots: [item], zonesAdaptation: zones,
         })
       } else {
         existing.stockTotal += item.quantiteDisponible
@@ -348,14 +353,15 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
     return Array.from(map.values())
   }, [catalogue])
 
-  const filteredVarietes = useMemo(() =>
-    varieteGroups.filter(v =>
-      !search ||
-      v.nomVariete.toLowerCase().includes(search.toLowerCase()) ||
-      v.codeVariete.toLowerCase().includes(search.toLowerCase())
-    ),
-    [varieteGroups, search]
-  )
+  const filteredVarietes = useMemo(() => {
+    if (!search) return varieteGroups
+    const s = search.toLowerCase()
+    return varieteGroups.filter(v =>
+      v.nomVariete.toLowerCase().includes(s) ||
+      v.codeVariete.toLowerCase().includes(s) ||
+      v.nomEspece.toLowerCase().includes(s)
+    )
+  }, [varieteGroups, search])
 
   /* Map orgId → distance minimale depuis les données de proximité */
   const distanceByOrgId = useMemo(() => {
@@ -408,6 +414,9 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
   }, [geoMode, proximiteItems, catalogue, search, selectedEspece])
 
   const totalCartKg = cart.reduce((s, i) => s + i.quantite, 0)
+
+  /* Lookup rapide zone id → zone (pour les badges ZAE sur les cartes) */
+  const zoneMap = useMemo(() => new Map(zones.map(z => [z.id, z])), [zones])
 
   /* ── Fournisseurs drawer ── */
   const FournisseursDrawer = () => (
@@ -705,8 +714,8 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
             </div>
           </div>
 
-          {/* Champ de recherche : visible dès qu'une espèce est sélectionnée ou en mode proximité */}
-          {(selectedEspece || geoMode) && (
+          {/* Champ de recherche : toujours visible */}
+          {(
             <div style={{ position: 'relative', width: 240, flexShrink: 0 }}>
               <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
               <input type="text" value={search} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
@@ -794,33 +803,8 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
         {viewMode === 'list' && (
         <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
 
-          {/* Welcome state */}
-          {!selectedEspece && (
-            <div style={{ maxWidth: 560, margin: '48px auto', textAlign: 'center' }}>
-              <div style={{ width: 72, height: 72, borderRadius: 20, background: '#f0fdf4', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: '#16a34a' }}>
-                <Sprout size={34} />
-              </div>
-              <h3 style={{ fontSize: 20, fontWeight: 700, marginBottom: 10, color: 'var(--text-primary)' }}>Bienvenue dans le catalogue</h3>
-              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 28, lineHeight: 1.7 }}>
-                Sélectionnez une espèce dans la barre de gauche pour consulter les variétés disponibles, filtrez par zone et ajoutez au panier.
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center' }}>
-                {especes.map(e => {
-                  const Icon = ESPECE_ICONS[e.codeEspece] ?? ESPECE_ICONS.default
-                  return (
-                    <button key={e.id} onClick={() => setSelectedEspece(e)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', transition: 'border-color 0.15s' }}>
-                      <Icon size={16} style={{ color: '#16a34a' }} />
-                      {e.nomCommun}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Skeleton loading */}
-          {selectedEspece && loading && (
+          {loading && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
               {[1,2,3,4].map(i => (
                 <div key={i} className="skeleton" style={{ height: 220, borderRadius: 14 }} />
@@ -829,22 +813,25 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
           )}
 
           {/* Empty */}
-          {selectedEspece && !loading && sortedFilteredVarietes.length === 0 && (
+          {!loading && sortedFilteredVarietes.length === 0 && (
             <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
               <Package size={44} style={{ opacity: 0.2, marginBottom: 14, display: 'block', margin: '0 auto 14px' }} />
               <p style={{ fontSize: 15, fontWeight: 500, marginBottom: 4 }}>Aucune variété disponible</p>
               <p style={{ fontSize: 13 }}>
-                {selectedZone ? `Aucun stock R1/R2 en ${selectedZone.nom}` : 'Aucun stock R1/R2 pour cette espèce'}
-                {search ? ` correspondant à "${search}"` : ''}
+                {selectedZone
+                  ? `Aucun stock R2${selectedEspece ? ` de ${selectedEspece.nomCommun}` : ''} en ${selectedZone.nom}`
+                  : selectedEspece ? `Aucun stock R2 pour ${selectedEspece.nomCommun}` : 'Aucun stock R2 disponible'}
+                {search ? ` · "${search}"` : ''}
               </p>
             </div>
           )}
 
           {/* Barre de tri */}
-          {selectedEspece && !loading && sortedFilteredVarietes.length > 0 && (
+          {!loading && sortedFilteredVarietes.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
                 <strong style={{ color: 'var(--text-primary)' }}>{sortedFilteredVarietes.length} variété{sortedFilteredVarietes.length > 1 ? 's' : ''}</strong>
+                {selectedEspece ? ` · ${selectedEspece.nomCommun}` : ' · Toutes espèces'}
                 {selectedZone ? ` · ${selectedZone.nom}` : ' · Toutes zones'}
                 {geoMode && <span style={{ color: '#2563eb', marginLeft: 6, fontSize: 11 }}>📡 Proximité</span>}
               </span>
@@ -871,7 +858,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
           )}
 
           {/* Variety cards grid */}
-          {selectedEspece && !loading && sortedFilteredVarietes.length > 0 && (
+          {!loading && sortedFilteredVarietes.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
               {sortedFilteredVarietes.map(v => {
                 const isAdded  = addedIds.has(v.varieteId)
@@ -879,6 +866,10 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
                 const nCfg     = v.niveauAdaptation ? NIVEAU_CONFIG[v.niveauAdaptation] : null
                 const accent   = nCfg?.color ?? '#6b7280'
                 const stockTonnes = `${v.stockTotal.toLocaleString('fr-FR')} kg`
+                /* Badges ZAE : toutes les zones de la variété */
+                const zonesBadges = v.zonesAdaptation
+                  .map(zi => ({ zone: zoneMap.get(zi.idZone), niveau: zi.niveau }))
+                  .filter(z => z.zone != null) as Array<{ zone: ZoneAgro; niveau: string }>
 
                 /* Fournisseur le plus proche via lookup dans les données de proximité */
                 const closestLot = geoMode
@@ -904,6 +895,11 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
                           <span style={{ background: '#f0fdf4', color: '#16a34a', border: '1px solid #bbf7d0', padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700 }}>
                             {v.codeEspece || selectedEspece?.codeEspece}
                           </span>
+                          {!selectedEspece && (
+                            <span style={{ background: '#f8fafc', color: '#475569', border: '1px solid #e2e8f0', padding: '2px 7px', borderRadius: 6, fontSize: 10, fontWeight: 500 }}>
+                              {v.nomEspece}
+                            </span>
+                          )}
                           {nCfg && (
                             <span style={{ background: nCfg.bg, color: nCfg.color, border: `1px solid ${nCfg.color}40`, padding: '2px 7px', borderRadius: 6, fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap' }}>
                               {nCfg.label}
@@ -929,6 +925,26 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
                           </div>
                         )}
                       </div>
+
+                      {/* Zones agro-écologiques de la variété */}
+                      {zonesBadges.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                          {zonesBadges.slice(0, 3).map(({ zone, niveau }) => {
+                            const cfg = NIVEAU_CONFIG[niveau]
+                            return (
+                              <span key={zone.id} title={cfg?.label ?? niveau}
+                                style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 600, border: `1px solid ${cfg?.color ?? '#9ca3af'}40`, background: cfg?.bg ?? '#f9fafb', color: cfg?.color ?? '#6b7280', whiteSpace: 'nowrap' }}>
+                                {zone.nom}
+                              </span>
+                            )
+                          })}
+                          {zonesBadges.length > 3 && (
+                            <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, fontWeight: 600, background: '#f3f4f6', color: '#6b7280', border: '1px solid #e5e7eb' }}>
+                              +{zonesBadges.length - 3} zones
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {/* Fournisseur le plus proche (mode géoloc) */}
                       {closestLot && closestDist != null && (() => {

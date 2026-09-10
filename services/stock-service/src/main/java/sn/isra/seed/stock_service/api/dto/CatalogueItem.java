@@ -22,5 +22,7 @@ public interface CatalogueItem {
     Double getLatitude();
     Double getLongitude();
     String getNiveauAdaptation();
+    /** JSON : [{"idZone":1,"niveau":"OPTIMAL"}, ...] — toutes ZAE de la variété */
+    String getZonesAdaptation();
     String getNomComplet();
 }
