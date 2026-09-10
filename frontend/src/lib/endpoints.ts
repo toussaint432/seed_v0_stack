@@ -125,6 +125,12 @@ export const endpoints = {
   /** Flux R2 Catalogue — Multiplicateur → Quotataire */
   orderPropositionsR2:         (id: number) => `${ORDER}/orders/${id}/propositions-r2`,
   orderDecisionQuotataire:     (id: number) => `${ORDER}/orders/${id}/decision-quotataire`,
+  /** Phase 4 — Facturation */
+  orderGenererFacture:         (id: number) => `${ORDER}/orders/${id}/generer-facture`,
+  orderFacture:                (id: number) => `${ORDER}/orders/${id}/facture`,
+  factures:                    `${ORDER}/factures`,
+  factureById:                 (id: number) => `${ORDER}/factures/${id}`,
+  factureAccuserReception:     (id: number) => `${ORDER}/factures/${id}/accuser-reception`,
   orderBordereauTransfert:     (id: number) => `${ORDER}/orders/${id}/bordereau-transfert`,
   orderBordereauReception:     (id: number) => `${ORDER}/orders/${id}/bordereau-reception`,
   orderCatalogueG3:            `${ORDER}/orders/catalogue-g3`,
