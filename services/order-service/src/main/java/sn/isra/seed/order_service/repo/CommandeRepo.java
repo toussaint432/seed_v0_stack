@@ -36,4 +36,8 @@ public interface CommandeRepo extends JpaRepository<Commande, Long> {
 
     @Query("SELECT COUNT(c) FROM Commande c WHERE (c.idOrganisationFournisseur IN (SELECT o.id FROM Organisation o WHERE o.typeOrganisation = sn.isra.seed.order_service.entity.enums.TypeOrganisation.UPSEMCL) OR c.idOrganisationFournisseur IS NULL) AND c.statut = sn.isra.seed.order_service.entity.enums.StatutCommande.SOUMISE")
     long countSoumisesForUpsemcl();
+
+    /** Commandes EN_NEGOCIATION dont le quotataire est l'acheteur — besoin de décision */
+    @Query("SELECT COUNT(c) FROM Commande c WHERE c.usernameAcheteur = :username AND c.statut = sn.isra.seed.order_service.entity.enums.StatutCommande.EN_NEGOCIATION")
+    long countEnNegociationAcheteur(@Param("username") String username);
 }

@@ -3,11 +3,14 @@ package sn.isra.seed.order_service.api;
 import sn.isra.seed.order_service.api.dto.AllocateRequest;
 import sn.isra.seed.order_service.api.dto.CreateOrderRequest;
 import sn.isra.seed.order_service.api.dto.DecisionMultiplicateurRequest;
+import sn.isra.seed.order_service.api.dto.DecisionQuotataireRequest;
 import sn.isra.seed.order_service.api.dto.PropositionG3Request;
+import sn.isra.seed.order_service.api.dto.PropositionR2Request;
 import sn.isra.seed.order_service.api.dto.ProposeRequest;
 import sn.isra.seed.order_service.api.dto.ReceptionConfirmationRequest;
 import sn.isra.seed.order_service.api.dto.StatutRequest;
 import sn.isra.seed.order_service.api.dto.ValiderCommandeRequest;
+import sn.isra.seed.order_service.entity.enums.TypeCommande;
 import sn.isra.seed.order_service.entity.AllocationCommande;
 import sn.isra.seed.order_service.entity.Commande;
 import sn.isra.seed.order_service.entity.LigneCommande;
@@ -86,7 +89,8 @@ public class OrderController {
     } else if (isUpsemcl(jwt)) {
       count = commandeRepo.countSoumisesForUpsemcl();
     } else if (isQuotaire(jwt)) {
-      count = commandeRepo.countSoumisesAcheteur(username);
+      // Alerter le quotataire quand une proposition est EN_NEGOCIATION en attente de sa décision
+      count = commandeRepo.countEnNegociationAcheteur(username);
     }
     return Map.of("count", count);
   }
@@ -219,6 +223,10 @@ public class OrderController {
     c.setCodeCommande(req.codeCommande());
     c.setClient(req.client());
     c.setStatut(StatutCommande.SOUMISE);
+    // G3 (id=4) → flux UPSemCL→Multiplicateur ; tout le reste → R2 Mult→Quotataire (défaut)
+    if (req.lignes() != null && req.lignes().stream().anyMatch(l -> l.idGeneration() != null && l.idGeneration() == 4L)) {
+      c.setTypeCommande(TypeCommande.G3_UPSEMCL_MULT);
+    }
     c.setUsernameAcheteur(username);
     c.setIdOrganisationAcheteur(orgAcheteur);
     c.setNomCompletAcheteur(membre.map(m -> m.getNomComplet()).orElse(null));
@@ -810,11 +818,12 @@ public class OrderController {
   }
 
   /**
-   * POST /api/orders/{id}/confirmer-reception  (Multiplicateur)
-   * Confirme la réception physique des semences. Crédite le stock du multiplicateur,
+   * POST /api/orders/{id}/confirmer-reception  (Multiplicateur ou Quotataire)
+   * Confirme la réception physique des semences. Crédite le stock de l'acheteur,
    * enregistre les écarts éventuels, passe la commande en LIVREE.
+   * Utilisé par le multiplicateur (flux G3) et le quotataire (flux R2).
    */
-  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-quotataire','ROLE_seed-admin')")
   @Transactional
   @PostMapping("/{id}/confirmer-reception")
   public ResponseEntity<Commande> confirmerReception(
@@ -991,6 +1000,108 @@ public class OrderController {
     });
 
     return ResponseEntity.ok(br);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════════
+     FLUX R2 CATALOGUE — MULTIPLICATEUR → QUOTATAIRE
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /**
+   * POST /api/orders/{id}/propositions-r2  (Multiplicateur)
+   * Le multiplicateur propose ses lots R2 au quotataire avec un prix unitaire HT.
+   * Crée ou remplace les PropositionLigne ; passe la commande EN_NEGOCIATION.
+   * Pré-condition : commande SOUMISE ou EN_NEGOCIATION.
+   */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-admin')")
+  @Transactional
+  @PostMapping("/{id}/propositions-r2")
+  public ResponseEntity<Commande> propositionsR2(
+      @PathVariable Long id,
+      @Valid @RequestBody PropositionR2Request req,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.SOUMISE && commande.getStatut() != StatutCommande.EN_NEGOCIATION) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "Seule une commande SOUMISE ou EN_NEGOCIATION accepte une proposition R2 (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    String usernameAgent = jwt != null ? jwt.getClaimAsString("preferred_username") : "multiplicateur";
+
+    for (PropositionR2Request.LigneProposition item : req.propositions()) {
+      LigneCommande ligne = ligneRepo.findById(item.idLigne())
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ligne #" + item.idLigne() + " introuvable"));
+      if (!ligne.getCommande().getId().equals(id)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ligne #" + item.idLigne() + " n'appartient pas à cette commande");
+      }
+
+      propositionLigneRepo.findByLigneCommande_Id(item.idLigne()).ifPresent(propositionLigneRepo::delete);
+
+      PropositionLigne prop = new PropositionLigne();
+      prop.setLigneCommande(ligne);
+      prop.setIdLotSelectionne(item.idLotSelectionne());
+      prop.setQuantiteSelectionnee(item.quantiteSelectionnee());
+      prop.setPrixUnitaireHt(item.prixUnitaireHt());
+      prop.setTauxTva(item.tauxTva() != null ? item.tauxTva() : java.math.BigDecimal.ZERO);
+      prop.setUsernameAgent(usernameAgent);
+      prop.setStatutProposition("PROPOSEE");
+      prop.setCreatedAt(Instant.now());
+      propositionLigneRepo.save(prop);
+
+      ligne.setIdLotPropose(item.idLotSelectionne());
+      ligne.setQuantiteProposee(item.quantiteSelectionnee());
+      ligne.setStatutLigne(StatutLigne.EN_NEGOCIATION);
+      ligneRepo.save(ligne);
+    }
+
+    commande.setStatut(StatutCommande.EN_NEGOCIATION);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * PATCH /api/orders/{id}/decision-quotataire  (Quotataire)
+   * Le quotataire accepte ou refuse chaque ligne individuellement.
+   * ≥1 acceptée → ACCORDEE ; toutes refusées → retour à SOUMISE.
+   * Pré-condition : commande EN_NEGOCIATION.
+   */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-quotataire','ROLE_seed-admin')")
+  @Transactional
+  @PatchMapping("/{id}/decision-quotataire")
+  public ResponseEntity<Commande> decisionQuotataire(
+      @PathVariable Long id,
+      @Valid @RequestBody DecisionQuotataireRequest req) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.EN_NEGOCIATION) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être EN_NEGOCIATION pour soumettre une décision (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    long nbAccordees = 0;
+    for (DecisionQuotataireRequest.DecisionLigne dec : req.decisions()) {
+      LigneCommande ligne = ligneRepo.findById(dec.idLigne())
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Ligne #" + dec.idLigne() + " introuvable"));
+      if (!ligne.getCommande().getId().equals(id)) {
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ligne #" + dec.idLigne() + " n'appartient pas à cette commande");
+      }
+
+      ligne.setStatutLigne(dec.accepte() ? StatutLigne.ACCORDEE : StatutLigne.REFUSEE);
+      ligneRepo.save(ligne);
+
+      propositionLigneRepo.findByLigneCommande_Id(dec.idLigne()).ifPresent(prop -> {
+        prop.setStatutProposition(dec.accepte() ? "ACCEPTEE" : "REFUSEE");
+        propositionLigneRepo.save(prop);
+      });
+
+      if (dec.accepte()) nbAccordees++;
+    }
+
+    commande.setStatut(nbAccordees > 0 ? StatutCommande.ACCORDEE : StatutCommande.SOUMISE);
+    return ResponseEntity.ok(commandeRepo.save(commande));
   }
 
   @PreAuthorize("hasAnyAuthority('ROLE_seed-admin','ROLE_seed-upsemcl','ROLE_seed-multiplicator')")
