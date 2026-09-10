@@ -229,6 +229,13 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
     return lot ? lot.codeLot : `#${idLot}`
   }
 
+  function detectFlux(t: any): 'SELEC_UPSEMCL' | 'UPSEMCL_MULT' | 'MULT_QUOT' {
+    const role = t.roleEmetteur || ''
+    if (role === 'seed-selector') return 'SELEC_UPSEMCL'
+    if (role === 'seed-upsemcl') return 'UPSEMCL_MULT'
+    return 'MULT_QUOT'
+  }
+
   function submitFacture(e: React.FormEvent) {
     e.preventDefault()
     const t = factureModal
@@ -241,20 +248,24 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
 
     const memV = t.usernameEmetteur     ? membresMap[t.usernameEmetteur]     : null
     const memA = t.usernameDestinataire ? membresMap[t.usernameDestinataire] : null
+    const flux = detectFlux(t)
 
     const data: FactureData = {
       transfertId:      t.id,
       codeTransfert:    t.codeTransfert,
+      flux,
       vendeurUsername:  t.usernameEmetteur || currentUser,
       vendeurNom:       memV?.nomComplet || t.usernameEmetteur || currentUser,
       vendeurRole:      memV?.organisation?.nomOrganisation || ROLE_LABELS[emetteurRoleKey] || emetteurRoleKey,
-      vendeurAdresse:   'ISRA/CNRA — Bambey, Sénégal',
+      vendeurAdresse:   flux === 'MULT_QUOT'
+        ? (memV?.organisation?.localite || memV?.organisation?.region || 'Sénégal')
+        : 'ISRA/CNRA — Bambey, Sénégal',
       acheteurUsername: t.usernameDestinataire || '—',
       acheteurNom:      memA?.nomComplet || t.usernameDestinataire || '—',
       acheteurRole:     memA?.organisation?.nomOrganisation || ROLE_LABELS[destRoleKey] || destRoleKey,
       codeLot:          lot?.codeLot || `LOT-${t.idLot}`,
-      nomVariete:       lot?.variete?.nomVariete || lot?.nomVariete || 'N/D',
-      nomEspece:        lot?.variete?.espece?.nomEspece || lot?.espece?.nomEspece || 'Semence',
+      nomVariete:       lot?.variete?.nomVariete || lot?.nomVariete || t.nomVariete || '—',
+      nomEspece:        lot?.variete?.espece?.nomEspece || lot?.espece?.nomEspece || t.codeEspece || 'Semence',
       generationCode:   gen || '—',
       quantiteKg:       Number(t.quantite ?? lot?.quantiteNette ?? 0),
       unite:            lot?.unite || 'kg',
@@ -286,8 +297,8 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
 
     const lotData: LotPdfData = {
       codeLot:          lot?.codeLot || `LOT-${t.idLot}`,
-      nomVariete:       lot?.variete?.nomVariete || lot?.nomVariete || 'N/D',
-      nomEspece:        lot?.variete?.espece?.nomEspece || lot?.espece?.nomEspece || 'Semence',
+      nomVariete:       lot?.variete?.nomVariete || lot?.nomVariete || t.nomVariete || '—',
+      nomEspece:        lot?.variete?.espece?.nomEspece || lot?.espece?.nomEspece || t.codeEspece || 'Semence',
       generationCode:   gen || '—',
       quantiteNette:    Number(t.quantite ?? lot?.quantiteNette ?? 0),
       unite:            lot?.unite || 'kg',
@@ -316,16 +327,20 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
       roleLabel: memDest?.organisation?.nomOrganisation || ROLE_LABELS[destRoleKey] || destRoleKey,
     }
 
+    const flux = detectFlux(t)
     const docData: TransferDocData = {
       type,
+      flux,
       codeTransfert:      t.codeTransfert,
-      numero:             generateNumero(t.id),
+      numero:             generateNumero(t.id, flux),
       lot:                lotData,
       expediteur,
       destinataire,
       quantiteTransferee: Number(t.quantite ?? 0),
       dateDemande:        t.dateDemande || new Date().toISOString().split('T')[0],
       observations:       t.observations,
+      orgEmetteurNom:     memExp?.organisation?.nomOrganisation,
+      orgEmetteurRegion:  memExp?.organisation?.region,
     }
 
     const result = generateTransferDoc(docData)

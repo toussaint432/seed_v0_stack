@@ -319,6 +319,9 @@ public class LotService {
         t.setGenerationTransferee(gen);
         t.setObservations(observations != null ? observations : "");
         t.setQuantite(quantiteTransfert);
+        t.setNomVariete(lot.getNomVariete());
+        t.setCodeVariete(lot.getCodeVariete());
+        t.setCodeEspece(lot.getCodeEspece());
 
         TransfertLot saved = transfertRepo.save(t);
 

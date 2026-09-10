@@ -59,6 +59,19 @@ public class TransfertLot {
     @Column(name = "generation_transferee", nullable = false, length = 10)
     private String generationTransferee;
 
+    /** Nom de la variété — dénormalisé depuis lot_semencier pour les documents PDF. */
+    @Size(max = 200)
+    @Column(name = "nom_variete", length = 200)
+    private String nomVariete;
+
+    @Size(max = 50)
+    @Column(name = "code_variete", length = 50)
+    private String codeVariete;
+
+    @Size(max = 30)
+    @Column(name = "code_espece", length = 30)
+    private String codeEspece;
+
     @Positive(message = "La quantité doit être positive")
     @Column(precision = 12, scale = 2)
     private BigDecimal quantite;
