@@ -6,11 +6,12 @@ ALTER TABLE lot.transfert_lot
     ADD COLUMN IF NOT EXISTS code_variete VARCHAR(50),
     ADD COLUMN IF NOT EXISTS code_espece  VARCHAR(30);
 
--- Backfill depuis lot_semencier pour les transferts existants
+-- Backfill depuis catalog.variete via lot_semencier
 UPDATE lot.transfert_lot t
-SET nom_variete  = ls.nom_variete,
-    code_variete = ls.code_variete,
+SET nom_variete  = v.nom_variete,
+    code_variete = v.code_variete,
     code_espece  = ls.code_espece
 FROM lot.lot_semencier ls
+JOIN catalog.variete v ON v.id = ls.id_variete
 WHERE ls.id = t.id_lot
   AND t.nom_variete IS NULL;

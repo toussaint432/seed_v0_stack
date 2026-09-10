@@ -319,9 +319,20 @@ public class LotService {
         t.setGenerationTransferee(gen);
         t.setObservations(observations != null ? observations : "");
         t.setQuantite(quantiteTransfert);
-        t.setNomVariete(lot.getNomVariete());
-        t.setCodeVariete(lot.getCodeVariete());
         t.setCodeEspece(lot.getCodeEspece());
+        String nomV = lot.getNomVariete(), codeV = lot.getCodeVariete();
+        if ((nomV == null || nomV.isBlank()) && lot.getIdVariete() != null) {
+            try {
+                Object[] row = (Object[]) em.createNativeQuery(
+                    "SELECT nom_variete, code_variete FROM catalog.variete WHERE id = :id")
+                    .setParameter("id", lot.getIdVariete())
+                    .getSingleResult();
+                nomV  = (String) row[0];
+                codeV = (String) row[1];
+            } catch (Exception ignored) {}
+        }
+        t.setNomVariete(nomV);
+        t.setCodeVariete(codeV);
 
         TransfertLot saved = transfertRepo.save(t);
 
