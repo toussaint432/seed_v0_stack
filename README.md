@@ -340,17 +340,111 @@ docker compose logs -f catalog-service
 
 ## Comptes utilisateurs
 
-| Utilisateur | Mot de passe | Rôle Keycloak | Accès |
-|---|---|---|---|
-| `admin` | `admin123` | `seed-admin` | Supervision complète — tous les modules |
-| `selecteur` | `select123` | `seed-selector` | Variétés + Lots G0/G1 + Transferts + Analytiques |
-| `upseml` | `upseml123` | `seed-upsemcl` | Lots G1→G3 + Stock + Certifications + Commandes reçues |
-| `multiplicateur` | `multi123` | `seed-multiplicator` | Lots G3→R2 + Mes Sites + Stock + Commandes G3 |
-| `multi_fatick` | `multifat123` | `seed-multiplicator` | Idem multiplicateur — organisation Fatick |
-| `quotataire` | `quota123` | `seed-quotataire` | Catalogue semences R2 + Commandes |
-| `directeur` | `directeur123` | `seed-directeur` | Dashboard décisionnel CNRA en lecture seule — vue d'ensemble de la chaîne semencière |
+La plateforme compte **25 utilisateurs actifs** dans le realm Keycloak `seed-v0`. Voici les comptes représentatifs par rôle — la liste complète et les mots de passe sont dans `infra/keycloak/users-credentials.env` (fichier local non commité).
 
-> **Realm Keycloak** : `seed-v0` · **Client** : `seed-frontend`
+| Utilisateur | Rôle Keycloak | Accès plateforme |
+|---|---|---|
+| `admin` | `seed-admin` | Supervision complète — tous les modules |
+| `directeur` | `seed-directeur` | Dashboard décisionnel CNRA — lecture seule de la chaîne |
+| `alla_lo_upsemcl` | `seed-upsemcl` | Lots G1→G3 + Stock + Certifications + Commandes reçues |
+| `selecteur_mil` | `seed-selector` | Variétés + Lots G0/G1 + Transferts + Analytiques |
+| `multi_bc_ziguinchor` | `seed-multiplicator` | Lots G3→R2 + Mes Sites + Stock + Commandes G3 |
+| `quotataire_nord` | `seed-quotataire` | Catalogue semences R2 + Commandes |
+
+**Rôles disponibles (6) :** `seed-admin` · `seed-directeur` · `seed-upsemcl` · `seed-selector` · `seed-multiplicator` · `seed-quotataire`
+
+> **Realm** : `seed-v0` · **Client** : `seed-frontend` · **Mots de passe** : voir `infra/keycloak/users-credentials.env`
+
+---
+
+## Gestion des utilisateurs Keycloak
+
+### Architecture — séparation structure / secrets
+
+La gestion des utilisateurs Keycloak repose sur trois fichiers avec des responsabilités distinctes :
+
+```
+infra/keycloak/
+├── realm-seed-v0.json          ← Structure (users, rôles, clients, config)
+│                                 Versionné dans Git — jamais de mot de passe
+│                                 Importé par Keycloak au 1er démarrage uniquement
+│
+└── users-credentials.env       ← Mots de passe des 25 utilisateurs
+                                  LOCAL uniquement — dans .gitignore
+                                  Source de vérité pour la restauration
+scripts/
+├── sync-keycloak.sh            ← Synchronise users-credentials.env → Keycloak Admin API
+├── export-keycloak.sh          ← Exporte Keycloak → realm-seed-v0.json (sans mots de passe)
+└── keycloak-maintenance.sh     ← Script guidé tout-en-un (export + diff + commit)
+```
+
+**Principe** : le JSON versionné définit la *structure* (qui existe, quel rôle). Les mots de passe vivent uniquement dans un fichier local non commité. Ce choix est délibéré — versionner des credentials est une faille de sécurité (OWASP A02:2021 — Cryptographic Failures).
+
+---
+
+### Créer un utilisateur via l'interface plateforme
+
+Quand l'administrateur crée un utilisateur via **Sen Jiw → Gestion des utilisateurs → Nouvel utilisateur** :
+
+1. Le backend appelle l'Admin API Keycloak directement
+2. L'utilisateur est créé avec le mot de passe temporaire saisi et le rôle assigné
+3. **L'utilisateur peut se connecter immédiatement** — Keycloak lui demande de changer son mot de passe à la première connexion
+4. Aucun réglage supplémentaire n'est nécessaire pour que l'utilisateur soit opérationnel
+
+**⚠️ Ce qui n'est pas automatique :** le nouvel utilisateur n'est pas encore versionné dans `realm-seed-v0.json`. Si Keycloak est réinitialisé sans versioning préalable, cet utilisateur est perdu.
+
+---
+
+### Procédure de versioning après création d'un utilisateur
+
+```bash
+# 1. Ajouter le mot de passe initial dans le fichier local (jamais commité)
+echo "username=mot_de_passe_initial" >> infra/keycloak/users-credentials.env
+
+# 2. Lancer le script de maintenance guidé (export + diff + commit)
+./scripts/keycloak-maintenance.sh
+```
+
+Le script `keycloak-maintenance.sh` :
+- Exporte le realm courant depuis Keycloak (sans mots de passe)
+- Affiche le diff Git pour revue humaine
+- Détecte les nouveaux utilisateurs et vérifie leur présence dans `users-credentials.env`
+- Propose un commit avec un message pré-rempli — **l'humain valide avant chaque commit**
+
+**Pourquoi ne pas automatiser le commit depuis le backend ?** Trois raisons architecturales :
+- Un service applicatif ne doit pas avoir accès au dépôt Git (séparation des responsabilités)
+- Chaque commit de configuration doit être une intention humaine validée (principe GitOps)
+- `realm-seed-v0.json` n'est utile que pour la restauration — sa mise à jour n'est pas critique en temps réel
+
+---
+
+### Sur un nouvel environnement (machine neuve ou reset Docker)
+
+```bash
+# 1. Cloner le projet
+git clone https://github.com/toussaint432/seed_v0_stack.git && cd seed_v0_stack
+
+# 2. Copier et renseigner les mots de passe
+cp infra/keycloak/users-credentials.env.example infra/keycloak/users-credentials.env
+nano infra/keycloak/users-credentials.env   # renseigner les vrais mots de passe
+
+# 3. Démarrer la stack — Keycloak importe realm-seed-v0.json (structure uniquement)
+docker compose up -d
+
+# 4. Appliquer les mots de passe via l'Admin API
+./scripts/sync-keycloak.sh
+```
+
+---
+
+### Modifier un rôle ou une configuration Keycloak
+
+Toute modification effectuée dans la **console Keycloak** (nouveau rôle, nouveau mapper, changement de session timeout, etc.) doit être exportée et commitée :
+
+```bash
+./scripts/keycloak-maintenance.sh
+# → Export automatique, diff affiché, commit guidé
+```
 
 ---
 
@@ -552,12 +646,19 @@ seed_v0_stack/
 │           └── ChatController          # Messagerie inter-acteurs
 │
 ├── infra/
-│   ├── keycloak/                   # Realm seed-v0 (import automatique), thème ISRA
+│   ├── keycloak/
+│   │   ├── realm-seed-v0.json      # Structure realm (users, rôles, clients) — sans mots de passe
+│   │   └── users-credentials.env   # Mots de passe 25 users — LOCAL, dans .gitignore
 │   ├── postgres/init/              # Schéma initial (remplacé par Flyway dès V1)
 │   ├── prometheus/                 # prometheus.yml + règles d'alerte
 │   ├── alertmanager/               # Configuration des notifications d'alerte
 │   ├── kafka/                      # Configuration JMX exporter
 │   └── grafana/                    # Dashboards : JVM, infra, vue d'ensemble
+│
+├── scripts/
+│   ├── keycloak-maintenance.sh     # Script guidé : export + diff + commit (à lancer après création user)
+│   ├── sync-keycloak.sh            # Synchronise users-credentials.env → Keycloak Admin API
+│   └── export-keycloak.sh          # Exporte Keycloak → realm-seed-v0.json (sans mots de passe)
 │
 ├── data/
 │   └── uploads/                    # Fichiers PDF générés et documents uploadés
@@ -740,6 +841,15 @@ triggers {
 - [x] Cascade `service_healthy` : tous les services attendent Keycloak opérationnel
 - [x] `SWAGGER_ENABLED: false` sur les 4 microservices (surface d'attaque réduite)
 - [x] Jenkinsfile corrigé : `jdk21`, stage `seed-common` séquentiel, Deploy, Smoke Test fonctionnel
+
+### Réalisé (Sécurité — Gestion Keycloak)
+- [x] Séparation structure / secrets : `realm-seed-v0.json` versionné sans aucun mot de passe
+- [x] `infra/keycloak/users-credentials.env` — fichier local non commité, contient les mots de passe des 25 users
+- [x] Alignement realm JSON ↔ Keycloak : 25 users réels (suppression 6 comptes fantômes, ajout 4 users manquants)
+- [x] Rôle `seed-directeur` ajouté au JSON (existait dans Keycloak, absent du versioning)
+- [x] `scripts/sync-keycloak.sh` — synchronisation idempotente via Admin API (crée/met à jour, ne supprime jamais)
+- [x] `scripts/export-keycloak.sh` — export realm sans credentials pour maintenir le JSON à jour
+- [x] `scripts/keycloak-maintenance.sh` — script guidé tout-en-un : export + diff + revue humaine + commit optionnel
 
 ### À venir (Phase 3 — Durcissement production)
 - [ ] `USER nonroot` dans tous les Dockerfiles (principe de moindre privilège, CIS Docker Benchmark)
