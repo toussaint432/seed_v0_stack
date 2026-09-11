@@ -109,6 +109,10 @@
         "description": "Administrateur ISRA — supervision globale"
       },
       {
+        "name": "seed-directeur",
+        "description": "Directeur CNRA — tableau de bord décisionnel"
+      },
+      {
         "name": "seed-selector",
         "description": "Sélectionneur — crée G0, transfère G1 à UPSemCL"
       },
@@ -130,62 +134,34 @@
     {
       "username": "admin",
       "enabled": true,
-      "email": "admin@seed.local",
+      "email": "thianoyano.gomis@gmail.com",
       "firstName": "Admin",
       "lastName": "ISRA",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "admin123",
-          "temporary": false
-        }
-      ],
+      "credentials": [],
       "realmRoles": [
         "seed-admin"
       ]
     },
     {
-      "username": "selecteur",
+      "username": "directeur",
       "enabled": true,
-      "email": "selecteur@seed.local",
-      "firstName": "Ibrahima",
-      "lastName": "Sélectionneur",
-      "attributes": {
-        "specialisation": [
-          "RIZ"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "select123",
-          "temporary": false
-        }
-      ],
+      "email": "bassirou.sine@isra.sn",
+      "firstName": "Bassirou",
+      "lastName": "SINE",
+      "credentials": [],
       "realmRoles": [
-        "seed-selector"
+        "seed-directeur"
       ]
     },
     {
-      "username": "selecteur_mil",
+      "username": "alla_lo_upsemcl",
       "enabled": true,
-      "email": "selecteur.mil@seed.local",
-      "firstName": "Mamadou",
-      "lastName": "Sélect-MIL",
-      "attributes": {
-        "specialisation": [
-          "MIL"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectmil123",
-          "temporary": false
-        }
-      ],
+      "email": "alla.lo@uadb.edu.sn",
+      "firstName": "Alla",
+      "lastName": "Lo",
+      "credentials": [],
       "realmRoles": [
-        "seed-selector"
+        "seed-upsemcl"
       ]
     },
     {
@@ -193,319 +169,11 @@
       "enabled": true,
       "email": "selecteur.ara@seed.local",
       "firstName": "Aminata",
-      "lastName": "Sélect-ARA",
+      "lastName": "BALDÉ",
       "attributes": {
-        "specialisation": [
-          "ARA"
-        ]
+        "specialisation": ["ARA"]
       },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectara123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-selector"
-      ]
-    },
-    {
-      "username": "upsemcl",
-      "enabled": true,
-      "email": "upsemcl@seed.local",
-      "firstName": "Fatou",
-      "lastName": "UPSemCL",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "upsemcl123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-upsemcl"
-      ]
-    },
-    {
-      "username": "multiplicateur",
-      "enabled": true,
-      "email": "multi@seed.local",
-      "firstName": "Moussa",
-      "lastName": "Multiplicateur",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multi123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-multiplicator"
-      ]
-    },
-    {
-      "username": "quotataire",
-      "enabled": true,
-      "email": "quotataire@seed.local",
-      "firstName": "Aminata",
-      "lastName": "Quotataire",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "quota123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-quotataire"
-      ]
-    },
-    {
-      "username": "upsemcl_bambey",
-      "enabled": true,
-      "email": "upsemcl.bambey@seed.local",
-      "firstName": "Ousmane",
-      "lastName": "UPSemCL-Bambey",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "upsemcl123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-upsemcl"
-      ]
-    },
-    {
-      "username": "upsemcl_stlouis",
-      "enabled": false,
-      "email": "upsemcl.stlouis@seed.local",
-      "firstName": "Rokhaya",
-      "lastName": "UPSemCL-StLouis",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "upsemclsl123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-upsemcl"
-      ]
-    },
-    {
-      "username": "selecteur_sor",
-      "enabled": true,
-      "email": "selecteur.sor@seed.local",
-      "firstName": "Babacar",
-      "lastName": "Sélect-SOR",
-      "attributes": {
-        "specialisation": [
-          "SOR"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectsor123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-selector"
-      ]
-    },
-    {
-      "username": "selecteur_nie",
-      "enabled": true,
-      "email": "selecteur.nie@seed.local",
-      "firstName": "Mariama",
-      "lastName": "Sélect-NIE",
-      "attributes": {
-        "specialisation": [
-          "NIE"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectnie123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-selector"
-      ]
-    },
-    {
-      "username": "multi_fatick",
-      "enabled": true,
-      "email": "multi.fatick@seed.local",
-      "firstName": "Ibrahima",
-      "lastName": "Multi-Fatick",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multifat123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-multiplicator"
-      ]
-    },
-    {
-      "username": "quotataire_nord",
-      "enabled": true,
-      "email": "quota.nord@seed.local",
-      "firstName": "Ndéye",
-      "lastName": "OP-Nord",
-      "attributes": {
-        "zone": [
-          "NORD"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "quotanord123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-quotataire"
-      ]
-    },
-    {
-      "username": "quotataire_centre",
-      "enabled": true,
-      "email": "quota.centre@seed.local",
-      "firstName": "Moussa",
-      "lastName": "OP-Centre",
-      "attributes": {
-        "zone": [
-          "CENTRE"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "quotacentre123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-quotataire"
-      ]
-    },
-    {
-      "username": "quotataire_casamance",
-      "enabled": true,
-      "email": "quota.casamance@seed.local",
-      "firstName": "Fatoumata",
-      "lastName": "OP-Casamance",
-      "attributes": {
-        "zone": [
-          "CASAMANCE"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "quotacas123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-quotataire"
-      ]
-    },
-    {
-      "username": "selecteur_riz",
-      "enabled": true,
-      "email": "selecteur.riz@seed.local",
-      "firstName": "Oumar",
-      "lastName": "Sélect-RIZ",
-      "attributes": {
-        "specialisation": [
-          "RIZ"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectriz123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-selector"
-      ]
-    },
-    {
-      "username": "selecteur_mai",
-      "enabled": true,
-      "email": "selecteur.mai@seed.local",
-      "firstName": "Adja",
-      "lastName": "Sélect-MAI",
-      "attributes": {
-        "specialisation": [
-          "MAI"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectmai123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-selector"
-      ]
-    },
-    {
-      "username": "selecteur_fon",
-      "enabled": true,
-      "email": "selecteur.fon@seed.local",
-      "firstName": "Coumba",
-      "lastName": "Sélect-FON",
-      "attributes": {
-        "specialisation": [
-          "FON"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectfon123",
-          "temporary": false
-        }
-      ],
-      "realmRoles": [
-        "seed-selector"
-      ]
-    },
-    {
-      "username": "selecteur_ses",
-      "enabled": true,
-      "email": "selecteur.ses@seed.local",
-      "firstName": "Rokhaya",
-      "lastName": "Sélect-SES",
-      "attributes": {
-        "specialisation": [
-          "SES"
-        ]
-      },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectses123",
-          "temporary": false
-        }
-      ],
+      "credentials": [],
       "realmRoles": [
         "seed-selector"
       ]
@@ -517,17 +185,107 @@
       "firstName": "Mamadou",
       "lastName": "Sélect-BLE",
       "attributes": {
-        "specialisation": [
-          "BLE"
-        ]
+        "specialisation": ["BLE"]
       },
-      "credentials": [
-        {
-          "type": "password",
-          "value": "selectble123",
-          "temporary": false
-        }
-      ],
+      "credentials": [],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_fon",
+      "enabled": true,
+      "email": "selecteur.fon@seed.local",
+      "firstName": "Coumba",
+      "lastName": "Sélect-FON",
+      "attributes": {
+        "specialisation": ["FON"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_mai",
+      "enabled": true,
+      "email": "selecteur.mai@seed.local",
+      "firstName": "Adja",
+      "lastName": "Sélect-MAI",
+      "attributes": {
+        "specialisation": ["MAI"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_mil",
+      "enabled": true,
+      "email": "selecteur.mil@seed.local",
+      "firstName": "Mamadou",
+      "lastName": "Sélect-MIL",
+      "attributes": {
+        "specialisation": ["MIL"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_nie",
+      "enabled": true,
+      "email": "selecteur.nie@seed.local",
+      "firstName": "Ndeye Mariama",
+      "lastName": "FALL",
+      "attributes": {
+        "specialisation": ["NIE"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_riz",
+      "enabled": true,
+      "email": "selecteur.riz@seed.local",
+      "firstName": "Oumar",
+      "lastName": "Sélect-RIZ",
+      "attributes": {
+        "specialisation": ["RIZ"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_ses",
+      "enabled": true,
+      "email": "selecteur.ses@seed.local",
+      "firstName": "Rokhaya",
+      "lastName": "Sélect-SES",
+      "attributes": {
+        "specialisation": ["SES"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-selector"
+      ]
+    },
+    {
+      "username": "selecteur_sor",
+      "enabled": true,
+      "email": "selecteur.sor@seed.local",
+      "firstName": "Babacar",
+      "lastName": "Sélect-SOR",
+      "attributes": {
+        "specialisation": ["SOR"]
+      },
+      "credentials": [],
       "realmRoles": [
         "seed-selector"
       ]
@@ -536,15 +294,20 @@
       "username": "multi_bc_ziguinchor",
       "enabled": true,
       "email": "multi.bc@seed.local",
-      "firstName": "Sékou",
-      "lastName": "Multi-Ziguinchor",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multibcz123",
-          "temporary": false
-        }
-      ],
+      "firstName": "Multi",
+      "lastName": "Basse-Casamance",
+      "credentials": [],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "multi_fatick",
+      "enabled": true,
+      "email": "multi.fatick@seed.local",
+      "firstName": "Ibrahima",
+      "lastName": "SÈNE",
+      "credentials": [],
       "realmRoles": [
         "seed-multiplicator"
       ]
@@ -553,15 +316,9 @@
       "username": "multi_hc_kolda",
       "enabled": true,
       "email": "multi.hc@seed.local",
-      "firstName": "Aissatou",
-      "lastName": "Multi-Kolda",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multihck123",
-          "temporary": false
-        }
-      ],
+      "firstName": "Multi",
+      "lastName": "Haute-Casamance",
+      "credentials": [],
       "realmRoles": [
         "seed-multiplicator"
       ]
@@ -570,15 +327,9 @@
       "username": "multi_mc_sedhiou",
       "enabled": true,
       "email": "multi.mc@seed.local",
-      "firstName": "Boubacar",
-      "lastName": "Multi-Sédhiou",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multimcs123",
-          "temporary": false
-        }
-      ],
+      "firstName": "Multi",
+      "lastName": "Moyenne-Casamance",
+      "credentials": [],
       "realmRoles": [
         "seed-multiplicator"
       ]
@@ -587,15 +338,9 @@
       "username": "multi_nay_thies",
       "enabled": true,
       "email": "multi.nay@seed.local",
-      "firstName": "Ndéye",
-      "lastName": "Multi-Thiès",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multinayt123",
-          "temporary": false
-        }
-      ],
+      "firstName": "Multi",
+      "lastName": "Niayes",
+      "credentials": [],
       "realmRoles": [
         "seed-multiplicator"
       ]
@@ -604,15 +349,9 @@
       "username": "multi_so_tambacounda",
       "enabled": true,
       "email": "multi.so@seed.local",
-      "firstName": "Alpha",
-      "lastName": "Multi-Tambacounda",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multisot123",
-          "temporary": false
-        }
-      ],
+      "firstName": "Multi",
+      "lastName": "Sénégal-Oriental",
+      "credentials": [],
       "realmRoles": [
         "seed-multiplicator"
       ]
@@ -621,15 +360,9 @@
       "username": "multi_vf_stlouis",
       "enabled": true,
       "email": "multi.vf@seed.local",
-      "firstName": "Daouda",
-      "lastName": "Multi-StLouis",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multivfsl123",
-          "temporary": false
-        }
-      ],
+      "firstName": "Multi",
+      "lastName": "Vallée-Fleuve",
+      "credentials": [],
       "realmRoles": [
         "seed-multiplicator"
       ]
@@ -638,17 +371,75 @@
       "username": "multi_zsp_louga",
       "enabled": true,
       "email": "multi.zsp@seed.local",
-      "firstName": "Modou",
-      "lastName": "Multi-Louga",
-      "credentials": [
-        {
-          "type": "password",
-          "value": "multizsp123",
-          "temporary": false
-        }
-      ],
+      "firstName": "Multi",
+      "lastName": "Zone-Sylvo-Pastorale",
+      "credentials": [],
       "realmRoles": [
         "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "multiplicateur_kaolack",
+      "enabled": true,
+      "email": "abdou.aziz.fall@isra.sn",
+      "firstName": "Abdou Aziz",
+      "lastName": "FALL",
+      "credentials": [],
+      "realmRoles": [
+        "seed-multiplicator"
+      ]
+    },
+    {
+      "username": "khoureich_quotataire",
+      "enabled": true,
+      "email": "ahmadkhoureich.ka@uadb.edu.sn",
+      "firstName": "Ahmad Khoureich",
+      "lastName": "KA",
+      "credentials": [],
+      "realmRoles": [
+        "seed-quotataire"
+      ]
+    },
+    {
+      "username": "quotataire_casamance",
+      "enabled": true,
+      "email": "quota.casamance@seed.local",
+      "firstName": "Fatoumata",
+      "lastName": "OP-Casamance",
+      "attributes": {
+        "zone": ["CASAMANCE"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-quotataire"
+      ]
+    },
+    {
+      "username": "quotataire_centre",
+      "enabled": true,
+      "email": "quota.centre@seed.local",
+      "firstName": "Moussa",
+      "lastName": "OP-Centre",
+      "attributes": {
+        "zone": ["CENTRE"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-quotataire"
+      ]
+    },
+    {
+      "username": "quotataire_nord",
+      "enabled": true,
+      "email": "quota.nord@seed.local",
+      "firstName": "Ndéye",
+      "lastName": "OP-Nord",
+      "attributes": {
+        "zone": ["NORD"]
+      },
+      "credentials": [],
+      "realmRoles": [
+        "seed-quotataire"
       ]
     }
   ],

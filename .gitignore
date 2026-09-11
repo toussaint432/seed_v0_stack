@@ -18,6 +18,7 @@ dist/
 *.p12
 *.jks
 secrets/
+infra/keycloak/users-credentials.env
 
 # OS
 .DS_Store
