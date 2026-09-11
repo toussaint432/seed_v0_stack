@@ -381,6 +381,9 @@ services:
       VITE_KEYCLOAK_URL: http://localhost:18080
       VITE_KEYCLOAK_REALM: seed-v0
       VITE_KEYCLOAK_CLIENT_ID: seed-frontend
+    volumes:
+      # Bind-mount des sources : Vite HMR détecte les changements locaux sans rebuild ni docker cp
+      - ./frontend/src:/app/src
     ports:
       - "127.0.0.1:5173:5173"
 
