@@ -64,6 +64,31 @@ public class Commande {
     @Column(name = "localisation_acheteur", length = 200)
     private String localisationAcheteur;
 
+    /** Téléphone personnel de l'acheteur — dénormalisé depuis membre_organisation. */
+    @Size(max = 50)
+    @Column(name = "telephone_acheteur", length = 50)
+    private String telephoneAcheteur;
+
+    /** Rôle Keycloak de l'acheteur — dénormalisé pour affichage (ex. seed-quotataire). */
+    @Size(max = 80)
+    @Column(name = "role_acheteur", length = 80)
+    private String roleAcheteur;
+
+    /** Nom de l'organisation fournisseur — dénormalisé pour éviter les #ID dans l'UI. */
+    @Size(max = 200)
+    @Column(name = "nom_organisation_fournisseur", length = 200)
+    private String nomOrganisationFournisseur;
+
+    /** Nom complet du membre principal de l'organisation fournisseur. */
+    @Size(max = 200)
+    @Column(name = "nom_complet_fournisseur", length = 200)
+    private String nomCompletFournisseur;
+
+    /** Téléphone du membre principal de l'organisation fournisseur. */
+    @Size(max = 50)
+    @Column(name = "telephone_fournisseur", length = 50)
+    private String telephoneFournisseur;
+
     @Column(columnDefinition = "TEXT")
     private String observations;
 

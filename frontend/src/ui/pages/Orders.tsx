@@ -10,6 +10,7 @@ import { endpoints } from '../../lib/endpoints'
 import { normalizeVariete, extractList } from '../../lib/normalizers'
 import { downloadXlsx, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormActions, Toast } from '../components/Modal'
+import { ROLE_LABELS } from '../../lib/constants'
 
 interface Props { roleKey: string }
 
@@ -865,7 +866,7 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], memb
       {detail && (
         <Modal
           title={`Commande — ${detail.codeCommande}`}
-          subtitle={`${membresMap[detail.usernameAcheteur]?.nomComplet || detail.usernameAcheteur || '—'} · ${fmtDatetime(detail.createdAt)}`}
+          subtitle={`${detail.usernameAcheteur || '—'} · ${fmtDatetime(detail.createdAt)}`}
           onClose={() => setDetail(null)} size="md"
         >
           <StatusPipeline statut={detail.statut} />
@@ -882,13 +883,59 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], memb
               </div>
             </div>
           )}
+
+          {/* ── Bloc ACHETEUR / FOURNISSEUR ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 0, marginBottom: 14, border: '1px solid var(--border)', borderRadius: 9, overflow: 'hidden' }}>
+            {/* ACHETEUR */}
+            <div style={{ padding: '12px 14px', background: 'var(--surface-2)' }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>Acheteur</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                  {detail.nomCompletAcheteur || detail.client || detail.usernameAcheteur || '—'}
+                </span>
+                {detail.roleAcheteur && (
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                    {ROLE_LABELS[detail.roleAcheteur] ?? detail.roleAcheteur}
+                  </span>
+                )}
+              </div>
+              {(detail.nomOrganisationAcheteur || orgName(detail.idOrganisationAcheteur) !== `#${detail.idOrganisationAcheteur}`) && (
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>
+                  {detail.nomOrganisationAcheteur || orgName(detail.idOrganisationAcheteur)}
+                </div>
+              )}
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {detail.telephoneAcheteur ? `📞 ${detail.telephoneAcheteur}` : '📞 Non renseigné'}
+              </div>
+            </div>
+
+            {/* Séparateur */}
+            <div style={{ height: 1, background: 'var(--border)' }} />
+
+            {/* FOURNISSEUR */}
+            <div style={{ padding: '12px 14px', background: 'var(--surface-2)' }}>
+              <div style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: 8 }}>Fournisseur</div>
+              {detail.nomCompletFournisseur ? (
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
+                    {detail.nomCompletFournisseur}
+                  </span>
+                </div>
+              ) : null}
+              <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 2 }}>
+                {detail.nomOrganisationFournisseur || orgName(detail.idOrganisationFournisseur)}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {detail.telephoneFournisseur ? `📞 ${detail.telephoneFournisseur}` : '📞 Non renseigné'}
+              </div>
+            </div>
+          </div>
+
+          {/* ── Métadonnées ── */}
           <div style={{ display: 'grid', gap: 8, fontSize: 13, marginBottom: 16 }}>
             {([
-              ['Client',          detail.client || '—'],
-              ['Fournisseur',     orgName(detail.idOrganisationFournisseur)],
-              ['Org acheteur',    orgName(detail.idOrganisationAcheteur)],
-              ['Soumise le',      fmtDatetime(detail.createdAt)],
-              ['Observations',    detail.observations || '—'],
+              ['Soumise le',   fmtDatetime(detail.createdAt)],
+              ['Observations', detail.observations || '—'],
             ] as [string,string][]).map(([k,v]) => (
               <div key={k} style={{ display: 'flex', gap: 8, borderBottom: '1px solid var(--border)', paddingBottom: 8 }}>
                 <span style={{ minWidth: 120, fontWeight: 600, color: 'var(--text-secondary)', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.04em' }}>{k}</span>

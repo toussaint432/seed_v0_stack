@@ -66,6 +66,7 @@ public class OrderController {
   private final LigneRepo ligneRepo;
   private final AllocationRepo allocationRepo;
   private final MembreOrganisationRepo membreRepo;
+  private final sn.isra.seed.order_service.repo.OrganisationRepo organisationRepo;
   private final StockOrderRepo stockOrderRepo;
   private final LotQuantiteRepo lotQuantiteRepo;
   private final LotReceptionRepo lotReceptionRepo;
@@ -232,6 +233,23 @@ public class OrderController {
     c.setNomCompletAcheteur(membre.map(m -> m.getNomComplet()).orElse(null));
     c.setNomOrganisationAcheteur(membre.map(m -> m.getOrganisation().getNomOrganisation()).orElse(null));
     c.setLocalisationAcheteur(localisationAcheteur);
+    c.setTelephoneAcheteur(membre.map(m -> m.getTelephone()).orElse(null));
+    c.setRoleAcheteur(membre.map(m -> m.getKeycloakRole()).orElse(null));
+
+    if (req.idOrganisationFournisseur() != null) {
+      organisationRepo.findById(req.idOrganisationFournisseur()).ifPresent(orgF -> {
+        c.setNomOrganisationFournisseur(orgF.getNomOrganisation());
+        membreRepo.findByOrganisation_Id(orgF.getId()).stream()
+            .filter(m -> Boolean.TRUE.equals(m.getPrincipal()))
+            .findFirst()
+            .or(() -> membreRepo.findByOrganisation_Id(orgF.getId()).stream().findFirst())
+            .ifPresent(mf -> {
+              c.setNomCompletFournisseur(mf.getNomComplet());
+              c.setTelephoneFournisseur(mf.getTelephone() != null ? mf.getTelephone() : orgF.getTelephone());
+            });
+        if (c.getTelephoneFournisseur() == null) c.setTelephoneFournisseur(orgF.getTelephone());
+      });
+    }
     c.setIdOrganisationFournisseur(req.idOrganisationFournisseur());
     c.setObservations(req.observations());
     c.setCreatedAt(Instant.now());
