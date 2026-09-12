@@ -15,7 +15,9 @@ import java.time.LocalDate;
     indexes = {
         @Index(name = "idx_trflot_lot",      columnList = "id_lot"),
         @Index(name = "idx_trflot_emetteur", columnList = "username_emetteur"),
-        @Index(name = "idx_trflot_dest",     columnList = "username_destinataire")
+        @Index(name = "idx_trflot_dest",     columnList = "username_destinataire"),
+        @Index(name = "idx_trflot_org_emit", columnList = "id_org_emetteur"),
+        @Index(name = "idx_trflot_org_dest", columnList = "id_org_destinataire")
     }
 )
 @Getter @Setter @NoArgsConstructor
@@ -53,6 +55,14 @@ public class TransfertLot {
     @Size(max = 50)
     @Column(name = "role_destinataire", nullable = false, length = 50)
     private String roleDestinataire;
+
+    /** FK vers shared.organisation — raw Long, sans @ManyToOne cross-schéma */
+    @Column(name = "id_org_emetteur")
+    private Long idOrgEmetteur;
+
+    /** FK vers shared.organisation — raw Long, sans @ManyToOne cross-schéma */
+    @Column(name = "id_org_destinataire")
+    private Long idOrgDestinataire;
 
     @NotBlank(message = "La génération transférée est obligatoire")
     @Size(max = 10)

@@ -316,6 +316,8 @@ public class LotService {
         t.setRoleEmetteur(roleEmetteur);
         t.setUsernameDestinataire(usernameDestinataire);
         t.setRoleDestinataire(roleDestinataire);
+        t.setIdOrgEmetteur(membreOrgRepo.findOrgIdByUsername(usernameEmetteur).orElse(null));
+        t.setIdOrgDestinataire(membreOrgRepo.findOrgIdByUsername(usernameDestinataire).orElse(null));
         t.setGenerationTransferee(gen);
         t.setObservations(observations != null ? observations : "");
         t.setQuantite(quantiteTransfert);

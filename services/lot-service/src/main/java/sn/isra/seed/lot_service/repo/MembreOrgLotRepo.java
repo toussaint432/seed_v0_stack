@@ -27,7 +27,7 @@ public class MembreOrgLotRepo {
     public Optional<Long> findOrgIdByUsername(String username) {
         if (username == null || username.isBlank()) return Optional.empty();
         List<Long> rows = jdbc.query(
-            "SELECT id_organisation FROM membre_organisation WHERE keycloak_username = ? LIMIT 1",
+            "SELECT id_organisation FROM shared.membre_organisation WHERE keycloak_username = ? LIMIT 1",
             (rs, i) -> rs.getLong("id_organisation"),
             username
         );

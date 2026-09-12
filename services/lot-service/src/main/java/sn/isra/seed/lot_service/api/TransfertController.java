@@ -6,6 +6,7 @@ import sn.isra.seed.lot_service.entity.enums.StatutLot;
 import sn.isra.seed.lot_service.entity.enums.StatutTransfert;
 import sn.isra.seed.lot_service.repo.HistoriqueStatutLotRepo;
 import sn.isra.seed.lot_service.repo.LotRepo;
+import sn.isra.seed.lot_service.repo.MembreOrgLotRepo;
 import sn.isra.seed.lot_service.repo.StockCreditRepo;
 import sn.isra.seed.lot_service.repo.TransfertLotRepo;
 
@@ -32,6 +33,7 @@ public class TransfertController {
     private final LotRepo                lotRepo;
     private final HistoriqueStatutLotRepo historiqueRepo;
     private final StockCreditRepo         stockCreditRepo;
+    private final MembreOrgLotRepo        membreOrgRepo;
 
     /* ── GET /api/transferts/alerts/count — badge nav ── */
     @GetMapping("/alerts/count")
@@ -58,8 +60,18 @@ public class TransfertController {
     @GetMapping("/recus")
     public List<TransfertLot> transfertsRecus(@AuthenticationPrincipal Jwt jwt) {
         String username = jwt.getClaimAsString("preferred_username");
-        if ("seed-upsemcl".equals(extractRole(jwt)))
+        String role = extractRole(jwt);
+
+        // UPSemCL : organisation étatique unique — visibilité globale par rôle
+        if ("seed-upsemcl".equals(role))
             return transfertRepo.findPendingForRole("seed-upsemcl");
+
+        // Filtrage sécurisé par id_org — idOrg extrait du JWT via DB, jamais depuis le client
+        Long idOrg = membreOrgRepo.findOrgIdByUsername(username).orElse(null);
+        if (idOrg != null)
+            return transfertRepo.findPendingForOrgDestinataire(idOrg);
+
+        // Fallback rétrocompat : utilisateur sans entrée membre_organisation
         return transfertRepo.findPendingForDestinataire(username);
     }
 
