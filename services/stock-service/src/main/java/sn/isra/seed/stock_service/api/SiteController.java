@@ -106,6 +106,8 @@ public class SiteController {
         s.setLatitude(parseBD(body.get("latitude")));
         s.setLongitude(parseBD(body.get("longitude")));
         s.setZoneCode(getString(body, "zoneCode"));
+        s.setIdZoneAgro(parseLong(body.get("idZoneAgro")));
+        s.setIdDepartement(parseInteger(body.get("idDepartement")));
         s.setIdMembre(membreId);
         s.setIdOrganisation(orgId);
         s.setEstPrincipal(existing.isEmpty());
@@ -139,12 +141,14 @@ public class SiteController {
             String nom = getString(body, "nomSite");
             if (nom != null && !nom.isBlank()) s.setNomSite(nom.trim());
             if (body.containsKey("typeSite"))    s.setTypeSite(parseType(body.get("typeSite").toString()));
-            if (body.containsKey("zoneCode"))    s.setZoneCode(getString(body, "zoneCode"));
-            if (body.containsKey("departement")) s.setDepartement(getString(body, "departement"));
-            if (body.containsKey("localite"))    s.setLocalite(getString(body, "localite"));
-            if (body.containsKey("region"))      s.setRegion(getString(body, "region"));
-            if (body.containsKey("latitude"))    s.setLatitude(parseBD(body.get("latitude")));
-            if (body.containsKey("longitude"))   s.setLongitude(parseBD(body.get("longitude")));
+            if (body.containsKey("zoneCode"))      s.setZoneCode(getString(body, "zoneCode"));
+            if (body.containsKey("idZoneAgro"))    s.setIdZoneAgro(parseLong(body.get("idZoneAgro")));
+            if (body.containsKey("departement"))   s.setDepartement(getString(body, "departement"));
+            if (body.containsKey("idDepartement")) s.setIdDepartement(parseInteger(body.get("idDepartement")));
+            if (body.containsKey("localite"))      s.setLocalite(getString(body, "localite"));
+            if (body.containsKey("region"))        s.setRegion(getString(body, "region"));
+            if (body.containsKey("latitude"))      s.setLatitude(parseBD(body.get("latitude")));
+            if (body.containsKey("longitude"))     s.setLongitude(parseBD(body.get("longitude")));
             return ResponseEntity.<Object>ok(siteRepo.save(s));
         }).orElse(ResponseEntity.status(403).build());
     }
@@ -252,5 +256,15 @@ public class SiteController {
     private TypeSite parseType(String v) {
         try { return TypeSite.valueOf(v.toUpperCase()); }
         catch (Exception e) { return TypeSite.FERME; }
+    }
+
+    private Long parseLong(Object v) {
+        if (v == null) return null;
+        try { return Long.parseLong(v.toString()); } catch (Exception e) { return null; }
+    }
+
+    private Integer parseInteger(Object v) {
+        if (v == null) return null;
+        try { return Integer.parseInt(v.toString()); } catch (Exception e) { return null; }
     }
 }

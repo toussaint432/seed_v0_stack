@@ -53,6 +53,14 @@ public class Site {
     @Column(name = "zone_code", length = 10)
     private String zoneCode;
 
+    /** FK vers geo.zone_agro — stocké en Long brut, sans @ManyToOne cross-schéma */
+    @Column(name = "id_zone_agro")
+    private Long idZoneAgro;
+
+    /** FK vers geo.departements — stocké en Integer brut, sans @ManyToOne cross-schéma */
+    @Column(name = "id_departement")
+    private Integer idDepartement;
+
     @DecimalMin(value = "-90.0") @DecimalMax(value = "90.0")
     @Column(precision = 10, scale = 6)
     private BigDecimal latitude;
