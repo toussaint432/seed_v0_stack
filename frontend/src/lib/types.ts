@@ -88,10 +88,30 @@ export interface Variete {
 
 export interface ZoneAgro {
   id: number
-  codeZae: string
-  nomZae: string
+  code: string
+  nom: string
   description?: string
-  superficieKm2?: number
+  potentielCerealesHa?: number
+  potentielLegumineusesHa?: number
+}
+
+export interface Region {
+  id: number
+  nom: string
+  code?: string
+}
+
+export interface Departement {
+  id: number
+  nom: string
+  region?: Region
+}
+
+export interface ZoneEspece {
+  id: { idZoneAgro: number; idEspece: number }
+  estPrincipale: boolean
+  zone?: ZoneAgro
+  espece?: Espece
 }
 
 // ── Campagne ──

@@ -60,6 +60,8 @@ export const endpoints = {
   regions:              `${CATALOG}/regions`,
   departements:         `${CATALOG}/departements`,
   departementsParRegion:(regionId: number) => `${CATALOG}/departements?regionId=${regionId}`,
+  departementsParZone:  (zoneId: number)   => `${CATALOG}/departements?zoneId=${zoneId}`,
+  zoneEspeces:          (id: number)        => `${CATALOG}/zones/${id}/especes`,
   varietyZones:         (id: number) => `${CATALOG}/varieties/${id}/zones`,
   varietyFicheUpload:   (id: number) => `${CATALOG}/varieties/${id}/fiche-varietale`,
   varietyFicheUrl:      (id: number) => `${CATALOG}/varieties/${id}/fiche-varietale`,

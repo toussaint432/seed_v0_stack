@@ -5,6 +5,11 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.*;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
+import java.math.BigDecimal;
+import java.util.List;
+
 @Entity
 @Table(name = "zone_agro", schema = "geo")
 @Getter @Setter @NoArgsConstructor
@@ -26,4 +31,14 @@ public class ZoneAgro {
 
     @Column(columnDefinition = "TEXT")
     private String description;
+
+    @Column(name = "potentiel_cereales_ha", precision = 12, scale = 1)
+    private BigDecimal potentielCerealesHa;
+
+    @Column(name = "potentiel_legumineuses_ha", precision = 12, scale = 1)
+    private BigDecimal potentielLegumineusesHa;
+
+    @JsonIgnore
+    @OneToMany(mappedBy = "zone", fetch = FetchType.LAZY)
+    private List<ZoneEspece> especesLiees;
 }

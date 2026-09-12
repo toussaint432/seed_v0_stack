@@ -5,11 +5,13 @@ import sn.isra.seed.catalog_service.entity.Region;
 import sn.isra.seed.catalog_service.entity.VarieteZone;
 import sn.isra.seed.catalog_service.entity.VarieteZoneId;
 import sn.isra.seed.catalog_service.entity.ZoneAgro;
+import sn.isra.seed.catalog_service.entity.ZoneEspece;
 import sn.isra.seed.catalog_service.entity.enums.NiveauAdaptation;
 import sn.isra.seed.catalog_service.repo.DepartementRepo;
 import sn.isra.seed.catalog_service.repo.RegionRepo;
 import sn.isra.seed.catalog_service.repo.VarieteZoneRepo;
 import sn.isra.seed.catalog_service.repo.ZoneAgroRepo;
+import sn.isra.seed.catalog_service.repo.ZoneEspeceRepo;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -32,6 +34,7 @@ public class ZoneController {
     private final VarieteZoneRepo  varieteZoneRepo;
     private final RegionRepo       regionRepo;
     private final DepartementRepo  departementRepo;
+    private final ZoneEspeceRepo   zoneEspeceRepo;
 
     /* ── GET /api/zones — liste triée alphabétiquement, public ── */
     @GetMapping("/zones")
@@ -69,13 +72,22 @@ public class ZoneController {
         return regionRepo.findAllByOrderByNomAsc();
     }
 
-    /* ── GET /api/departements — tous les départements ── */
+    /* ── GET /api/departements — filtrable par regionId ou zoneId ── */
     @GetMapping("/departements")
     public List<Departement> getDepartements(
-            @RequestParam(required = false) Integer regionId) {
+            @RequestParam(required = false) Integer regionId,
+            @RequestParam(required = false) Integer zoneId) {
+        if (zoneId != null)
+            return departementRepo.findByZoneAgroIdOrderByNomAsc(zoneId);
         if (regionId != null)
             return departementRepo.findByRegionIdOrderByNomAsc(regionId);
         return departementRepo.findAllByOrderByNomAsc();
+    }
+
+    /* ── GET /api/zones/{id}/especes — espèces recommandées pour une ZAE ── */
+    @GetMapping("/zones/{id}/especes")
+    public List<ZoneEspece> getEspecesByZone(@PathVariable Long id) {
+        return zoneEspeceRepo.findByIdIdZoneAgro(id);
     }
 
     /* ── GET /api/varieties/{id}/zones — public ── */

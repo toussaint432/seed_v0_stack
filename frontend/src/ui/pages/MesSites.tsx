@@ -1,28 +1,11 @@
 import React, { useEffect, useState } from 'react'
-import { MapPin, Plus, RefreshCw, Edit2, CheckCircle2, Star, Trash2, Lock } from 'lucide-react'
+import { MapPin, Plus, RefreshCw, Edit2, CheckCircle2, Star, Trash2, Lock, Navigation } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { Modal, Field, FormInput, FormActions, Toast } from '../components/Modal'
+import type { ZoneAgro, Departement } from '../../lib/types'
 
 interface Props { roleKey: string }
-
-/* ── 46 départements du Sénégal groupés par région ── */
-const DEPARTEMENTS: { region: string; depts: string[] }[] = [
-  { region: 'Dakar',        depts: ['Dakar', 'Guédiawaye', 'Keur Massar', 'Pikine', 'Rufisque'] },
-  { region: 'Diourbel',     depts: ['Bambey', 'Diourbel', 'Mbacké'] },
-  { region: 'Fatick',       depts: ['Fatick', 'Foundiougne', 'Gossas'] },
-  { region: 'Kaffrine',     depts: ['Birkelane', 'Kaffrine', 'Koungheul', 'Malem Hodar'] },
-  { region: 'Kaolack',      depts: ['Guinguinéo', 'Kaolack', 'Nioro du Rip'] },
-  { region: 'Kédougou',     depts: ['Kédougou', 'Salémata', 'Saraya'] },
-  { region: 'Kolda',        depts: ['Kolda', 'Médina Yoro Foula', 'Vélingara'] },
-  { region: 'Louga',        depts: ['Kébémer', 'Linguère', 'Louga'] },
-  { region: 'Matam',        depts: ['Kanel', 'Matam', 'Ranérou Ferlo'] },
-  { region: 'Saint-Louis',  depts: ['Dagana', 'Podor', 'Saint-Louis'] },
-  { region: 'Sédhiou',      depts: ['Bounkiling', 'Goudomp', 'Sédhiou'] },
-  { region: 'Tambacounda',  depts: ['Bakel', 'Goudiry', 'Koumpentoum', 'Tambacounda'] },
-  { region: 'Thiès',        depts: ['Mbour', 'Thiès', 'Tivaouane'] },
-  { region: 'Ziguinchor',   depts: ['Bignona', 'Oussouye', 'Ziguinchor'] },
-]
 
 /* ── Localités par département avec coordonnées GPS et zone agro-écologique ── */
 type Localite = { nom: string; lat: number; lng: number; zone: string; region: string }
@@ -81,7 +64,15 @@ const selectStyle: React.CSSProperties = {
   fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text)', cursor: 'pointer',
 }
 
-const EMPTY_FORM = { nomSite: '', departement: '', localite: '' }
+const EMPTY_FORM = {
+  nomSite:       '',
+  idZoneAgro:    0,
+  departement:   '',   // nom département (clé LOCALITES)
+  idDepartement: 0,
+  localite:      '',
+  latitude:      '',
+  longitude:     '',
+}
 
 export function MesSites({ roleKey }: Props) {
   const [sites,   setSites]   = useState<any[]>([])
@@ -92,7 +83,11 @@ export function MesSites({ roleKey }: Props) {
   const [saving,   setSaving]   = useState(false)
   const [form,     setForm]     = useState({ ...EMPTY_FORM })
 
-  // Lecture seule pour les rôles institutionnels
+  const [zones,        setZones]        = useState<ZoneAgro[]>([])
+  const [deptsForZone, setDeptsForZone] = useState<Departement[]>([])
+  const [loadingDepts, setLoadingDepts] = useState(false)
+  const [gpsLoading,   setGpsLoading]   = useState(false)
+
   const isReadOnly = ['seed-selector', 'seed-upsemcl'].includes(roleKey)
   const canEdit    = ['seed-multiplicator', 'seed-quotataire', 'seed-admin'].includes(roleKey)
   const canCreate  = canEdit && !isReadOnly
@@ -108,42 +103,118 @@ export function MesSites({ roleKey }: Props) {
     finally { setLoading(false) }
   }
 
-  useEffect(() => { fetchSites() }, [])
+  useEffect(() => {
+    fetchSites()
+    api.get(endpoints.zones)
+      .then(r => setZones(Array.isArray(r.data) ? r.data : []))
+      .catch(() => {})
+  }, [])
 
-  function onDeptChange(dept: string) {
-    setForm(f => ({ ...f, departement: dept, localite: '' }))
+  function onZoneChange(zoneId: number) {
+    setForm(f => ({ ...f, idZoneAgro: zoneId, departement: '', idDepartement: 0, localite: '', latitude: '', longitude: '' }))
+    setDeptsForZone([])
+    if (!zoneId) return
+    setLoadingDepts(true)
+    api.get(endpoints.departementsParZone(zoneId))
+      .then(r => setDeptsForZone(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setDeptsForZone([]))
+      .finally(() => setLoadingDepts(false))
+  }
+
+  function onDeptChange(deptId: number, deptNom: string) {
+    setForm(f => ({ ...f, idDepartement: deptId, departement: deptNom, localite: '', latitude: '', longitude: '' }))
+  }
+
+  function onLocaliteChange(localiteNom: string) {
+    const loc = (LOCALITES[form.departement] ?? []).find(l => l.nom === localiteNom)
+    setForm(f => ({
+      ...f,
+      localite:  localiteNom,
+      latitude:  loc ? String(loc.lat) : f.latitude,
+      longitude: loc ? String(loc.lng) : f.longitude,
+    }))
+  }
+
+  function handleGetGPS() {
+    if (!navigator.geolocation) {
+      setToast({ msg: 'Géolocalisation non supportée par ce navigateur', type: 'error' })
+      return
+    }
+    setGpsLoading(true)
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setGpsLoading(false)
+        const { latitude, longitude } = pos.coords
+        if (latitude < 12.0 || latitude > 16.7 || longitude < -17.6 || longitude > -11.3) {
+          setToast({ msg: 'Position détectée hors des limites du Sénégal. Vérifiez votre signal GPS.', type: 'error' })
+          return
+        }
+        setForm(f => ({ ...f, latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) }))
+        setToast({ msg: 'Position GPS enregistrée', type: 'success' })
+      },
+      () => {
+        setGpsLoading(false)
+        setToast({ msg: 'Localisation refusée ou indisponible', type: 'error' })
+      },
+      { timeout: 15000, maximumAge: 60000 }
+    )
   }
 
   function openCreate() {
     setEditCode(null)
     setForm({ ...EMPTY_FORM })
+    setDeptsForZone([])
     setShowForm(true)
   }
 
   function openEdit(s: any) {
     setEditCode(s.codeSite)
-    setForm({ nomSite: s.nomSite ?? '', departement: s.departement ?? '', localite: s.localite ?? '' })
+    const zoneForSite = zones.find(z => z.code === s.zoneCode)
+    const zoneId = zoneForSite?.id ?? 0
+    setForm({
+      nomSite:       s.nomSite ?? '',
+      idZoneAgro:    zoneId,
+      departement:   s.departement ?? '',
+      idDepartement: 0,
+      localite:      s.localite ?? '',
+      latitude:      s.latitude != null ? String(s.latitude) : '',
+      longitude:     s.longitude != null ? String(s.longitude) : '',
+    })
+    if (zoneId) {
+      setLoadingDepts(true)
+      api.get(endpoints.departementsParZone(zoneId))
+        .then(r => {
+          const depts: Departement[] = Array.isArray(r.data) ? r.data : []
+          setDeptsForZone(depts)
+          const matched = depts.find(d => d.nom === s.departement)
+          if (matched) setForm(f => ({ ...f, idDepartement: matched.id }))
+        })
+        .catch(() => setDeptsForZone([]))
+        .finally(() => setLoadingDepts(false))
+    }
     setShowForm(true)
   }
 
   async function submitForm(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.nomSite.trim() || !form.departement || !form.localite) return
+    if (!form.nomSite.trim() || !form.idZoneAgro || !form.departement || !form.localite) return
     setSaving(true)
 
-    // Dériver GPS, ZAE, région depuis la table statique
+    const selectedZoneObj = zones.find(z => z.id === form.idZoneAgro)
     const loc = (LOCALITES[form.departement] ?? []).find(l => l.nom === form.localite)
     const typeSite = roleKey === 'seed-multiplicator' ? 'FERME' : 'MAGASIN'
 
     const payload: Record<string, unknown> = {
-      nomSite:     form.nomSite.trim(),
+      nomSite:       form.nomSite.trim(),
       typeSite,
-      departement: form.departement,
-      localite:    form.localite,
-      region:      loc?.region,
-      zoneCode:    loc?.zone,
-      latitude:    loc?.lat,
-      longitude:   loc?.lng,
+      departement:   form.departement,
+      localite:      form.localite,
+      region:        loc?.region,
+      zoneCode:      selectedZoneObj?.code,
+      idZoneAgro:    form.idZoneAgro   || undefined,
+      idDepartement: form.idDepartement || undefined,
+      latitude:      form.latitude  ? parseFloat(form.latitude)  : undefined,
+      longitude:     form.longitude ? parseFloat(form.longitude) : undefined,
     }
 
     try {
@@ -303,28 +374,52 @@ export function MesSites({ roleKey }: Props) {
               />
             </Field>
 
-            <Field label="Département" required>
+            {/* ── Niveau 1 : Zone Agro-Écologique ── */}
+            <Field label="Zone Agro-Écologique (ZAE)" required>
               <select
-                value={form.departement}
-                onChange={e => onDeptChange(e.target.value)}
+                value={form.idZoneAgro || ''}
+                onChange={e => onZoneChange(Number(e.target.value))}
                 required
                 style={selectStyle}
               >
-                <option value="">— Sélectionner un département —</option>
-                {DEPARTEMENTS.map(g => (
-                  <optgroup key={g.region} label={g.region}>
-                    {g.depts.map(d => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </optgroup>
+                <option value="">— Sélectionner une ZAE —</option>
+                {zones.map(z => (
+                  <option key={z.id} value={z.id}>{z.nom} ({z.code})</option>
                 ))}
               </select>
             </Field>
 
+            {/* ── Niveau 2 : Département (filtré par ZAE) ── */}
+            <Field label="Département" required>
+              <select
+                value={form.idDepartement || ''}
+                onChange={e => {
+                  const id = Number(e.target.value)
+                  const dept = deptsForZone.find(d => d.id === id)
+                  onDeptChange(id, dept?.nom ?? '')
+                }}
+                required
+                disabled={!form.idZoneAgro || loadingDepts}
+                style={{ ...selectStyle, opacity: form.idZoneAgro ? 1 : 0.5 }}
+              >
+                <option value="">
+                  {!form.idZoneAgro
+                    ? '— Choisir d\'abord une ZAE —'
+                    : loadingDepts
+                    ? 'Chargement…'
+                    : '— Sélectionner un département —'}
+                </option>
+                {deptsForZone.map(d => (
+                  <option key={d.id} value={d.id}>{d.nom}</option>
+                ))}
+              </select>
+            </Field>
+
+            {/* ── Niveau 3 : Localité ── */}
             <Field label="Localité / Ville" required>
               <select
                 value={form.localite}
-                onChange={e => setForm(f => ({ ...f, localite: e.target.value }))}
+                onChange={e => onLocaliteChange(e.target.value)}
                 required
                 disabled={!form.departement}
                 style={{ ...selectStyle, opacity: form.departement ? 1 : 0.5 }}
@@ -338,28 +433,81 @@ export function MesSites({ roleKey }: Props) {
               </select>
             </Field>
 
-            {form.localite && (() => {
-              const loc = localitesForDept.find(l => l.nom === form.localite)
-              return loc ? (
-                <div style={{
-                  background: 'var(--green-50)', border: '1px solid var(--green-200)',
-                  borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-                  fontSize: 12, color: 'var(--green-700)', display: 'flex', gap: 10, alignItems: 'center',
-                }}>
-                  <MapPin size={13} />
-                  <span>
-                    Localisation enregistrée — <strong>{loc.region}</strong>,
-                    zone <strong>{loc.zone}</strong>. Coordonnées GPS auto-assignées.
-                  </span>
+            {/* ── GPS — inputs readOnly + bouton capteur ── */}
+            <Field label="Coordonnées GPS">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
+                      Latitude
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={form.latitude}
+                      placeholder="—"
+                      style={{
+                        ...selectStyle,
+                        background: 'var(--surface-2)',
+                        cursor: 'default',
+                        color: form.latitude ? 'var(--text)' : 'var(--text-muted)',
+                      }}
+                    />
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 3 }}>
+                      Longitude
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={form.longitude}
+                      placeholder="—"
+                      style={{
+                        ...selectStyle,
+                        background: 'var(--surface-2)',
+                        cursor: 'default',
+                        color: form.longitude ? 'var(--text)' : 'var(--text-muted)',
+                      }}
+                    />
+                  </div>
                 </div>
-              ) : null
-            })()}
+                <button
+                  type="button"
+                  onClick={handleGetGPS}
+                  disabled={gpsLoading}
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    padding: '8px 14px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    cursor: gpsLoading ? 'wait' : 'pointer',
+                    border: '1px solid #0369a1',
+                    background: gpsLoading ? 'var(--surface-2)' : '#eff6ff',
+                    color: gpsLoading ? 'var(--text-muted)' : '#1d4ed8',
+                    fontFamily: 'var(--font-sans)',
+                    transition: 'background 0.15s',
+                  }}
+                >
+                  <Navigation size={13} />
+                  {gpsLoading ? 'Localisation en cours…' : 'Récupérer ma position GPS actuelle'}
+                </button>
+                {form.latitude && form.longitude && (
+                  <div style={{
+                    background: 'var(--green-50)', border: '1px solid var(--green-200)',
+                    borderRadius: 6, padding: '7px 12px', fontSize: 11, color: 'var(--green-700)',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                    <MapPin size={11} />
+                    <span>Position enregistrée — {parseFloat(form.latitude).toFixed(4)}°N, {parseFloat(form.longitude).toFixed(4)}°E</span>
+                  </div>
+                )}
+              </div>
+            </Field>
 
             <FormActions>
               <button type="button" className="btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
               <button
                 type="submit" className="btn-primary"
-                disabled={saving || !form.nomSite.trim() || !form.departement || !form.localite}
+                disabled={saving || !form.nomSite.trim() || !form.idZoneAgro || !form.departement || !form.localite}
               >
                 {saving ? 'Enregistrement…' : editCode ? 'Mettre à jour' : 'Créer le site'}
               </button>

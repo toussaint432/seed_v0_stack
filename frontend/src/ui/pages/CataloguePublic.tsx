@@ -112,6 +112,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
   const [selectedEspece,  setSelectedEspece]  = useState<Espece | null>(null)
   const [selectedVariete, setSelectedVariete] = useState<VarieteGroup | null>(null)
   const [selectedZone,    setSelectedZone]    = useState<ZoneAgro | null>(null)
+  const [zoneEspeces,     setZoneEspeces]     = useState<string[]>([])
   const [search,          setSearch]          = useState('')
 
   const [showFournisseurs, setShowFournisseurs] = useState(false)
@@ -333,6 +334,19 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
       .catch(() => {})
   }, [])
 
+  /* Charge les espèces recommandées pour la ZAE de l'utilisateur */
+  useEffect(() => {
+    if (!selectedZone) { setZoneEspeces([]); return }
+    fetch(`${CATALOG}/zones/${selectedZone.id}/especes`)
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setZoneEspeces(data.map((ze: any) => ze.espece?.codeEspece).filter(Boolean) as string[])
+        }
+      })
+      .catch(() => setZoneEspeces([]))
+  }, [selectedZone])
+
   /* Fonction de chargement du catalogue — espèce et zone sont toutes deux optionnelles */
   const chargerCatalogue = useCallback((espece: Espece | null, zone: ZoneAgro | null, silent = false) => {
     if (!silent) setLoading(true)
@@ -432,16 +446,21 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
 
   const sortedFilteredVarietes = useMemo(() => {
     const vs = [...filteredVarietes]
-    if (sortBy === 'germination')
-      return vs.sort((a, b) => b.tauxGerminationMoyen - a.tauxGerminationMoyen)
-    if (sortBy === 'distance') {
-      return vs.sort((a, b) => {
-        const dMin = (v: VarieteGroup) => Math.min(...v.lots.map(l => distanceByOrgId.get(l.organisationId) ?? Infinity))
-        return dMin(a) - dMin(b)
-      })
+    /* Espèces de la ZAE de l'utilisateur remontent en tête — indicateur de pertinence agronomique */
+    const inZone = (v: VarieteGroup) => zoneEspeces.includes(v.codeEspece)
+    const zoneBoost = (a: VarieteGroup, b: VarieteGroup) => {
+      const za = inZone(a) ? 0 : 1
+      const zb = inZone(b) ? 0 : 1
+      return za - zb
     }
-    return vs.sort((a, b) => b.stockTotal - a.stockTotal)
-  }, [filteredVarietes, sortBy, distanceByOrgId])
+    if (sortBy === 'germination')
+      return vs.sort((a, b) => zoneBoost(a, b) || b.tauxGerminationMoyen - a.tauxGerminationMoyen)
+    if (sortBy === 'distance') {
+      const dMin = (v: VarieteGroup) => Math.min(...v.lots.map(l => distanceByOrgId.get(l.organisationId) ?? Infinity))
+      return vs.sort((a, b) => zoneBoost(a, b) || dMin(a) - dMin(b))
+    }
+    return vs.sort((a, b) => zoneBoost(a, b) || b.stockTotal - a.stockTotal)
+  }, [filteredVarietes, sortBy, distanceByOrgId, zoneEspeces])
 
   const fournisseurs = useMemo(
     () => groupByOrg(geoMode ? proximiteItems : (selectedVariete?.lots ?? [])),

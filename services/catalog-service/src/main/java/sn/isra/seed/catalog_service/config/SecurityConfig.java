@@ -30,6 +30,7 @@ public class SecurityConfig {
         .requestMatchers(HttpMethod.GET,
             "/api/zones",
             "/api/zones/par-departement/**",
+            "/api/zones/*/especes",
             "/api/regions",
             "/api/departements",
             "/api/varieties/*/zones",
