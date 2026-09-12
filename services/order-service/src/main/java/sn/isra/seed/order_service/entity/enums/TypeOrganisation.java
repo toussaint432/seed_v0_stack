@@ -7,6 +7,8 @@ public enum TypeOrganisation {
     UPSEMCL,
     /** Multiplicateur de semences agréé */
     MULTIPLICATEUR,
+    /** Quotataire — bénéficiaire de quotas de semences subventionnées */
+    QUOTATAIRE,
     /** Coopérative agricole */
     COOPERATIVE,
     /** Revendeur détaillant */
