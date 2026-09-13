@@ -2720,11 +2720,13 @@ function PropositionFifoDssModal({
     quantiteSelectionnee: string
     motifOverride: string
     overrideActif: boolean
+    prixUnitaireHt: string
+    tauxTva: string
   }>>({})
 
   useEffect(() => {
     const init: typeof props = {}
-    for (const l of lignes) init[l.id] = { idLotSuggereFifo: null, quantiteSuggere: '', idLotSelectionne: null, quantiteSelectionnee: String(l.quantiteDemandee ?? ''), motifOverride: '', overrideActif: false }
+    for (const l of lignes) init[l.id] = { idLotSuggereFifo: null, quantiteSuggere: '', idLotSelectionne: null, quantiteSelectionnee: String(l.quantiteDemandee ?? ''), motifOverride: '', overrideActif: false, prixUnitaireHt: '', tauxTva: '0' }
     setProps(init)
 
     Promise.all(lignes.map(l =>
@@ -2760,6 +2762,7 @@ function PropositionFifoDssModal({
     const p = props[l.id]
     if (!p || !p.idLotSelectionne || !p.quantiteSelectionnee || Number(p.quantiteSelectionnee) <= 0) return false
     if (p.overrideActif && p.idLotSelectionne !== p.idLotSuggereFifo && !p.motifOverride.trim()) return false
+    if (!p.prixUnitaireHt || Number(p.prixUnitaireHt) <= 0) return false
     return true
   })
 
@@ -2775,6 +2778,8 @@ function PropositionFifoDssModal({
           idLotSelectionne:     p.idLotSelectionne,
           quantiteSelectionnee: Number(p.quantiteSelectionnee),
           motifOverride:        p.overrideActif && p.idLotSelectionne !== p.idLotSuggereFifo ? p.motifOverride : null,
+          prixUnitaireHt:       Number(p.prixUnitaireHt),
+          tauxTva:              Number(p.tauxTva ?? 0),
         }
       })
       await api.post(endpoints.orderPropositionsG3(commande.id), { propositions })
@@ -2798,7 +2803,7 @@ function PropositionFifoDssModal({
         </div>
       ) : lignes.map((ligne: any) => {
         const lots = lotsParVariete[ligne.idVariete] ?? []
-        const p = props[ligne.id] ?? { idLotSuggereFifo: null, quantiteSuggere: '', idLotSelectionne: null, quantiteSelectionnee: '', motifOverride: '', overrideActif: false }
+        const p = props[ligne.id] ?? { idLotSuggereFifo: null, quantiteSuggere: '', idLotSelectionne: null, quantiteSelectionnee: '', motifOverride: '', overrideActif: false, prixUnitaireHt: '', tauxTva: '0' }
         const lotSuggere = lots.find((l: any) => l.id === p.idLotSuggereFifo)
         const lotSelectionne = lots.find((l: any) => l.id === p.idLotSelectionne)
         const needsMotif = p.overrideActif && p.idLotSelectionne !== p.idLotSuggereFifo
@@ -2875,15 +2880,40 @@ function PropositionFifoDssModal({
             )}
 
             {lots.length > 0 && (
-              <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', flexShrink: 0 }}>Quantité proposée</div>
-                <input
-                  type="number" value={p.quantiteSelectionnee} min={1}
-                  max={lotSelectionne ? Number(lotSelectionne.quantiteNette) : undefined}
-                  onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], quantiteSelectionnee: e.target.value } }))}
-                  style={{ padding: '6px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: 130, outline: 'none', background: 'var(--surface)' }}
-                />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{ligne.unite} sur {ligne.quantiteDemandee} demandés{lotSelectionne ? ` · ${Number(lotSelectionne.quantiteNette).toFixed(0)} kg dispo` : ''}</span>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 12 }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Quantité ({ligne.unite})</div>
+                  <input
+                    type="number" value={p.quantiteSelectionnee} min={1}
+                    max={lotSelectionne ? Number(lotSelectionne.quantiteNette) : undefined}
+                    onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], quantiteSelectionnee: e.target.value } }))}
+                    style={{ padding: '8px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: '100%', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+                  />
+                  {lotSelectionne && <div style={{ fontSize: 10.5, color: '#15803d', marginTop: 3 }}>{Number(lotSelectionne.quantiteNette).toFixed(0)} kg dispo</div>}
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#d97706', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>Prix unitaire HT (FCFA/kg) *</div>
+                  <input
+                    type="number" value={p.prixUnitaireHt} min={1} step="0.01"
+                    onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], prixUnitaireHt: e.target.value } }))}
+                    placeholder="ex : 450"
+                    style={{ padding: '8px 10px', border: '1px solid #fde68a', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: '100%', outline: 'none', background: '#fefce8', boxSizing: 'border-box' }}
+                  />
+                  {p.prixUnitaireHt && p.quantiteSelectionnee && (
+                    <div style={{ fontSize: 10.5, color: '#d97706', marginTop: 3, fontWeight: 600 }}>
+                      Montant HT : {(Number(p.prixUnitaireHt) * Number(p.quantiteSelectionnee)).toLocaleString('fr-SN')} FCFA
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 6 }}>TVA (%)</div>
+                  <input
+                    type="number" value={p.tauxTva} min={0} max={30} step="0.5"
+                    onChange={e => setProps(prev => ({ ...prev, [ligne.id]: { ...prev[ligne.id], tauxTva: e.target.value } }))}
+                    placeholder="0"
+                    style={{ padding: '8px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', width: '100%', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -2893,7 +2923,7 @@ function PropositionFifoDssModal({
       <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
         {!isValid && !loading && (
           <span style={{ fontSize: 11.5, color: '#d97706', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <XCircle size={13} /> Sélectionnez un lot pour chaque variété avant d'envoyer
+            <XCircle size={13} /> Sélectionnez un lot, une quantité et un prix pour chaque variété
           </span>
         )}
         <div style={{ display: 'flex', gap: 10, marginLeft: 'auto' }}>

@@ -135,6 +135,20 @@ public interface LotRepo extends JpaRepository<LotSemencier, Long> {
     Page<LotSemencier> findR2Disponible(Pageable pageable);
 
     /**
+     * Lots reçus par un quotataire via le workflow commande.
+     * Filtre strictement sur le préfixe REC- (lots créés atomiquement
+     * par confirmerEtTransferer) et sur l'org de l'acheteur.
+     * Garantit l'étanchéité multi-tenant : aucun lot tiers ne peut remonter.
+     */
+    @Query("""
+        SELECT l FROM LotSemencier l
+        WHERE l.idOrgProducteur = :orgId
+          AND l.codeLot LIKE 'REC-%'
+        ORDER BY l.createdAt DESC
+        """)
+    List<LotSemencier> findLotsRecusQuotataire(@Param("orgId") Long orgId);
+
+    /**
      * Lots G4/R1/R2 des multiplicateurs dont le certificat est uploadé mais
      * non encore validé (statut EN_ATTENTE) — file de travail UPSemCL / Admin.
      */

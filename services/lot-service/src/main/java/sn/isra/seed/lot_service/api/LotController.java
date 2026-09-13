@@ -222,6 +222,8 @@ public class LotController {
         if (orgId == null) return ResponseEntity.ok(List.of());
         if (roles.contains("seed-upsemcl"))
             return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findLotsUpsemclAll(orgId)));
+        if (roles.contains("seed-quotataire"))
+            return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findLotsRecusQuotataire(orgId)));
         return ResponseEntity.ok(lotMapper.toDtoList(lotRepo.findMesLots(orgId, username)));
     }
 
