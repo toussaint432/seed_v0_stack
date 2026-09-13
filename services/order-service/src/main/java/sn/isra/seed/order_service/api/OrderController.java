@@ -12,6 +12,7 @@ import sn.isra.seed.order_service.api.dto.StatutRequest;
 import sn.isra.seed.order_service.api.dto.ValiderCommandeRequest;
 import sn.isra.seed.order_service.entity.enums.TypeCommande;
 import sn.isra.seed.order_service.entity.AllocationCommande;
+import sn.isra.seed.order_service.entity.Bordereau;
 import sn.isra.seed.order_service.entity.Commande;
 import sn.isra.seed.order_service.entity.LigneCommande;
 import sn.isra.seed.order_service.entity.PropositionLigne;
@@ -22,6 +23,7 @@ import sn.isra.seed.order_service.entity.enums.StatutCommande;
 import sn.isra.seed.order_service.entity.enums.StatutLigne;
 import sn.isra.seed.order_service.kafka.OrderEventProducer;
 import sn.isra.seed.order_service.repo.AllocationRepo;
+import sn.isra.seed.order_service.repo.BordereauRepo;
 import sn.isra.seed.order_service.repo.CommandeRepo;
 import sn.isra.seed.order_service.repo.LigneRepo;
 import sn.isra.seed.order_service.repo.LotQuantiteRepo;
@@ -31,6 +33,7 @@ import sn.isra.seed.order_service.repo.PropositionLigneRepo;
 import sn.isra.seed.order_service.repo.ReceptionCommandeRepo;
 import sn.isra.seed.order_service.repo.StockOrderRepo;
 import sn.isra.seed.order_service.repo.TransfertLotOrderRepo;
+import sn.isra.seed.order_service.service.FactureGenerationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +77,8 @@ public class OrderController {
   private final sn.isra.seed.order_service.repo.GenerationSemenceRepo generationRepo;
   private final PropositionLigneRepo propositionLigneRepo;
   private final ReceptionCommandeRepo receptionCommandeRepo;
+  private final BordereauRepo bordereauRepo;
+  private final FactureGenerationService factureGenerationService;
   private final OrderEventProducer producer;
   private final ObjectMapper om;
 
@@ -447,7 +452,7 @@ public class OrderController {
       commande.setSiteDestinationCode(sc);
     }
 
-    commande.setStatut(StatutCommande.ACCORDEE);
+    commande.setStatut(StatutCommande.ACCEPTEE);
     return ResponseEntity.ok(commandeRepo.save(commande));
   }
 
@@ -581,6 +586,188 @@ public class OrderController {
 
     commande.setStatut(StatutCommande.EN_LIVRAISON);
     commande.setCodeTransfertGenere(baseCode);
+    return ResponseEntity.ok(commandeRepo.save(commande));
+  }
+
+  /**
+   * POST /api/orders/{id}/confirmer-et-transferer  (UPSemCL / vendeur)
+   * Déclencheur atomique unique : débite lot + stock, crée lot REC + transfert ACCEPTE,
+   * génère la facture automatique FCFA et le bordereau.
+   * Pré-condition : commande ACCEPTEE.
+   */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-upsemcl','ROLE_seed-multiplicator','ROLE_seed-admin')")
+  @Transactional
+  @PostMapping("/{id}/confirmer-et-transferer")
+  public ResponseEntity<Commande> confirmerEtTransferer(
+      @PathVariable Long id,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.ACCEPTEE) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être ACCEPTEE pour déclencher le transfert (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    String emetteur  = jwt != null ? jwt.getClaimAsString("preferred_username") : "systeme";
+    String roleEmett = extractRole(jwt);
+    String roleDest  = roleDestinataire(roleEmett);
+
+    // Vérification sécurité : seul le fournisseur peut déclencher
+    if (jwt != null && !hasRole(jwt, "seed-admin")) {
+      membreRepo.findByKeycloakUsername(emetteur).ifPresent(m -> {
+        Long idOrgJwt = m.getOrganisation().getId();
+        if (!idOrgJwt.equals(commande.getIdOrganisationFournisseur())) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+              "Vous n'êtes pas le fournisseur de cette commande");
+        }
+      });
+    }
+
+    if (commande.getUsernameAcheteur() == null) {
+      throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Acheteur non identifié sur la commande");
+    }
+
+    String baseCode = "TL-" + UUID.randomUUID().toString().substring(0, 10).toUpperCase();
+    Long idTransfertPrincipal = null;
+
+    for (LigneCommande ligne : commande.getLignes()) {
+      PropositionLigne prop = propositionLigneRepo.findByLigneCommande_Id(ligne.getId()).orElse(null);
+      if (prop == null || prop.getIdLotSelectionne() == null || prop.getQuantiteSelectionnee() == null) continue;
+
+      var lot = lotQuantiteRepo.findById(prop.getIdLotSelectionne())
+          .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+              "Lot #" + prop.getIdLotSelectionne() + " introuvable"));
+      String ancienStatut = lot.getStatutLot();
+
+      // Débiter lot fournisseur
+      int updated = lotQuantiteRepo.debitLotById(prop.getIdLotSelectionne(), prop.getQuantiteSelectionnee());
+      if (updated == 0) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+            "Quantité insuffisante sur le lot #" + prop.getIdLotSelectionne());
+      }
+
+      java.math.BigDecimal restant = lot.getQuantiteNette().subtract(prop.getQuantiteSelectionnee());
+      boolean epuise = restant.compareTo(java.math.BigDecimal.ZERO) <= 0;
+      String nouvoStatut = epuise ? "TRANSFERE" : ancienStatut;
+      lotQuantiteRepo.insertHistoriqueTransfert(prop.getIdLotSelectionne(), ancienStatut, nouvoStatut,
+          emetteur, "Transfert commande #" + id + " → " + commande.getUsernameAcheteur());
+
+      // Débiter stock fournisseur
+      if (commande.getIdOrganisationFournisseur() != null) {
+        stockOrderRepo.debitByOrg(prop.getIdLotSelectionne(),
+            commande.getIdOrganisationFournisseur(), prop.getQuantiteSelectionnee());
+      } else {
+        stockOrderRepo.debitUpsemcl(prop.getIdLotSelectionne(), prop.getQuantiteSelectionnee());
+      }
+
+      // Créer lot REC chez l'acheteur et créditer son stock
+      String codeLotRec = "REC-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+      String unite = ligne.getUnite() != null ? ligne.getUnite() : "kg";
+      Long idLotRec = lotReceptionRepo.createReceptionLot(
+          prop.getIdLotSelectionne(), codeLotRec,
+          commande.getIdOrganisationAcheteur(),
+          commande.getUsernameAcheteur(),
+          prop.getQuantiteSelectionnee(), unite);
+      if (commande.getIdOrganisationAcheteur() != null) {
+        stockOrderRepo.creditOrg(idLotRec, commande.getIdOrganisationAcheteur(), prop.getQuantiteSelectionnee(), unite);
+      } else if (commande.getSiteDestinationCode() != null) {
+        stockOrderRepo.creditSiteCode(idLotRec, commande.getSiteDestinationCode(), prop.getQuantiteSelectionnee(), unite);
+      }
+
+      // Créer transfert ACCEPTE direct
+      String codeLigne = baseCode + "-L" + ligne.getId();
+      transfertLotOrderRepo.createAutoTransfert(
+          codeLigne, idLotRec, emetteur, roleEmett,
+          commande.getUsernameAcheteur(), roleDest,
+          prop.getQuantiteSelectionnee());
+
+      // Tracer l'événement d'acceptation dans transfert_lot_event
+      transfertLotOrderRepo.insertEventAcceptation(codeLigne, emetteur,
+          "Transfert automatique commande #" + id);
+
+      // Garder l'id du transfert principal pour le bordereau
+      if (idTransfertPrincipal == null) {
+        var transfert = transfertLotOrderRepo.findAll().stream()
+            .filter(t -> codeLigne.equals(t.getCodeTransfert())).findFirst();
+        transfert.ifPresent(t -> {});
+      }
+
+      ligne.setStatutLigne(StatutLigne.LIVREE);
+      ligneRepo.save(ligne);
+
+      log.info("[confirmer-et-transferer] lot={} → acheteur={} qty={} commande={}",
+          prop.getIdLotSelectionne(), commande.getUsernameAcheteur(),
+          prop.getQuantiteSelectionnee(), id);
+    }
+
+    commande.setStatut(StatutCommande.TRANSFERE);
+    commande.setCodeTransfertGenere(baseCode);
+    commandeRepo.save(commande);
+
+    // Génération automatique de la facture (idempotente)
+    factureGenerationService.genererFactureAuto(commande, emetteur);
+
+    // Création du bordereau (idempotente)
+    if (bordereauRepo.findByIdCommande(id).isEmpty()) {
+      Long idOrgEmetteur  = commande.getIdOrganisationFournisseur() != null
+          ? commande.getIdOrganisationFournisseur() : 0L;
+      Long idOrgDest = commande.getIdOrganisationAcheteur() != null
+          ? commande.getIdOrganisationAcheteur() : 0L;
+      Bordereau b = new Bordereau();
+      b.setTypeBordereau("BORDEREAU_UNIFIE");
+      b.setNumeroBordereau("BOR-" + id + "-" + System.currentTimeMillis() % 100000);
+      b.setIdCommande(id);
+      b.setUsernameEmetteur(emetteur);
+      b.setIdOrgEmetteur(idOrgEmetteur);
+      b.setIdOrgDestinataire(idOrgDest);
+      bordereauRepo.save(b);
+    }
+
+    return ResponseEntity.ok(commande);
+  }
+
+  /**
+   * PATCH /api/orders/{id}/confirmer-reception  (Acheteur)
+   * L'acheteur confirme la réception physique des semences.
+   * Pré-condition : commande TRANSFERE.
+   */
+  @PreAuthorize("hasAnyAuthority('ROLE_seed-multiplicator','ROLE_seed-quotataire','ROLE_seed-admin')")
+  @Transactional
+  @PatchMapping("/{id}/confirmer-reception")
+  public ResponseEntity<Commande> confirmerReception(
+      @PathVariable Long id,
+      @RequestBody(required = false) java.util.Map<String, String> body,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    Commande commande = commandeRepo.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
+
+    if (commande.getStatut() != StatutCommande.TRANSFERE) {
+      throw new ResponseStatusException(HttpStatus.CONFLICT,
+          "La commande doit être TRANSFERE pour confirmer la réception (statut actuel : " + commande.getStatut() + ")");
+    }
+
+    // Vérification sécurité : seul l'acheteur ou un admin peut confirmer la réception
+    if (jwt != null && !hasRole(jwt, "seed-admin")) {
+      String username = jwt.getClaimAsString("preferred_username");
+      membreRepo.findByKeycloakUsername(username).ifPresent(m -> {
+        Long idOrgJwt = m.getOrganisation().getId();
+        if (!idOrgJwt.equals(commande.getIdOrganisationAcheteur())) {
+          throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+              "Vous n'êtes pas l'acheteur de cette commande");
+        }
+      });
+    }
+
+    String commentaire = body != null ? body.get("commentaireReception") : null;
+    commande.setCommentaireReception(commentaire);
+    commande.setStatut(StatutCommande.RECEPTIONNEE);
+
+    log.info("[confirmer-reception] commande={} → RECEPTIONNEE par {}",
+        id, jwt != null ? jwt.getClaimAsString("preferred_username") : "inconnu");
+
     return ResponseEntity.ok(commandeRepo.save(commande));
   }
 
@@ -746,6 +933,8 @@ public class OrderController {
       prop.setIdLotSelectionne(item.idLotSelectionne());
       prop.setQuantiteSelectionnee(item.quantiteSelectionnee());
       prop.setMotifOverride(item.motifOverride());
+      prop.setPrixUnitaireHt(item.prixUnitaireHt());
+      prop.setTauxTva(item.tauxTva() != null ? item.tauxTva() : java.math.BigDecimal.ZERO);
       prop.setUsernameAgent(usernameAgent);
       prop.setStatutProposition("PROPOSEE");
       prop.setCreatedAt(Instant.now());

@@ -124,12 +124,16 @@ function drawMultHeader(doc: jsPDF, ML: number, Y: number, orgNom: string, orgRe
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
-  if (orgRegion) doc.text(orgRegion, ML, Y + 14)
-  doc.text('Semencier agréé — Sénégal', ML, Y + orgRegion ? 20 : 14)
+  if (orgRegion) {
+    doc.text(orgRegion, ML, Y + 15)
+    doc.text('Semencier agréé — Sénégal', ML, Y + 21)
+  } else {
+    doc.text('Semencier agréé — Sénégal', ML, Y + 15)
+  }
 
   doc.setDrawColor(...GRAY)
   doc.setLineWidth(0.4)
-  doc.line(ML, Y + 26, ML + 80, Y + 26)
+  doc.line(ML, Y + 28, ML + 80, Y + 28)
   doc.setTextColor(...DARK)
 }
 
@@ -154,7 +158,7 @@ export function generateTransferDoc(data: TransferDocData): { blobUrl: string; f
     doc.setFontSize(8)
     doc.text(`Le ${fmtDate(data.dateDemande)}`, RX, Y + 12, { align: 'right' })
 
-    Y += 38
+    Y += 44
   } else {
     /* ═══ EN-TÊTE OFFICIEL ISRA/CNRA ═══ */
     drawIsraHeader(doc, ML, TW, Y)

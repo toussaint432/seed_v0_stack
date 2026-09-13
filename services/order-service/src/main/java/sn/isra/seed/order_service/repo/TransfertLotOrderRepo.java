@@ -78,6 +78,23 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
     int accepterTransfert(@Param("code") String code);
 
     /**
+     * Trace une transition dans lot.transfert_lot_event pour un transfert créé atomiquement.
+     * Appelé juste après createAutoTransfert pour alimenter le journal immuable (V83).
+     */
+    @Modifying
+    @Query(value = """
+        INSERT INTO lot.transfert_lot_event
+            (id_transfert_lot, statut_avant, statut_apres, username, commentaire, created_at)
+        SELECT t.id, NULL, t.statut, :username, :commentaire, now()
+        FROM lot.transfert_lot t
+        WHERE t.code_transfert = :code
+        LIMIT 1
+        """, nativeQuery = true)
+    void insertEventAcceptation(@Param("code") String code,
+                                @Param("username") String username,
+                                @Param("commentaire") String commentaire);
+
+    /**
      * Redirige un transfert EN_ATTENTE vers le lot de réception (REC) créé pour le multiplicateur.
      * Supporte les deux formats de code (exact ou préfixe avec suffixe -L{id}).
      */

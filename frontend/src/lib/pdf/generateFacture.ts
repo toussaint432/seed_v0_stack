@@ -58,7 +58,9 @@ function fmtDate(d?: string): string {
 }
 
 function fmtFcfa(n: number): string {
-  return n.toLocaleString('fr-FR') + ' FCFA'
+  // toLocaleString('fr-FR') insère des espaces insécables (U+00A0) comme séparateurs de milliers
+  // → jsPDF les interprète comme coupures de mot → montants tronqués dans autoTable
+  return n.toLocaleString('fr-FR').replace(/ /g, ' ') + ' FCFA'
 }
 
 const GREEN: [number, number, number] = [27,  94,  32]
@@ -231,28 +233,30 @@ export function generateFacture(data: FactureData): FactureResult {
   /* ═══ TABLEAU ═══ */
   autoTable(doc, {
     startY: Y,
-    head: [['Désignation', 'Variété', 'Quantité (kg)', 'Prix unit. (FCFA/kg)', 'Montant HT (FCFA)']],
+    head: [['Désignation', 'Variété', 'Qté (kg)', 'Prix unit. FCFA/kg', 'Montant HT FCFA']],
     body: [[
       data.nomEspece || '—',
       data.nomVariete || '—',
-      `${data.quantiteKg.toLocaleString('fr-FR')} kg`,
-      data.prixUnitaireKg.toLocaleString('fr-FR'),
-      montantHT.toLocaleString('fr-FR'),
+      `${data.quantiteKg.toLocaleString('fr-FR').replace(/ /g, ' ')} kg`,
+      data.prixUnitaireKg.toLocaleString('fr-FR').replace(/ /g, ' '),
+      montantHT.toLocaleString('fr-FR').replace(/ /g, ' '),
     ]],
     theme: 'grid',
     headStyles: {
       fillColor: GREEN,
       textColor: [255, 255, 255],
       fontStyle: 'bold',
-      fontSize: 8.5,
+      fontSize: 8,
       halign: 'center',
       cellPadding: { top: 4, bottom: 4, left: 3, right: 3 },
     },
     bodyStyles: { fontSize: 9, cellPadding: 5 },
     columnStyles: {
-      2: { halign: 'center' },
-      3: { halign: 'right' },
-      4: { halign: 'right', fontStyle: 'bold' },
+      0: { cellWidth: 40 },
+      1: { cellWidth: 38 },
+      2: { cellWidth: 26, halign: 'center' },
+      3: { cellWidth: 36, halign: 'right' },
+      4: { cellWidth: 34, halign: 'right', fontStyle: 'bold' },
     },
     margin: { left: ML, right: MR },
   })
@@ -296,7 +300,7 @@ export function generateFacture(data: FactureData): FactureResult {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...DARK)
-  doc.text(`Arrêtée à la somme de : ${montantTTC.toLocaleString('fr-FR')} FCFA TTC`, ML, Y)
+  doc.text(`Arrêtée à la somme de : ${montantTTC.toLocaleString('fr-FR').replace(/ /g, ' ')} FCFA TTC`, ML, Y)
 
   Y += 10
 

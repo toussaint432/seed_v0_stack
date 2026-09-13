@@ -15,8 +15,12 @@ public enum StatutCommande {
     ANNULEE,
     /** Rejetée par le fournisseur */
     REJETEE,
-    /** Acceptée (flux legacy / quotataire) */
+    /** Acceptée (flux legacy / quotataire) — et désormais verrou contractuel du flux G3/R2 */
     ACCEPTEE,
     /** En cours de préparation (flux legacy) */
-    EN_PREPARATION
+    EN_PREPARATION,
+    /** Transfert déclenché de manière atomique par le vendeur (lot + stock + facture + bordereau) */
+    TRANSFERE,
+    /** Réception physique confirmée par l'acheteur — peut comporter un commentaire de contestation */
+    RECEPTIONNEE
 }

@@ -99,6 +99,10 @@ public class Commande {
     @Column(name = "code_transfert_genere", length = 80)
     private String codeTransfertGenere;
 
+    /** Commentaire de réception — saisi par l'acheteur à l'Étape 5 (RECEPTIONNEE). */
+    @Column(name = "commentaire_reception", columnDefinition = "TEXT")
+    private String commentaireReception;
+
     @Size(max = 50)
     @Column(name = "site_destination_code", length = 50)
     private String siteDestinationCode;

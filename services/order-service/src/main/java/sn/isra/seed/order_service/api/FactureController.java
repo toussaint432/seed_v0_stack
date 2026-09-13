@@ -23,6 +23,7 @@ import sn.isra.seed.order_service.entity.enums.TypeFacture;
 import sn.isra.seed.order_service.repo.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -59,9 +60,11 @@ public class FactureController {
         Commande commande = commandeRepo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
 
-        if (commande.getStatut() != StatutCommande.LIVREE) {
+        if (commande.getStatut() != StatutCommande.LIVREE
+                && commande.getStatut() != StatutCommande.TRANSFERE
+                && commande.getStatut() != StatutCommande.RECEPTIONNEE) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "La facture ne peut être générée que pour une commande LIVREE (statut actuel : " + commande.getStatut() + ")");
+                    "La facture ne peut être générée que pour une commande LIVREE, TRANSFERE ou RECEPTIONNEE (statut actuel : " + commande.getStatut() + ")");
         }
 
         // Idempotence : renvoyer la facture existante si déjà créée
@@ -110,20 +113,24 @@ public class FactureController {
                 fl.setGeneration(ligne.getIdGeneration() != null
                         ? genCode(ligne.getIdGeneration()) : null);
                 fl.setCreatedAt(Instant.now());
-                fl.setMontantHt(prop.getPrixUnitaireHt().multiply(prop.getQuantiteSelectionnee()));
                 BigDecimal tauxTva = fl.getTauxTva() != null ? fl.getTauxTva() : BigDecimal.ZERO;
-                fl.setMontantTtc(fl.getMontantHt().multiply(
-                        BigDecimal.ONE.add(tauxTva.divide(new BigDecimal("100")))));
+                BigDecimal montantHt = prop.getPrixUnitaireHt()
+                        .multiply(prop.getQuantiteSelectionnee())
+                        .setScale(0, RoundingMode.HALF_UP);
+                BigDecimal montantTva = montantHt
+                        .multiply(tauxTva)
+                        .divide(new BigDecimal("100"), 0, RoundingMode.HALF_UP);
+                fl.setMontantHt(montantHt);
+                fl.setMontantTtc(montantHt.add(montantTva));
                 facture.getLignes().add(fl);
             });
         }
 
         for (FactureLigne fl : facture.getLignes()) {
-            totalHt  = totalHt.add(fl.getMontantHt() != null ? fl.getMontantHt() : BigDecimal.ZERO);
-            totalTva = totalTva.add(
-                    fl.getMontantHt() != null && fl.getTauxTva() != null
-                            ? fl.getMontantHt().multiply(fl.getTauxTva().divide(new BigDecimal("100")))
-                            : BigDecimal.ZERO);
+            BigDecimal ht  = fl.getMontantHt() != null ? fl.getMontantHt() : BigDecimal.ZERO;
+            BigDecimal ttc = fl.getMontantTtc() != null ? fl.getMontantTtc() : ht;
+            totalHt  = totalHt.add(ht);
+            totalTva = totalTva.add(ttc.subtract(ht));
         }
 
         facture.setMontantHt(totalHt);
@@ -154,18 +161,40 @@ public class FactureController {
 
     /** GET /api/orders/{id}/facture — Facture associée à une commande */
     @GetMapping("/api/orders/{id}/facture")
-    public ResponseEntity<Facture> getFactureParCommande(@PathVariable Long id) {
-        return factureRepo.findByCommande_Id(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Facture> getFactureParCommande(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt) {
+        Facture facture = factureRepo.findByCommande_Id(id).orElse(null);
+        if (facture == null) return ResponseEntity.notFound().build();
+        if (!peutAccederFacture(jwt, facture)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès refusé");
+        }
+        return ResponseEntity.ok(facture);
     }
 
     /** GET /api/factures/{id} — Détail d'une facture */
     @GetMapping("/api/factures/{id}")
-    public ResponseEntity<Facture> getFacture(@PathVariable Long id) {
-        return factureRepo.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+    public ResponseEntity<Facture> getFacture(
+            @PathVariable Long id,
+            @AuthenticationPrincipal Jwt jwt) {
+        Facture facture = factureRepo.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Facture introuvable"));
+        if (!peutAccederFacture(jwt, facture)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Accès refusé");
+        }
+        return ResponseEntity.ok(facture);
+    }
+
+    private boolean peutAccederFacture(Jwt jwt, Facture facture) {
+        if (jwt == null) return false;
+        if (hasRole(jwt, "seed-admin") || hasRole(jwt, "seed-upsemcl")) return true;
+        String username = jwt.getClaimAsString("preferred_username");
+        return membreRepo.findByKeycloakUsername(username).map(m -> {
+            Long idOrg = m.getOrganisation().getId();
+            Commande cmd = facture.getCommande();
+            return idOrg.equals(cmd.getIdOrganisationFournisseur())
+                || idOrg.equals(cmd.getIdOrganisationAcheteur());
+        }).orElse(false);
     }
 
     /**
