@@ -25,18 +25,22 @@ const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> =
   REJETEE:        { label: 'Rejetée',           bg: '#fef2f2', color: '#dc2626' },
   ACCEPTEE:       { label: 'Acceptée',          bg: '#f0fdf4', color: '#15803d' },
   EN_PREPARATION: { label: 'En préparation',    bg: '#f5f3ff', color: '#6d28d9' },
+  TRANSFERE:      { label: 'Transféré',         bg: '#eff6ff', color: '#1d4ed8' },
+  RECEPTIONNEE:   { label: 'Réceptionnée',      bg: '#dcfce7', color: '#065f46' },
 }
 const PAGE_SIZE = 10
 const PIPELINE_STEPS = [
-  { key: 'SOUMISE',         label: 'Soumise'       },
-  { key: 'EN_NEGOCIATION',  label: 'Négociation'   },
-  { key: 'ACCORDEE',        label: 'Accordée'      },
-  { key: 'EN_LIVRAISON',    label: 'En livraison'  },
-  { key: 'LIVREE',          label: 'Livrée'        },
+  { key: 'SOUMISE',        label: 'Soumise'      },
+  { key: 'EN_NEGOCIATION', label: 'Négociation'  },
+  { key: 'ACCEPTEE',       label: 'Acceptée'     },
+  { key: 'TRANSFERE',      label: 'Transféré'    },
+  { key: 'RECEPTIONNEE',   label: 'Réceptionné'  },
 ]
 const PIPELINE_IDX: Record<string, number> = {
-  SOUMISE: 0, EN_NEGOCIATION: 1, ACCORDEE: 2, EN_LIVRAISON: 3, LIVREE: 4,
-  ACCEPTEE: 1, EN_PREPARATION: 2,
+  SOUMISE: 0, EN_NEGOCIATION: 1,
+  ACCEPTEE: 2, ACCORDEE: 2, EN_PREPARATION: 2,
+  TRANSFERE: 3, EN_LIVRAISON: 3,
+  RECEPTIONNEE: 4, LIVREE: 4,
 }
 const TERMINAL = ['ANNULEE', 'REJETEE']
 const NEXT_ACTIONS: Record<string, { statut: string; label: string; danger?: boolean }[]> = {
@@ -135,9 +139,9 @@ function fmtDatetime(value?: string | null): string {
 type KpiKey = 'pending' | 'accepted' | 'rejected' | 'delivered'
 const KPI_FILTER: Record<KpiKey, (o: any) => boolean> = {
   pending:   o => o.statut === 'SOUMISE',
-  accepted:  o => ['ACCEPTEE','EN_PREPARATION','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON'].includes(o.statut),
+  accepted:  o => ['ACCEPTEE','EN_PREPARATION','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON','TRANSFERE'].includes(o.statut),
   rejected:  o => ['ANNULEE','REJETEE'].includes(o.statut),
-  delivered: o => o.statut === 'LIVREE',
+  delivered: o => ['LIVREE','RECEPTIONNEE'].includes(o.statut),
 }
 
 // ─── Types et constantes du graphe d'évolution ────────────────────────────────
@@ -175,8 +179,8 @@ function buildPointData(label: string, sublabel: string, cmds: any[]): PointData
   return {
     label, sublabel, total: cmds.length, rawOrders: cmds,
     SOUMISE:  nb(['SOUMISE']),
-    EN_COURS: nb(['ACCEPTEE','EN_PREPARATION','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON']),
-    LIVREE:   nb(['LIVREE']),
+    EN_COURS: nb(['ACCEPTEE','EN_PREPARATION','EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON','TRANSFERE']),
+    LIVREE:   nb(['LIVREE','RECEPTIONNEE']),
     ANNULEE:  nb(['ANNULEE', 'REJETEE']),
   }
 }
@@ -1068,6 +1072,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
   const [search,       setSearch]       = useState('')
   const [decisionQuotModal,  setDecisionQuotModal]  = useState<any | null>(null)
   const [receptionR2Modal,   setReceptionR2Modal]   = useState<any | null>(null)
+  const [receptionNewModal,  setReceptionNewModal]  = useState<any | null>(null)
   const [actioning,          setActioning]           = useState<number | null>(null)
 
   const [form, setForm] = useState({
@@ -1201,8 +1206,19 @@ function VueQuotataire({ setToast }: { setToast: any }) {
                   </button>
                 )
               }
+              if (o.statut === 'ACCEPTEE') {
+                return <span style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={11} /> Acceptée — en attente de transfert</span>
+              }
               if (o.statut === 'ACCORDEE') {
                 return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={11} /> En attente de transfert</span>
+              }
+              if (o.statut === 'TRANSFERE') {
+                return (
+                  <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => setReceptionNewModal(o)} disabled={actioning === o.id}>
+                    <PackageCheck size={11} /> Confirmer réception
+                  </button>
+                )
               }
               if (o.statut === 'EN_LIVRAISON') {
                 return (
@@ -1211,6 +1227,9 @@ function VueQuotataire({ setToast }: { setToast: any }) {
                     <PackageCheck size={11} /> Confirmer réception
                   </button>
                 )
+              }
+              if (o.statut === 'RECEPTIONNEE') {
+                return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><PackageCheck size={11} /> Réceptionnée ✓</span>
               }
               return null
             },
@@ -1233,6 +1252,15 @@ function VueQuotataire({ setToast }: { setToast: any }) {
           commande={receptionR2Modal}
           varieties={varieties}
           onClose={() => setReceptionR2Modal(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
+        />
+      )}
+
+      {receptionNewModal && (
+        <ConfirmerReceptionSimpleModal
+          commande={receptionNewModal}
+          onClose={() => setReceptionNewModal(null)}
           onSuccess={fetchAll}
           setToast={setToast}
         />
@@ -1325,6 +1353,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
   const [proposerRecuModal, setProposerRecuModal] = useState<any | null>(null)
   const [decisionMulModal,  setDecisionMulModal]  = useState<any | null>(null)
   const [receptionConfModal, setReceptionConfModal] = useState<any | null>(null)
+  const [receptionG3Modal,   setReceptionG3Modal]   = useState<any | null>(null)
   const [membresMap,       setMembresMap]       = useState<Record<string, any>>({})
   const [form, setForm] = useState({
     observations: '',
@@ -1428,6 +1457,17 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
     try {
       await api.post(endpoints.orderFaireTransfert(id), {})
       setToast({ msg: `Transfert déclenché pour ${code} — le quotataire peut maintenant accuser réception`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors du transfert', type: 'error' })
+    } finally { setActioning(null) }
+  }
+
+  async function confirmerEtTransfererRecue(id: number, code: string) {
+    setActioning(id)
+    try {
+      await api.post(endpoints.orderConfirmerEtTransferer(id), {})
+      setToast({ msg: `Transfert atomique confirmé pour ${code} — facture et bordereau générés`, type: 'success' })
       fetchAll()
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message ?? 'Erreur lors du transfert', type: 'error' })
@@ -1549,6 +1589,15 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
                 if (o.statut === 'EN_NEGOCIATION') {
                   return <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, fontStyle: 'italic' }}>En attente du quotataire</span>
                 }
+                if (o.statut === 'ACCEPTEE') {
+                  return (
+                    <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #1d4ed8, #1e40af)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                      onClick={() => confirmerEtTransfererRecue(o.id, o.codeCommande)} disabled={actioning === o.id}>
+                      {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Truck size={11} />}
+                      Confirmer et transférer
+                    </button>
+                  )
+                }
                 if (o.statut === 'ACCORDEE') {
                   return (
                     <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #6d28d9, #4c1d95)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
@@ -1558,8 +1607,14 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
                     </button>
                   )
                 }
+                if (o.statut === 'TRANSFERE') {
+                  return <span style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Truck size={11} /> Transféré — réception en attente</span>
+                }
                 if (o.statut === 'EN_LIVRAISON') {
                   return <span style={{ fontSize: 11, color: '#6d28d9', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Truck size={11} /> En livraison</span>
+                }
+                if (o.statut === 'RECEPTIONNEE') {
+                  return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><PackageCheck size={11} /> Réceptionnée</span>
                 }
                 return null
               },
@@ -1589,8 +1644,19 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
                     </button>
                   )
                 }
+                if (o.statut === 'ACCEPTEE') {
+                  return <span style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={11} /> Acceptée — en attente du transfert UPSemCL</span>
+                }
                 if (o.statut === 'ACCORDEE') {
                   return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><CheckCircle2 size={11} /> Accordée — en attente transfert</span>
+                }
+                if (o.statut === 'TRANSFERE') {
+                  return (
+                    <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                      onClick={() => setReceptionG3Modal(o)} disabled={actioning === o.id}>
+                      <PackageCheck size={11} /> Confirmer réception
+                    </button>
+                  )
                 }
                 if (o.statut === 'EN_LIVRAISON') {
                   return (
@@ -1599,6 +1665,9 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
                       <PackageCheck size={11} /> Confirmer réception
                     </button>
                   )
+                }
+                if (o.statut === 'RECEPTIONNEE') {
+                  return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><PackageCheck size={11} /> Réceptionnée ✓</span>
                 }
                 return null
               },
@@ -1725,6 +1794,15 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
           commande={receptionConfModal}
           varieties={varieties}
           onClose={() => setReceptionConfModal(null)}
+          onSuccess={fetchAll}
+          setToast={setToast}
+        />
+      )}
+
+      {receptionG3Modal && (
+        <ConfirmerReceptionSimpleModal
+          commande={receptionG3Modal}
+          onClose={() => setReceptionG3Modal(null)}
           onSuccess={fetchAll}
           setToast={setToast}
         />
@@ -2454,6 +2532,17 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
     } finally { setActioning(null) }
   }
 
+  async function handleConfirmerEtTransferer(commande: any) {
+    setActioning(commande.id)
+    try {
+      await api.post(endpoints.orderConfirmerEtTransferer(commande.id), {})
+      setToast({ msg: `Transfert atomique confirmé pour ${commande.codeCommande} — facture et bordereau générés`, type: 'success' })
+      fetchAll()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors du transfert', type: 'error' })
+    } finally { setActioning(null) }
+  }
+
   useEffect(() => { fetchAll() }, [])
 
   const aTraiter   = orders.filter(o => o.statut === 'SOUMISE').length
@@ -2498,6 +2587,15 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
       if (o.statut === 'EN_NEGOCIATION') {
         return <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> En attente multiplicateur</span>
       }
+      if (o.statut === 'ACCEPTEE') {
+        return (
+          <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #1d4ed8, #1e40af)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => handleConfirmerEtTransferer(o)} disabled={actioning === o.id}>
+            {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Truck size={11} />}
+            Confirmer et transférer
+          </button>
+        )
+      }
       if (o.statut === 'ACCORDEE') {
         return (
           <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #6d28d9, #4c1d95)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
@@ -2507,8 +2605,14 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
           </button>
         )
       }
+      if (o.statut === 'TRANSFERE') {
+        return <span style={{ fontSize: 11, color: '#1d4ed8', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Truck size={11} /> Transféré — en attente réception</span>
+      }
       if (o.statut === 'EN_LIVRAISON') {
         return <span style={{ fontSize: 11, color: '#6d28d9', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Truck size={11} /> En livraison</span>
+      }
+      if (o.statut === 'RECEPTIONNEE') {
+        return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><PackageCheck size={11} /> Réceptionnée</span>
       }
       return null
     },
@@ -3340,6 +3444,61 @@ function DecisionQuotataireModal({
         <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
         <button className="btn btn-primary" style={{ background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 7 }} onClick={submit} disabled={saving}>
           {saving ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Envoi…</> : <><CheckCircle2 size={13} /> Envoyer ma décision</>}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   MODAL : CONFIRMER RÉCEPTION — nouveau flux TRANSFERE → RECEPTIONNEE
+   Appelé par l'ACHETEUR (multiplicateur sur G3, quotataire sur R2).
+   ══════════════════════════════════════════════════════════════════════════════ */
+function ConfirmerReceptionSimpleModal({
+  commande, onClose, onSuccess, setToast,
+}: {
+  commande: any; onClose: () => void; onSuccess: () => void; setToast: (t: any) => void
+}) {
+  const [commentaire, setCommentaire] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function submit() {
+    setSaving(true)
+    try {
+      await api.patch(endpoints.orderConfirmerReception(commande.id), { commentaireReception: commentaire || null })
+      setToast({ msg: `Réception confirmée pour ${commande.codeCommande} — commande clôturée`, type: 'success' })
+      onSuccess(); onClose()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de la confirmation', type: 'error' })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <Modal title="Confirmer la réception" subtitle={`${commande.codeCommande} · Étape 5/5`} onClose={onClose} size="sm">
+      <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', marginBottom: 18, fontSize: 12.5, color: '#15803d', display: 'flex', alignItems: 'flex-start', gap: 9 }}>
+        <PackageCheck size={15} style={{ marginTop: 1, flexShrink: 0 }} />
+        <span>En confirmant, vous certifiez avoir physiquement reçu les semences. La commande passera en statut <strong>Réceptionnée</strong>.</span>
+      </div>
+      <Field label="Commentaire de réception (optionnel)">
+        <textarea
+          value={commentaire}
+          onChange={e => setCommentaire(e.target.value)}
+          placeholder="Conditions de réception, remarques sur la qualité ou la quantité…"
+          rows={3}
+          style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+        />
+      </Field>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+        <button className="btn btn-secondary" onClick={onClose} disabled={saving}>Annuler</button>
+        <button
+          className="btn btn-primary"
+          style={{ background: 'linear-gradient(135deg, #16a34a, #059669)', border: 'none', display: 'flex', alignItems: 'center', gap: 7 }}
+          onClick={submit} disabled={saving}
+        >
+          {saving
+            ? <><RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> Confirmation…</>
+            : <><PackageCheck size={13} /> Confirmer la réception</>
+          }
         </button>
       </div>
     </Modal>

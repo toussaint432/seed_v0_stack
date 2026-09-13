@@ -124,6 +124,7 @@ export const endpoints = {
   orderPropositionsG3:         (id: number) => `${ORDER}/orders/${id}/propositions-g3`,
   orderDecisionMultiplicateur: (id: number) => `${ORDER}/orders/${id}/decision-multiplicateur`,
   orderConfirmerReception:     (id: number) => `${ORDER}/orders/${id}/confirmer-reception`,
+  orderConfirmerEtTransferer:  (id: number) => `${ORDER}/orders/${id}/confirmer-et-transferer`,
   /** Flux R2 Catalogue — Multiplicateur → Quotataire */
   orderPropositionsR2:         (id: number) => `${ORDER}/orders/${id}/propositions-r2`,
   orderDecisionQuotataire:     (id: number) => `${ORDER}/orders/${id}/decision-quotataire`,
