@@ -2,9 +2,7 @@ package sn.isra.seed.order_service.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
 import sn.isra.seed.order_service.entity.*;
 import sn.isra.seed.order_service.entity.enums.StatutFacture;
 import sn.isra.seed.order_service.entity.enums.TypeCommande;
@@ -72,9 +70,8 @@ public class FactureGenerationService {
                     || prop.getQuantiteSelectionnee() == null) continue;
 
             if (prop.getPrixUnitaireHt() == null) {
-                throw new ResponseStatusException(HttpStatus.CONFLICT,
-                        "La ligne #" + ligne.getId() + " n'a pas de prix renseigné — "
-                        + "re-soumettez la proposition avec un prix unitaire HT.");
+                log.warn("[facture-auto] Ligne #{} sans prix unitaire HT — ignorée (données legacy)", ligne.getId());
+                continue;
             }
 
             BigDecimal tauxTva = prop.getTauxTva() != null

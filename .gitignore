@@ -30,3 +30,6 @@ design-b-innovation-sahel.html
 
 # Uploads utilisateurs — fichiers binaires gérés hors git
 data/uploads/
+
+# Artefacts IDE DB Client (VSCode plugin) — générés localement, ne versionner pas
+.dbclient/

@@ -4,7 +4,6 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,7 +41,7 @@ public class StockController {
   public Page<StockDto> list(
       @RequestParam(required = false) String site,
       @AuthenticationPrincipal Jwt jwt,
-      @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable) {
+      @PageableDefault(size = 20) Pageable pageable) {
     return stockService.list(site, jwt, pageable).map(stockMapper::toDto);
   }
 

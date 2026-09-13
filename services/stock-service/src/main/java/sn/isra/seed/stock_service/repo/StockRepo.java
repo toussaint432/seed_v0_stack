@@ -17,7 +17,9 @@ import java.util.Optional;
 public interface StockRepo extends JpaRepository<Stock, Long> {
 
   List<Stock> findBySite_CodeSite(String codeSite);
-  Page<Stock> findBySite_CodeSite(String codeSite, Pageable pageable);
+
+  @Query("SELECT s FROM Stock s WHERE s.site.codeSite = :codeSite ORDER BY s.updatedAt DESC")
+  Page<Stock> findBySite_CodeSite(@Param("codeSite") String codeSite, Pageable pageable);
   Optional<Stock> findByIdLotAndSite_CodeSite(Long idLot, String codeSite);
 
   /**
