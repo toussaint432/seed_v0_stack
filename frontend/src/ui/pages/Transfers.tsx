@@ -286,8 +286,14 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
     setToast({ msg: `Facture ${result.filename} ouverte dans un nouvel onglet`, type: 'success' })
   }
 
-  function downloadDoc(t: any, type: 'BORDEREAU') {
-    const lot = lots.find((l: any) => l.id === (t.idLot ?? t.lot?.id))
+  async function downloadDoc(t: any, type: 'BORDEREAU') {
+    let lot = lots.find((l: any) => l.id === (t.idLot ?? t.lot?.id))
+    if (!lot && t.idLot) {
+      try {
+        const r = await api.get(endpoints.lotById(t.idLot))
+        lot = normalizeLot(r.data)
+      } catch { /* fallbacks appliqués ligne par ligne ci-dessous */ }
+    }
     const jwt = keycloak.tokenParsed as Record<string, unknown>
     const currentUser = (jwt?.preferred_username as string) || ''
 

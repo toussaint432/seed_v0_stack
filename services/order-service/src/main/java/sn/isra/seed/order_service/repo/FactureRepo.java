@@ -39,4 +39,8 @@ public interface FactureRepo extends JpaRepository<Facture, Long> {
 
     /** Liste simple pour une commande (résultat attendu : 0 ou 1) */
     List<Facture> findByCommande_IdOrderByDateEmissionDesc(Long idCommande);
+
+    /** Toutes les factures triées — ORDER BY embarqué pour contourner le bug Hibernate 6 naming strategy */
+    @Query("SELECT f FROM Facture f ORDER BY f.dateEmission DESC")
+    Page<Facture> findAllByDateDesc(Pageable pageable);
 }

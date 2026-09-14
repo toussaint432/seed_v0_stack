@@ -119,21 +119,21 @@ function drawMultHeader(doc: jsPDF, ML: number, Y: number, orgNom: string, orgRe
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(11)
   doc.setTextColor(...DARK)
-  doc.text(orgNom || 'Multiplicateur', ML, Y + 8)
+  doc.text(orgNom || 'Multiplicateur', ML, Y + 10)
 
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(8)
   doc.setTextColor(...MUTED)
   if (orgRegion) {
-    doc.text(orgRegion, ML, Y + 15)
-    doc.text('Semencier agréé — Sénégal', ML, Y + 21)
+    doc.text(orgRegion, ML, Y + 19)
+    doc.text('Semencier agréé — Sénégal', ML, Y + 27)
   } else {
-    doc.text('Semencier agréé — Sénégal', ML, Y + 15)
+    doc.text('Semencier agréé — Sénégal', ML, Y + 19)
   }
 
   doc.setDrawColor(...GRAY)
   doc.setLineWidth(0.4)
-  doc.line(ML, Y + 28, ML + 80, Y + 28)
+  doc.line(ML, Y + 36, ML + 80, Y + 36)
   doc.setTextColor(...DARK)
 }
 
@@ -153,12 +153,12 @@ export function generateTransferDoc(data: TransferDocData): { blobUrl: string; f
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(8)
     doc.setTextColor(...DARK)
-    doc.text(data.numero, RX, Y + 4, { align: 'right' })
+    doc.text(data.numero, RX, Y + 8, { align: 'right' })
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
-    doc.text(`Le ${fmtDate(data.dateDemande)}`, RX, Y + 12, { align: 'right' })
+    doc.text(`Le ${fmtDate(data.dateDemande)}`, RX, Y + 16, { align: 'right' })
 
-    Y += 44
+    Y += 52
   } else {
     /* ═══ EN-TÊTE OFFICIEL ISRA/CNRA ═══ */
     drawIsraHeader(doc, ML, TW, Y)

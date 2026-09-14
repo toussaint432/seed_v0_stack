@@ -108,6 +108,11 @@ public class MembreController {
         m.setPrincipal(req.principal() != null ? req.principal() : false);
         m.setTelephone(req.telephone());
         m.setSpecialisation(req.specialisation());
+        m.setIdZoneAgro(req.idZoneAgro());
+        m.setDepartement(req.departement());
+        m.setCommune(req.commune());
+        m.setLatitude(req.latitude());
+        m.setLongitude(req.longitude());
         return membreRepo.save(m);
     }
 
@@ -156,7 +161,12 @@ public class MembreController {
             String roleDansOrg,
             Boolean principal,
             String telephone,
-            String specialisation
+            String specialisation,
+            Long idZoneAgro,
+            String departement,
+            String commune,
+            java.math.BigDecimal latitude,
+            java.math.BigDecimal longitude
     ) {}
 
     record ProfilPatch(String telephone, Boolean telephonePublic) {}

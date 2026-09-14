@@ -5,7 +5,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -206,13 +205,13 @@ public class FactureController {
     @GetMapping("/api/factures")
     public Page<Facture> listFactures(
             @AuthenticationPrincipal Jwt jwt,
-            @PageableDefault(size = 20, sort = "dateEmission", direction = Sort.Direction.DESC) Pageable pageable) {
+            @PageableDefault(size = 20) Pageable pageable) {
 
         if (jwt == null) return Page.empty(pageable);
         String username = jwt.getClaimAsString("preferred_username");
 
         if (hasRole(jwt, "seed-upsemcl") || hasRole(jwt, "seed-admin")) {
-            return factureRepo.findAll(pageable);
+            return factureRepo.findAllByDateDesc(pageable);
         }
         if (hasRole(jwt, "seed-multiplicator")) {
             return membreRepo.findByKeycloakUsername(username)

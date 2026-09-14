@@ -40,6 +40,23 @@ public class MembreOrganisation {
     @Column(name = "specialisation")
     private String specialisation;
 
+    /** Zone Agro-Écologique de terrain — référence vers catalog.zone_agro (dénormalisé, sans FK cross-schema) */
+    @Column(name = "id_zone_agro")
+    private Long idZoneAgro;
+
+    @Column(name = "departement", length = 100)
+    private String departement;
+
+    @Column(name = "commune", length = 100)
+    private String commune;
+
+    /** Coordonnées GPS du site principal de l'acteur (précision 6 décimales ≈ 11 cm) */
+    @Column(name = "latitude", precision = 10, scale = 6)
+    private java.math.BigDecimal latitude;
+
+    @Column(name = "longitude", precision = 10, scale = 6)
+    private java.math.BigDecimal longitude;
+
     @Column(name = "created_at")
     private Instant createdAt;
 

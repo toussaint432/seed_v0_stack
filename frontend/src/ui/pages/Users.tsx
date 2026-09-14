@@ -161,11 +161,15 @@ export function Users({ roleKey }: Props) {
 
   const [organisations, setOrganisations] = useState<any[]>([])
   const [especes,       setEspeces]       = useState<any[]>([])
+  const [zones,         setZones]         = useState<any[]>([])
+  const [gpsCapturing,  setGpsCapturing]  = useState(false)
 
-  const [form, setForm] = useState({
+  const FORM_INITIAL = {
     username: '', firstName: '', lastName: '', email: '',
     password: '', role: 'seed-selector', orgId: '', specialisation: '',
-  })
+    idZoneAgro: '', departement: '', commune: '', latitude: '', longitude: '',
+  }
+  const [form, setForm] = useState(FORM_INITIAL)
 
   function adminHeaders() {
     return { Authorization: `Bearer ${keycloak.token}` }
@@ -210,6 +214,7 @@ export function Users({ roleKey }: Props) {
       fetchEvents()
       api.get(endpoints.organisations).then(r => setOrganisations(r.data || [])).catch(() => {})
       api.get(endpoints.species).then(r => setEspeces(r.data || [])).catch(() => {})
+      api.get(endpoints.zones).then(r => setZones(Array.isArray(r.data) ? r.data : (r.data?.content ?? []))).catch(() => {})
     }
   }, [])
 
@@ -289,12 +294,17 @@ export function Users({ roleKey }: Props) {
           roleDansOrg:      'MEMBRE',
           principal:        true,
           specialisation:   form.specialisation || null,
+          idZoneAgro:       form.idZoneAgro ? Number(form.idZoneAgro) : null,
+          departement:      form.departement || null,
+          commune:          form.commune || null,
+          latitude:         form.latitude ? Number(form.latitude) : null,
+          longitude:        form.longitude ? Number(form.longitude) : null,
         })
       }
 
       setToast({ msg: `Utilisateur ${form.username} créé avec succès`, type: 'success' })
       setShowForm(false)
-      setForm({ username: '', firstName: '', lastName: '', email: '', password: '', role: 'seed-selector', orgId: '', specialisation: '' })
+      setForm(FORM_INITIAL)
       fetchUsers()
     } catch (err: any) {
       setToast({ msg: err?.message ?? 'Erreur lors de la création', type: 'error' })
@@ -743,6 +753,83 @@ export function Users({ roleKey }: Props) {
                 </select>
               </Field>
             )}
+
+            {/* ── Localisation géographique ──────────────────────────── */}
+            <div style={{ marginTop: 8, marginBottom: 4, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              Localisation terrain (optionnel)
+            </div>
+
+            <Field label="Zone Agro-Écologique (ZAE)">
+              <select
+                value={form.idZoneAgro}
+                onChange={e => setForm(f => ({ ...f, idZoneAgro: e.target.value }))}
+                style={{ width: '100%', padding: '0 12px', height: 36, borderRadius: 6, border: '1px solid var(--border-strong)', background: 'var(--surface)', fontSize: 13, fontFamily: 'var(--font-sans)', color: 'var(--text)', cursor: 'pointer' }}
+              >
+                <option value="">— Sélectionner une ZAE —</option>
+                {zones.map((z: any) => (
+                  <option key={z.id} value={z.id}>{z.nom}{z.code ? ` (${z.code})` : ''}</option>
+                ))}
+              </select>
+            </Field>
+
+            <FormRow>
+              <Field label="Département">
+                <FormInput value={form.departement} onChange={e => setForm(f => ({ ...f, departement: e.target.value }))} placeholder="Ex : Bambey" />
+              </Field>
+              <Field label="Commune">
+                <FormInput value={form.commune} onChange={e => setForm(f => ({ ...f, commune: e.target.value }))} placeholder="Ex : Bambey-Commune" />
+              </Field>
+            </FormRow>
+
+            <FormRow>
+              <Field label="Latitude GPS" hint="Remplie automatiquement via le bouton ci-dessous">
+                <FormInput type="number" step="0.000001" value={form.latitude} onChange={e => setForm(f => ({ ...f, latitude: e.target.value }))} placeholder="14.703000" />
+              </Field>
+              <Field label="Longitude GPS">
+                <FormInput type="number" step="0.000001" value={form.longitude} onChange={e => setForm(f => ({ ...f, longitude: e.target.value }))} placeholder="-16.477000" />
+              </Field>
+            </FormRow>
+
+            <div style={{ marginBottom: 20 }}>
+              <button
+                type="button"
+                disabled={gpsCapturing}
+                onClick={() => {
+                  if (!navigator.geolocation) { alert("La géolocalisation n'est pas disponible sur ce navigateur."); return }
+                  setGpsCapturing(true)
+                  navigator.geolocation.getCurrentPosition(
+                    pos => {
+                      setForm(f => ({
+                        ...f,
+                        latitude:  String(pos.coords.latitude.toFixed(6)),
+                        longitude: String(pos.coords.longitude.toFixed(6)),
+                      }))
+                      setGpsCapturing(false)
+                    },
+                    err => {
+                      alert(`Impossible de capturer la position : ${err.message}`)
+                      setGpsCapturing(false)
+                    },
+                    { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                  )
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 18px', borderRadius: 8, border: '1.5px solid #0369a1',
+                  background: gpsCapturing ? '#e0f2fe' : 'var(--surface)',
+                  color: '#0369a1', fontWeight: 700, fontSize: 13, cursor: gpsCapturing ? 'wait' : 'pointer',
+                  transition: 'background 0.15s',
+                }}
+              >
+                <span style={{ fontSize: 16 }}>📍</span>
+                {gpsCapturing ? 'Capture en cours…' : 'Capturer ma position exacte'}
+              </button>
+              {form.latitude && form.longitude && (
+                <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)' }}>
+                  Position capturée : {Number(form.latitude).toFixed(5)}° N, {Number(form.longitude).toFixed(5)}° E
+                </div>
+              )}
+            </div>
 
             <FormActions onCancel={() => setShowForm(false)} loading={saving} submitLabel="Créer l'utilisateur" />
           </form>
