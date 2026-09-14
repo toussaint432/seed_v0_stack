@@ -149,13 +149,35 @@ CREATE TABLE IF NOT EXISTS lot_semencier (
   purete_physique     NUMERIC(5,2)  CHECK (purete_physique BETWEEN 0 AND 100),
   statut_lot          VARCHAR(30)   NOT NULL DEFAULT 'DISPONIBLE'
                       CHECK (statut_lot IN ('DISPONIBLE','EN_PRODUCTION','CERTIFIE',
-                                            'TRANSFERE','EPUISE','RETIRE')),
+                                            'TRANSFERE','EPUISE','RETIRE',
+                                            'DECLASS','EN_COURS_CERT','SOUCHE','PERDU')),
   -- Traçabilité acteurs
   id_org_producteur   BIGINT        REFERENCES organisation(id),
   username_createur   VARCHAR(150),
   responsable_nom     VARCHAR(150),
   responsable_role    VARCHAR(100),
-  created_at          TIMESTAMP     DEFAULT now()
+  created_at          TIMESTAMP     DEFAULT now(),
+  -- Champs dénormalisés — évite jointures inter-services à l'affichage
+  campagne            VARCHAR(50),
+  code_espece         VARCHAR(30),
+  nom_variete         VARCHAR(200),
+  code_variete        VARCHAR(50),
+  -- Champs production PCAE
+  superficie_ha       NUMERIC(10,2),
+  production_brute_kg NUMERIC(14,2),
+  rendement_kg_ha     NUMERIC(10,2),
+  cycle               VARCHAR(1),
+  niveau_semence      VARCHAR(50),
+  quantite_semence_src_kg NUMERIC(14,2),
+  -- Workflow certification (G4/R1/R2)
+  certificat_path     VARCHAR(500),
+  statut_certification VARCHAR(20)  NOT NULL DEFAULT 'SANS_CERTIFICAT',
+  approbateur_username VARCHAR(150),
+  date_approbation    TIMESTAMP,
+  motif_rejet_cert    TEXT,
+  -- Politique d'édition : BROUILLON = modifiable, CONFIRME = verrouillé
+  statut_edition      VARCHAR(20)  NOT NULL DEFAULT 'BROUILLON',
+  date_confirmation   TIMESTAMP
 );
 
 -- ────────────────────────────────────────────────────────────
@@ -324,7 +346,8 @@ CREATE TABLE IF NOT EXISTS commande (
   statut                      VARCHAR(30)  NOT NULL DEFAULT 'SOUMISE'
                               CHECK (statut IN ('SOUMISE','ACCEPTEE','EN_PREPARATION',
                                                 'LIVREE','ANNULEE','REJETEE',
-                                                'EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON')),
+                                                'EN_NEGOCIATION','ACCORDEE','EN_LIVRAISON',
+                                                'TRANSFERE','RECEPTIONNEE')),
   username_acheteur           VARCHAR(150),
   id_organisation_acheteur    BIGINT       REFERENCES organisation(id),
   id_organisation_fournisseur BIGINT       REFERENCES organisation(id),

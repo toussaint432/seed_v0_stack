@@ -473,11 +473,16 @@ export type StatutLot =
 // order-service : StatutCommande.java
 export type StatutCommande =
   | 'SOUMISE'
-  | 'ACCEPTEE'
-  | 'EN_PREPARATION'
+  | 'EN_NEGOCIATION'
+  | 'ACCORDEE'
+  | 'EN_LIVRAISON'
   | 'LIVREE'
   | 'ANNULEE'
   | 'REJETEE'
+  | 'ACCEPTEE'
+  | 'EN_PREPARATION'
+  | 'TRANSFERE'
+  | 'RECEPTIONNEE'
 
 // lot-service & stock-service : StatutTransfert.java
 export type StatutTransfert = 'EN_ATTENTE' | 'ACCEPTE' | 'REJETE' | 'ANNULE'
@@ -510,18 +515,28 @@ export { GEN_COLORS, GEN_CHART_COLORS, ROLE_LABELS, ROLE_LABELS_LONG, STATUT_LOT
 
 export const STATUT_COMMANDE_LABELS: Record<StatutCommande, string> = {
   SOUMISE:        'Soumise',
-  ACCEPTEE:       'Acceptée',
-  EN_PREPARATION: 'En préparation',
+  EN_NEGOCIATION: 'En négociation',
+  ACCORDEE:       'Accordée',
+  EN_LIVRAISON:   'En livraison',
   LIVREE:         'Livrée',
   ANNULEE:        'Annulée',
   REJETEE:        'Rejetée',
+  ACCEPTEE:       'Acceptée',
+  EN_PREPARATION: 'En préparation',
+  TRANSFERE:      'Transférée',
+  RECEPTIONNEE:   'Réceptionnée',
 }
 
 export const STATUT_COMMANDE_COLORS: Record<StatutCommande, { bg: string; border: string; text: string }> = {
   SOUMISE:        { bg: '#eff6ff', border: '#bfdbfe', text: '#1d4ed8' },
-  ACCEPTEE:       { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
-  EN_PREPARATION: { bg: '#fef3c7', border: '#fde68a', text: '#92660a' },
+  EN_NEGOCIATION: { bg: '#fff7ed', border: '#fed7aa', text: '#c2410c' },
+  ACCORDEE:       { bg: '#f0fdfa', border: '#99f6e4', text: '#0f766e' },
+  EN_LIVRAISON:   { bg: '#ecfeff', border: '#a5f3fc', text: '#0e7490' },
   LIVREE:         { bg: '#dcfce7', border: '#86efac', text: '#166534' },
   ANNULEE:        { bg: '#f9fafb', border: '#e5e7eb', text: '#6b7280' },
   REJETEE:        { bg: '#fef2f2', border: '#fecaca', text: '#dc2626' },
+  ACCEPTEE:       { bg: '#f0fdf4', border: '#bbf7d0', text: '#15803d' },
+  EN_PREPARATION: { bg: '#fef3c7', border: '#fde68a', text: '#92660a' },
+  TRANSFERE:      { bg: '#f5f3ff', border: '#ddd6fe', text: '#6d28d9' },
+  RECEPTIONNEE:   { bg: '#ecfdf5', border: '#6ee7b7', text: '#047857' },
 }
