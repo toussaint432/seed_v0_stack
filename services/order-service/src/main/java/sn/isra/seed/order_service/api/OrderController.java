@@ -1129,21 +1129,23 @@ public class OrderController {
       m.put("unite",            ligne.getUnite() != null ? ligne.getUnite() : "kg");
 
       propositionLigneRepo.findByLigneCommande_Id(ligne.getId()).ifPresent(prop -> {
-        m.put("proposition", Map.of(
-            "idLotSuggereFifo",    prop.getIdLotSuggereFifo(),
-            "quantiteSuggere",     prop.getQuantiteSuggere(),
-            "idLotSelectionne",    prop.getIdLotSelectionne(),
-            "quantiteSelectionnee",prop.getQuantiteSelectionnee(),
-            "motifOverride",       prop.getMotifOverride() != null ? prop.getMotifOverride() : "",
-            "usernameAgent",       prop.getUsernameAgent() != null ? prop.getUsernameAgent() : "",
-            "statutProposition",   prop.getStatutProposition(),
-            "sources",             prop.getSources().stream().map(s -> Map.of(
-                "idLot",        s.getIdLot(),
-                "quantite",     s.getQuantite(),
-                "fifoSuggere",  s.isFifoSuggere(),
-                "ordrePriorite",s.getOrdrePriorite()
-            )).toList()
-        ));
+        java.util.Map<String, Object> propMap = new java.util.LinkedHashMap<>();
+        propMap.put("idLotSuggereFifo",     prop.getIdLotSuggereFifo());
+        propMap.put("quantiteSuggere",      prop.getQuantiteSuggere());
+        propMap.put("idLotSelectionne",     prop.getIdLotSelectionne());
+        propMap.put("quantiteSelectionnee", prop.getQuantiteSelectionnee());
+        propMap.put("prixUnitaireHt",       prop.getPrixUnitaireHt());
+        propMap.put("tauxTva",              prop.getTauxTva() != null ? prop.getTauxTva() : java.math.BigDecimal.ZERO);
+        propMap.put("motifOverride",        prop.getMotifOverride() != null ? prop.getMotifOverride() : "");
+        propMap.put("usernameAgent",        prop.getUsernameAgent() != null ? prop.getUsernameAgent() : "");
+        propMap.put("statutProposition",    prop.getStatutProposition());
+        propMap.put("sources",              prop.getSources().stream().map(s -> Map.of(
+            "idLot",         s.getIdLot(),
+            "quantite",      s.getQuantite(),
+            "fifoSuggere",   s.isFifoSuggere(),
+            "ordrePriorite", s.getOrdrePriorite()
+        )).toList());
+        m.put("proposition", propMap);
       });
       return m;
     }).toList();
