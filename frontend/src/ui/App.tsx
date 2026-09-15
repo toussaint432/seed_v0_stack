@@ -268,14 +268,21 @@ export function App() {
     return () => document.removeEventListener('mousedown', handler)
   }, [cmdOpen, notifOpen, userMenuOpen])
 
-  // Surveillance expiration session — avertissement 2 min avant
+  // Renouvellement proactif du token — invisible pour l'utilisateur
   useEffect(() => {
     if (!ready || !keycloak.authenticated) return
     const check = () => {
       const exp = (keycloak.tokenParsed as any)?.exp
       if (!exp) return
       const remaining = exp - Math.floor(Date.now() / 1000)
-      setSessionWarning(remaining > 0 && remaining <= 120)
+      if (remaining > 0 && remaining <= 120) {
+        // Refresh proactif : résout ~100% des cas avant l'expiration visible
+        keycloak.updateToken(120)
+          .then(refreshed => { if (refreshed) setSessionWarning(false) })
+          .catch(() => setSessionWarning(true))
+        return
+      }
+      setSessionWarning(false)
     }
     check()
     const t = setInterval(check, 20_000)

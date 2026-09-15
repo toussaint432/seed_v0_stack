@@ -29,7 +29,15 @@ export async function initKeycloak(): Promise<boolean> {
   }
   WIN.__keycloakInitialized = true
 
-  // Si le refresh token expire → retour à la landing page, l'utilisateur choisit de se reconnecter
+  // Refresh silencieux dès que le token expire — aucune intervention utilisateur
+  keycloak.onTokenExpired = () => {
+    keycloak.updateToken(30).catch(() => {
+      WIN.__keycloakInitialized = false
+      window.location.href = window.location.origin
+    })
+  }
+
+  // Si le refresh token est lui-même expiré → retour landing, l'utilisateur se reconnecte
   keycloak.onAuthRefreshError = () => {
     WIN.__keycloakInitialized = false
     window.location.href = window.location.origin
