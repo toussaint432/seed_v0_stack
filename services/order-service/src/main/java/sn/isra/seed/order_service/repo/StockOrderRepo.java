@@ -33,6 +33,7 @@ public interface StockOrderRepo extends JpaRepository<Stock, Long> {
         UPDATE stock
            SET quantite_disponible = quantite_disponible - :qte
          WHERE id_lot = :idLot
+           AND quantite_disponible >= :qte
            AND id_site IN (
                SELECT s.id FROM site s
                JOIN organisation o ON s.id_organisation = o.id
@@ -51,6 +52,7 @@ public interface StockOrderRepo extends JpaRepository<Stock, Long> {
         UPDATE stock
            SET quantite_disponible = quantite_disponible - :qte
          WHERE id_lot = :idLot
+           AND quantite_disponible >= :qte
            AND id_site IN (
                SELECT s.id FROM site s
                WHERE s.id_organisation = :idOrg

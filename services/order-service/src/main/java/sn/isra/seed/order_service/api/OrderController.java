@@ -498,9 +498,10 @@ public class OrderController {
     Commande commande = commandeRepo.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
 
-    if (commande.getStatut() != StatutCommande.ACCORDEE) {
+    if (commande.getStatut() != StatutCommande.ACCORDEE
+        && commande.getStatut() != StatutCommande.ACCEPTEE) {
       throw new ResponseStatusException(HttpStatus.CONFLICT,
-          "La commande doit être ACCORDEE pour déclencher le transfert (statut actuel : " + commande.getStatut() + ")");
+          "La commande doit être ACCORDEE ou ACCEPTEE pour déclencher le transfert (statut actuel : " + commande.getStatut() + ")");
     }
     if (commande.getUsernameAcheteur() == null) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Acheteur non identifié — impossible de créer le transfert");
@@ -558,11 +559,17 @@ public class OrderController {
           ligne.getIdLotPropose(), ancienStatut, nouveauStatut, emetteur, commentaire);
 
       // Débiter le stock du fournisseur (multiplicateur ou UPSemCL selon idOrganisationFournisseur)
+      int stockDebite;
       if (commande.getIdOrganisationFournisseur() != null) {
-        stockOrderRepo.debitByOrg(ligne.getIdLotPropose(),
+        stockDebite = stockOrderRepo.debitByOrg(ligne.getIdLotPropose(),
             commande.getIdOrganisationFournisseur(), ligne.getQuantiteProposee());
       } else {
-        stockOrderRepo.debitUpsemcl(ligne.getIdLotPropose(), ligne.getQuantiteProposee());
+        stockDebite = stockOrderRepo.debitUpsemcl(ligne.getIdLotPropose(), ligne.getQuantiteProposee());
+      }
+      if (stockDebite == 0) {
+        throw new ResponseStatusException(HttpStatus.CONFLICT,
+            "Stock insuffisant pour le lot #" + ligne.getIdLotPropose()
+                + " (quantite_disponible < " + ligne.getQuantiteProposee().toPlainString() + " kg)");
       }
 
       // Code unique par ligne pour respecter UNIQUE(code_transfert)
