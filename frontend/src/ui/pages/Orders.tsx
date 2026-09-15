@@ -2955,10 +2955,11 @@ function DecisionMultiplicateurModal({
     for (const l of lignesG3) init[l.id] = { accepte: true }
     return init
   })
-  const [siteCode,  setSiteCode]  = useState('')
-  const [mesSites,  setMesSites]  = useState<any[]>([])
-  const [lotsInfo,  setLotsInfo]  = useState<Record<number, any>>({})
-  const [saving,    setSaving]    = useState(false)
+  const [siteCode,       setSiteCode]       = useState('')
+  const [mesSites,       setMesSites]       = useState<any[]>([])
+  const [lotsInfo,       setLotsInfo]       = useState<Record<number, any>>({})
+  const [propositions,   setPropositions]   = useState<Record<number, any>>({})
+  const [saving,         setSaving]         = useState(false)
 
   useEffect(() => {
     api.get(endpoints.sitesMesSites).then(r => {
@@ -2968,7 +2969,15 @@ function DecisionMultiplicateurModal({
       if (principal) setSiteCode(principal.codeSite)
     }).catch(() => {})
 
-    // Charger les infos des lots proposés (qualité)
+    // Prix UPSemCL par ligne (prixUnitaireHt, tauxTva)
+    api.get(endpoints.orderBordereauTransfert(commande.id))
+      .then(r => {
+        const map: Record<number, any> = {}
+        ;(r.data?.lignes ?? []).forEach((l: any) => { if (l.proposition) map[l.idLigne] = l.proposition })
+        setPropositions(map)
+      }).catch(() => {})
+
+    // Infos qualité des lots proposés
     const ids = lignesG3.map((l: any) => l.idLotPropose).filter(Boolean)
     Promise.all(ids.map(id => api.get(endpoints.lotById(id)).then(r => [id, r.data] as [number, any]).catch(() => null)))
       .then(results => {
@@ -3006,8 +3015,13 @@ function DecisionMultiplicateurModal({
       </div>
 
       {lignesG3.map((ligne: any) => {
-        const lot = lotsInfo[ligne.idLotPropose]
-        const dec = decisions[ligne.id] ?? { accepte: true }
+        const lot  = lotsInfo[ligne.idLotPropose]
+        const prop = propositions[ligne.id]
+        const dec  = decisions[ligne.id] ?? { accepte: true }
+        const qteProposee = Number(ligne.quantiteProposee ?? ligne.quantiteDemandee ?? 0)
+        const prixHt      = prop?.prixUnitaireHt != null ? Number(prop.prixUnitaireHt) : null
+        const montantHt   = prixHt != null ? prixHt * qteProposee : null
+        const tauxTva     = prop?.tauxTva != null ? Number(prop.tauxTva) : 0
         return (
           <div key={ligne.id} style={{ border: `2px solid ${dec.accepte ? '#bbf7d0' : '#fca5a5'}`, borderRadius: 10, padding: 16, marginBottom: 14, background: dec.accepte ? '#f0fdf4' : '#fef2f2', transition: 'all .15s' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
@@ -3034,11 +3048,29 @@ function DecisionMultiplicateurModal({
                 </div>
                 <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', color: 'var(--text-muted)' }}>
                   {lot?.campagne && <span>Campagne : <strong style={{ color: 'var(--text-primary)' }}>{lot.campagne}</strong></span>}
-                  <span>Qté proposée : <strong style={{ color: '#15803d' }}>{ligne.quantiteProposee ?? ligne.quantiteDemandee} kg</strong></span>
+                  <span>Qté proposée : <strong style={{ color: '#15803d' }}>{qteProposee} kg</strong></span>
                   {lot?.controleQualite?.tauxGermination && <span>Germination : <strong style={{ color: '#1d4ed8' }}>{lot.controleQualite.tauxGermination}%</strong></span>}
                   {lot?.controleQualite?.puretePhysique && <span>Pureté : <strong>{lot.controleQualite.puretePhysique}%</strong></span>}
                   {lot?.controleQualite?.tauxHumidite && <span>Humidité : <strong>{lot.controleQualite.tauxHumidite}%</strong></span>}
                 </div>
+                {prixHt != null && (
+                  <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)', display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 2 }}>Prix unitaire HT</div>
+                      <div style={{ fontWeight: 700, fontSize: 13.5, color: '#d97706' }}>{prixHt.toLocaleString('fr-SN')} FCFA/kg</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 2 }}>Montant HT estimé</div>
+                      <div style={{ fontWeight: 700, fontSize: 13.5, color: '#1d4ed8' }}>{montantHt!.toLocaleString('fr-SN')} FCFA</div>
+                    </div>
+                    {tauxTva > 0 && (
+                      <div>
+                        <div style={{ fontSize: 10.5, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 2 }}>TVA</div>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{tauxTva} %</div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

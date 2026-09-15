@@ -20,12 +20,14 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
         INSERT INTO transfert_lot
           (code_transfert, id_lot, username_emetteur, role_emetteur,
            username_destinataire, role_destinataire, generation_transferee,
-           quantite, statut, date_demande, date_acceptation, created_at)
+           quantite, statut, date_demande, date_acceptation, created_at,
+           nom_variete, code_variete)
         SELECT
           :code, :idLot, :emetteur, :roleEmetteur,
           :destinataire, :roleDestinataire,
           g.code_generation,
-          :quantite, 'ACCEPTE', CURRENT_DATE, CURRENT_DATE, now()
+          :quantite, 'ACCEPTE', CURRENT_DATE, CURRENT_DATE, now(),
+          l.nom_variete, l.code_variete
         FROM lot_semencier l
         JOIN generation_semence g ON l.id_generation = g.id
         WHERE l.id = :idLot
@@ -44,12 +46,14 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
         INSERT INTO transfert_lot
           (code_transfert, id_lot, username_emetteur, role_emetteur,
            username_destinataire, role_destinataire, generation_transferee,
-           quantite, statut, date_demande, created_at)
+           quantite, statut, date_demande, created_at,
+           nom_variete, code_variete)
         SELECT
           :code, :idLot, :emetteur, :roleEmetteur,
           :destinataire, :roleDestinataire,
           g.code_generation,
-          :quantite, 'EN_ATTENTE', CURRENT_DATE, now()
+          :quantite, 'EN_ATTENTE', CURRENT_DATE, now(),
+          l.nom_variete, l.code_variete
         FROM lot_semencier l
         JOIN generation_semence g ON l.id_generation = g.id
         WHERE l.id = :idLot

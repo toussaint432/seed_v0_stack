@@ -8,6 +8,7 @@ import sn.isra.seed.order_service.entity.enums.StatutFacture;
 import sn.isra.seed.order_service.entity.enums.TypeCommande;
 import sn.isra.seed.order_service.entity.enums.TypeFacture;
 import sn.isra.seed.order_service.repo.FactureRepo;
+import sn.isra.seed.order_service.repo.LotQuantiteRepo;
 import sn.isra.seed.order_service.repo.PropositionLigneRepo;
 
 import java.math.BigDecimal;
@@ -32,6 +33,7 @@ public class FactureGenerationService {
 
     private final FactureRepo           factureRepo;
     private final PropositionLigneRepo  propositionLigneRepo;
+    private final LotQuantiteRepo       lotQuantiteRepo;
 
     /**
      * Génère et persiste la facture d'une commande.
@@ -97,6 +99,10 @@ public class FactureGenerationService {
             fl.setMontantTtc(montantTtc);
             fl.setGeneration(ligne.getIdGeneration() != null ? genCode(ligne.getIdGeneration()) : null);
             fl.setCreatedAt(Instant.now());
+            lotQuantiteRepo.findById(prop.getIdLotSelectionne()).ifPresent(lot -> {
+                fl.setNomVariete(lot.getNomVariete());
+                fl.setCodeVariete(lot.getCodeVariete());
+            });
 
             facture.getLignes().add(fl);
             totalHt  = totalHt.add(montantHt);

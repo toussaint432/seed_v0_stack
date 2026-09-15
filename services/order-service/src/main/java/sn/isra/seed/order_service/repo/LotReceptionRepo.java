@@ -27,7 +27,8 @@ public class LotReceptionRepo {
                 code_lot, id_variete, id_generation, id_lot_parent,
                 campagne, quantite_nette, unite,
                 statut_lot, id_org_producteur, username_createur,
-                created_at, date_production, code_espece
+                created_at, date_production, code_espece,
+                nom_variete, code_variete
             )
             SELECT
                 :codeLot,
@@ -35,7 +36,8 @@ public class LotReceptionRepo {
                 COALESCE(l.campagne, EXTRACT(YEAR FROM NOW())::TEXT),
                 :quantite, :unite,
                 'DISPONIBLE', :idOrg, :username,
-                NOW(), CURRENT_DATE, l.code_espece
+                NOW(), CURRENT_DATE, l.code_espece,
+                l.nom_variete, l.code_variete
             FROM lot_semencier l
             WHERE l.id = :parentId
             RETURNING id

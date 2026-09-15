@@ -35,4 +35,10 @@ public class LotSemencierOrder {
 
     @Column(name = "id_org_producteur")
     private Long idOrgProducteur;
+
+    @Column(name = "nom_variete", length = 150)
+    private String nomVariete;
+
+    @Column(name = "code_variete", length = 30)
+    private String codeVariete;
 }
