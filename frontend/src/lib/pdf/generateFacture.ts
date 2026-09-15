@@ -62,6 +62,45 @@ function fmtFcfa(n: number): string {
   // → jsPDF les interprète comme coupures de mot → montants tronqués dans autoTable
   return n.toLocaleString('fr-FR').replace(/ /g, ' ') + ' FCFA'
 }
+function nombreEnLettres(n: number): string {
+  n = Math.round(n)
+  if (n === 0) return 'ZÉRO'
+  if (n < 0) return 'MOINS ' + nombreEnLettres(-n)
+
+  const units = ['', 'UN', 'DEUX', 'TROIS', 'QUATRE', 'CINQ', 'SIX', 'SEPT', 'HUIT', 'NEUF',
+                 'DIX', 'ONZE', 'DOUZE', 'TREIZE', 'QUATORZE', 'QUINZE', 'SEIZE',
+                 'DIX-SEPT', 'DIX-HUIT', 'DIX-NEUF']
+  const tens  = ['', '', 'VINGT', 'TRENTE', 'QUARANTE', 'CINQUANTE', 'SOIXANTE', 'SOIXANTE', 'QUATRE-VINGT', 'QUATRE-VINGT']
+
+  function below1000(x: number): string {
+    if (x === 0) return ''
+    if (x < 20) return units[x]
+    if (x < 100) {
+      const d = Math.floor(x / 10), u = x % 10
+      if (d === 8) return u === 0 ? 'QUATRE-VINGTS' : 'QUATRE-VINGT-' + units[u]
+      if (d === 9) return 'QUATRE-VINGT-' + units[10 + u]
+      if (d === 7) return u === 1 ? 'SOIXANTE-ET-ONZE' : 'SOIXANTE-' + units[10 + u]
+      if (u === 0) return tens[d]
+      if (u === 1) return tens[d] + '-ET-UN'
+      return tens[d] + '-' + units[u]
+    }
+    const c = Math.floor(x / 100), r = x % 100
+    const base = c === 1 ? 'CENT' : units[c] + ' CENT' + (r === 0 ? 'S' : '')
+    return r === 0 ? base : base + ' ' + below1000(r)
+  }
+
+  const millions = Math.floor(n / 1_000_000)
+  const milliers = Math.floor((n % 1_000_000) / 1_000)
+  const reste    = n % 1_000
+
+  const parts: string[] = []
+  if (millions > 0) parts.push(below1000(millions) + (millions === 1 ? ' MILLION' : ' MILLIONS'))
+  if (milliers > 0) parts.push(milliers === 1 ? 'MILLE' : below1000(milliers) + ' MILLE')
+  if (reste    > 0) parts.push(below1000(reste))
+
+  return parts.join(' ')
+}
+
 
 const GREEN: [number, number, number] = [27,  94,  32]
 const DARK:  [number, number, number] = [33,  33,  33]
@@ -300,7 +339,7 @@ export function generateFacture(data: FactureData): FactureResult {
   doc.setFont('helvetica', 'bold')
   doc.setFontSize(8)
   doc.setTextColor(...DARK)
-  doc.text(`Arrêtée à la somme de : ${montantTTC.toLocaleString('fr-FR').replace(/ /g, ' ')} FCFA TTC`, ML, Y)
+  doc.text(`ARRÊTÉE À LA SOMME DE ${nombreEnLettres(montantTTC)} FCFA TTC`, ML, Y)
 
   Y += 10
 

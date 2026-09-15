@@ -74,7 +74,7 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
   // blobUrl ouvert dans un onglet → pas besoin de state docViewer
 
   const canCreate = ['seed-admin', 'seed-selector', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
-  const rule = TRANSFER_RULES[roleKey]
+  const rule      = TRANSFER_RULES[roleKey]
 
   // Lots filtrés selon les générations autorisées pour ce rôle
   const transferableLots = rule
@@ -97,13 +97,6 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
   const [membresMap, setMembresMap] = useState<Record<string, any>>({})
   const [refusModal, setRefusModal] = useState<any>(null)
   const [motifRefus, setMotifRefus] = useState('')
-  // État modale facture
-  const [factureModal, setFactureModal] = useState<any>(null)
-  const [facturePrix, setFacturePrix] = useState('')
-  const [factureTva, setFactureTva] = useState('0')
-  const [factureConditions, setFactureConditions] = useState('')
-
-  const canCreateFacture = ['seed-selector', 'seed-upsemcl', 'seed-admin'].includes(roleKey)
 
   async function fetchAll() {
     setLoading(true)
@@ -236,19 +229,18 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
     return 'MULT_QUOT'
   }
 
-  function submitFacture(e: React.FormEvent) {
-    e.preventDefault()
-    const t = factureModal
+  function buildFacturePdf(t: any, facture: any) {
+    const ligne = facture.lignes?.[0]
+    if (!ligne) { setToast({ msg: 'Facture vide — aucune ligne produit', type: 'error' }); return }
     const lot = lots.find((l: any) => l.id === (t.idLot ?? t.lot?.id))
     const jwt = keycloak.tokenParsed as Record<string, unknown>
     const currentUser = (jwt?.preferred_username as string) || ''
     const gen = t.generationTransferee || lot?.generation?.codeGeneration || ''
+    const flux = detectFlux(t)
     const emetteurRoleKey = t.roleEmetteur || guessRoleFromGen(gen, 'emetteur')
     const destRoleKey     = t.roleDestinataire || guessRoleFromGen(gen, 'dest')
-
     const memV = t.usernameEmetteur     ? membresMap[t.usernameEmetteur]     : null
     const memA = t.usernameDestinataire ? membresMap[t.usernameDestinataire] : null
-    const flux = detectFlux(t)
 
     const data: FactureData = {
       transfertId:      t.id,
@@ -264,26 +256,59 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
       acheteurNom:      memA?.nomComplet || t.usernameDestinataire || '—',
       acheteurRole:     memA?.organisation?.nomOrganisation || ROLE_LABELS[destRoleKey] || destRoleKey,
       codeLot:          lot?.codeLot || `LOT-${t.idLot}`,
-      nomVariete:       lot?.variete?.nomVariete || lot?.nomVariete || t.nomVariete || '—',
+      nomVariete:       ligne.nomVariete || lot?.variete?.nomVariete || lot?.nomVariete || '—',
       nomEspece:        lot?.variete?.espece?.nomEspece || lot?.espece?.nomEspece || t.codeEspece || 'Semence',
-      generationCode:   gen || '—',
-      quantiteKg:       Number(t.quantite ?? lot?.quantiteNette ?? 0),
-      unite:            lot?.unite || 'kg',
+      generationCode:   ligne.generation || gen || '—',
+      quantiteKg:       Number(ligne.quantite ?? t.quantite ?? 0),
+      unite:            ligne.unite || lot?.unite || 'kg',
       campagne:         lot?.campagne,
-      prixUnitaireKg:   parseFloat(facturePrix) || 0,
-      tvaPercent:       parseFloat(factureTva) || 0,
+      prixUnitaireKg:   Number(ligne.prixUnitaireHt ?? 0),
+      tvaPercent:       Number(ligne.tauxTva ?? 0),
       dateFacture:      new Date().toISOString().split('T')[0],
-      conditions:       factureConditions || undefined,
       observations:     t.observations,
     }
 
     const result: FactureResult = generateFacture(data)
-    setFactureModal(null)
-    setFacturePrix('')
-    setFactureTva('0')
-    setFactureConditions('')
     window.open(result.blobUrl, '_blank')
     setToast({ msg: `Facture ${result.filename} ouverte dans un nouvel onglet`, type: 'success' })
+  }
+
+  async function openFacture(t: any) {
+    try {
+      // Stratégie 1 : idCommande direct (disponible sur les transferts créés après Phase A)
+      if (t.idCommande) {
+        let facture: any
+        try {
+          facture = (await api.get(endpoints.orderFacture(t.idCommande))).data
+        } catch (e: any) {
+          if (e?.response?.status === 404) {
+            // Facture absente (créée avant Phase A) — génération idempotente via POST
+            facture = (await api.post(endpoints.orderGenererFacture(t.idCommande), {})).data
+          } else {
+            throw e
+          }
+        }
+        buildFacturePdf(t, facture)
+        return
+      }
+      // Stratégie 2 : chercher dans la liste des factures du connecté par correspondance lot
+      const fRes = await api.get(endpoints.factures)
+      const items: any[] = fRes.data?.content ?? (Array.isArray(fRes.data) ? fRes.data : [])
+      const matched = items.find((f: any) =>
+        f.lignes?.some((l: any) => l.idLot === t.idLot) &&
+        (!t.usernameDestinataire || f.commande?.usernameAcheteur === t.usernameDestinataire)
+      )
+      if (!matched) {
+        setToast({ msg: 'Aucune facture trouvée pour ce transfert', type: 'error' })
+        return
+      }
+      buildFacturePdf(t, matched)
+    } catch (err: any) {
+      const msg = err?.response?.data?.detail
+        || err?.response?.data?.message
+        || 'Erreur lors du chargement de la facture'
+      setToast({ msg, type: 'error' })
+    }
   }
 
   async function downloadDoc(t: any, type: 'BORDEREAU') {
@@ -611,12 +636,13 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
                               <CheckCircle2 size={11} />Réception confirmée
                             </span>
                           )}
-                          {canCreateFacture && isActif && (
+                          {/* Facture disponible dès que la réception est confirmée — tous rôles */}
+                          {statut === 'ACCEPTE' && (
                             <button
                               className="btn btn-ghost"
                               style={{ height: 26, padding: '0 7px', fontSize: 11, color: '#b45309' }}
-                              title="Créer la Facture"
-                              onClick={() => { setFactureModal(t); setFacturePrix(''); setFactureTva('0') }}
+                              title="Télécharger la Facture PDF"
+                              onClick={() => openFacture(t)}
                             ><Receipt size={12} /></button>
                           )}
                         </div>
@@ -661,14 +687,15 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
                   <span style={{ color: '#15803d', fontWeight: 600, fontSize: 12.5 }}>Réception confirmée</span>
                 </div>
               )}
-              {canCreateFacture && ['EN_ATTENTE','ACCEPTE'].includes(showDetail.statut || showDetail.statutTransfert) && (
+              {/* Facture disponible uniquement quand la réception est confirmée */}
+              {(showDetail.statut || showDetail.statutTransfert) === 'ACCEPTE' && (
                 <button
                   className="btn btn-secondary"
                   style={{ flex: 1, minWidth: 140, justifyContent: 'center', gap: 8, border: '1.5px solid #fca5a5', background: '#fff5f5' }}
-                  onClick={() => { setShowDetail(null); setFactureModal(showDetail); setFacturePrix(''); setFactureTva('0') }}
+                  onClick={() => { setShowDetail(null); openFacture(showDetail) }}
                 >
                   <Receipt size={14} color="#b91c1c" />
-                  <span style={{ color: '#b91c1c', fontWeight: 600, fontSize: 12.5 }}>Générer Facture</span>
+                  <span style={{ color: '#b91c1c', fontWeight: 600, fontSize: 12.5 }}>Télécharger la Facture</span>
                 </button>
               )}
             </div>
@@ -843,87 +870,6 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
         </Modal>
       )}
 
-      {/* Modale Facture — saisie du prix unitaire */}
-      {factureModal && (
-        <Modal
-          title="Générer la Facture"
-          subtitle={`Transfert ${factureModal.codeTransfert} · ${factureModal.generationTransferee || ''} · ${Number(factureModal.quantite || 0).toLocaleString('fr-FR')} kg`}
-          onClose={() => setFactureModal(null)}
-          size="sm"
-        >
-          {/* Récap vendeur / acheteur */}
-          <div style={{ display: 'flex', gap: 10, marginBottom: 18 }}>
-            <div style={{ flex: 1, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#15803d', textTransform: 'uppercase', marginBottom: 3 }}>Vendeur</div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{factureModal.usernameEmetteur || '—'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ROLE_LABELS[factureModal.roleEmetteur || guessRoleFromGen(factureModal.generationTransferee || '', 'emetteur')] || '—'}</div>
-            </div>
-            <div style={{ flex: 1, background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '10px 14px' }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', marginBottom: 3 }}>Acheteur</div>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>{factureModal.usernameDestinataire || '—'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{ROLE_LABELS[factureModal.roleDestinataire || guessRoleFromGen(factureModal.generationTransferee || '', 'dest')] || '—'}</div>
-            </div>
-          </div>
-
-          <form onSubmit={submitFacture}>
-            <FormRow>
-              <Field label="Prix unitaire (FCFA / kg)" required hint="Ex : 350 pour G1, 150 pour G3">
-                <FormInput
-                  type="number"
-                  value={facturePrix}
-                  onChange={e => setFacturePrix(e.target.value)}
-                  placeholder="350"
-                  min="0"
-                  step="1"
-                  required
-                  autoFocus
-                />
-              </Field>
-              <Field label="TVA (%)" hint="0 si exonéré, 18 sinon">
-                <FormSelect value={factureTva} onChange={e => setFactureTva(e.target.value)}>
-                  <option value="0">Exonéré (0 %)</option>
-                  <option value="18">TVA 18 %</option>
-                </FormSelect>
-              </Field>
-            </FormRow>
-
-            {/* Aperçu calcul */}
-            {facturePrix && Number(facturePrix) > 0 && (
-              <div style={{ background: '#fff5f5', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 16px', marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#b91c1c', textTransform: 'uppercase', marginBottom: 8 }}>Aperçu facture</div>
-                {(() => {
-                  const ht  = Number(factureModal.quantite || 0) * Number(facturePrix)
-                  const tva = Number(factureTva) > 0 ? Math.round(ht * Number(factureTva) / 100) : 0
-                  const ttc = ht + tva
-                  return (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, fontSize: 13 }}>
-                      <span style={{ color: 'var(--text-muted)' }}>Quantité</span>
-                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{Number(factureModal.quantite || 0).toLocaleString('fr-FR')} kg</span>
-                      <span style={{ color: 'var(--text-muted)' }}>Prix unitaire</span>
-                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{Number(facturePrix).toLocaleString('fr-FR')} FCFA/kg</span>
-                      <span style={{ color: 'var(--text-muted)' }}>Total HT</span>
-                      <span style={{ fontWeight: 600, textAlign: 'right' }}>{ht.toLocaleString('fr-FR')} FCFA</span>
-                      {tva > 0 && <><span style={{ color: 'var(--text-muted)' }}>TVA {factureTva} %</span><span style={{ fontWeight: 600, textAlign: 'right' }}>{tva.toLocaleString('fr-FR')} FCFA</span></>}
-                      <span style={{ color: '#b91c1c', fontWeight: 700, borderTop: '1px solid #fca5a5', paddingTop: 4 }}>TOTAL TTC</span>
-                      <span style={{ color: '#b91c1c', fontWeight: 700, textAlign: 'right', borderTop: '1px solid #fca5a5', paddingTop: 4 }}>{ttc.toLocaleString('fr-FR')} FCFA</span>
-                    </div>
-                  )
-                })()}
-              </div>
-            )}
-
-            <Field label="Conditions de paiement" hint="Laisser vide pour la valeur par défaut">
-              <FormInput
-                value={factureConditions}
-                onChange={e => setFactureConditions(e.target.value)}
-                placeholder="Paiement à 30 jours — Virement ISRA/CNRA"
-              />
-            </Field>
-
-            <FormActions onCancel={() => setFactureModal(null)} loading={false} submitLabel="Voir la Facture PDF" />
-          </form>
-        </Modal>
-      )}
 
     </div>
   )
