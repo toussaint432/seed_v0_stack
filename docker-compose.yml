@@ -204,8 +204,8 @@ services:
       KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED: "false"
       DYNAMIC_CONFIG_ENABLED: "true"
       LOGGING_LEVEL_ROOT: warn
-      JAVA_OPTS: "-Xms32m -Xmx96m -XX:MaxMetaspaceSize=64m -XX:+UseG1GC -XX:TieredStopAtLevel=1"
-    mem_limit: 192m
+      JAVA_OPTS: "-Xms48m -Xmx128m -XX:MaxMetaspaceSize=80m -XX:+UseSerialGC"
+    mem_limit: 256m
 
   # ✅ Base env commun (optionnel mais propre)
   catalog-service:
