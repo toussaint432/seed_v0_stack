@@ -5,7 +5,7 @@ import {
   Users as UsersIcon, CircleUser, Bell, Search, Menu, LogOut, ChevronRight,
   Activity, Warehouse, ShoppingCart, ArrowRightLeft, Shield,
   Calendar, MapPin, Workflow, Server, Store, MessageCircle,
-  Sun, Moon, Monitor, X,
+  Sun, Moon, Monitor, X, FileText,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { initKeycloak, keycloak } from '../lib/keycloak'
@@ -26,11 +26,12 @@ import { CataloguePublic }  from './pages/CataloguePublic'
 import { Messages }            from './pages/Messages'
 import { Certifications }      from './pages/Certifications'
 import { DirecteurDashboard }  from './pages/DirecteurDashboard'
+import { Factures }             from './pages/Factures'
 type Page =
   | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
   | 'certifications' | 'transfers' | 'campagnes' | 'sites'
   | 'mes-sites' | 'programs' | 'profile' | 'users' | 'catalogue'
-  | 'messages' | 'directeur'
+  | 'messages' | 'directeur' | 'factures'
 
 /* ── Auth helpers ── */
 function getUserRoles(): string[] {
@@ -74,6 +75,7 @@ function getNavSections(roleKey: string): NavSection[] {
   const campagnes:      NavItem = { id: 'campagnes',      label: 'Campagnes',               icon: Calendar }
   const sites:          NavItem = { id: 'sites',          label: 'Sites',                   icon: MapPin }
   const mesSites:       NavItem = { id: 'mes-sites',      label: 'Mes Sites',               icon: MapPin }
+  const factures:       NavItem = { id: 'factures',       label: 'Factures',                icon: FileText }
 
   const users:          NavItem = { id: 'users',          label: 'Utilisateurs',            icon: UsersIcon }
   switch (roleKey) {
@@ -82,7 +84,7 @@ function getNavSections(roleKey: string): NavSection[] {
         { section: 'Général',        items: [dashboard] },
         { section: 'Catalogue',      items: [varieties, { ...lots, label: 'Lots & Générations' }] },
         { section: 'Production',     items: [programs, certifications, transfers] },
-        { section: 'Logistique',     items: [stocks, orders] },
+        { section: 'Logistique',     items: [stocks, orders, factures] },
         { section: 'Référentiels',   items: [campagnes, sites] },
         { section: 'Administration', items: [users] },
       ]
@@ -101,7 +103,7 @@ function getNavSections(roleKey: string): NavSection[] {
         { section: 'Général',        items: [dashboard] },
         { section: 'Référentiel',    items: [{ ...varieties, label: 'Variétés & Espèces' }] },
         { section: 'Multiplication', items: [{ ...lots, label: 'Lots G1→G3' }, programs] },
-        { section: 'Gestion',        items: [stocks, certifications, transfers, orders] },
+        { section: 'Gestion',        items: [stocks, certifications, transfers, orders, factures] },
         { section: 'Communication',  items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
 
@@ -110,7 +112,7 @@ function getNavSections(roleKey: string): NavSection[] {
         { section: 'Général',        items: [dashboard] },
         { section: 'Référentiel',    items: [{ ...varieties, label: 'Variétés & Espèces' }] },
         { section: 'Production',     items: [{ ...lots, label: 'Catalogue & Lots' }, programs] },
-        { section: 'Logistique',     items: [stocks, certifications, transfers, orders] },
+        { section: 'Logistique',     items: [stocks, certifications, transfers, orders, factures] },
         { section: 'Mes Données',    items: [mesSites] },
         { section: 'Communication',  items: [{ id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
       ]
@@ -119,7 +121,7 @@ function getNavSections(roleKey: string): NavSection[] {
       return [
         { section: 'Général',        items: [dashboard] },
         { section: 'Référentiel',    items: [{ ...varieties, label: 'Variétés & Espèces' }, { id: 'catalogue' as Page, label: 'Catalogue R1/R2', icon: Store }] },
-        { section: 'Commandes',      items: [orders, { id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
+        { section: 'Commandes',      items: [orders, factures, { id: 'messages' as Page, label: 'Messages', icon: MessageCircle }] },
         { section: 'Logistique',     items: [stocks, transfers, { ...lots, label: 'Semences reçues' }] },
         { section: 'Mes Données',    items: [mesSites] },
       ]
@@ -158,6 +160,7 @@ const pageTitle: Record<Page, { title: string; sub: string }> = {
   catalogue:      { title: 'Catalogue des semences',       sub: 'Stocks R1/R2 disponibles chez les multiplicateurs' },
   messages:       { title: 'Messagerie',                   sub: 'Conversations directes avec vos partenaires' },
   directeur:      { title: 'Tableau de bord',               sub: 'Indicateurs décisionnels — chaîne semencière ISRA/CNRA' },
+  factures:       { title: 'Factures',                      sub: 'Factures commerciales émises et reçues' },
 }
 
 const roleDescriptions: Record<string, string> = {
@@ -750,6 +753,7 @@ export function App() {
             <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
             <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />
             <Route path="/messages"       element={<Messages roleKey={user.roleKey} username={user.name} />} />
+            <Route path="/factures"       element={<Factures roleKey={user.roleKey} />} />
             <Route path="/directeur"     element={currentRole === 'seed-directeur' || currentRole === 'seed-admin' ? <DirecteurDashboard /> : <Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
             <Route path="*"              element={<Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
           </Routes>

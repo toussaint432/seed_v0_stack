@@ -1262,6 +1262,14 @@ function VueQuotataire({ setToast }: { setToast: any }) {
               if (o.statut === 'RECEPTIONNEE') {
                 return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><PackageCheck size={11} /> Réceptionnée ✓</span>
               }
+              if (o.statut === 'LIVREE') {
+                return (
+                  <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 10px', border: '1px solid #0369a1', color: '#0369a1', display: 'flex', alignItems: 'center', gap: 5 }}
+                    onClick={() => navigate('/factures')}>
+                    <Receipt size={11} /> Voir facture
+                  </button>
+                )
+              }
               return null
             },
           }]}
@@ -1394,6 +1402,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
    VUE MULTIPLICATEUR
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueMultiplicateur({ setToast }: { setToast: any }) {
+  const navigate = useNavigate()
   const [onglet,        setOnglet]        = useState<'recues'|'demandes'>('recues')
   const [recues,        setRecues]        = useState<any[]>([])
   const [demandes,      setDemandes]      = useState<any[]>([])
@@ -1695,6 +1704,14 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
                 }
                 if (o.statut === 'RECEPTIONNEE') {
                   return <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><PackageCheck size={11} /> Réceptionnée</span>
+                }
+                if (o.statut === 'LIVREE') {
+                  return (
+                    <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 10px', border: '1px solid #0369a1', color: '#0369a1', display: 'flex', alignItems: 'center', gap: 5 }}
+                      onClick={() => navigate('/factures')}>
+                      <Receipt size={11} /> Voir facture
+                    </button>
+                  )
                 }
                 return null
               },

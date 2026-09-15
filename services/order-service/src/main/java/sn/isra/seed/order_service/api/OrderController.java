@@ -839,6 +839,10 @@ public class OrderController {
       transfertLotOrderRepo.accepterTransfert(commande.getCodeTransfertGenere());
     }
 
+    // Génération atomique de la facture R2 : dans la même transaction que l'accusé de réception
+    String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "system";
+    factureGenerationService.genererFactureAuto(commande, emetteur);
+
     commande.setStatut(StatutCommande.LIVREE);
     return ResponseEntity.ok(commandeRepo.save(commande));
   }
