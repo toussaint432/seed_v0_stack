@@ -21,13 +21,13 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
           (code_transfert, id_lot, username_emetteur, role_emetteur,
            username_destinataire, role_destinataire, generation_transferee,
            quantite, statut, date_demande, date_acceptation, created_at,
-           nom_variete, code_variete)
+           nom_variete, code_variete, id_commande)
         SELECT
           :code, :idLot, :emetteur, :roleEmetteur,
           :destinataire, :roleDestinataire,
           g.code_generation,
           :quantite, 'ACCEPTE', CURRENT_DATE, CURRENT_DATE, now(),
-          l.nom_variete, l.code_variete
+          l.nom_variete, l.code_variete, :idCommande
         FROM lot_semencier l
         JOIN generation_semence g ON l.id_generation = g.id
         WHERE l.id = :idLot
@@ -38,7 +38,8 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
                             @Param("roleEmetteur") String roleEmetteur,
                             @Param("destinataire") String destinataire,
                             @Param("roleDestinataire") String roleDestinataire,
-                            @Param("quantite") BigDecimal quantite);
+                            @Param("quantite") BigDecimal quantite,
+                            @Param("idCommande") Long idCommande);
 
     /** Crée un transfert en attente de validation par le destinataire (statut EN_ATTENTE). */
     @Modifying
@@ -47,13 +48,13 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
           (code_transfert, id_lot, username_emetteur, role_emetteur,
            username_destinataire, role_destinataire, generation_transferee,
            quantite, statut, date_demande, created_at,
-           nom_variete, code_variete)
+           nom_variete, code_variete, id_commande)
         SELECT
           :code, :idLot, :emetteur, :roleEmetteur,
           :destinataire, :roleDestinataire,
           g.code_generation,
           :quantite, 'EN_ATTENTE', CURRENT_DATE, now(),
-          l.nom_variete, l.code_variete
+          l.nom_variete, l.code_variete, :idCommande
         FROM lot_semencier l
         JOIN generation_semence g ON l.id_generation = g.id
         WHERE l.id = :idLot
@@ -64,7 +65,8 @@ public interface TransfertLotOrderRepo extends JpaRepository<TransfertLot, Long>
                                @Param("roleEmetteur") String roleEmetteur,
                                @Param("destinataire") String destinataire,
                                @Param("roleDestinataire") String roleDestinataire,
-                               @Param("quantite") BigDecimal quantite);
+                               @Param("quantite") BigDecimal quantite,
+                               @Param("idCommande") Long idCommande);
 
     /**
      * Accepte un ou plusieurs transferts EN_ATTENTE liés à une commande.

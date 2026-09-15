@@ -60,6 +60,9 @@ public class TransfertLot {
     @Column(name = "created_at", updatable = false)
     private Instant createdAt;
 
+    @Column(name = "id_commande")
+    private Long idCommande;
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) createdAt = Instant.now();

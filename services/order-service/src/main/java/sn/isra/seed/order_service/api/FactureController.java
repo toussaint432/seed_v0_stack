@@ -159,6 +159,7 @@ public class FactureController {
        ══════════════════════════════════════════════════════════════════════ */
 
     /** GET /api/orders/{id}/facture — Facture associée à une commande */
+    @Transactional(readOnly = true)
     @GetMapping("/api/orders/{id}/facture")
     public ResponseEntity<Facture> getFactureParCommande(
             @PathVariable Long id,
@@ -172,6 +173,7 @@ public class FactureController {
     }
 
     /** GET /api/factures/{id} — Détail d'une facture */
+    @Transactional(readOnly = true)
     @GetMapping("/api/factures/{id}")
     public ResponseEntity<Facture> getFacture(
             @PathVariable Long id,
@@ -202,6 +204,7 @@ public class FactureController {
      * - multiplicateur  → ses propres factures émises
      * - quotataire      → factures reçues (commandes où il est acheteur)
      */
+    @Transactional(readOnly = true)
     @GetMapping("/api/factures")
     public Page<Facture> listFactures(
             @AuthenticationPrincipal Jwt jwt,

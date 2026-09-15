@@ -3,6 +3,7 @@ package sn.isra.seed.order_service.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import sn.isra.seed.order_service.entity.*;
 import sn.isra.seed.order_service.entity.enums.StatutFacture;
 import sn.isra.seed.order_service.entity.enums.TypeCommande;
@@ -41,6 +42,7 @@ public class FactureGenerationService {
      *
      * @throws ResponseStatusException 409 si aucune ligne n'a de prix renseigné
      */
+    @Transactional
     public Facture genererFactureAuto(Commande commande, String usernameEmetteur) {
         // Idempotence — ne jamais créer deux factures pour la même commande
         return factureRepo.findByCommande_Id(commande.getId())

@@ -375,7 +375,7 @@ public class OrderController {
           transfertLotOrderRepo.createAutoTransfert(
               codeTransfert, newLotId, emetteur, "seed-upsemcl",
               commande.getUsernameAcheteur(), "seed-multiplicator",
-              alloc.getQuantiteAllouee()
+              alloc.getQuantiteAllouee(), commande.getId()
           );
 
           log.info("Livraison (updateStatut) : lot REC {} créé pour org {} à partir du lot UPSemCL {}",
@@ -579,7 +579,7 @@ public class OrderController {
           ligne.getIdLotPropose(),
           emetteur, roleEmett,
           commande.getUsernameAcheteur(), roleDest,
-          ligne.getQuantiteProposee()
+          ligne.getQuantiteProposee(), commande.getId()
       );
 
       ligne.setStatutLigne(StatutLigne.LIVREE);
@@ -688,7 +688,7 @@ public class OrderController {
       transfertLotOrderRepo.createAutoTransfert(
           codeLigne, idLotRec, emetteur, roleEmett,
           commande.getUsernameAcheteur(), roleDest,
-          prop.getQuantiteSelectionnee());
+          prop.getQuantiteSelectionnee(), commande.getId());
 
       // Tracer l'événement d'acceptation dans transfert_lot_event
       transfertLotOrderRepo.insertEventAcceptation(codeLigne, emetteur,
@@ -839,12 +839,18 @@ public class OrderController {
       transfertLotOrderRepo.accepterTransfert(commande.getCodeTransfertGenere());
     }
 
-    // Génération atomique de la facture R2 : dans la même transaction que l'accusé de réception
-    String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "system";
-    factureGenerationService.genererFactureAuto(commande, emetteur);
-
     commande.setStatut(StatutCommande.LIVREE);
-    return ResponseEntity.ok(commandeRepo.save(commande));
+    commandeRepo.save(commande);
+
+    String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "system";
+    try {
+      factureGenerationService.genererFactureAuto(commande, emetteur);
+    } catch (Exception ex) {
+      log.error("[accuserReception] Échec génération facture commande={} — {}", id, ex.getMessage(), ex);
+    }
+
+    log.info("[accuserReception] Commande {} → LIVREE par {}", id, emetteur);
+    return ResponseEntity.ok(commande);
   }
 
   /* ══════════════════════════════════════════════════════════════════════
@@ -1443,7 +1449,7 @@ public class OrderController {
           newLotId,
           emetteur, roleEmett,
           commande.getUsernameAcheteur(), roleDest,
-          item.quantite()
+          item.quantite(), commande.getId()
       );
 
       log.info("Transfert automatique créé : lot={} → {} ({}  {})",

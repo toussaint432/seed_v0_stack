@@ -110,6 +110,10 @@ public class TransfertLot {
     @Column(name = "accepted_at")
     private Instant acceptedAt;
 
+    /** FK vers orders.commande — lien traçabilité facture / transfert (V87). */
+    @Column(name = "id_commande")
+    private Long idCommande;
+
     /** Horodatage précis du refus — pour piste d'audit à la seconde */
     @Column(name = "refused_at")
     private Instant refusedAt;
