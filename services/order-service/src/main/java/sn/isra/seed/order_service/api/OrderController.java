@@ -316,7 +316,7 @@ public class OrderController {
     } catch (IllegalArgumentException e) {
       throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
           "Statut invalide : " + req.statut() +
-          ". Valeurs acceptées : SOUMISE, ACCEPTEE, EN_PREPARATION, LIVREE, ANNULEE, REJETEE");
+          ". Valeurs acceptées : SOUMISE, ACCEPTEE, EN_PREPARATION, LIVREE, ANNULEE");
     }
 
     return commandeRepo.findById(id).map(c -> {

@@ -22,7 +22,7 @@ const STATUS_CFG: Record<string, { label: string; bg: string; color: string }> =
   EN_LIVRAISON:   { label: 'En livraison',      bg: '#f5f3ff', color: '#6d28d9' },
   LIVREE:         { label: 'Livrée',            bg: '#ecfdf5', color: '#065f46' },
   ANNULEE:        { label: 'Annulée',           bg: '#fef2f2', color: '#dc2626' },
-  REJETEE:        { label: 'Rejetée',           bg: '#fef2f2', color: '#dc2626' },
+  REJETEE:        { label: 'Annulée',           bg: '#fef2f2', color: '#dc2626' },
   ACCEPTEE:       { label: 'Acceptée',          bg: '#f0fdf4', color: '#15803d' },
   EN_PREPARATION: { label: 'En préparation',    bg: '#f5f3ff', color: '#6d28d9' },
   TRANSFERE:      { label: 'Transféré',         bg: '#eff6ff', color: '#1d4ed8' },
@@ -42,9 +42,9 @@ const PIPELINE_IDX: Record<string, number> = {
   TRANSFERE: 3, EN_LIVRAISON: 3,
   RECEPTIONNEE: 4, LIVREE: 4,
 }
-const TERMINAL = ['ANNULEE', 'REJETEE']
+const TERMINAL = ['ANNULEE']
 const NEXT_ACTIONS: Record<string, { statut: string; label: string; danger?: boolean }[]> = {
-  SOUMISE:        [{ statut: 'ACCEPTEE',       label: 'Accepter'            }, { statut: 'REJETEE',  label: 'Rejeter',  danger: true }],
+  SOUMISE:        [{ statut: 'ACCEPTEE',       label: 'Accepter'            }],
   ACCEPTEE:       [{ statut: 'EN_PREPARATION', label: 'Démarrer préparation'}, { statut: 'ANNULEE',  label: 'Annuler',  danger: true }],
   EN_PREPARATION: [{ statut: 'LIVREE',         label: 'Marquer livrée'     }, { statut: 'ANNULEE',  label: 'Annuler',  danger: true }],
 }
@@ -156,7 +156,7 @@ const SERIE_CFG: ReadonlyArray<{ key: SerieKey; label: string; couleur: string }
   { key: 'LIVREE',   label: 'Livrées',        couleur: '#10b981' },
   { key: 'EN_COURS', label: 'En cours',        couleur: '#f59e0b' },
   { key: 'SOUMISE',  label: 'Soumises',        couleur: '#3b82f6' },
-  { key: 'ANNULEE',  label: 'Annulées/Rejet.', couleur: '#ef4444' },
+  { key: 'ANNULEE',  label: 'Annulées',         couleur: '#ef4444' },
 ]
 
 const SERIE_COULEUR: Record<SerieKey, string> = {
@@ -789,6 +789,8 @@ function StatusPipeline({ statut }: { statut: string }) {
 }
 
 // Tableau générique avec pagination + modal détail
+const ANNULABLES = ['SOUMISE', 'EN_NEGOCIATION', 'ACCEPTEE', 'EN_PREPARATION']
+
 interface OrderTableProps {
   orders: any[]; loading: boolean; emptyMsg: string
   orgs?: any[]; varieties?: any[]
@@ -796,9 +798,11 @@ interface OrderTableProps {
   onUpdateStatus?: (id: number, statut: string) => Promise<void>
   /** Intercepte les commandes G3 SOUMISE → ouvre TraiterCommandeG3Modal */
   onValiderG3?: (cmd: any) => void
+  /** Ouvre la modale d'annulation universelle depuis le detail modal */
+  onAnnuler?: (o: any) => void
   extraColumns?: { head: string; cell: (o: any) => React.ReactNode }[]
 }
-function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], membresMap = {}, onUpdateStatus, onValiderG3, extraColumns = [] }: OrderTableProps) {
+function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], membresMap = {}, onUpdateStatus, onValiderG3, onAnnuler, extraColumns = [] }: OrderTableProps) {
   const [page, setPage]     = useState(1)
   const [detail, setDetail] = useState<any>(null)
   const [actioning, setActioning] = useState(false)
@@ -874,16 +878,16 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], memb
           onClose={() => setDetail(null)} size="md"
         >
           <StatusPipeline statut={detail.statut} />
-          {detail.statut === 'REJETEE' && (
+          {['ANNULEE', 'REJETEE'].includes(detail.statut) && (
             <div style={{
               background: '#fef2f2', border: '1px solid #fca5a5', borderLeft: '4px solid #dc2626',
               borderRadius: 6, padding: '10px 14px', marginBottom: 12,
             }}>
-              <div style={{ fontWeight: 700, color: '#dc2626', fontSize: 12, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4 }}>
-                Commande rejetée
+              <div style={{ fontWeight: 700, color: '#dc2626', fontSize: 12, textTransform: 'uppercase', letterSpacing: '.04em', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <XCircle size={13} /> Commande annulée
               </div>
               <div style={{ fontSize: 13, color: '#7f1d1d' }}>
-                {detail.observations || 'Aucun motif renseigné.'}
+                <span style={{ fontWeight: 600 }}>Motif : </span>{detail.observations || 'Aucun motif renseigné.'}
               </div>
             </div>
           )}
@@ -1051,6 +1055,17 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], memb
               })}
             </div>
           )}
+          {onAnnuler && detail && ANNULABLES.includes(detail.statut) && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14, display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-ghost"
+                style={{ color: '#dc2626', border: '1px solid #fecaca', height: 32, fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
+                onClick={() => { setDetail(null); onAnnuler(detail) }}
+              >
+                <XCircle size={13} /> Annuler la commande
+              </button>
+            </div>
+          )}
         </Modal>
       )}
     </>
@@ -1074,6 +1089,9 @@ function VueQuotataire({ setToast }: { setToast: any }) {
   const [receptionR2Modal,   setReceptionR2Modal]   = useState<any | null>(null)
   const [receptionNewModal,  setReceptionNewModal]  = useState<any | null>(null)
   const [actioning,          setActioning]           = useState<number | null>(null)
+  const [annulModal,         setAnnulModal]         = useState<{ id: number; code: string } | null>(null)
+  const [annulMotif,         setAnnulMotif]         = useState('')
+  const [annulSaving,        setAnnulSaving]        = useState(false)
 
   const [form, setForm] = useState({
     idOrganisationFournisseur: '',
@@ -1110,6 +1128,18 @@ function VueQuotataire({ setToast }: { setToast: any }) {
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message ?? 'Erreur lors de l\'accusé de réception', type: 'error' })
     } finally { setActioning(null) }
+  }
+
+  async function annulerCommande(e: React.FormEvent) {
+    e.preventDefault()
+    if (!annulModal || annulMotif.trim().length < 10) return
+    setAnnulSaving(true)
+    try {
+      await api.put(endpoints.orderStatut(annulModal.id), { statut: 'ANNULEE', observations: annulMotif.trim() })
+      setToast({ msg: `Commande ${annulModal.code} annulée`, type: 'success' })
+      setAnnulModal(null); setAnnulMotif(''); fetchAll()
+    } catch { setToast({ msg: 'Erreur lors de l\'annulation', type: 'error' }) }
+    finally { setAnnulSaving(false) }
   }
 
   async function submitOrder(e: React.FormEvent) {
@@ -1195,6 +1225,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
           emptyMsg="Aucune commande"
           orgs={orgs}
           varieties={varieties}
+          onAnnuler={(o) => { setAnnulModal({ id: o.id, code: o.codeCommande }); setAnnulMotif('') }}
           extraColumns={[{
             head: 'Action',
             cell: (o: any) => {
@@ -1326,6 +1357,35 @@ function VueQuotataire({ setToast }: { setToast: any }) {
           </form>
         </Modal>
       )}
+
+      {annulModal && (
+        <Modal title="Annuler la commande" subtitle={`${annulModal.code} — cette action est irréversible`} onClose={() => setAnnulModal(null)} size="sm">
+          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12.5, color: '#9a3412', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ fontSize: 15 }}>⚠</span>
+            La partie adverse sera informée du motif de cette annulation.
+          </div>
+          <form onSubmit={annulerCommande}>
+            <Field label="Motif de l'annulation *" hint="Minimum 10 caractères — visible par les deux parties">
+              <textarea
+                value={annulMotif}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAnnulMotif(e.target.value)}
+                placeholder="Stock insuffisant pour cette campagne, délai dépassé…"
+                rows={4}
+                style={{ width: '100%', padding: '8px 12px', border: `1px solid ${annulMotif.length > 0 && annulMotif.trim().length < 10 ? '#fca5a5' : 'var(--border-strong)'}`, borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+              />
+              {annulMotif.length > 0 && annulMotif.trim().length < 10 && (
+                <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Motif trop court ({annulMotif.trim().length}/10 caractères minimum)</div>
+              )}
+            </Field>
+            <FormActions
+              onCancel={() => setAnnulModal(null)}
+              loading={annulSaving}
+              submitLabel="Confirmer l'annulation"
+              submitDisabled={annulMotif.trim().length < 10}
+            />
+          </form>
+        </Modal>
+      )}
     </div>
   )
 }
@@ -1432,12 +1492,14 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
     finally { setSaving(false) }
   }
   async function refuser(e: React.FormEvent) {
-    e.preventDefault(); if (!refusModal) return; setSaving(true)
+    e.preventDefault()
+    if (!refusModal || motif.trim().length < 10) return
+    setSaving(true)
     try {
-      await api.put(endpoints.orderStatut(refusModal.id), { statut: 'REJETEE', observations: motif })
-      setToast({ msg: `Commande ${refusModal.code} rejetée`, type: 'success' })
+      await api.put(endpoints.orderStatut(refusModal.id), { statut: 'ANNULEE', observations: motif.trim() })
+      setToast({ msg: `Commande ${refusModal.code} annulée`, type: 'success' })
       setRefusModal(null); setMotif(''); fetchAll()
-    } catch { setToast({ msg: 'Erreur', type: 'error' }) }
+    } catch { setToast({ msg: 'Erreur lors de l\'annulation', type: 'error' }) }
     finally { setSaving(false) }
   }
 
@@ -1569,6 +1631,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
             emptyMsg="Aucune commande reçue"
             varieties={varieties}
             membresMap={membresMap}
+            onAnnuler={(o) => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }}
             extraColumns={[{
               head: 'Actions',
               cell: (o: any) => {
@@ -1580,22 +1643,39 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
                         <Settings2 size={11} /> Proposer
                       </button>
                       <button className="btn btn-ghost" style={{ height: 28, fontSize: 11, padding: '0 8px', color: 'var(--red-600)', border: '1px solid #fecaca' }}
-                        onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }} disabled={saving}>
+                        onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }} disabled={saving}
+                        title="Annuler la commande">
                         <Ban size={11} />
                       </button>
                     </div>
                   )
                 }
                 if (o.statut === 'EN_NEGOCIATION') {
-                  return <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, fontStyle: 'italic' }}>En attente du quotataire</span>
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, fontStyle: 'italic' }}>En attente du quotataire</span>
+                      <button className="btn btn-ghost" style={{ height: 24, width: 24, padding: 0, color: 'var(--red-600)', border: '1px solid #fecaca', flexShrink: 0 }}
+                        onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }}
+                        title="Annuler la commande">
+                        <Ban size={10} />
+                      </button>
+                    </div>
+                  )
                 }
                 if (o.statut === 'ACCEPTEE') {
                   return (
-                    <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #1d4ed8, #1e40af)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
-                      onClick={() => confirmerEtTransfererRecue(o.id, o.codeCommande)} disabled={actioning === o.id}>
-                      {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Truck size={11} />}
-                      Confirmer et transférer
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #1d4ed8, #1e40af)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+                        onClick={() => confirmerEtTransfererRecue(o.id, o.codeCommande)} disabled={actioning === o.id}>
+                        {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Truck size={11} />}
+                        Confirmer et transférer
+                      </button>
+                      <button className="btn btn-ghost" style={{ height: 28, width: 28, padding: 0, color: 'var(--red-600)', border: '1px solid #fecaca', flexShrink: 0 }}
+                        onClick={() => { setRefusModal({ id: o.id, code: o.codeCommande }); setMotif('') }}
+                        title="Annuler la commande">
+                        <Ban size={10} />
+                      </button>
+                    </div>
                   )
                 }
                 if (o.statut === 'ACCORDEE') {
@@ -1749,12 +1829,25 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
       )}
 
       {refusModal && (
-        <Modal title="Annuler la commande" subtitle={`Commande ${refusModal.code}`} onClose={() => setRefusModal(null)} size="sm">
+        <Modal title="Annuler la commande" subtitle={`${refusModal.code} — cette action est irréversible`} onClose={() => setRefusModal(null)} size="sm">
+          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12.5, color: '#9a3412', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ fontSize: 15 }}>⚠</span>
+            La partie adverse sera informée du motif de cette annulation.
+          </div>
           <form onSubmit={refuser}>
-            <Field label="Motif d'annulation" required hint="Visible par le demandeur">
-              <textarea value={motif} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMotif(e.target.value)} placeholder="Stock insuffisant, variété indisponible…" rows={4} required style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', boxSizing: 'border-box' }} />
+            <Field label="Motif de l'annulation *" hint="Minimum 10 caractères — visible par les deux parties">
+              <textarea
+                value={motif}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setMotif(e.target.value)}
+                placeholder="Stock insuffisant pour cette campagne, délai dépassé…"
+                rows={4}
+                style={{ width: '100%', padding: '8px 12px', border: `1px solid ${motif.length > 0 && motif.trim().length < 10 ? '#fca5a5' : 'var(--border-strong)'}`, borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', boxSizing: 'border-box', background: 'var(--surface)' }}
+              />
+              {motif.length > 0 && motif.trim().length < 10 && (
+                <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Motif trop court ({motif.trim().length}/10 caractères minimum)</div>
+              )}
             </Field>
-            <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer l'annulation" />
+            <FormActions onCancel={() => setRefusModal(null)} loading={saving} submitLabel="Confirmer l'annulation" submitDisabled={motif.trim().length < 10} />
           </form>
         </Modal>
       )}
@@ -2498,6 +2591,9 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
   const [commandeAProposer, setCommandeAProposer] = useState<any | null>(null)
   const [commandeTransfert, setCommandeTransfert] = useState<any | null>(null)
   const [actioning,         setActioning]         = useState<number | null>(null)
+  const [annulModal,        setAnnulModal]        = useState<{ id: number; code: string } | null>(null)
+  const [annulMotif,        setAnnulMotif]        = useState('')
+  const [annulSaving,       setAnnulSaving]       = useState(false)
   const isUpsemcl = roleKey === 'seed-upsemcl'
 
   async function fetchAll() {
@@ -2530,6 +2626,18 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message ?? 'Erreur lors du transfert', type: 'error' })
     } finally { setActioning(null) }
+  }
+
+  async function annulerCommande(e: React.FormEvent) {
+    e.preventDefault()
+    if (!annulModal || annulMotif.trim().length < 10) return
+    setAnnulSaving(true)
+    try {
+      await api.put(endpoints.orderStatut(annulModal.id), { statut: 'ANNULEE', observations: annulMotif.trim() })
+      setToast({ msg: `Commande ${annulModal.code} annulée`, type: 'success' })
+      setAnnulModal(null); setAnnulMotif(''); fetchAll()
+    } catch { setToast({ msg: 'Erreur lors de l\'annulation', type: 'error' }) }
+    finally { setAnnulSaving(false) }
   }
 
   async function handleConfirmerEtTransferer(commande: any) {
@@ -2574,26 +2682,54 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
                 title="Livraison directe (ancien flux)" onClick={() => handleValiderG3(o)} disabled={actioning === o.id}>
                 <Zap size={11} />
               </button>
+              <button className="btn btn-ghost" style={{ height: 28, width: 28, padding: 0, color: 'var(--red-600)', border: '1px solid #fecaca', flexShrink: 0 }}
+                onClick={() => { setAnnulModal({ id: o.id, code: o.codeCommande }); setAnnulMotif('') }}
+                title="Annuler la commande">
+                <Ban size={10} />
+              </button>
             </div>
           )
         }
         return (
-          <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 5 }}
-            onClick={() => setCommandeAProposer(o)} disabled={actioning === o.id}>
-            <Settings2 size={11} /> Proposer
-          </button>
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', display: 'flex', alignItems: 'center', gap: 5 }}
+              onClick={() => setCommandeAProposer(o)} disabled={actioning === o.id}>
+              <Settings2 size={11} /> Proposer
+            </button>
+            <button className="btn btn-ghost" style={{ height: 28, width: 28, padding: 0, color: 'var(--red-600)', border: '1px solid #fecaca', flexShrink: 0 }}
+              onClick={() => { setAnnulModal({ id: o.id, code: o.codeCommande }); setAnnulMotif('') }}
+              title="Annuler la commande">
+              <Ban size={10} />
+            </button>
+          </div>
         )
       }
       if (o.statut === 'EN_NEGOCIATION') {
-        return <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> En attente multiplicateur</span>
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#d97706', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}><Clock size={11} /> En attente multiplicateur</span>
+            <button className="btn btn-ghost" style={{ height: 24, width: 24, padding: 0, color: 'var(--red-600)', border: '1px solid #fecaca', flexShrink: 0 }}
+              onClick={() => { setAnnulModal({ id: o.id, code: o.codeCommande }); setAnnulMotif('') }}
+              title="Annuler la commande">
+              <Ban size={10} />
+            </button>
+          </div>
+        )
       }
       if (o.statut === 'ACCEPTEE') {
         return (
-          <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #1d4ed8, #1e40af)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
-            onClick={() => handleConfirmerEtTransferer(o)} disabled={actioning === o.id}>
-            {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Truck size={11} />}
-            Confirmer et transférer
-          </button>
+          <div style={{ display: 'flex', gap: 5 }}>
+            <button className="btn btn-primary" style={{ height: 28, fontSize: 11, padding: '0 10px', background: 'linear-gradient(135deg, #1d4ed8, #1e40af)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}
+              onClick={() => handleConfirmerEtTransferer(o)} disabled={actioning === o.id}>
+              {actioning === o.id ? <RefreshCw size={11} style={{ animation: 'spin 1s linear infinite' }} /> : <Truck size={11} />}
+              Confirmer et transférer
+            </button>
+            <button className="btn btn-ghost" style={{ height: 28, width: 28, padding: 0, color: 'var(--red-600)', border: '1px solid #fecaca', flexShrink: 0 }}
+              onClick={() => { setAnnulModal({ id: o.id, code: o.codeCommande }); setAnnulMotif('') }}
+              title="Annuler la commande">
+              <Ban size={10} />
+            </button>
+          </div>
         )
       }
       if (o.statut === 'ACCORDEE') {
@@ -2624,7 +2760,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
         <KpiCard icon={<ShoppingCart size={20} />}  value={orders.length} label="Total reçues"  accent="#3b82f6" loading={loading} onClick={() => setKpiFilter(null)} />
         <KpiCard icon={<Clock size={20} />}          value={aTraiter}      label="À traiter"     accent="#f59e0b" active={kpiFilter === 'pending'}   onClick={() => toggleKpi('pending')}   loading={loading} />
         <KpiCard icon={<PackageCheck size={20} />}   value={enCours}       label="En cours"      accent="#22c55e" active={kpiFilter === 'accepted'}   onClick={() => toggleKpi('accepted')}  loading={loading} />
-        <KpiCard icon={<XCircle size={20} />}        value={rejetees}      label="Rejetées"      accent="#ef4444" active={kpiFilter === 'rejected'}   onClick={() => toggleKpi('rejected')}  loading={loading} />
+        <KpiCard icon={<XCircle size={20} />}        value={rejetees}      label="Annulées"      accent="#ef4444" active={kpiFilter === 'rejected'}   onClick={() => toggleKpi('rejected')}  loading={loading} />
       </div>
 
       {aTraiter > 0 && (
@@ -2678,6 +2814,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
           varieties={varieties}
           onUpdateStatus={handleUpdateStatus}
           onValiderG3={isUpsemcl ? handleValiderG3 : undefined}
+          onAnnuler={(o) => { setAnnulModal({ id: o.id, code: o.codeCommande }); setAnnulMotif('') }}
           extraColumns={extraColumnsUpsemcl}
         />
       </div>
@@ -2696,6 +2833,30 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
       )}
       {commandeTransfert && (
         <ProposeModal commande={commandeTransfert} varieties={varieties} onClose={() => setCommandeTransfert(null)} onSuccess={fetchAll} setToast={setToast} />
+      )}
+
+      {annulModal && (
+        <Modal title="Annuler la commande" subtitle={`${annulModal.code} — cette action est irréversible`} onClose={() => setAnnulModal(null)} size="sm">
+          <div style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 12.5, color: '#9a3412', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+            <span style={{ fontSize: 15 }}>⚠</span>
+            La partie adverse sera informée du motif de cette annulation.
+          </div>
+          <form onSubmit={annulerCommande}>
+            <Field label="Motif de l'annulation *" hint="Minimum 10 caractères — visible par les deux parties">
+              <textarea
+                value={annulMotif}
+                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setAnnulMotif(e.target.value)}
+                placeholder="Stock insuffisant pour cette campagne, délai dépassé…"
+                rows={4}
+                style={{ width: '100%', padding: '8px 12px', border: `1px solid ${annulMotif.length > 0 && annulMotif.trim().length < 10 ? '#fca5a5' : 'var(--border-strong)'}`, borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', boxSizing: 'border-box' }}
+              />
+              {annulMotif.length > 0 && annulMotif.trim().length < 10 && (
+                <div style={{ fontSize: 11, color: '#dc2626', marginTop: 4 }}>Motif trop court ({annulMotif.trim().length}/10 caractères minimum)</div>
+              )}
+            </Field>
+            <FormActions onCancel={() => setAnnulModal(null)} loading={annulSaving} submitLabel="Confirmer l'annulation" submitDisabled={annulMotif.trim().length < 10} />
+          </form>
+        </Modal>
       )}
     </div>
   )
@@ -3685,7 +3846,7 @@ function VueAdmin({ setToast }: { setToast: any }) {
 
       {rejected > 0 && !loading && (
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <XCircle size={13} /> <strong>{rejected}</strong> commande{rejected > 1 ? 's' : ''} annulée{rejected > 1 ? 's' : ''} / rejetée{rejected > 1 ? 's' : ''}
+          <XCircle size={13} /> <strong>{rejected}</strong> commande{rejected > 1 ? 's' : ''} annulée{rejected > 1 ? 's' : ''}
           <button className="btn btn-ghost" style={{ fontSize: 11, marginLeft: 4 }} onClick={() => toggleKpi('rejected')}>Afficher</button>
         </div>
       )}

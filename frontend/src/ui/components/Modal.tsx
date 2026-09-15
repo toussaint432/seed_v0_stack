@@ -97,16 +97,18 @@ export function FormActions({
   onCancel, loading,
   submitLabel = 'Enregistrer',
   submitClassName = 'btn-primary',
+  submitDisabled,
 }: {
   onCancel: () => void
   loading?: boolean
   submitLabel?: string
   submitClassName?: string
+  submitDisabled?: boolean
 }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
       <button type="button" onClick={onCancel} className="btn btn-secondary">Annuler</button>
-      <button type="submit" className={`btn ${submitClassName}`} disabled={loading}>
+      <button type="submit" className={`btn ${submitClassName}`} disabled={loading || submitDisabled}>
         {loading ? 'Enregistrement…' : submitLabel}
       </button>
     </div>
