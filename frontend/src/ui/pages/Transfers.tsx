@@ -103,7 +103,7 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
   async function fetchAll() {
     setLoading(true)
     const lotsUrl = roleKey === 'seed-multiplicator' ? endpoints.lotsMesLots : endpoints.lots
-    const needsMesSites = ['seed-multiplicator', 'seed-quotataire'].includes(roleKey)
+    const needsMesSites = ['seed-multiplicator', 'seed-quotataire', 'seed-upsemcl'].includes(roleKey)
     const [tRes, lRes, rRes, sRes, msRes] = await Promise.allSettled([
       api.get(endpoints.transfertsLot),
       api.get(lotsUrl),
