@@ -75,7 +75,7 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
   const [saving, setSaving] = useState(false)
   // blobUrl ouvert dans un onglet → pas besoin de state docViewer
 
-  const canCreate = ['seed-admin', 'seed-selector', 'seed-upsemcl', 'seed-multiplicator'].includes(roleKey)
+  const canCreate = roleKey === 'seed-selector'
   const rule      = TRANSFER_RULES[roleKey]
 
   // Lots filtrés selon les générations autorisées pour ce rôle

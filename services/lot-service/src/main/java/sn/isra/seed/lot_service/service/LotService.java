@@ -270,6 +270,11 @@ public class LotService {
         if (roleEmetteur == null)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Rôle non autorisé à créer un transfert");
 
+        // UPSemCL doit passer par la voie commande (POST /orders/{id}/faire-transfert)
+        if ("seed-upsemcl".equals(roleEmetteur))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                "Les transferts UPSemCL doivent être initiés depuis une commande acceptée");
+
         LotSemencier lot = lotRepo.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Lot introuvable"));
 
