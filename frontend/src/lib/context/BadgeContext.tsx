@@ -5,9 +5,7 @@ import { keycloak } from '../keycloak'
 
 interface BadgeCounts {
   messages: number
-  lots: number
   transferts: number
-  stocks: number
   commandes: number
   certifications: number
 }
@@ -20,7 +18,7 @@ interface BadgeContextValue {
 }
 
 const DEFAULT_COUNTS: BadgeCounts = {
-  messages: 0, lots: 0, transferts: 0, stocks: 0, commandes: 0, certifications: 0,
+  messages: 0, transferts: 0, commandes: 0, certifications: 0,
 }
 
 const BadgeContext = createContext<BadgeContextValue>({
@@ -65,17 +63,13 @@ export function BadgeProvider({ children }: { children: React.ReactNode }) {
 
   const fetchAlertCounts = useCallback(async () => {
     try {
-      const [lots, transferts, stock, commandes] = await Promise.allSettled([
-        api.get(endpoints.alertsCountLots),
+      const [transferts, commandes] = await Promise.allSettled([
         api.get(endpoints.alertsCountTransferts),
-        api.get(endpoints.alertsCountStock),
         api.get(endpoints.alertsCountCommandes),
       ])
       setCounts(c => ({
         ...c,
-        lots:       lots.status       === 'fulfilled' ? (lots.value.data?.count       ?? 0) : c.lots,
         transferts: transferts.status === 'fulfilled' ? (transferts.value.data?.count ?? 0) : c.transferts,
-        stocks:     stock.status      === 'fulfilled' ? (stock.value.data?.count      ?? 0) : c.stocks,
         commandes:  commandes.status  === 'fulfilled' ? (commandes.value.data?.count  ?? 0) : c.commandes,
       }))
     } catch { /* ignoré */ }

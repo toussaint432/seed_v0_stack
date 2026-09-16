@@ -430,9 +430,7 @@ function AppAuthenticated() {
                   <span className="nav-label">{label}</span>
                   {badge && <span className="nav-badge">{badge}</span>}
                   {id === 'messages'      && counts.messages    > 0 && <span className="nav-badge">{counts.messages}</span>}
-                  {id === 'lots'          && counts.lots        > 0 && <span className="nav-badge">{counts.lots}</span>}
                   {id === 'transfers'     && counts.transferts  > 0 && <span className="nav-badge">{counts.transferts}</span>}
-                  {id === 'stocks'        && counts.stocks      > 0 && <span className="nav-badge">{counts.stocks}</span>}
                   {id === 'orders'        && counts.commandes   > 0 && <span className="nav-badge">{counts.commandes}</span>}
                   {id === 'certifications' && (() => {
                     const actionCount = user.roleKey === 'seed-upsemcl' || user.roleKey === 'seed-admin'

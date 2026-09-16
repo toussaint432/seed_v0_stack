@@ -2627,8 +2627,8 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
       api.get(endpoints.varieties),
     ])
     const allOrders = oRes.status === 'fulfilled' ? extractList(oRes.value.data) : []
-    // UPSemCL ne traite que les commandes G3 (idGeneration 4) venant des multiplicateurs
-    setOrders(allOrders.filter((o: any) => Array.isArray(o.lignes) && o.lignes.some((l: any) => l.idGeneration === 4)))
+    // UPSemCL ne traite que les commandes G3_UPSEMCL_MULT — filtre sur typeCommande pour éviter le double-mapping JPA (idGeneration peut être null en JSON)
+    setOrders(allOrders.filter((o: any) => o.typeCommande === 'G3_UPSEMCL_MULT'))
     setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
     if (varRes.status === 'fulfilled') setVarieties(extractList(varRes.value.data).map(normalizeVariete))
     setLoading(false)
