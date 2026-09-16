@@ -13,6 +13,7 @@ import { fmtT } from '../../lib/fmt'
 import { downloadXlsx, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { keycloak } from '../../lib/keycloak'
+import { useBadges } from '../../lib/context/BadgeContext'
 import {
   generateTransferDoc, generateNumero,
   TransferDocData, LotPdfData, PartiePdf,
@@ -411,6 +412,7 @@ function LotDropdown({ lots, value, onChange, placeholder = 'Sélectionner un lo
 
 export function Stocks({ roleKey, userSpecialisation }: Props) {
   const navigate = useNavigate()
+  const { refreshBadge } = useBadges()
   const [agregeStocks, setAgregeStocks] = useState<any[]>([])
   const [lots,         setLots]         = useState<any[]>([])
   const [varieties,    setVarieties]    = useState<any[]>([])
@@ -489,6 +491,7 @@ export function Stocks({ roleKey, userSpecialisation }: Props) {
     ])
     setLoading(false)
     setRefreshing(false)
+    refreshBadge('stocks')
   }
 
   useEffect(() => { fetchAll() }, [])

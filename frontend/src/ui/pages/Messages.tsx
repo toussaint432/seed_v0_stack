@@ -8,6 +8,7 @@ import { normalizeVariete, extractList } from '../../lib/normalizers'
 import { ChatBubble } from '../components/ChatBubble'
 import { AudioRecorder } from '../components/AudioRecorder'
 import { Toast } from '../components/Modal'
+import { useBadges } from '../../lib/context/BadgeContext'
 
 interface VarieteCatalog { id: number; nomVariete: string; codeVariete: string; espece?: { codeEspece: string } }
 
@@ -109,6 +110,7 @@ function formatDate(iso: string) {
 
 /* ══════════════════════════════════════════════════════════════ */
 export function Messages({ roleKey, username }: Props) {
+  const { clearBadge } = useBadges()
   const [convs, setConvs]             = useState<ConvSummary[]>([])
   const [selectedConv, setSelected]   = useState<ConvSummary | null>(null)
   const [messages, setMessages]       = useState<MessageData[]>([])
@@ -149,6 +151,7 @@ export function Messages({ roleKey, username }: Props) {
   }
 
   useEffect(() => {
+    clearBadge('messages')
     fetchConvs()
     fetchMembres()
     if (roleKey === 'seed-quotataire') {

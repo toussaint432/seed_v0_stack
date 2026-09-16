@@ -26,6 +26,7 @@ import { CataloguePublic }  from './pages/CataloguePublic'
 import { Messages }            from './pages/Messages'
 import { Certifications }      from './pages/Certifications'
 import { DirecteurDashboard }  from './pages/DirecteurDashboard'
+import { BadgeProvider, useBadges } from '../lib/context/BadgeContext'
 type Page =
   | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
   | 'certifications' | 'transfers' | 'campagnes' | 'sites'
@@ -178,21 +179,62 @@ const adminTools = [
 
 export function App() {
   const navigate   = useNavigate()
-  const location   = useLocation()
   const [ready,     setReady]     = useState(false)
   // Vrai seulement quand l'URL contient le code OAuth2 (retour post-login KC).
   // Dans ce cas on affiche un loading le temps du token exchange (~200 ms).
   // Pour une visite normale (pas de code dans l'URL), on affiche
   // LandingPage immédiatement sans attendre l'init KC.
   const [isKcCallback] = useState(() => new URLSearchParams(window.location.search).has('code'))
+
+  useEffect(() => {
+    initKeycloak()
+      .then(() => {
+        setReady(true)
+        // Authentifié (post-login KC ou session existante) → dashboard directement.
+        // La landing page ne s'affiche que pour les utilisateurs non authentifiés.
+        if (keycloak.authenticated) {
+          navigate('/dashboard')
+        }
+      })
+      .catch(() => {
+        setReady(true)
+      })
+  }, [])
+
+  if (!ready) {
+    // Pendant l'init Keycloak :
+    // - Callback post-login (code OAuth2 dans l'URL) → spinner
+    // - Visite directe sans code → landing page immédiatement (pas de redirection)
+    if (isKcCallback) {
+      return (
+        <div className="loading-screen">
+          <div className="loading-logo">
+            <Leaf size={24} color="#fff" />
+          </div>
+          <div className="loading-text">Connexion en cours…</div>
+        </div>
+      )
+    }
+    return <LandingPage />
+  }
+
+  // Après init : non authentifié → landing page
+  if (!keycloak.authenticated) {
+    return <LandingPage />
+  }
+
+  return (
+    <BadgeProvider>
+      <AppAuthenticated />
+    </BadgeProvider>
+  )
+}
+
+function AppAuthenticated() {
+  const navigate   = useNavigate()
+  const location   = useLocation()
+  const { counts, certifNotifs } = useBadges()
   const [collapsed, setCollapsed] = useState(false)
-  const [unread,        setUnread]        = useState(0)
-  const [certifNotifs,  setCertifNotifs]  = useState<any[]>([])
-  const [alertLots,       setAlertLots]       = useState(0)
-  const [alertTransferts, setAlertTransferts] = useState(0)
-  const [alertStock,      setAlertStock]      = useState(0)
-  const [alertCommandes,  setAlertCommandes]  = useState(0)
-  const unreadTimer = useRef<ReturnType<typeof setInterval> | null>(null)
   const [theme,     setTheme]     = useState<'system' | 'light' | 'dark'>(() => (localStorage.getItem('seed-theme') as any) || 'system')
   const [sessionWarning, setSessionWarning] = useState(false)
   const [notifOpen,    setNotifOpen]    = useState(false)
@@ -205,22 +247,6 @@ export function App() {
   const searchRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLInputElement>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    initKeycloak()
-      .then(() => {
-        setReady(true)
-        // Authentifié (post-login KC ou session existante) → dashboard directement.
-        // La landing page ne s'affiche que pour les utilisateurs non authentifiés.
-        if (keycloak.authenticated) {
-          const roles: string[] = (keycloak.tokenParsed as any)?.realm_access?.roles ?? []
-          navigate('/dashboard')
-        }
-      })
-      .catch(() => {
-        setReady(true)
-      })
-  }, [])
 
   // ── Thème ──
   useEffect(() => {
@@ -270,7 +296,6 @@ export function App() {
 
   // Renouvellement proactif du token — invisible pour l'utilisateur
   useEffect(() => {
-    if (!ready || !keycloak.authenticated) return
     const check = () => {
       const exp = (keycloak.tokenParsed as any)?.exp
       if (!exp) return
@@ -287,82 +312,7 @@ export function App() {
     check()
     const t = setInterval(check, 20_000)
     return () => clearInterval(t)
-  }, [ready])
-
-  // Polling badge non-lus + notifications certification (toutes les 30s)
-  useEffect(() => {
-    if (!ready || !keycloak.authenticated) return
-    async function fetchUnread() {
-      try {
-        const { api } = await import('../lib/api')
-        const { endpoints } = await import('../lib/endpoints')
-        const r = await api.get(endpoints.chatUnread)
-        setUnread(r.data?.count || 0)
-      } catch { /* ignoré */ }
-    }
-    async function fetchCertifNotifs() {
-      try {
-        const { api } = await import('../lib/api')
-        const { endpoints } = await import('../lib/endpoints')
-        const roles: string[] = (keycloak.tokenParsed as any)?.realm_access?.roles ?? []
-        const role = roles.find((r: string) => r.startsWith('seed-')) ?? ''
-        if (role === 'seed-multiplicator') {
-          const r = await api.get(endpoints.lotsMultCertif)
-          setCertifNotifs(r.data ?? [])
-        } else if (role === 'seed-upsemcl' || role === 'seed-admin') {
-          const r = await api.get(endpoints.lotsACertifier)
-          setCertifNotifs(r.data ?? [])
-        }
-      } catch { /* ignoré */ }
-    }
-    async function fetchAlertCounts() {
-      try {
-        const { api } = await import('../lib/api')
-        const { endpoints } = await import('../lib/endpoints')
-        const [lots, transferts, stock, commandes] = await Promise.allSettled([
-          api.get(endpoints.alertsCountLots),
-          api.get(endpoints.alertsCountTransferts),
-          api.get(endpoints.alertsCountStock),
-          api.get(endpoints.alertsCountCommandes),
-        ])
-        if (lots.status       === 'fulfilled') setAlertLots(lots.value.data?.count       || 0)
-        if (transferts.status === 'fulfilled') setAlertTransferts(transferts.value.data?.count || 0)
-        if (stock.status      === 'fulfilled') setAlertStock(stock.value.data?.count      || 0)
-        if (commandes.status  === 'fulfilled') setAlertCommandes(commandes.value.data?.count  || 0)
-      } catch { /* ignoré */ }
-    }
-    fetchUnread()
-    fetchCertifNotifs()
-    fetchAlertCounts()
-    unreadTimer.current = setInterval(() => {
-      fetchUnread()
-      fetchCertifNotifs()
-      fetchAlertCounts()
-    }, 30_000)
-    return () => { if (unreadTimer.current) clearInterval(unreadTimer.current) }
-  }, [ready])
-
-  if (!ready) {
-    // Pendant l'init Keycloak :
-    // - Callback post-login (code OAuth2 dans l'URL) → spinner
-    // - Visite directe sans code → landing page immédiatement (pas de redirection)
-    if (isKcCallback) {
-      return (
-        <div className="loading-screen">
-          <div className="loading-logo">
-            <Leaf size={24} color="#fff" />
-          </div>
-          <div className="loading-text">Connexion en cours…</div>
-        </div>
-      )
-    }
-    return <LandingPage />
-  }
-
-  // Après init : non authentifié → landing page
-  if (!keycloak.authenticated) {
-    return <LandingPage />
-  }
+  }, [])
 
   const user        = getUserInfo()
   const navSections = getNavSections(user.roleKey)
@@ -422,9 +372,9 @@ export function App() {
   })()
 
   const notifications: Notif[] = [
-    ...(unread > 0 ? [{
+    ...(counts.messages > 0 ? [{
       id: 1, type: 'message' as const,
-      title: `${unread} message${unread > 1 ? 's' : ''} non lu${unread > 1 ? 's' : ''}`,
+      title: `${counts.messages} message${counts.messages > 1 ? 's' : ''} non lu${counts.messages > 1 ? 's' : ''}`,
       sub: 'Messagerie plateforme', time: 'maintenant', read: false,
       href: NOTIF_HREF.message,
     }] : []),
@@ -479,11 +429,11 @@ export function App() {
                   <span className="nav-icon"><Icon size={16} /></span>
                   <span className="nav-label">{label}</span>
                   {badge && <span className="nav-badge">{badge}</span>}
-                  {id === 'messages'      && unread         > 0 && <span className="nav-badge">{unread}</span>}
-                  {id === 'lots'          && alertLots       > 0 && <span className="nav-badge">{alertLots}</span>}
-                  {id === 'transfers'     && alertTransferts > 0 && <span className="nav-badge">{alertTransferts}</span>}
-                  {id === 'stocks'        && alertStock      > 0 && <span className="nav-badge">{alertStock}</span>}
-                  {id === 'orders'        && alertCommandes  > 0 && <span className="nav-badge">{alertCommandes}</span>}
+                  {id === 'messages'      && counts.messages    > 0 && <span className="nav-badge">{counts.messages}</span>}
+                  {id === 'lots'          && counts.lots        > 0 && <span className="nav-badge">{counts.lots}</span>}
+                  {id === 'transfers'     && counts.transferts  > 0 && <span className="nav-badge">{counts.transferts}</span>}
+                  {id === 'stocks'        && counts.stocks      > 0 && <span className="nav-badge">{counts.stocks}</span>}
+                  {id === 'orders'        && counts.commandes   > 0 && <span className="nav-badge">{counts.commandes}</span>}
                   {id === 'certifications' && (() => {
                     const actionCount = user.roleKey === 'seed-upsemcl' || user.roleKey === 'seed-admin'
                       ? certifNotifs.length

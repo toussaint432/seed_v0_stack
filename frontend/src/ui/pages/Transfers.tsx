@@ -14,6 +14,7 @@ import { Pagination } from '../components/Pagination'
 import { keycloak } from '../../lib/keycloak'
 import { generateTransferDoc, generateNumero, TransferDocData, LotPdfData, PartiePdf } from '../../lib/pdf/generateTransferDoc'
 import { generateFacture, FactureData, FactureResult } from '../../lib/pdf/generateFacture'
+import { useBadges } from '../../lib/context/BadgeContext'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
 const PAGE_SIZE = 10
@@ -55,6 +56,7 @@ function fmtDatetime(value?: string | null): string {
 }
 
 export function Transfers({ roleKey, userSpecialisation }: Props) {
+  const { refreshBadge } = useBadges()
   const [transfers, setTransfers] = useState<any[]>([])
   const [lots, setLots] = useState<any[]>([])
   const [sites, setSites] = useState<any[]>([])
@@ -131,6 +133,7 @@ export function Transfers({ roleKey, userSpecialisation }: Props) {
     setMembresMap(map)
 
     setLoading(false)
+    refreshBadge('transferts')
   }
 
   useEffect(() => { fetchAll() }, [])

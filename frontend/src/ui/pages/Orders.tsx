@@ -11,6 +11,7 @@ import { normalizeVariete, extractList } from '../../lib/normalizers'
 import { downloadXlsx, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormActions, Toast } from '../components/Modal'
 import { ROLE_LABELS } from '../../lib/constants'
+import { useBadges } from '../../lib/context/BadgeContext'
 
 interface Props { roleKey: string }
 
@@ -1077,6 +1078,7 @@ function OrderTable({ orders, loading, emptyMsg, orgs = [], varieties = [], memb
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueQuotataire({ setToast }: { setToast: any }) {
   const navigate = useNavigate()
+  const { refreshBadge } = useBadges()
   const [orders,       setOrders]       = useState<any[]>([])
   const [orgs,         setOrgs]         = useState<any[]>([])
   const [varieties,    setVarieties]    = useState<any[]>([])
@@ -1112,6 +1114,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
     if (varRes.status === 'fulfilled')
       setVarieties(extractList(varRes.value.data).map(normalizeVariete).filter((v: any) => v.statutVariete === 'DIFFUSEE'))
     setLoading(false)
+    refreshBadge('commandes')
   }
   useEffect(() => { fetchAll() }, [])
 
@@ -1403,6 +1406,7 @@ function VueQuotataire({ setToast }: { setToast: any }) {
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueMultiplicateur({ setToast }: { setToast: any }) {
   const navigate = useNavigate()
+  const { refreshBadge } = useBadges()
   const [onglet,        setOnglet]        = useState<'recues'|'demandes'>('recues')
   const [recues,        setRecues]        = useState<any[]>([])
   const [demandes,      setDemandes]      = useState<any[]>([])
@@ -1458,6 +1462,7 @@ function VueMultiplicateur({ setToast }: { setToast: any }) {
     const map: Record<string, any> = {}
     entries.forEach(r => { if (r.status === 'fulfilled') { const [u, m] = r.value; map[u] = m } })
     setMembresMap(map)
+    refreshBadge('commandes')
   }
   useEffect(() => { fetchAll() }, [])
 
@@ -2612,6 +2617,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
   const [annulMotif,        setAnnulMotif]        = useState('')
   const [annulSaving,       setAnnulSaving]       = useState(false)
   const isUpsemcl = roleKey === 'seed-upsemcl'
+  const { refreshBadge } = useBadges()
 
   async function fetchAll() {
     setLoading(true)
@@ -2626,6 +2632,7 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
     setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
     if (varRes.status === 'fulfilled') setVarieties(extractList(varRes.value.data).map(normalizeVariete))
     setLoading(false)
+    refreshBadge('commandes')
   }
   async function handleUpdateStatus(id: number, statut: string) {
     await api.put(endpoints.orderStatut(id), { statut })
@@ -3749,6 +3756,7 @@ function ConfirmerReceptionSimpleModal({
    VUE ADMIN
    ══════════════════════════════════════════════════════════════════════════════ */
 function VueAdmin({ setToast }: { setToast: any }) {
+  const { refreshBadge } = useBadges()
   const [orders,    setOrders]    = useState<any[]>([])
   const [orgs,      setOrgs]      = useState<any[]>([])
   const [loading,   setLoading]   = useState(true)
@@ -3770,6 +3778,7 @@ function VueAdmin({ setToast }: { setToast: any }) {
     setOrgs(orgRes.status === 'fulfilled' ? orgRes.value.data : [])
     if (varRes.status === 'fulfilled') setVarieties(extractList(varRes.value.data).map(normalizeVariete))
     setLoading(false)
+    refreshBadge('commandes')
   }
   async function handleUpdateStatus(id: number, statut: string) {
     await api.put(endpoints.orderStatut(id), { statut })

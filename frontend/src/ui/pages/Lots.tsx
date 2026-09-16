@@ -8,6 +8,7 @@ import { fmtT } from '../../lib/fmt'
 import { downloadXlsx, formatDateForExport } from '../../lib/exportUtils'
 import { Modal, Field, FormInput, FormSelect, FormRow, FormActions, Toast } from '../components/Modal'
 import { generateTransferDoc, generateNumero, type TransferDocData, type LotPdfData, type PartiePdf } from '../../lib/pdf/generateTransferDoc'
+import { useBadges } from '../../lib/context/BadgeContext'
 
 interface Props { roleKey: string; userSpecialisation?: string | null }
 // Chaîne stricte G0→G1→G2→G3→G4→R1→R2
@@ -804,6 +805,7 @@ type CartVarieteItem = {
 }
 
 function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type: 'success'|'error' }) => void }) {
+  const { refreshBadge } = useBadges()
   const [onglet, setOnglet]           = useState<'catalogue'|'meslots'>('catalogue')
   const [catalogueG3, setCatalogueG3] = useState<any[]>([])
   const [mesLots, setMesLots]         = useState<any[]>([])
@@ -972,6 +974,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
       )
       setUpsemclOrgId(upsemcl?.id ?? null)
     }
+    refreshBadge('lots')
   }
 
   // Accepter un transfert G3 entrant — le lot apparaît ensuite dans Mes Lots
@@ -2330,6 +2333,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
 }
 
 export function Lots({ roleKey, userSpecialisation }: Props) {
+  const { refreshBadge } = useBadges()
   const [lots, setLots] = useState<any[]>([])
   const [varieties, setVarieties] = useState<any[]>([])
   const [generation, setGeneration] = useState('')
@@ -2502,7 +2506,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
       let data = extractList(r.data).map(normalizeLot)
       if (roleKey !== 'seed-admin') data = data.filter((l: any) => allowedGens.includes(l.generation?.codeGeneration))
       setLots(data)
-    }).catch(() => setLots([])).finally(() => setLoading(false))
+    }).catch(() => setLots([])).finally(() => { setLoading(false); refreshBadge('lots') })
   }
 
   useEffect(() => {

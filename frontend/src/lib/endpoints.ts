@@ -162,6 +162,7 @@ export const endpoints = {
   chatMessages:       (convId: number) => `${ORDER}/chat/conversations/${convId}/messages`,
   chatUpload:         (convId: number) => `${ORDER}/chat/conversations/${convId}/messages/upload`,
   chatUnread:         `${ORDER}/chat/unread-count`,
+  chatMarkAllRead:    `${ORDER}/chat/mark-all-read`,
 
   // ── Swagger UI links ──
   swagger: {
