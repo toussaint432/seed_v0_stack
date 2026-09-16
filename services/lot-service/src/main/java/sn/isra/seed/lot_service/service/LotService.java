@@ -343,7 +343,7 @@ public class LotService {
             ? lot.getQuantiteNette().subtract(quantiteTransfert) : BigDecimal.ZERO;
         lot.setQuantiteNette(restant.compareTo(BigDecimal.ZERO) >= 0 ? restant : BigDecimal.ZERO);
         StatutLot nouveauStatut = restant.compareTo(BigDecimal.ZERO) <= 0
-            ? StatutLot.TRANSFERE : ancienStatut;
+            ? StatutLot.EPUISE : ancienStatut;
         lot.setStatutLot(nouveauStatut);
         lotRepo.save(lot);
 

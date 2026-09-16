@@ -385,21 +385,46 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
       @Param("idVariete") Long idVariete
   );
 
+  /** Compte les variétés dont le stock total (somme des lots) dans le périmètre org est entre 0 et seuil. */
   @Query(value = """
-      SELECT COUNT(DISTINCT s.id_lot)
-      FROM stock s
-      JOIN site si ON si.id = s.id_site
-      WHERE si.id_organisation = :orgId
-        AND s.quantite_disponible > 0
-        AND s.quantite_disponible < :seuil
+      SELECT COUNT(*) FROM (
+        SELECT s.id_variete
+        FROM   stock s
+        JOIN   site si ON si.id = s.id_site
+        WHERE  si.id_organisation = :orgId
+          AND  s.quantite_disponible > 0
+        GROUP BY s.id_variete
+        HAVING SUM(s.quantite_disponible) < :seuil
+      ) agg
       """, nativeQuery = true)
-  long countLowStockByOrg(@Param("orgId") Long orgId, @Param("seuil") BigDecimal seuil);
+  long countLowVarietesByOrg(@Param("orgId") Long orgId, @Param("seuil") BigDecimal seuil);
 
+  /** Idem, filtré par espèce pour le Sélectionneur (code_espece dénormalisé dans lot_semencier). */
   @Query(value = """
-      SELECT COUNT(DISTINCT s.id_lot)
-      FROM stock s
-      WHERE s.quantite_disponible > 0
-        AND s.quantite_disponible < :seuil
+      SELECT COUNT(*) FROM (
+        SELECT s.id_variete
+        FROM   stock s
+        JOIN   site si ON si.id = s.id_site
+        JOIN   lot.lot_semencier ls ON ls.id = s.id_lot
+        WHERE  si.id_organisation = :orgId
+          AND  s.quantite_disponible > 0
+          AND  UPPER(ls.code_espece) = UPPER(CAST(:codeEspece AS VARCHAR))
+        GROUP BY s.id_variete
+        HAVING SUM(s.quantite_disponible) < :seuil
+      ) agg
       """, nativeQuery = true)
-  long countLowStock(@Param("seuil") BigDecimal seuil);
+  long countLowVarietesByOrgAndEspece(@Param("orgId") Long orgId, @Param("seuil") BigDecimal seuil,
+                                       @Param("codeEspece") String codeEspece);
+
+  /** Admin : toutes organisations confondues. */
+  @Query(value = """
+      SELECT COUNT(*) FROM (
+        SELECT s.id_variete
+        FROM   stock s
+        WHERE  s.quantite_disponible > 0
+        GROUP BY s.id_variete
+        HAVING SUM(s.quantite_disponible) < :seuil
+      ) agg
+      """, nativeQuery = true)
+  long countLowVarietesGlobal(@Param("seuil") BigDecimal seuil);
 }

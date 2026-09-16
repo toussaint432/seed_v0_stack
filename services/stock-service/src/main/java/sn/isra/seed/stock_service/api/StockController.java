@@ -22,6 +22,7 @@ import sn.isra.seed.stock_service.entity.MouvementStock;
 import sn.isra.seed.stock_service.repo.MouvementRepo;
 import sn.isra.seed.stock_service.repo.StockRepo;
 import sn.isra.seed.stock_service.service.StockService;
+import sn.isra.seed.common.util.JwtHelper;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -50,10 +51,21 @@ public class StockController {
   @GetMapping("/stocks/alerts/count")
   public Map<String, Long> alertsCount(@AuthenticationPrincipal Jwt jwt) {
     if (jwt == null) return Map.of("count", 0L);
-    Long orgId = stockService.resolveOrgId(jwt);
-    long count = (orgId != null)
-        ? stockRepo.countLowStockByOrg(orgId, SEUIL_ALERTE_STOCK)
-        : stockRepo.countLowStock(SEUIL_ALERTE_STOCK);
+    long count = 0L;
+    if (JwtHelper.hasRole(jwt, "seed-admin")) {
+      count = stockRepo.countLowVarietesGlobal(SEUIL_ALERTE_STOCK);
+    } else if (JwtHelper.hasRole(jwt, "seed-selector")) {
+      Long orgId = stockService.resolveOrgId(jwt);
+      String specialisation = jwt.getClaimAsString("specialisation");
+      if (orgId != null && specialisation != null && !specialisation.isBlank()) {
+        count = stockRepo.countLowVarietesByOrgAndEspece(orgId, SEUIL_ALERTE_STOCK, specialisation);
+      } else if (orgId != null) {
+        count = stockRepo.countLowVarietesByOrg(orgId, SEUIL_ALERTE_STOCK);
+      }
+    } else if (JwtHelper.hasRole(jwt, "seed-upsemcl") || JwtHelper.hasRole(jwt, "seed-multiplicator")) {
+      Long orgId = stockService.resolveOrgId(jwt);
+      if (orgId != null) count = stockRepo.countLowVarietesByOrg(orgId, SEUIL_ALERTE_STOCK);
+    }
     return Map.of("count", count);
   }
 

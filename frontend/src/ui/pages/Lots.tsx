@@ -2394,6 +2394,7 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
   const [search,         setSearch]          = useState('')
   const [genFilter,      setGenFilter]       = useState('')
   const [filterStatut,   setFilterStatut]   = useState('')
+  const [showHistorique, setShowHistorique] = useState(false)
   const [certLot,        setCertLot]         = useState<any | null>(null)
   const canManageCert = ['seed-admin','seed-selector','seed-upsemcl','seed-multiplicator'].includes(roleKey)
   const [selectedLot,    setSelectedLot]    = useState<any | null>(null)
@@ -2543,15 +2544,23 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
       .finally(() => setStatsLoading(false))
   }, [])
 
+  const STATUTS_HISTORIQUE = ['EPUISE', 'RETIRE', 'PERDU']
+
   // Filtre client-side supplémentaire par spécialisation pour seed-selector
   // (double sécurité : le backend filtre déjà via findForSelector)
-  const displayLots = (roleKey === 'seed-selector' && userSpecialisation)
-    ? lots.filter(l => {
-        const v = (varieties as any[]).find((vv: any) => vv.id === l.idVariete)
-        const ce: string | undefined = v?.espece?.codeEspece
-        return !ce || ce.toUpperCase() === userSpecialisation.toUpperCase()
-      })
-    : lots
+  const displayLots = lots.filter(l => {
+    if (!showHistorique) {
+      if (STATUTS_HISTORIQUE.includes(l.statutLot)) return false
+      // lots TRANSFERE à 0 kg : existants avant la migration EPUISE
+      if (l.statutLot === 'TRANSFERE' && Number(l.quantiteNette ?? 0) === 0) return false
+    }
+    if (roleKey === 'seed-selector' && userSpecialisation) {
+      const v = (varieties as any[]).find((vv: any) => vv.id === l.idVariete)
+      const ce: string | undefined = v?.espece?.codeEspece
+      if (ce && ce.toUpperCase() !== userSpecialisation.toUpperCase()) return false
+    }
+    return true
+  })
 
   const genCounts = displayLots.reduce((acc: Record<string, number>, l) => {
     const g = l.generation?.codeGeneration || 'N/A'; acc[g] = (acc[g] || 0) + 1; return acc
@@ -3076,6 +3085,19 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               })}
             </div>
           )}
+          {/* Toggle historique */}
+          <button
+            onClick={() => { setShowHistorique(h => !h); setFilterStatut('') }}
+            style={{
+              height: 28, padding: '0 10px', borderRadius: 20, fontSize: 11, fontWeight: showHistorique ? 700 : 500,
+              background: showHistorique ? '#0369a118' : 'var(--surface-2)',
+              color: showHistorique ? '#0369a1' : 'var(--text-muted)',
+              border: `1px solid ${showHistorique ? '#0369a155' : 'var(--border)'}`,
+              cursor: 'pointer', transition: 'all .12s', display: 'flex', alignItems: 'center', gap: 5,
+            }}
+          >
+            {showHistorique ? '↩ Masquer l\'historique' : '↷ Afficher l\'historique'}
+          </button>
           {/* Effacer filtres */}
           {(search || genFilter || generation || filterEspece || filterStatut) && (
             <button className="btn btn-ghost" style={{ fontSize: 12, height: 28 }} onClick={() => { setSearch(''); setGenFilter(''); setGeneration(''); setFilterEspece(''); setFilterStatut('') }}>
