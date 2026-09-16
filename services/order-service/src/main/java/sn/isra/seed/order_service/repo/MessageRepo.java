@@ -26,4 +26,8 @@ public interface MessageRepo extends JpaRepository<Message, Long> {
     @Modifying
     @Query("UPDATE Message m SET m.lu = true WHERE m.idConversation = :convId AND m.expediteur <> :username AND m.lu = false")
     void markAsRead(@Param("convId") Long convId, @Param("username") String username);
+
+    @Modifying
+    @Query("UPDATE Message m SET m.lu = true WHERE m.expediteur <> :username AND m.lu = false AND m.idConversation IN (SELECT c.id FROM Conversation c WHERE c.participant1 = :username OR c.participant2 = :username)")
+    void markAllRead(@Param("username") String username);
 }

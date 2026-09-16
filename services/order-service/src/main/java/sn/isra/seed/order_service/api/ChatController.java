@@ -322,6 +322,19 @@ public class ChatController {
     }
 
     /* ════════════════════════════════════════
+       PUT /api/chat/mark-all-read
+       ════════════════════════════════════════ */
+    @PutMapping("/mark-all-read")
+    @Transactional
+    public ResponseEntity<Map<String, Long>> markAllRead(@AuthenticationPrincipal Jwt jwt) {
+        if (jwt == null) return ResponseEntity.status(401).build();
+        String me = username(jwt);
+        msgRepo.markAllRead(me);
+        Long remaining = msgRepo.countTotalUnread(me);
+        return ResponseEntity.ok(Map.of("count", remaining != null ? remaining : 0L));
+    }
+
+    /* ════════════════════════════════════════
        Helpers privés
        ════════════════════════════════════════ */
 
