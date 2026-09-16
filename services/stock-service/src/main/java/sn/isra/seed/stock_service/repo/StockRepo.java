@@ -388,12 +388,13 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
   /** Compte les variétés dont le stock total (somme des lots) dans le périmètre org est entre 0 et seuil. */
   @Query(value = """
       SELECT COUNT(*) FROM (
-        SELECT s.id_variete
+        SELECT ls.id_variete
         FROM   stock s
-        JOIN   site si ON si.id = s.id_site
+        JOIN   site si         ON si.id = s.id_site
+        JOIN   lot_semencier ls ON ls.id = s.id_lot
         WHERE  si.id_organisation = :orgId
           AND  s.quantite_disponible > 0
-        GROUP BY s.id_variete
+        GROUP BY ls.id_variete
         HAVING SUM(s.quantite_disponible) < :seuil
       ) agg
       """, nativeQuery = true)
@@ -402,14 +403,14 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
   /** Idem, filtré par espèce pour le Sélectionneur (code_espece dénormalisé dans lot_semencier). */
   @Query(value = """
       SELECT COUNT(*) FROM (
-        SELECT s.id_variete
+        SELECT ls.id_variete
         FROM   stock s
-        JOIN   site si ON si.id = s.id_site
-        JOIN   lot.lot_semencier ls ON ls.id = s.id_lot
+        JOIN   site si         ON si.id = s.id_site
+        JOIN   lot_semencier ls ON ls.id = s.id_lot
         WHERE  si.id_organisation = :orgId
           AND  s.quantite_disponible > 0
           AND  UPPER(ls.code_espece) = UPPER(CAST(:codeEspece AS VARCHAR))
-        GROUP BY s.id_variete
+        GROUP BY ls.id_variete
         HAVING SUM(s.quantite_disponible) < :seuil
       ) agg
       """, nativeQuery = true)
@@ -419,10 +420,11 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
   /** Admin : toutes organisations confondues. */
   @Query(value = """
       SELECT COUNT(*) FROM (
-        SELECT s.id_variete
+        SELECT ls.id_variete
         FROM   stock s
+        JOIN   lot_semencier ls ON ls.id = s.id_lot
         WHERE  s.quantite_disponible > 0
-        GROUP BY s.id_variete
+        GROUP BY ls.id_variete
         HAVING SUM(s.quantite_disponible) < :seuil
       ) agg
       """, nativeQuery = true)

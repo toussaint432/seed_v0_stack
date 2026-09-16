@@ -195,17 +195,18 @@ public class OrderController {
    * (quel que soit l'ID d'org), plus celles sans fournisseur explicite.
    */
   @GetMapping("/a-traiter")
-  public Page<Commande> aTraiter(
+  public ResponseEntity<?> aTraiter(
       @AuthenticationPrincipal Jwt jwt,
       @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
     if (isUpsemcl(jwt)) {
-      return commandeRepo.findForAnyUpsemcl(pageable);
+      return ResponseEntity.ok(commandeRepo.findForAnyUpsemcl());
     }
     String username = jwt.getClaimAsString("preferred_username");
-    return membreRepo.findByKeycloakUsername(username)
+    Page<Commande> page = membreRepo.findByKeycloakUsername(username)
         .map(m -> commandeRepo.findByIdOrganisationFournisseurOrderByCreatedAtDesc(
             m.getOrganisation().getId(), pageable))
         .orElse(Page.empty(pageable));
+    return ResponseEntity.ok(page);
   }
 
   @Transactional
