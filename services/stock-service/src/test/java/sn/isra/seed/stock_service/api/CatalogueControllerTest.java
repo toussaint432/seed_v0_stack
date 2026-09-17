@@ -71,6 +71,9 @@ class CatalogueControllerTest {
         @Override public String getNiveauAdaptation()    { return "OPTIMAL"; }
         @Override public String getZonesAdaptation()     { return null; }
         @Override public String getNomComplet()           { return null; }
+        @Override public String getTelephone()            { return null; }
+        @Override public String getLocalite()             { return null; }
+        @Override public String getDepartement()          { return null; }
     }
 
     /** Implémentation de test pour CatalogueProximiteItem (étend CatalogueItem + distanceKm). */

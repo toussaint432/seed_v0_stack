@@ -23,6 +23,9 @@ interface CatalogueItem {
   zonesAdaptation?: string   // JSON : [{idZone, niveau}]
   distanceKm?: number
   nomComplet?: string
+  telephone?: string
+  localite?: string
+  departement?: string
 }
 
 interface ZoneAgro { id: number; code: string; nom: string }
@@ -47,6 +50,8 @@ interface VarieteAgg {
 interface MultGroup {
   orgId: number; orgNom: string; nomComplet?: string
   region: string; distanceKm?: number
+  telephone?: string
+  localite?: string
   varietes: VarieteAgg[]
   stockTotal: number
 }
@@ -125,6 +130,10 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
   const [contactingOrg,    setContactingOrg]    = useState<number | null>(null)
   /* Coordonnées GPS de l'utilisateur (obtenues automatiquement ou manuellement) */
   const [userCoords,       setUserCoords]       = useState<[number, number] | null>(null)
+
+  const [currentUser, setCurrentUser] = useState<{
+    nomComplet: string; telephone: string; localite: string; roleKey: string; nomOrganisation: string
+  } | null>(null)
 
   const [cart,            setCart]            = useState<CartItem[]>([])
   const [cartConflict,    setCartConflict]    = useState<{ current: string; blocked: string } | null>(null)
@@ -312,6 +321,22 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
     )
   }, []) /* Une seule fois au montage */
 
+  /* ── Profil de l'utilisateur connecté (nom, téléphone, localité) ── */
+  useEffect(() => {
+    if (!token) return
+    fetch(`${STOCK}/profil/me`, { headers })
+      .then(r => {
+        if (!r.ok) throw new Error(`Profil HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((d: { nomComplet: string; telephone: string; localite: string; roleKey: string; nomOrganisation: string }) => {
+        setCurrentUser(d)
+      })
+      .catch(err => {
+        console.warn('[CataloguePublic] Impossible de charger le profil utilisateur :', err)
+      })
+  }, [token]) /* Rechargé si le token change (reconnexion) */
+
   useEffect(() => {
     fetch(`${CATALOG}/species`, { headers }).then(r => r.json()).then(setEspeces).catch(() => {})
 
@@ -478,6 +503,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
         map.set(item.organisationId, {
           orgId: item.organisationId, orgNom: item.nomOrganisation,
           nomComplet: item.nomComplet, region: item.region, distanceKm: distKm,
+          telephone: item.telephone ?? undefined, localite: item.localite ?? undefined,
           varietes: [{ varieteId: item.varieteId, nomVariete: item.nomVariete, codeVariete: item.codeVariete, nomEspece: item.nomEspece, codeEspece: item.codeEspece ?? selectedEspece?.codeEspece ?? '', generation: item.generation, stockTotal: item.quantiteDisponible, tauxGermination: item.tauxGermination, niveauAdaptation: item.niveauAdaptation, zonesAdaptation: zones, representant: item }],
           stockTotal: item.quantiteDisponible,
         })
@@ -938,6 +964,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
             userCoords={userCoords}
             geoMode={geoMode}
             proximiteCount={proximiteItems.length}
+            currentUser={currentUser ?? undefined}
             onAddToCart={addToCartFromMap}
             onContacter={async (orgId) => { await handleContacter(orgId) }}
             onSelectZone={setSelectedZone}
@@ -1013,13 +1040,19 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
                           </span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={10} /> {mult.region}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={10} /> {mult.localite ? `${mult.localite}, ` : ''}{mult.region}</span>
                           {distKm != null && (
                             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, background: distBg, color: distCol, border: `1px solid ${distBdr}`, borderRadius: 99, padding: '1px 7px', fontWeight: 600 }}>
                               <Navigation size={9} /> {distKm} km · ~{distH}h
                             </span>
                           )}
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Package size={10} /> <strong style={{ color: 'var(--text-primary)' }}>{mult.stockTotal.toLocaleString('fr-FR')} kg</strong> total</span>
+                          {mult.telephone && (
+                            <a href={`tel:${mult.telephone}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}
+                               title="Appeler ce multiplicateur">
+                              📞 {mult.telephone}
+                            </a>
+                          )}
                         </div>
                       </div>
                       <button onClick={() => handleContacter(mult.orgId)} disabled={contactingOrg === mult.orgId}

@@ -28,6 +28,9 @@ interface CatalogueItem {
   niveauAdaptation: string | null
   distanceKm?: number
   nomComplet?: string
+  telephone?: string
+  localite?: string
+  departement?: string
 }
 interface CartItem {
   varieteId: number; nomVariete: string; codeVariete: string
@@ -42,9 +45,20 @@ interface SiteGroup {
   lat: number; lng: number
   orgId: number; orgNom: string
   nomComplet?: string
+  telephone?: string
+  localite?: string
+  departement?: string
   stockTotal: number; lots: CatalogueItem[]
   zaeCode: string | null
   distanceKm?: number
+}
+
+interface CurrentUser {
+  nomComplet: string
+  telephone: string
+  localite: string
+  roleKey: string
+  nomOrganisation: string
 }
 
 interface Props {
@@ -58,6 +72,8 @@ interface Props {
   /* Indique si on est en mode "proximité toutes espèces" */
   geoMode?:       boolean
   proximiteCount?: number
+  /* Profil de l'utilisateur connecté, pour le panneau "Votre position" */
+  currentUser?:   CurrentUser
   onAddToCart:    (item: CatalogueItem, qty: number) => void
   onContacter:    (orgId: number) => Promise<void>
   onSelectZone:   (z: ZoneAgro | null) => void
@@ -128,10 +144,12 @@ function FlyTo({ pos, zoom = 9 }: { pos: [number, number] | null; zoom?: number 
 /* ────────────────────────────────────────────
    Composant principal
 ──────────────────────────────────────────── */
-export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, cart, userCoords, geoMode, proximiteCount, onAddToCart, onContacter, onSelectZone }: Props) {
+export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, cart, userCoords, geoMode, proximiteCount, currentUser, onAddToCart, onContacter, onSelectZone }: Props) {
 
   /* ── État ── */
   const [selectedSite,   setSelectedSite]   = useState<SiteGroup | null>(null)
+  const [showUserPanel,  setShowUserPanel]  = useState(false)
+  const [geoLabel,       setGeoLabel]       = useState<string | null>(null)
   const [userPos,        setUserPos]         = useState<[number, number] | null>(null)
   const [geoLoading,     setGeoLoading]      = useState(false)
   const [geoError,       setGeoError]        = useState<string | null>(null)
@@ -152,6 +170,40 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
       setShowDistRings(true)
     }
   }, [userCoords])
+
+  /* Reverse geocoding Nominatim : donne un nom de lieu lisible si currentUser.localite est vide */
+  useEffect(() => {
+    if (!userPos) return
+    /* Priorité : localité connue en base */
+    if (currentUser?.localite && currentUser.localite.trim() !== '') {
+      setGeoLabel(currentUser.localite.trim())
+      return
+    }
+    /* Fallback : appel Nominatim (1 req max par position) */
+    const controller = new AbortController()
+    const [lat, lng] = userPos
+    fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=fr`,
+      { signal: controller.signal, headers: { 'User-Agent': 'SenJiw/1.0 (ISRA CNRA Bambey)' } }
+    )
+      .then(r => {
+        if (!r.ok) throw new Error(`Nominatim HTTP ${r.status}`)
+        return r.json()
+      })
+      .then((d: { address?: Record<string, string> }) => {
+        const a = d.address ?? {}
+        const lieu = a.village || a.town || a.city || a.municipality || ''
+        const zone = a.county || a.state_district || a.state || ''
+        setGeoLabel(lieu && zone ? `${lieu}, ${zone}` : lieu || zone || 'Localisation obtenue')
+      })
+      .catch(err => {
+        if ((err as Error).name !== 'AbortError') {
+          console.warn('[MapCatalogue] Reverse geocoding échoué :', err)
+          setGeoLabel(null)
+        }
+      })
+    return () => controller.abort()
+  }, [userPos, currentUser?.localite])
 
   /* Quand une zone est sélectionnée depuis la liste, centrer la carte sur son centroïde */
   useEffect(() => {
@@ -181,18 +233,21 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
         const siteKey  = Object.keys(SITE_TO_ZAE).find(k => item.nomSite?.toUpperCase().includes(k.toUpperCase().split('-')[0]))
         const zaeCode  = siteKey ? SITE_TO_ZAE[siteKey] : null
         map.set(item.siteId, {
-          siteId:     item.siteId,
-          nomSite:    item.nomSite,
-          region:     item.region,
-          lat:        item.latitude,
-          lng:        item.longitude,
-          orgId:      item.organisationId,
-          orgNom:     item.nomOrganisation,
-          nomComplet: item.nomComplet,
-          stockTotal: item.quantiteDisponible,
-          lots:       [item],
+          siteId:      item.siteId,
+          nomSite:     item.nomSite,
+          region:      item.region,
+          lat:         item.latitude,
+          lng:         item.longitude,
+          orgId:       item.organisationId,
+          orgNom:      item.nomOrganisation,
+          nomComplet:  item.nomComplet,
+          telephone:   item.telephone ?? undefined,
+          localite:    item.localite ?? undefined,
+          departement: item.departement ?? undefined,
+          stockTotal:  item.quantiteDisponible,
+          lots:        [item],
           zaeCode,
-          distanceKm: item.distanceKm,
+          distanceKm:  item.distanceKm,
         })
       } else {
         ex.stockTotal += item.quantiteDisponible
@@ -400,9 +455,15 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
 
           {/* ── Couche 3 : Position utilisateur ── */}
           {userPos && (
-            <Marker position={userPos} icon={USER_ICON}>
+            <Marker
+              position={userPos}
+              icon={USER_ICON}
+              eventHandlers={{ click: () => { setShowUserPanel(true); setSelectedSite(null) } }}
+            >
               <Tooltip permanent direction="top" offset={[0, -12]}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8' }}>Votre position</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8' }}>
+                  {currentUser?.nomComplet || 'Votre position'} — cliquez pour les détails
+                </span>
               </Tooltip>
             </Marker>
           )}
@@ -430,6 +491,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                 eventHandlers={{
                   click: () => {
                     setSelectedSite(site)
+                    setShowUserPanel(false)
                     setFlyTarget([site.lat, site.lng])
                     setFlyZoom(9)
                   },
@@ -569,7 +631,67 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
 
         {/* ── En-tête panneau ── */}
         <div style={{ padding: '14px 16px 12px', borderBottom: '1px solid var(--border)', background: 'var(--surface-2)', flexShrink: 0 }}>
-          {selectedSite ? (
+          {showUserPanel ? (
+            /* ── Panneau Votre position ── */
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#2563eb', border: '3px solid #fff', boxShadow: '0 0 0 2px #2563eb40', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                    {currentUser ? currentUser.nomComplet.slice(0, 2).toUpperCase() : '?'}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.3 }}>
+                      {currentUser?.nomComplet || 'Utilisateur'}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
+                      {({
+                        'seed-quotataire':    'Quotataire / OP',
+                        'seed-multiplicator': 'Multiplicateur agréé',
+                        'seed-selector':      'Sélectionneur',
+                        'seed-upsemcl':       'UPSemCL',
+                        'seed-admin':         'Administrateur ISRA',
+                      } as Record<string, string>)[currentUser?.roleKey ?? ''] ?? 'Utilisateur'}
+                    </div>
+                  </div>
+                </div>
+                <button onClick={() => setShowUserPanel(false)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 4, display: 'flex', flexShrink: 0 }}>
+                  <X size={15} />
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 11 }}>
+                {currentUser?.nomOrganisation && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                    <Package size={11} style={{ flexShrink: 0 }} />
+                    <span>{currentUser.nomOrganisation}</span>
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)' }}>
+                  <MapPin size={11} style={{ flexShrink: 0 }} />
+                  <span>
+                    {geoLabel === null
+                      ? 'Localisation en cours…'
+                      : geoLabel || 'Localisation inconnue'}
+                  </span>
+                </div>
+                {currentUser?.telephone && currentUser.telephone.trim() !== '' ? (
+                  <a href={`tel:${currentUser.telephone}`}
+                     style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>
+                    <span style={{ fontSize: 13 }}>📞</span>
+                    <span>{currentUser.telephone}</span>
+                  </a>
+                ) : (
+                  <div style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Téléphone non renseigné</div>
+                )}
+                {proximiteCount != null && proximiteCount > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#15803d', fontWeight: 600 }}>
+                    <Navigation size={11} style={{ flexShrink: 0 }} />
+                    <span>{proximiteCount} multiplicateur{proximiteCount > 1 ? 's' : ''} à moins de 200 km</span>
+                  </div>
+                )}
+              </div>
+            </>
+          ) : selectedSite ? (
             <>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 4 }}>
                 <div>
@@ -601,8 +723,15 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                   <Package size={10} /> {selectedSite.stockTotal.toLocaleString('fr-FR')} kg dispo
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface-3)', padding: '2px 8px', borderRadius: 99, border: '1px solid var(--border)' }}>
-                  <MapPin size={10} /> {selectedSite.region}
+                  <MapPin size={10} /> {selectedSite.localite ? `${selectedSite.localite}, ` : ''}{selectedSite.departement || selectedSite.region}
                 </span>
+                {selectedSite.telephone && (
+                  <a href={`tel:${selectedSite.telephone}`}
+                     style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#2563eb', fontWeight: 600, background: '#eff6ff', padding: '2px 8px', borderRadius: 99, border: '1px solid #bfdbfe', textDecoration: 'none' }}
+                     title="Appeler ce multiplicateur">
+                    📞 {selectedSite.telephone}
+                  </a>
+                )}
               </div>
 
               {/* Bouton contacter */}
@@ -666,7 +795,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                   key={site.siteId}
                   site={site}
                   isSelected={selectedSite?.siteId === site.siteId}
-                  onClick={() => { setSelectedSite(site); setFlyTarget([site.lat, site.lng]); setFlyZoom(9) }}
+                  onClick={() => { setSelectedSite(site); setShowUserPanel(false); setFlyTarget([site.lat, site.lng]); setFlyZoom(9) }}
                 />
               ))}
             </div>

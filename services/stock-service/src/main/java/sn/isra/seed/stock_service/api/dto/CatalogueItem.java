@@ -25,4 +25,10 @@ public interface CatalogueItem {
     /** JSON : [{"idZone":1,"niveau":"OPTIMAL"}, ...] — toutes ZAE de la variété */
     String getZonesAdaptation();
     String getNomComplet();
+    /** Téléphone du membre agréé (COALESCE membre → organisation) */
+    String getTelephone();
+    /** Localité du site (COALESCE site → organisation) */
+    String getLocalite();
+    /** Département du site */
+    String getDepartement();
 }

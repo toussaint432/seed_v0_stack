@@ -280,7 +280,10 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
                  ) ORDER BY vz2.niveau_adaptation) AS text)
            FROM variete_zone vz2
            WHERE vz2.id_variete = v.id)      AS zonesAdaptation,
-          COALESCE(mo.nom_complet, o.nom_organisation) AS nomComplet
+          COALESCE(mo.nom_complet, o.nom_organisation) AS nomComplet,
+          COALESCE(mo.telephone, o.telephone) AS telephone,
+          COALESCE(si.localite,  o.localite)  AS localite,
+          si.departement                       AS departement
       FROM stock s
       JOIN lot_semencier ls       ON s.id_lot           = ls.id
       JOIN generation_semence g   ON ls.id_generation   = g.id
@@ -349,6 +352,9 @@ public interface StockRepo extends JpaRepository<Stock, Long> {
                FROM variete_zone vz2
                WHERE vz2.id_variete = v.id) AS zonesAdaptation,
               COALESCE(mo.nom_complet, o.nom_organisation) AS nomComplet,
+              COALESCE(mo.telephone, o.telephone)          AS telephone,
+              COALESCE(si.localite,  o.localite)           AS localite,
+              si.departement                               AS departement,
               6371.0 * acos(LEAST(1.0,
                   cos(radians(CAST(:lat AS double precision)))
                   * cos(radians(COALESCE(si.latitude,  o.latitude)::double precision))
