@@ -15,6 +15,49 @@ public class LotReceptionRepo {
     }
 
     /**
+     * Génère un code de lot REC lisible à partir du lot parent :
+     * format REC-{GEN}-{ESPECE}-{VARIETE}-{ANNEE}-{SEQ:02d}
+     * ex: REC-G3-ARA-28206-2026-01
+     */
+    public String generateRecLotCode(Long parentLotId) {
+        String sql = """
+            WITH meta AS (
+                SELECT
+                    g.code_generation                        AS gen,
+                    UPPER(COALESCE(l.code_espece, 'ESP'))    AS espece,
+                    CASE
+                        WHEN l.code_variete IS NOT NULL AND l.code_variete LIKE '%-%'
+                            THEN UPPER(REPLACE(SUBSTRING(l.code_variete FROM POSITION('-' IN l.code_variete) + 1), '-', ''))
+                        WHEN l.nom_variete IS NOT NULL AND TRIM(l.nom_variete) != ''
+                            THEN UPPER(REGEXP_REPLACE(l.nom_variete, '[^A-Za-z0-9]', '', 'g'))
+                        ELSE 'VAR'
+                    END                                      AS variete_part,
+                    COALESCE(SUBSTRING(l.campagne FROM '[0-9]{4}$'),
+                             EXTRACT(YEAR FROM NOW())::TEXT) AS annee
+                FROM lot_semencier l
+                JOIN generation_semence g ON g.id = l.id_generation
+                WHERE l.id = :parentId
+            ),
+            prefix AS (
+                SELECT 'REC-' || gen || '-' || espece || '-' || variete_part || '-' || annee AS pfx
+                FROM meta
+            ),
+            seq AS (
+                SELECT COALESCE(MAX(
+                    CAST(SUBSTRING(code_lot FROM '[0-9]+$') AS INTEGER)
+                ), 0) + 1 AS next_seq
+                FROM lot_semencier
+                WHERE code_lot ~ ('^' || (SELECT pfx FROM prefix) || '-[0-9]+$')
+            )
+            SELECT (SELECT pfx FROM prefix) || '-' || LPAD(next_seq::TEXT, 2, '0')
+            FROM seq
+            """;
+        return jdbc.queryForObject(sql,
+            new MapSqlParameterSource("parentId", parentLotId),
+            String.class);
+    }
+
+    /**
      * Crée un lot_semencier pour le multiplicateur qui reçoit des semences via commande.
      * Copie id_variete, id_generation, campagne et code_espece du lot source UPSemCL.
      * Le lot parent reste le lot UPSemCL (traçabilité G3 → G4 → R1).

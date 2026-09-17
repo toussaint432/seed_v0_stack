@@ -138,7 +138,7 @@ public class TransfertController {
         var commandeOpt = stockCreditRepo.findCommandeByTransfert(t.getCodeTransfert());
         commandeOpt.ifPresent(info -> {
             try {
-                String codeLot = "REC-" + info.commandeId() + "-L" + info.ligneId();
+                String codeLot = stockCreditRepo.generateRecLotCode(sourceLotId);
                 Long newLotId = stockCreditRepo.createReceptionLot(
                     sourceLotId, codeLot,
                     info.idOrgAcheteur(), info.usernameAcheteur(),
@@ -158,7 +158,7 @@ public class TransfertController {
             try {
                 Long orgId = stockCreditRepo.findOrgIdByUsername(username).orElse(null);
                 if (orgId != null) {
-                    String codeLot = "REC-G1-" + t.getCodeTransfert();
+                    String codeLot = stockCreditRepo.generateRecLotCode(sourceLotId);
                     Long newLotId = stockCreditRepo.createReceptionLot(
                         sourceLotId, codeLot, orgId, username, t.getQuantite(), "kg"
                     );
@@ -183,7 +183,7 @@ public class TransfertController {
             try {
                 Long orgDest = stockCreditRepo.findOrgIdByUsername(t.getUsernameDestinataire()).orElse(null);
                 if (orgDest != null) {
-                    String codeLot = "REC-DIRECT-" + t.getCodeTransfert();
+                    String codeLot = stockCreditRepo.generateRecLotCode(sourceLotId);
                     Long newLotId = stockCreditRepo.createReceptionLot(
                         sourceLotId, codeLot, orgDest, t.getUsernameDestinataire(), t.getQuantite(), "kg"
                     );

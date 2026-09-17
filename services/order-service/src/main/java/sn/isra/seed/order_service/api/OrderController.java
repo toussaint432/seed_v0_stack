@@ -354,7 +354,7 @@ public class OrderController {
 
           // 2. Créer un lot REC pour le multiplicateur (enfant du lot UPSemCL)
           String unite = ligne.getUnite() != null ? ligne.getUnite() : "kg";
-          String codeLotRec = "REC-" + commande.getId() + "-ALLOC-" + alloc.getId();
+          String codeLotRec = lotReceptionRepo.generateRecLotCode(alloc.getIdLot());
           Long newLotId = lotReceptionRepo.createReceptionLot(
               alloc.getIdLot(), codeLotRec,
               commande.getIdOrganisationAcheteur(),
@@ -671,7 +671,7 @@ public class OrderController {
       }
 
       // Créer lot REC chez l'acheteur et créditer son stock
-      String codeLotRec = "REC-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+      String codeLotRec = lotReceptionRepo.generateRecLotCode(prop.getIdLotSelectionne());
       String unite = ligne.getUnite() != null ? ligne.getUnite() : "kg";
       Long idLotRec = lotReceptionRepo.createReceptionLot(
           prop.getIdLotSelectionne(), codeLotRec,
@@ -811,7 +811,7 @@ public class OrderController {
       String unite = ligne.getUnite() != null ? ligne.getUnite() : "kg";
 
       // Créer un nouveau lot_semencier au nom du multiplicateur (enfant du lot UPSemCL)
-      String codeLot = "REC-" + commande.getId() + "-L" + ligne.getId();
+      String codeLot = lotReceptionRepo.generateRecLotCode(ligne.getIdLotPropose());
       Long newLotId = lotReceptionRepo.createReceptionLot(
           ligne.getIdLotPropose(), codeLot,
           commande.getIdOrganisationAcheteur(),
@@ -1076,7 +1076,7 @@ public class OrderController {
       if (ligne.getIdLotPropose() == null || ligne.getQuantiteProposee() == null) continue;
 
       String unite = ligne.getUnite() != null ? ligne.getUnite() : "kg";
-      String codeLot = "REC-" + commande.getId() + "-L" + ligne.getId();
+      String codeLot = lotReceptionRepo.generateRecLotCode(ligne.getIdLotPropose());
       Long newLotId = lotReceptionRepo.createReceptionLot(
           ligne.getIdLotPropose(), codeLot,
           commande.getIdOrganisationAcheteur(),
@@ -1412,7 +1412,7 @@ public class OrderController {
       // 2c. Créer un lot de réception pour le multiplicateur + créditer son site principal
       String uniteItem = ligne.getUnite() != null ? ligne.getUnite() : "kg";
       // Inclut idLot pour unicité quand plusieurs lots couvrent la même ligne (FIFO multi-lot)
-      String codeLotRec = "REC-" + commande.getId() + "-L" + item.idLigne() + "-" + item.idLot();
+      String codeLotRec = lotReceptionRepo.generateRecLotCode(item.idLot());
       Long newLotId = lotReceptionRepo.createReceptionLot(
           item.idLot(), codeLotRec,
           commande.getIdOrganisationAcheteur(),
