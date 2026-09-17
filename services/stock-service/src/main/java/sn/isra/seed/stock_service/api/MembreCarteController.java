@@ -79,7 +79,8 @@ public class MembreCarteController {
                      WHERE s.id_membre = m.id AND s.est_principal = true LIMIT 1),
                     (SELECT s.zone_code FROM stock.site s
                      WHERE s.id_organisation = o.id AND s.est_principal = true LIMIT 1)
-                )                                                AS "zoneCode"
+                )                                                AS "zoneCode",
+                COALESCE(m.telephone, o.telephone)              AS "telephone"
             FROM shared.membre_organisation m
             JOIN shared.organisation o ON o.id = m.id_organisation
             WHERE m.keycloak_role IN (%s)

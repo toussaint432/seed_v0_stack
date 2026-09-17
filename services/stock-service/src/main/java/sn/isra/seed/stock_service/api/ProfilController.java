@@ -35,9 +35,28 @@ public class ProfilController {
             SELECT
                 mo.nom_complet      AS "nomComplet",
                 mo.telephone        AS "telephone",
-                mo.localite         AS "localite",
+                COALESCE(o.localite, o.region, '') AS "localite",
                 mo.keycloak_role    AS "roleKey",
-                o.nom_organisation  AS "nomOrganisation"
+                o.nom_organisation  AS "nomOrganisation",
+                COALESCE(
+                    (SELECT s.latitude  FROM stock.site s WHERE s.id_membre = mo.id  AND s.est_principal = true LIMIT 1),
+                    (SELECT s.latitude  FROM stock.site s WHERE s.id_organisation = o.id AND s.est_principal = true LIMIT 1),
+                    o.latitude
+                )                   AS "latitude",
+                COALESCE(
+                    (SELECT s.longitude FROM stock.site s WHERE s.id_membre = mo.id  AND s.est_principal = true LIMIT 1),
+                    (SELECT s.longitude FROM stock.site s WHERE s.id_organisation = o.id AND s.est_principal = true LIMIT 1),
+                    o.longitude
+                )                   AS "longitude",
+                COALESCE(
+                    (SELECT s.nom_site  FROM stock.site s WHERE s.id_membre = mo.id  AND s.est_principal = true LIMIT 1),
+                    (SELECT s.nom_site  FROM stock.site s WHERE s.id_organisation = o.id AND s.est_principal = true LIMIT 1),
+                    o.nom_organisation
+                )                   AS "nomSite",
+                COALESCE(
+                    (SELECT s.zone_code FROM stock.site s WHERE s.id_membre = mo.id  AND s.est_principal = true LIMIT 1),
+                    (SELECT s.zone_code FROM stock.site s WHERE s.id_organisation = o.id AND s.est_principal = true LIMIT 1)
+                )                   AS "zoneCode"
             FROM shared.membre_organisation mo
             LEFT JOIN shared.organisation o ON o.id = mo.id_organisation
             WHERE mo.keycloak_username = ?

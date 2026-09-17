@@ -38,6 +38,19 @@ interface MembreCarte {
   longitude: number
   nomSite: string
   zoneCode: string | null
+  telephone?: string
+}
+
+interface MonProfil {
+  nomComplet: string
+  telephone?: string
+  localite?: string
+  roleKey: string
+  nomOrganisation: string
+  latitude?: number
+  longitude?: number
+  nomSite?: string
+  zoneCode?: string | null
 }
 
 interface Props { roleKey: string }
@@ -139,6 +152,12 @@ function createClusterIcon(group: MembreCarte[]): L.DivIcon {
   return L.divIcon({ html, className: '', iconSize: [140, cs + 10], iconAnchor: [70, Math.round(cs / 2)] })
 }
 
+
+/* ── Icône "ma position" — cercle bleu style GPS ── */
+function createMeIcon(): L.DivIcon {
+  const html = `<div style="width:18px;height:18px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 0 3px rgba(37,99,235,0.28),0 2px 8px rgba(37,99,235,0.45);"></div>`
+  return L.divIcon({ html, className: '', iconSize: [18, 18], iconAnchor: [9, 9] })
+}
 
 /* ── Formatage ── */
 function fmtKg(v: number) {
@@ -394,6 +413,13 @@ function ClusterPopup({
         <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.7, marginBottom: 4 }}>
           <div>📍 {m.nomSite}{m.zoneCode ? ` · ZAE ${m.zoneCode}` : ''}</div>
           <div>🏢 {m.nomOrganisation}</div>
+          {m.telephone && (
+            <div>
+              <a href={`tel:${m.telephone}`} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
+                📞 {m.telephone}
+              </a>
+            </div>
+          )}
           {km !== null && <div style={{ color: '#2563eb', fontWeight: 600 }}>✈ {fmtDist(km)} de votre position</div>}
         </div>
         {varieties.length > 0 && (
@@ -486,12 +512,19 @@ export function MapSemences({ roleKey }: Props) {
   /* ── Utilisateurs carte ── */
   const [membres,  setMembres]  = useState<MembreCarte[]>([])
   const [userPos,  setUserPos]  = useState<[number, number] | null>(null)
+  const [meSite,   setMeSite]   = useState<MonProfil | null>(null)
 
   useEffect(() => {
     navigator.geolocation?.getCurrentPosition(
       p => setUserPos([p.coords.latitude, p.coords.longitude]),
-      () => {}
+      () => console.warn('[MapSemences] Géolocalisation refusée ou indisponible')
     )
+  }, [])
+
+  useEffect(() => {
+    api.get('/api/profil/me')
+      .then(r => setMeSite(r.data))
+      .catch(err => console.warn('[MapSemences] Profil non chargé :', err))
   }, [])
 
   /* ── Panneau latéral ── */
@@ -795,6 +828,54 @@ export function MapSemences({ roleKey }: Props) {
             )}
 
 
+            {/* ── Couche 2 : Ma position (site enregistré en BDD) ── */}
+            {meSite && meSite.latitude != null && meSite.longitude != null && (
+              <Marker
+                position={[meSite.latitude, meSite.longitude]}
+                icon={createMeIcon()}
+                zIndexOffset={2000}
+              >
+                <Popup minWidth={230} maxWidth={290}>
+                  <div style={{ fontFamily: 'inherit', padding: '2px 0' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <div style={{
+                        width: 34, height: 34, borderRadius: '50%',
+                        background: '#2563eb',
+                        border: '2px solid #fff', boxShadow: '0 2px 6px rgba(37,99,235,0.4)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                      }}>
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="white">
+                          <circle cx="12" cy="7.5" r="3.5"/>
+                          <path d="M5 20c0-3.87 3.13-7 7-7s7 3.13 7 7H5z"/>
+                        </svg>
+                      </div>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: 13, color: '#111827', lineHeight: 1.2 }}>
+                          {meSite.nomComplet}
+                        </div>
+                        <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 700, background: '#2563eb18', color: '#2563eb', borderRadius: 4, padding: '1px 6px', marginTop: 2 }}>
+                          {ROLE_LABELS[meSite.roleKey] || meSite.roleKey} · Votre position
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.7 }}>
+                      {meSite.nomSite && (
+                        <div>📍 {meSite.nomSite}{meSite.zoneCode ? ` · ZAE ${meSite.zoneCode}` : ''}</div>
+                      )}
+                      <div>🏢 {meSite.nomOrganisation}</div>
+                      {meSite.telephone && (
+                        <div>
+                          <a href={`tel:${meSite.telephone}`} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
+                            📞 {meSite.telephone}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Popup>
+              </Marker>
+            )}
+
             {/* ── Couche 3 : Acteurs (cluster si co-localisés, sinon popup individuel) ── */}
             {showSitesAndUsers && memberGroups.map((group, idx) => {
               /* ── Cluster : plusieurs acteurs au même endroit ── */
@@ -866,6 +947,13 @@ export function MapSemences({ roleKey }: Props) {
                       <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.7, marginBottom: 4 }}>
                         <div>📍 {m.nomSite}{m.zoneCode ? ` · ZAE ${m.zoneCode}` : ''}</div>
                         <div>🏢 {m.nomOrganisation}</div>
+                        {m.telephone && (
+                          <div>
+                            <a href={`tel:${m.telephone}`} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>
+                              📞 {m.telephone}
+                            </a>
+                          </div>
+                        )}
                         {km !== null && (
                           <div style={{ color: '#2563eb', fontWeight: 600 }}>
                             ✈ {fmtDist(km)} de votre position
