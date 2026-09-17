@@ -118,10 +118,10 @@ function createMultiplicateurIcon(orgNom: string, stockTotal: number, maxStock: 
   return L.divIcon({ html, className: '', iconSize: [160, cs + 28], iconAnchor: [80, Math.round(cs / 2)] })
 }
 
-/* ── Centrage auto sur la position utilisateur ── */
-function FlyTo({ pos }: { pos: [number, number] | null }) {
+/* ── Centrage auto (position utilisateur ou centroïde de zone) ── */
+function FlyTo({ pos, zoom = 9 }: { pos: [number, number] | null; zoom?: number }) {
   const map = useMap()
-  if (pos) map.flyTo(pos, 9, { animate: true, duration: 1.2 })
+  if (pos) map.flyTo(pos, zoom, { animate: true, duration: 1.2 })
   return null
 }
 
@@ -136,6 +136,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
   const [geoLoading,     setGeoLoading]      = useState(false)
   const [geoError,       setGeoError]        = useState<string | null>(null)
   const [flyTarget,      setFlyTarget]       = useState<[number, number] | null>(null)
+  const [flyZoom,        setFlyZoom]         = useState<number>(9)
   const [showDistRings,  setShowDistRings]   = useState(false)
   const [showZAE,        setShowZAE]         = useState(true)
   const [qtyInputs,      setQtyInputs]       = useState<Record<number, string>>({})
@@ -147,9 +148,27 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
     if (userCoords) {
       setUserPos(userCoords)
       setFlyTarget(userCoords)
+      setFlyZoom(9)
       setShowDistRings(true)
     }
   }, [userCoords])
+
+  /* Quand une zone est sélectionnée depuis la liste, centrer la carte sur son centroïde */
+  useEffect(() => {
+    if (!selectedZone) return
+    const feature = SENEGAL_ZAE_GEOJSON.features.find(
+      f => f.properties.code === selectedZone.code
+    )
+    if (!feature) return
+    try {
+      const center = L.geoJSON(feature).getBounds().getCenter()
+      setFlyTarget([center.lat, center.lng])
+      setFlyZoom(8)
+    } catch {
+      /* feature invalide — on ne vole pas, pas d'erreur silencieuse */
+      console.warn('[MapCatalogue] Impossible de calculer le centroïde pour la zone', selectedZone.code)
+    }
+  }, [selectedZone])
 
   /* ── Grouper par site (depuis les données catalogue chargées) ── */
   const sites = useMemo<SiteGroup[]>(() => {
@@ -214,6 +233,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
         const coords: [number, number] = [pos.coords.latitude, pos.coords.longitude]
         setUserPos(coords)
         setFlyTarget(coords)
+        setFlyZoom(9)
         setShowDistRings(true)
         setGeoLoading(false)
       },
@@ -344,7 +364,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
           />
 
           {/* Clic pour recentrer */}
-          {flyTarget && <FlyTo pos={flyTarget} />}
+          {flyTarget && <FlyTo pos={flyTarget} zoom={flyZoom} />}
 
           {/* ── Couche 1 : Polygones ZAE ── */}
           {showZAE && (
@@ -411,6 +431,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                   click: () => {
                     setSelectedSite(site)
                     setFlyTarget([site.lat, site.lng])
+                    setFlyZoom(9)
                   },
                 }}
               >
@@ -645,7 +666,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                   key={site.siteId}
                   site={site}
                   isSelected={selectedSite?.siteId === site.siteId}
-                  onClick={() => { setSelectedSite(site); setFlyTarget([site.lat, site.lng]) }}
+                  onClick={() => { setSelectedSite(site); setFlyTarget([site.lat, site.lng]); setFlyZoom(9) }}
                 />
               ))}
             </div>

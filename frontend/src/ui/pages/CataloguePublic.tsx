@@ -515,11 +515,12 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
     return mgs.sort((a, b) => b.stockTotal - a.stockTotal)
   }, [filteredMultGroups, geoMode])
 
-  /* Données carte : items de proximité filtrés par espèce sélectionnée (si applicable),
-     ou catalogue filtré par espèce en mode liste. Recherche textuelle dans les deux cas. */
+  /* Données carte : toujours le catalogue complet — tous les multiplicateurs restent visibles.
+     proximiteItems sert uniquement au tri par distance et aux indicateurs dans la liste,
+     jamais comme filtre d'affichage sur la carte (évite l'incohérence liste 4 / carte 2). */
   const catalogueForMap = useMemo<CatalogueItem[]>(() => {
-    let base = (geoMode && proximiteItems.length > 0) ? proximiteItems : catalogue
-    if (geoMode && selectedEspece) {
+    let base = catalogue
+    if (selectedEspece) {
       base = base.filter(item => item.codeEspece === selectedEspece.codeEspece)
     }
     if (!search.trim()) return base
@@ -529,7 +530,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
       item.codeVariete.toLowerCase().includes(s) ||
       item.nomEspece.toLowerCase().includes(s)
     )
-  }, [geoMode, proximiteItems, catalogue, search, selectedEspece])
+  }, [catalogue, search, selectedEspece])
 
   const totalCartKg = cart.reduce((s, i) => s + i.quantite, 0)
 
@@ -901,15 +902,20 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
           </div>
         )}
 
-        {/* Bandeau mode proximité : visible en vue liste quand la géoloc est active */}
-        {geoMode && viewMode === 'list' && proximiteItems.length > 0 && (
+        {/* Bandeau mode proximité : visible en vue liste quand la géoloc est active.
+            Affiche le total catalogue + le sous-ensemble à moins de 200 km pour cohérence. */}
+        {geoMode && viewMode === 'list' && (
           <div style={{
             padding: '8px 20px', background: '#eff6ff', borderBottom: '1px solid #bfdbfe',
             display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0,
           }}>
             <Navigation size={13} style={{ color: '#2563eb', flexShrink: 0 }} />
             <span style={{ fontSize: 12, color: '#1e40af', flex: 1 }}>
-              <strong>{new Set(proximiteItems.map(i => i.organisationId)).size} multiplicateurs</strong> disponibles dans un rayon de 200 km ·
+              <strong>{sortedMultGroups.length} multiplicateur{sortedMultGroups.length > 1 ? 's' : ''}</strong> au total
+              {proximiteItems.length > 0 && (
+                <> · <strong>{new Set(proximiteItems.map(i => i.organisationId)).size}</strong> à moins de 200 km</>
+              )}
+               ·
               <button onClick={() => setViewMode('map')} style={{ marginLeft: 6, background: 'none', border: 'none', cursor: 'pointer', color: '#2563eb', fontWeight: 700, fontSize: 12, fontFamily: 'inherit', textDecoration: 'underline', padding: 0 }}>
                 Voir sur la carte →
               </button>
