@@ -35,7 +35,11 @@ public class ProfilController {
             SELECT
                 mo.nom_complet      AS "nomComplet",
                 mo.telephone        AS "telephone",
-                COALESCE(o.localite, o.region, '') AS "localite",
+                COALESCE(
+                    (SELECT s.localite FROM stock.site s WHERE s.id_membre = mo.id  AND s.est_principal = true LIMIT 1),
+                    (SELECT s.localite FROM stock.site s WHERE s.id_organisation = o.id AND s.est_principal = true LIMIT 1),
+                    o.localite, o.region, ''
+                )                   AS "localite",
                 mo.keycloak_role    AS "roleKey",
                 o.nom_organisation  AS "nomOrganisation",
                 COALESCE(

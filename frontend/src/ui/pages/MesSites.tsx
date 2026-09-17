@@ -154,7 +154,7 @@ export function MesSites({ roleKey }: Props) {
       },
       () => {
         setGpsLoading(false)
-        setToast({ msg: 'Localisation refusée ou indisponible', type: 'error' })
+        setToast({ msg: 'Localisation refusée. Vérifiez les permissions dans Chrome → Paramètres → Confidentialité → Paramètres des sites → Position, puis réessayez.', type: 'error' })
       },
       { timeout: 15000, maximumAge: 60000 }
     )

@@ -59,6 +59,8 @@ interface CurrentUser {
   localite: string
   roleKey: string
   nomOrganisation: string
+  latitude?: number
+  longitude?: number
 }
 
 interface Props {
@@ -453,20 +455,29 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
             />
           ))}
 
-          {/* ── Couche 3 : Position utilisateur ── */}
-          {userPos && (
-            <Marker
-              position={userPos}
-              icon={USER_ICON}
-              eventHandlers={{ click: () => { setShowUserPanel(true); setSelectedSite(null) } }}
-            >
-              <Tooltip permanent direction="top" offset={[0, -12]}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8' }}>
-                  {currentUser?.nomComplet || 'Votre position'} — cliquez pour les détails
-                </span>
-              </Tooltip>
-            </Marker>
-          )}
+          {/* ── Couche 3 : Position utilisateur ──
+               userPos (GPS navigateur) en priorité, sinon position du site en BDD ── */}
+          {(() => {
+            const autoPos: [number, number] | null =
+              currentUser?.latitude && currentUser?.longitude
+                ? [currentUser.latitude, currentUser.longitude]
+                : null
+            const displayPos = userPos ?? autoPos
+            if (!displayPos) return null
+            return (
+              <Marker
+                position={displayPos}
+                icon={USER_ICON}
+                eventHandlers={{ click: () => { setShowUserPanel(true); setSelectedSite(null) } }}
+              >
+                <Tooltip permanent direction="top" offset={[0, -12]}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8' }}>
+                    {currentUser?.nomComplet || 'Votre position'} — cliquez pour les détails
+                  </span>
+                </Tooltip>
+              </Marker>
+            )
+          })()}
 
           {/* ── Couche 4 : Multiplicateurs (icône personnage + popup enrichi) ── */}
           {sites.map((site) => {

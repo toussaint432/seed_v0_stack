@@ -133,6 +133,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
 
   const [currentUser, setCurrentUser] = useState<{
     nomComplet: string; telephone: string; localite: string; roleKey: string; nomOrganisation: string
+    latitude?: number; longitude?: number
   } | null>(null)
 
   const [cart,            setCart]            = useState<CartItem[]>([])
