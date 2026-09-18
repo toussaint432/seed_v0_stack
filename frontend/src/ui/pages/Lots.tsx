@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX, Shield, MessageCircle, Users, Edit2, Lock, Clock } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
+import { generateLotCode } from '../../lib/lotCode'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
 import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../../lib/normalizers'
@@ -13,22 +14,6 @@ import { useBadges } from '../../lib/context/BadgeContext'
 interface Props { roleKey: string; userSpecialisation?: string | null }
 // Chaîne stricte G0→G1→G2→G3→G4→R1→R2
 const NEXT_GEN: Record<string, string> = { G0:'G1', G1:'G2', G2:'G3', G3:'G4', G4:'R1', R1:'R2' }
-
-function normalizeName(s: string): string {
-  return s.toUpperCase()
-    .normalize('NFD').replace(/[̀-ͯ]/g, '')
-    .replace(/[\s\-_]+/g, '')
-}
-
-function generateLotCode(gen: string, codeEspece: string, nomVariete: string, year: number, existingLots: any[]): string {
-  const prefix = `${gen}-${normalizeName(codeEspece)}-${normalizeName(nomVariete)}-${year}-`
-  const maxNN = existingLots.reduce((max: number, l: any) => {
-    if (!l.codeLot?.startsWith(prefix)) return max
-    const n = parseInt(l.codeLot.slice(prefix.length), 10)
-    return isNaN(n) ? max : Math.max(max, n)
-  }, 0)
-  return `${prefix}${String(maxNN + 1).padStart(2, '0')}`
-}
 
 // ── Helpers certification (feu tricolore) ─────────────────────────
 type StatutCert = 'SANS_CERTIFICAT' | 'EN_ATTENTE' | 'CERTIFIE' | 'REJETE'
@@ -1914,14 +1899,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                                     onClick={() => {
                                       const nextGen = childGenOptions(gen)[0]
                                       const v = varietyMap[l.idVariete]
-                                      const yr = new Date().getFullYear()
-                                      const code = v ? generateLotCode(nextGen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, [...mesLots, ...catalogueG3]) : ''
+                                      const codeCampagne = l.campagne || ''
+                                      const code = generateLotCode(nextGen, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', codeCampagne, [...mesLots, ...catalogueG3])
                                       setParentLot(l)
                                       setChildForm({
                                         ...MULT_CHILD_FORM_INIT,
                                         generationCode: nextGen,
                                         codeLot: code,
-                                        campagne: l.campagne || yr.toString(),
+                                        campagne: codeCampagne,
                                       })
                                       setShowChildLot(true)
                                     }}
@@ -1982,8 +1967,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
                 <FormSelect value={newLotForm.generationCode} onChange={e => {
                   const gen = e.target.value
                   const v = varieties.find((x: any) => x.id === Number(newLotForm.idVariete))
-                  const yr = new Date().getFullYear()
-                  const code = v ? generateLotCode(gen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, [...mesLots, ...catalogueG3]) : newLotForm.codeLot
+                  const code = generateLotCode(gen, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', newLotForm.campagne, [...mesLots, ...catalogueG3])
                   setNewLotForm(f => ({ ...f, generationCode: gen, codeLot: code }))
                 }}>
                   <option value="G3">G3 — Certifiée C1</option>
@@ -1997,25 +1981,29 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               <FormSelect value={newLotForm.idVariete} onChange={e => {
                 const varId = e.target.value
                 const v = varieties.find((x: any) => x.id === Number(varId))
-                const yr = new Date().getFullYear()
-                const code = v ? generateLotCode(newLotForm.generationCode, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, [...mesLots, ...catalogueG3]) : newLotForm.codeLot
+                const code = generateLotCode(newLotForm.generationCode, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', newLotForm.campagne, [...mesLots, ...catalogueG3])
                 setNewLotForm(f => ({ ...f, idVariete: varId, codeLot: code }))
               }} required>
                 <option value="">— Choisir une variété —</option>
                 {varieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
               </FormSelect>
             </Field>
-            {newLotForm.codeLot && (
-              <Field label="Code lot">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{newLotForm.codeLot}</code>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Généré automatiquement</span>
-                </div>
-              </Field>
-            )}
+            <Field label="Code lot">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                {newLotForm.codeLot
+                  ? <><code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{newLotForm.codeLot}</code><span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Généré automatiquement</span></>
+                  : <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sélectionnez la génération, la variété et la campagne</span>
+                }
+              </div>
+            </Field>
             <FormRow>
               <Field label="Campagne" required>
-                <FormSelect value={newLotForm.campagne} onChange={e => setNewLotForm(f => ({ ...f, campagne: e.target.value }))} required>
+                <FormSelect value={newLotForm.campagne} onChange={e => {
+                  const camp = e.target.value
+                  const v = varieties.find((x: any) => x.id === Number(newLotForm.idVariete))
+                  const code = generateLotCode(newLotForm.generationCode, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', camp, [...mesLots, ...catalogueG3])
+                  setNewLotForm(f => ({ ...f, campagne: camp, codeLot: code }))
+                }} required>
                   <option value="">— Choisir une campagne —</option>
                   {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
                 </FormSelect>
@@ -2106,7 +2094,12 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
             </FormRow>
             <FormRow>
               <Field label="Campagne" required>
-                <FormSelect value={childForm.campagne} onChange={e => setChildForm(f => ({ ...f, campagne: e.target.value }))} required>
+                <FormSelect value={childForm.campagne} onChange={e => {
+                  const camp = e.target.value
+                  const v = varietyMap[parentLot?.idVariete]
+                  const code = generateLotCode(childForm.generationCode, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', camp, [...mesLots, ...catalogueG3])
+                  setChildForm(f => ({ ...f, campagne: camp, codeLot: code }))
+                }} required>
                   <option value="">— Choisir une campagne —</option>
                   {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
                 </FormSelect>
@@ -3227,13 +3220,13 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                             onClick={() => {
                               const nextGen = NEXT_GEN[gen]
                               const v = (varietyMap as any)[l.idVariete]
-                              const yr = new Date().getFullYear()
-                              const code = v ? generateLotCode(nextGen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : ''
+                              const codeCampagne = l.campagne || ''
+                              const code = generateLotCode(nextGen, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', codeCampagne, lots)
                               setParentLot(l)
                               setChildForm({
                                 codeLot: code,
                                 generationCode: nextGen,
-                                campagne: l.campagne || yr.toString(),
+                                campagne: codeCampagne,
                                 dateProduction: '', quantiteNette: '', unite: 'kg',
                                 tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '',
                                 superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '',
@@ -3450,12 +3443,12 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
                     onClick={() => {
                       const nextGen = NEXT_GEN[gen]
                       const v = (varietyMap as any)[l.idVariete]
-                      const yr = new Date().getFullYear()
-                      const code = v ? generateLotCode(nextGen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : ''
+                      const codeCampagne = l.campagne || ''
+                      const code = generateLotCode(nextGen, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', codeCampagne, lots)
                       setSelectedLot(null); setParentLot(l)
                       setChildForm({
                         codeLot: code,
-                        generationCode: nextGen, campagne: l.campagne || yr.toString(),
+                        generationCode: nextGen, campagne: codeCampagne,
                         dateProduction: '', quantiteNette: '', unite: 'kg',
                         tauxGermination: '', puretePhysique: '', quantiteSemenceSrcKg: '',
                         superficieHa: '', productionBruteKg: '', niveauSemence: '', siteCode: '',
@@ -3553,36 +3546,39 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
               <FormSelect value={newLotForm.idVariete} onChange={e => {
                 const varId = e.target.value
                 const v = formVarieties.find((x: any) => x.id === Number(varId))
-                const yr = new Date().getFullYear()
-                const code = v ? generateLotCode(newLotForm.generationCode, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : newLotForm.codeLot
+                const code = generateLotCode(newLotForm.generationCode, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', newLotForm.campagne, lots)
                 setNewLotForm(f => ({ ...f, idVariete: varId, codeLot: code }))
               }} required>
                 <option value="">-- Choisir une variété --</option>
                 {formVarieties.map((v: any) => <option key={v.id} value={v.id}>{v.codeVariete} — {v.nomVariete}</option>)}
               </FormSelect>
             </Field>
-            {newLotForm.codeLot && (
-              <Field label="Code lot">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
-                  <code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{newLotForm.codeLot}</code>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Généré automatiquement</span>
-                </div>
-              </Field>
-            )}
+            <Field label="Code lot">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, height: 36, padding: '0 12px', background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6 }}>
+                {newLotForm.codeLot
+                  ? <><code style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{newLotForm.codeLot}</code><span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-muted)' }}>Généré automatiquement</span></>
+                  : <span style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>Sélectionnez la génération, la variété et la campagne</span>
+                }
+              </div>
+            </Field>
             <FormRow>
               <Field label="Génération" required>
                 <FormSelect value={newLotForm.generationCode} onChange={e => {
                   const gen = e.target.value
                   const v = formVarieties.find((x: any) => x.id === Number(newLotForm.idVariete))
-                  const yr = new Date().getFullYear()
-                  const code = v ? generateLotCode(gen, v.espece?.codeEspece ?? '', v.nomVariete ?? '', yr, lots) : newLotForm.codeLot
+                  const code = generateLotCode(gen, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', newLotForm.campagne, lots)
                   setNewLotForm(f => ({ ...f, generationCode: gen, codeLot: code }))
                 }} required>
                   {allowedGens.map(g => <option key={g} value={g}>{g}</option>)}
                 </FormSelect>
               </Field>
               <Field label="Campagne" required>
-                <FormSelect value={newLotForm.campagne} onChange={e => setNewLotForm(f => ({ ...f, campagne: e.target.value }))} required>
+                <FormSelect value={newLotForm.campagne} onChange={e => {
+                  const camp = e.target.value
+                  const v = formVarieties.find((x: any) => x.id === Number(newLotForm.idVariete))
+                  const code = generateLotCode(newLotForm.generationCode, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', camp, lots)
+                  setNewLotForm(f => ({ ...f, campagne: camp, codeLot: code }))
+                }} required>
                   <option value="">— Choisir une campagne —</option>
                   {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
                 </FormSelect>
@@ -3694,7 +3690,12 @@ export function Lots({ roleKey, userSpecialisation }: Props) {
             </FormRow>
             <FormRow>
               <Field label="Campagne" required>
-                <FormSelect value={childForm.campagne} onChange={e => setChildForm(f => ({ ...f, campagne: e.target.value }))} required>
+                <FormSelect value={childForm.campagne} onChange={e => {
+                  const camp = e.target.value
+                  const v = (varietyMap as any)[parentLot?.idVariete]
+                  const code = generateLotCode(childForm.generationCode, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', camp, lots)
+                  setChildForm(f => ({ ...f, campagne: camp, codeLot: code }))
+                }} required>
                   <option value="">— Choisir une campagne —</option>
                   {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
                 </FormSelect>

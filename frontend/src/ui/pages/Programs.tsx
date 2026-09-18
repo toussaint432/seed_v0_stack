@@ -11,6 +11,7 @@ import { StatusBadge } from '../components/StatusBadge'
 import { Pagination } from '../components/Pagination'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { GEN_CHART_COLORS } from '../../lib/constants'
+import { generateLotCode } from '../../lib/lotCode'
 
 interface Props { roleKey: string; userSpecialisation?: string | null; username?: string }
 
@@ -294,12 +295,10 @@ export function Programs({ roleKey, userSpecialisation, username }: Props) {
     const srcLot = lots.find(l => l.id === p.idLot)
     const v = srcLot ? varMap[srcLot.idVariete] as any : null
     const genCible = p.generationCible ?? ''
-    const yr = p.campagne ?? new Date().getFullYear().toString()
-    const prefix = roleKey === 'seed-selector' ? 'SEL' : roleKey === 'seed-multiplicator' ? 'MUL' : 'UPS'
-    const vCode = v?.codeVariete ?? ''
-    const suggested = `${prefix}-${genCible}-${vCode.slice(0,6).toUpperCase()}-${yr}`.replace(/-+/g, '-')
+    const codeCampagne = p.campagne ?? ''
+    const suggested = generateLotCode(genCible, v?.espece?.codeEspece ?? '', v?.nomVariete ?? '', codeCampagne, lots)
     setLotResultatProg(p)
-    setLotResultatForm({ codeLot: suggested, quantiteNette: p.objectifKg?.toString() ?? '', tauxGermination: '', puretePhysique: '', dateProduction: new Date().toISOString().split('T')[0], campagne: yr })
+    setLotResultatForm({ codeLot: suggested, quantiteNette: p.objectifKg?.toString() ?? '', tauxGermination: '', puretePhysique: '', dateProduction: new Date().toISOString().split('T')[0], campagne: codeCampagne })
     setShowLotResultat(true)
   }
 

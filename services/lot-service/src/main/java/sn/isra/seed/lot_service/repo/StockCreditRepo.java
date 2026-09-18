@@ -169,8 +169,8 @@ public class StockCreditRepo {
 
     /**
      * Génère un code de lot REC lisible à partir du lot parent :
-     * format REC-{GEN}-{ESPECE}-{VARIETE}-{ANNEE}-{SEQ:02d}
-     * ex: REC-G3-ARA-28206-2026-01
+     * format REC-{GEN}-{ESPECE}-{VARIETE}-{code_campagne}-{NN}
+     * ex: REC-G3-ARA-28206-HIV-2026-1
      */
     public String generateRecLotCode(Long parentLotId) {
         return jdbc.queryForObject("""
@@ -185,14 +185,13 @@ public class StockCreditRepo {
                             THEN UPPER(REGEXP_REPLACE(l.nom_variete, '[^A-Za-z0-9]', '', 'g'))
                         ELSE 'VAR'
                     END                                      AS variete_part,
-                    COALESCE(SUBSTRING(l.campagne FROM '[0-9]{4}$'),
-                             EXTRACT(YEAR FROM NOW())::TEXT) AS annee
+                    COALESCE(l.campagne, EXTRACT(YEAR FROM NOW())::TEXT) AS code_campagne
                 FROM lot_semencier l
                 JOIN generation_semence g ON g.id = l.id_generation
                 WHERE l.id = ?
             ),
             prefix AS (
-                SELECT 'REC-' || gen || '-' || espece || '-' || variete_part || '-' || annee AS pfx
+                SELECT 'REC-' || gen || '-' || espece || '-' || variete_part || '-' || code_campagne AS pfx
                 FROM meta
             ),
             seq AS (
@@ -202,7 +201,7 @@ public class StockCreditRepo {
                 FROM lot_semencier
                 WHERE code_lot ~ ('^' || (SELECT pfx FROM prefix) || '-[0-9]+$')
             )
-            SELECT (SELECT pfx FROM prefix) || '-' || LPAD(next_seq::TEXT, 2, '0')
+            SELECT (SELECT pfx FROM prefix) || '-' || next_seq::TEXT
             FROM seq
             """,
             String.class,
