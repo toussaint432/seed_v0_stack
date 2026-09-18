@@ -21,6 +21,8 @@ public interface SiteRepo extends JpaRepository<Site, Long> {
 
   boolean existsByCodeSite(String codeSite);
 
+  boolean existsByCodeSiteAndIdNot(String codeSite, Long id);
+
   /**
    * Résolution site ← type d'organisation.
    * Utilisé par le LotTransferConsumer pour déterminer automatiquement

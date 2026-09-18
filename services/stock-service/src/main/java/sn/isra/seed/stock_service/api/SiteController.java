@@ -220,9 +220,15 @@ public class SiteController {
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<Site> update(@PathVariable Long id, @RequestBody Site body) {
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody Site body) {
         return siteRepo.findById(id).map(s -> {
-            if (body.getCodeSite()  != null) s.setCodeSite(body.getCodeSite());
+            if (body.getCodeSite() != null) {
+                String newCode = body.getCodeSite().toUpperCase().trim();
+                if (!newCode.equals(s.getCodeSite()) && siteRepo.existsByCodeSiteAndIdNot(newCode, id))
+                    return ResponseEntity.badRequest().<Object>body(
+                        Map.of("message", "Ce code site existe déjà : " + newCode));
+                s.setCodeSite(newCode);
+            }
             if (body.getNomSite()   != null) s.setNomSite(body.getNomSite());
             if (body.getTypeSite()  != null) s.setTypeSite(body.getTypeSite());
             if (body.getLocalite()  != null) s.setLocalite(body.getLocalite());

@@ -204,7 +204,7 @@ export function Sites({ roleKey }: Props) {
         <Modal title={editItem ? `Modifier — ${editItem.codeSite}` : 'Nouveau Site'} subtitle="Site de stockage ou production de semences" onClose={() => { setShowForm(false); setEditItem(null) }}>
           <form onSubmit={submitForm}>
             <FormRow>
-              <Field label="Code site" required hint="Ex: MAG-THIES"><FormInput value={form.codeSite} onChange={e => setForm(f => ({ ...f, codeSite: e.target.value.toUpperCase() }))} placeholder="MAG-THIES" required disabled={!!editItem} /></Field>
+              <Field label="Code site" required hint="Ex: MAG-THIES (unique)"><FormInput value={form.codeSite} onChange={e => setForm(f => ({ ...f, codeSite: e.target.value.toUpperCase() }))} placeholder="MAG-THIES" required /></Field>
               <Field label="Nom du site" required><FormInput value={form.nomSite} onChange={e => setForm(f => ({ ...f, nomSite: e.target.value }))} placeholder="Magasin central Thiès" required /></Field>
             </FormRow>
             <FormRow>
