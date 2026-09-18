@@ -68,4 +68,7 @@ public class Site {
     @DecimalMin(value = "-180.0") @DecimalMax(value = "180.0")
     @Column(precision = 10, scale = 6)
     private BigDecimal longitude;
+
+    @Transient
+    private String nomOrganisation;
 }

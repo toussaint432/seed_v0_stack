@@ -65,13 +65,14 @@ const selectStyle: React.CSSProperties = {
 }
 
 const EMPTY_FORM = {
-  nomSite:       '',
-  idZoneAgro:    0,
-  departement:   '',   // nom département (clé LOCALITES)
-  idDepartement: 0,
-  localite:      '',
-  latitude:      '',
-  longitude:     '',
+  nomSite:          '',
+  nomOrganisation:  '',
+  idZoneAgro:       0,
+  departement:      '',
+  idDepartement:    0,
+  localite:         '',
+  latitude:         '',
+  longitude:        '',
 }
 
 export function MesSites({ roleKey }: Props) {
@@ -172,13 +173,14 @@ export function MesSites({ roleKey }: Props) {
     const zoneForSite = zones.find(z => z.code === s.zoneCode)
     const zoneId = zoneForSite?.id ?? 0
     setForm({
-      nomSite:       s.nomSite ?? '',
-      idZoneAgro:    zoneId,
-      departement:   s.departement ?? '',
-      idDepartement: 0,
-      localite:      s.localite ?? '',
-      latitude:      s.latitude != null ? String(s.latitude) : '',
-      longitude:     s.longitude != null ? String(s.longitude) : '',
+      nomSite:         s.nomSite ?? '',
+      nomOrganisation: s.nomOrganisation ?? '',
+      idZoneAgro:      zoneId,
+      departement:     s.departement ?? '',
+      idDepartement:   0,
+      localite:        s.localite ?? '',
+      latitude:        s.latitude != null ? String(s.latitude) : '',
+      longitude:       s.longitude != null ? String(s.longitude) : '',
     })
     if (zoneId) {
       setLoadingDepts(true)
@@ -205,16 +207,17 @@ export function MesSites({ roleKey }: Props) {
     const typeSite = roleKey === 'seed-multiplicator' ? 'FERME' : 'MAGASIN'
 
     const payload: Record<string, unknown> = {
-      nomSite:       form.nomSite.trim(),
+      nomSite:          form.nomSite.trim(),
       typeSite,
-      departement:   form.departement,
-      localite:      form.localite,
-      region:        loc?.region,
-      zoneCode:      selectedZoneObj?.code,
-      idZoneAgro:    form.idZoneAgro   || undefined,
-      idDepartement: form.idDepartement || undefined,
-      latitude:      form.latitude  ? parseFloat(form.latitude)  : undefined,
-      longitude:     form.longitude ? parseFloat(form.longitude) : undefined,
+      departement:      form.departement,
+      localite:         form.localite,
+      region:           loc?.region,
+      zoneCode:         selectedZoneObj?.code,
+      idZoneAgro:       form.idZoneAgro    || undefined,
+      idDepartement:    form.idDepartement || undefined,
+      latitude:         form.latitude  ? parseFloat(form.latitude)  : undefined,
+      longitude:        form.longitude ? parseFloat(form.longitude) : undefined,
+      ...(form.nomOrganisation.trim() ? { nomOrganisation: form.nomOrganisation.trim() } : {}),
     }
 
     try {
@@ -371,6 +374,14 @@ export function MesSites({ roleKey }: Props) {
                 value={form.nomSite}
                 onChange={e => setForm(f => ({ ...f, nomSite: (e as React.ChangeEvent<HTMLInputElement>).target.value }))}
                 required
+              />
+            </Field>
+
+            <Field label="Nom de l'organisation" hint="Laissez vide pour ne pas modifier">
+              <FormInput
+                placeholder="Ex: Organisation Paysanne Nord"
+                value={form.nomOrganisation}
+                onChange={e => setForm(f => ({ ...f, nomOrganisation: (e as React.ChangeEvent<HTMLInputElement>).target.value }))}
               />
             </Field>
 
@@ -598,6 +609,11 @@ function SiteCard({
       {site.localite && (
         <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
           <MapPin size={11} />{site.localite}
+        </div>
+      )}
+      {site.nomOrganisation && (
+        <div style={{ fontSize: 11, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 8, marginTop: 2 }}>
+          Organisation&nbsp;: <span style={{ fontWeight: 600, color: 'var(--text)' }}>{site.nomOrganisation}</span>
         </div>
       )}
     </div>

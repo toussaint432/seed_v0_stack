@@ -41,7 +41,7 @@ export function Sites({ roleKey }: Props) {
 
   const [form, setForm] = useState({
     codeSite: '', nomSite: '', typeSite: 'MAGASIN', localite: '',
-    region: '', latitude: '', longitude: '', idOrganisation: '',
+    region: '', latitude: '', longitude: '', idOrganisation: '', nomOrganisation: '',
   })
 
 
@@ -63,7 +63,7 @@ export function Sites({ roleKey }: Props) {
 
   function openCreate() {
     setEditItem(null)
-    setForm({ codeSite: '', nomSite: '', typeSite: 'MAGASIN', localite: '', region: '', latitude: '', longitude: '', idOrganisation: '' })
+    setForm({ codeSite: '', nomSite: '', typeSite: 'MAGASIN', localite: '', region: '', latitude: '', longitude: '', idOrganisation: '', nomOrganisation: '' })
     setShowForm(true)
   }
 
@@ -74,6 +74,7 @@ export function Sites({ roleKey }: Props) {
       localite: s.localite || '', region: s.region || '',
       latitude: s.latitude?.toString() || '', longitude: s.longitude?.toString() || '',
       idOrganisation: s.idOrganisation?.toString() || '',
+      nomOrganisation: s.nomOrganisation || '',
     })
     setShowForm(true)
   }
@@ -221,6 +222,9 @@ export function Sites({ roleKey }: Props) {
               </Field>
             </FormRow>
             <Field label="Localité"><FormInput value={form.localite} onChange={e => setForm(f => ({ ...f, localite: e.target.value }))} placeholder="Bambey, Diourbel" /></Field>
+            <Field label="Nom de l'organisation" hint="Modifie le nom affiché pour tous les membres de cette organisation">
+              <FormInput value={form.nomOrganisation} onChange={e => setForm(f => ({ ...f, nomOrganisation: e.target.value }))} placeholder="Ex: Organisation Paysanne Nord" />
+            </Field>
             <FormRow>
               <Field label="Latitude" hint="Ex: 14.6928"><FormInput type="number" value={form.latitude} onChange={e => setForm(f => ({ ...f, latitude: e.target.value }))} placeholder="14.6928" step="0.0000001" /></Field>
               <Field label="Longitude" hint="Ex: -17.4467"><FormInput type="number" value={form.longitude} onChange={e => setForm(f => ({ ...f, longitude: e.target.value }))} placeholder="-17.4467" step="0.0000001" /></Field>

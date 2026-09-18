@@ -13,8 +13,11 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/sites")
@@ -31,9 +34,11 @@ public class SiteController {
     public List<Site> list(
             @RequestParam(required = false) String region,
             @RequestParam(required = false) Long idOrganisation) {
-        if (idOrganisation != null)
-            return siteRepo.findByIdOrganisationOrderByEstPrincipalDescIdAsc(idOrganisation);
-        return siteRepo.findAll();
+        List<Site> sites = idOrganisation != null
+            ? siteRepo.findByIdOrganisationOrderByEstPrincipalDescIdAsc(idOrganisation)
+            : siteRepo.findAll();
+        enrichWithOrgNames(sites);
+        return sites;
     }
 
     @GetMapping("/{id}")
@@ -51,12 +56,16 @@ public class SiteController {
         if (membreId.isEmpty()) return ResponseEntity.ok(List.of());
 
         List<Site> personal = siteRepo.findByIdMembreOrderByEstPrincipalDescIdAsc(membreId.get());
-        if (!personal.isEmpty()) return ResponseEntity.ok(personal);
+        if (!personal.isEmpty()) {
+            enrichWithOrgNames(personal);
+            return ResponseEntity.ok(personal);
+        }
 
-        // Fallback : sites de l'organisation (UPSemCL, sélectionneur — sites institutionnels)
         var orgId = membreRepo.findOrgIdByUsername(username);
         if (orgId.isEmpty()) return ResponseEntity.ok(List.of());
-        return ResponseEntity.ok(siteRepo.findByIdOrganisationOrderByEstPrincipalDescIdAsc(orgId.get()));
+        List<Site> orgSites = siteRepo.findByIdOrganisationOrderByEstPrincipalDescIdAsc(orgId.get());
+        enrichWithOrgNames(orgSites);
+        return ResponseEntity.ok(orgSites);
     }
 
     /**
@@ -148,8 +157,22 @@ public class SiteController {
             if (body.containsKey("localite"))      s.setLocalite(getString(body, "localite"));
             if (body.containsKey("region"))        s.setRegion(getString(body, "region"));
             if (body.containsKey("latitude"))      s.setLatitude(parseBD(body.get("latitude")));
-            if (body.containsKey("longitude"))     s.setLongitude(parseBD(body.get("longitude")));
-            return ResponseEntity.<Object>ok(siteRepo.save(s));
+            if (body.containsKey("longitude"))        s.setLongitude(parseBD(body.get("longitude")));
+            Site saved = siteRepo.save(s);
+            if (body.containsKey("nomOrganisation") && saved.getIdOrganisation() != null) {
+                String orgNom = getString(body, "nomOrganisation");
+                if (orgNom != null && !orgNom.isBlank()) {
+                    int updated = jdbc.update(
+                        "UPDATE shared.organisation SET nom_organisation = ? WHERE id = ?",
+                        orgNom, saved.getIdOrganisation());
+                    if (updated == 0)
+                        return ResponseEntity.badRequest().<Object>body(
+                            Map.of("message", "Organisation introuvable (id=" + saved.getIdOrganisation() + ")"));
+                    saved.setNomOrganisation(orgNom);
+                }
+            }
+            enrichWithOrgNames(List.of(saved));
+            return ResponseEntity.<Object>ok(saved);
         }).orElse(ResponseEntity.status(403).build());
     }
 
@@ -237,7 +260,19 @@ public class SiteController {
             if (body.getLatitude()  != null) s.setLatitude(body.getLatitude());
             if (body.getLongitude() != null) s.setLongitude(body.getLongitude());
             if (body.getIdOrganisation() != null) s.setIdOrganisation(body.getIdOrganisation());
-            return ResponseEntity.ok(siteRepo.save(s));
+            Site saved = siteRepo.save(s);
+            if (body.getNomOrganisation() != null && !body.getNomOrganisation().isBlank()
+                    && saved.getIdOrganisation() != null) {
+                int updated = jdbc.update(
+                    "UPDATE shared.organisation SET nom_organisation = ? WHERE id = ?",
+                    body.getNomOrganisation().trim(), saved.getIdOrganisation());
+                if (updated == 0)
+                    return ResponseEntity.badRequest().<Object>body(
+                        Map.of("message", "Organisation introuvable (id=" + saved.getIdOrganisation() + ")"));
+                saved.setNomOrganisation(body.getNomOrganisation().trim());
+            }
+            enrichWithOrgNames(List.of(saved));
+            return ResponseEntity.ok(saved);
         }).orElse(ResponseEntity.notFound().build());
     }
 
@@ -249,6 +284,23 @@ public class SiteController {
     }
 
     /* ── Helpers privés ── */
+
+    private void enrichWithOrgNames(List<Site> sites) {
+        List<Long> ids = sites.stream()
+            .map(Site::getIdOrganisation).filter(Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return;
+        String placeholders = ids.stream().map(i -> "?").collect(Collectors.joining(","));
+        Map<Long, String> names = new HashMap<>();
+        jdbc.queryForList(
+            "SELECT id, nom_organisation FROM shared.organisation WHERE id IN (" + placeholders + ")",
+            ids.toArray()
+        ).forEach(row -> names.put(((Number) row.get("id")).longValue(), (String) row.get("nom_organisation")));
+        sites.forEach(s -> {
+            if (s.getIdOrganisation() != null)
+                s.setNomOrganisation(names.get(s.getIdOrganisation()));
+        });
+    }
+
     private String getString(Map<String, Object> body, String key) {
         Object v = body.get(key);
         return v instanceof String s ? s.trim() : (v != null ? v.toString().trim() : null);
