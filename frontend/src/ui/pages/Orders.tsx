@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ShoppingCart, RefreshCw, Plus, Settings2, Clock, XCircle, PackageCheck,
   Search, X, ChevronLeft, ChevronRight, CheckCircle2, Ban, Eye, Building2,
-  TrendingUp, TrendingDown, BarChart2, Truck, Receipt, Zap, Download,
+  TrendingUp, TrendingDown, BarChart2, Truck, Receipt, Zap, Download, ClipboardList, Leaf,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { endpoints } from '../../lib/endpoints'
@@ -2619,6 +2619,14 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
   const isUpsemcl = roleKey === 'seed-upsemcl'
   const { refreshBadge } = useBadges()
 
+  // ── Expressions de besoins ────────────────────────────────────
+  const [besoinsAgregees,      setBesoinsAgregees]      = useState<any[]>([])
+  const [besoinsDetail,        setBesoinsDetail]        = useState<any[]>([])
+  const [loadingBesoins,       setLoadingBesoins]       = useState(false)
+  const [showBesoinsSection,   setShowBesoinsSection]   = useState(false)
+  const [besoinDetailExpanded, setBesoinDetailExpanded] = useState<string | null>(null)
+  const [besoinsPrendreCompte, setBesoinsPrendreCompte] = useState<number | null>(null)
+
   async function fetchAll() {
     setLoading(true)
     const [oRes, orgRes, varRes] = await Promise.allSettled([
@@ -2673,6 +2681,30 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
     } catch (err: any) {
       setToast({ msg: err?.response?.data?.message ?? 'Erreur lors du transfert', type: 'error' })
     } finally { setActioning(null) }
+  }
+
+  async function fetchBesoinsAgregees() {
+    setLoadingBesoins(true)
+    try {
+      const [agrRes, detRes] = await Promise.allSettled([
+        api.get(endpoints.expressionBesoinsAgregees),
+        api.get(endpoints.expressionBesoins),
+      ])
+      setBesoinsAgregees(agrRes.status === 'fulfilled' ? (Array.isArray(agrRes.value.data) ? agrRes.value.data : []) : [])
+      setBesoinsDetail(detRes.status === 'fulfilled' ? (Array.isArray(detRes.value.data) ? detRes.value.data : []) : [])
+    } catch { }
+    finally { setLoadingBesoins(false) }
+  }
+
+  async function prendreEnCompte(id: number) {
+    setBesoinsPrendreCompte(id)
+    try {
+      await api.put(endpoints.expressionBesoinPrendreCompte(id))
+      setToast({ msg: 'Besoin pris en compte', type: 'success' })
+      fetchBesoinsAgregees()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur', type: 'error' })
+    } finally { setBesoinsPrendreCompte(null) }
   }
 
   useEffect(() => { fetchAll() }, [])
@@ -2846,6 +2878,106 @@ function VueUpsemcl({ setToast, roleKey }: { setToast: any; roleKey: string }) {
       {!loading && livrees > 0 && (
         <div style={{ marginTop: 12, fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Truck size={13} /> <strong>{livrees}</strong> commande{livrees > 1 ? 's' : ''} livrée{livrees > 1 ? 's' : ''} ce cycle
+        </div>
+      )}
+
+      {/* ── Section Expressions de besoins (UPSemCL) ──────────────── */}
+      {isUpsemcl && (
+        <div className="card" style={{ marginTop: 18 }}>
+          <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => { setShowBesoinsSection(v => !v); if (!showBesoinsSection) fetchBesoinsAgregees() }}>
+            <span className="card-title">
+              <span className="card-title-icon"><ClipboardList size={15} /></span>
+              Expressions de besoins
+              {besoinsAgregees.length > 0 && <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{besoinsAgregees.length} variété{besoinsAgregees.length > 1 ? 's' : ''}</span>}
+              {besoinsDetail.filter(b => b.statut === 'SOUMISE').length > 0 && (
+                <span style={{ background: '#eff6ff', color: '#1d4ed8', borderRadius: 20, padding: '1px 8px', fontSize: 11, fontWeight: 700, marginLeft: 6 }}>
+                  {besoinsDetail.filter(b => b.statut === 'SOUMISE').length} en attente
+                </span>
+              )}
+            </span>
+            <button className="btn btn-ghost" style={{ fontSize: 12, gap: 5 }} onClick={e => { e.stopPropagation(); setShowBesoinsSection(v => !v); if (!showBesoinsSection) fetchBesoinsAgregees() }}>
+              {showBesoinsSection ? 'Replier' : 'Voir les besoins déclarés'}
+              {loadingBesoins && <RefreshCw size={11} style={{ animation: 'spin 0.8s linear infinite' }} />}
+            </button>
+          </div>
+
+          {showBesoinsSection && (
+            <div>
+              {loadingBesoins && besoinsAgregees.length === 0 ? (
+                <div style={{ padding: '24px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                  <RefreshCw size={16} style={{ animation: 'spin 0.8s linear infinite', marginBottom: 8 }} /><br />Chargement…
+                </div>
+              ) : besoinsAgregees.length === 0 ? (
+                <div style={{ padding: '24px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                  <Leaf size={28} style={{ marginBottom: 8, opacity: 0.3 }} /><br />Aucune expression de besoin soumise
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '2px solid var(--border)', background: 'var(--surface-2)' }}>
+                      <th style={{ padding: '9px 16px', textAlign: 'left', fontWeight: 700, fontSize: 12, color: 'var(--text-secondary)' }}>Variété</th>
+                      <th style={{ padding: '9px 16px', textAlign: 'left', fontWeight: 700, fontSize: 12, color: 'var(--text-secondary)' }}>Espèce</th>
+                      <th style={{ padding: '9px 16px', textAlign: 'left', fontWeight: 700, fontSize: 12, color: 'var(--text-secondary)' }}>Campagne cible</th>
+                      <th style={{ padding: '9px 16px', textAlign: 'right', fontWeight: 700, fontSize: 12, color: 'var(--text-secondary)' }}>Qté totale (kg)</th>
+                      <th style={{ padding: '9px 16px', textAlign: 'right', fontWeight: 700, fontSize: 12, color: 'var(--text-secondary)' }}>Multiplicateurs</th>
+                      <th style={{ padding: '9px 16px', textAlign: 'center', fontWeight: 700, fontSize: 12, color: 'var(--text-secondary)' }}>Détail</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {besoinsAgregees.map((row: any, idx: number) => {
+                      const key = `${row.idVariete}-${row.campagneCible}`
+                      const detailRows = besoinsDetail.filter((b: any) => b.idVariete === row.idVariete && b.campagneCible === row.campagneCible)
+                      return (
+                        <React.Fragment key={key}>
+                          <tr style={{ borderBottom: '1px solid var(--border)', background: idx % 2 === 0 ? 'transparent' : 'var(--surface-2)' }}>
+                            <td style={{ padding: '10px 16px', fontWeight: 600 }}>{row.nomVariete}</td>
+                            <td style={{ padding: '10px 16px', color: 'var(--text-muted)' }}>{row.codeEspece}</td>
+                            <td style={{ padding: '10px 16px' }}><span style={{ background: '#eff6ff', color: '#1d4ed8', borderRadius: 4, padding: '2px 7px', fontSize: 11.5, fontWeight: 600 }}>{row.campagneCible}</span></td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 700 }}>{Number(row.totalKg).toLocaleString('fr-FR')} kg</td>
+                            <td style={{ padding: '10px 16px', textAlign: 'right', color: 'var(--text-muted)' }}>{row.nbDemandeurs}</td>
+                            <td style={{ padding: '10px 16px', textAlign: 'center' }}>
+                              <button className="btn btn-ghost" style={{ fontSize: 11, height: 26, padding: '0 10px' }}
+                                onClick={() => setBesoinDetailExpanded(besoinDetailExpanded === key ? null : key)}>
+                                {besoinDetailExpanded === key ? 'Masquer' : 'Voir'}
+                              </button>
+                            </td>
+                          </tr>
+                          {besoinDetailExpanded === key && detailRows.map((b: any) => {
+                            const statutColor = b.statut === 'PRISE_EN_COMPTE' ? '#15803d' : b.statut === 'ANNULEE' ? '#9ca3af' : '#1d4ed8'
+                            const statutBg    = b.statut === 'PRISE_EN_COMPTE' ? '#f0fdf4' : b.statut === 'ANNULEE' ? '#f9fafb' : '#eff6ff'
+                            const statutLabel = b.statut === 'PRISE_EN_COMPTE' ? 'Prise en compte' : b.statut === 'ANNULEE' ? 'Annulée' : 'Soumise'
+                            return (
+                              <tr key={b.id} style={{ background: '#fafafa', borderBottom: '1px solid var(--border)', fontSize: 12 }}>
+                                <td colSpan={2} style={{ padding: '7px 16px 7px 32px', color: 'var(--text-secondary)' }}>
+                                  <strong>{b.nomCompletCreateur ?? b.usernameCreateur}</strong>
+                                  {b.nomOrganisation && <span style={{ color: 'var(--text-muted)', marginLeft: 5 }}>· {b.nomOrganisation}</span>}
+                                </td>
+                                <td style={{ padding: '7px 16px' }}></td>
+                                <td style={{ padding: '7px 16px', textAlign: 'right' }}>{Number(b.quantiteSouhaitee).toLocaleString('fr-FR')} {b.unite}</td>
+                                <td style={{ padding: '7px 16px', textAlign: 'right' }}>
+                                  <span style={{ padding: '2px 7px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: statutBg, color: statutColor }}>{statutLabel}</span>
+                                </td>
+                                <td style={{ padding: '7px 16px', textAlign: 'center' }}>
+                                  {b.statut === 'SOUMISE' && (
+                                    <button className="btn btn-primary" style={{ height: 26, fontSize: 11, padding: '0 10px', gap: 4 }}
+                                      disabled={besoinsPrendreCompte === b.id}
+                                      onClick={() => prendreEnCompte(b.id)}>
+                                      <CheckCircle2 size={11} />
+                                      {besoinsPrendreCompte === b.id ? '…' : 'Prendre en compte'}
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </React.Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          )}
         </div>
       )}
 

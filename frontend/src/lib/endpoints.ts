@@ -157,6 +157,14 @@ export const endpoints = {
   stockMonStock:           `${STOCK}/stocks/mon-stock`,
   ordersMesDemandesG3:     `${ORDER}/orders/mes-demandes-g3`,
 
+  // ── Expressions de besoins (order-service :18084) ──
+  expressionBesoins:             `${ORDER}/expressions-besoins`,
+  expressionBesoinsMesBesoins:   `${ORDER}/expressions-besoins/mes-besoins`,
+  expressionBesoinsAgregees:     `${ORDER}/expressions-besoins/agregees`,
+  expressionBesoinById:          (id: number) => `${ORDER}/expressions-besoins/${id}`,
+  expressionBesoinPrendreCompte: (id: number) => `${ORDER}/expressions-besoins/${id}/prendre-en-compte`,
+  expressionBesoinsAlerts:       `${ORDER}/expressions-besoins/alerts/count`,
+
   // ── Chat / Messagerie (order-service :18084) — Phase 6 ──
   chatConversations:  `${ORDER}/chat/conversations`,
   chatMessages:       (convId: number) => `${ORDER}/chat/conversations/${convId}/messages`,

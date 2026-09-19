@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX, Shield, MessageCircle, Users, Edit2, Lock, Clock } from 'lucide-react'
+import { Package, Plus, ArrowRightLeft, GitBranch, RefreshCw, X, ChevronRight, Eye, Building2, Download, FileText, Store, Layers, ShoppingCart, CheckCircle2, Bell, Check, XCircle, Search, BadgeCheck, Upload, Trash2, ShieldCheck, ShieldX, Shield, MessageCircle, Users, Edit2, Lock, Clock, ClipboardList, Leaf } from 'lucide-react'
 import { keycloak } from '../../lib/keycloak'
 import { generateLotCode } from '../../lib/lotCode'
 import { api } from '../../lib/api'
@@ -791,7 +791,7 @@ type CartVarieteItem = {
 
 function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type: 'success'|'error' }) => void }) {
   const { refreshBadge } = useBadges()
-  const [onglet, setOnglet]           = useState<'catalogue'|'meslots'>('catalogue')
+  const [onglet, setOnglet]           = useState<'catalogue'|'meslots'|'besoins'>('catalogue')
   const [catalogueG3, setCatalogueG3] = useState<any[]>([])
   const [mesLots, setMesLots]         = useState<any[]>([])
   const [monStock, setMonStock]       = useState<any[]>([])
@@ -799,6 +799,14 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   const [upsemclOrgId, setUpsemclOrgId] = useState<number | null>(null)
   const [loadingCat, setLoadingCat]   = useState(true)
   const [loadingMes, setLoadingMes]   = useState(true)
+  // ── Expression de besoins ─────────────────────────────────────
+  const [mesBesoins, setMesBesoins]     = useState<any[]>([])
+  const [loadingBesoins, setLoadingBesoins] = useState(false)
+  const [savingBesoin, setSavingBesoin] = useState(false)
+  const [besoinFormVariete, setBesoinFormVariete] = useState<any | null>(null)
+  const BESOIN_FORM_INIT = { campagneCible: '', quantiteSouhaitee: '', unite: 'kg', observations: '' }
+  const [besoinForm, setBesoinForm]     = useState(BESOIN_FORM_INIT)
+  const [searchBesoins, setSearchBesoins] = useState('')
   const [cart, setCart]               = useState<CartVarieteItem[]>([])
   const [cartObs, setCartObs]         = useState('')
   const [cartQty,   setCartQty]       = useState<Record<number, string>>({})
@@ -962,6 +970,50 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     refreshBadge('lots')
   }
 
+  async function fetchBesoins() {
+    setLoadingBesoins(true)
+    try {
+      const r = await api.get(endpoints.expressionBesoinsMesBesoins)
+      setMesBesoins(Array.isArray(r.data) ? r.data : [])
+    } catch { setMesBesoins([]) }
+    finally { setLoadingBesoins(false) }
+  }
+
+  async function submitBesoin(e: React.FormEvent) {
+    e.preventDefault()
+    if (!besoinFormVariete || !besoinForm.campagneCible || !besoinForm.quantiteSouhaitee) return
+    setSavingBesoin(true)
+    try {
+      await api.post(endpoints.expressionBesoins, {
+        idVariete:        besoinFormVariete.id,
+        nomVariete:       besoinFormVariete.nomVariete,
+        codeEspece:       besoinFormVariete.espece?.codeEspece ?? besoinFormVariete.codeEspece ?? '',
+        nomEspece:        besoinFormVariete.espece?.nomEspece  ?? besoinFormVariete.nomEspece  ?? '',
+        campagneCible:    besoinForm.campagneCible,
+        quantiteSouhaitee: parseFloat(besoinForm.quantiteSouhaitee),
+        unite:            besoinForm.unite,
+        observations:     besoinForm.observations || undefined,
+      })
+      setToast({ msg: `Besoin déclaré pour ${besoinFormVariete.nomVariete} — campagne ${besoinForm.campagneCible}`, type: 'success' })
+      setBesoinFormVariete(null)
+      setBesoinForm(BESOIN_FORM_INIT)
+      fetchBesoins()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de la déclaration', type: 'error' })
+    } finally { setSavingBesoin(false) }
+  }
+
+  async function annulerBesoin(eb: any) {
+    if (!window.confirm(`Annuler la déclaration pour ${eb.nomVariete} — campagne ${eb.campagneCible} ?`)) return
+    try {
+      await api.delete(endpoints.expressionBesoinById(eb.id))
+      setToast({ msg: 'Déclaration annulée', type: 'success' })
+      fetchBesoins()
+    } catch (err: any) {
+      setToast({ msg: err?.response?.data?.message || 'Erreur lors de l\'annulation', type: 'error' })
+    }
+  }
+
   // Accepter un transfert G3 entrant — le lot apparaît ensuite dans Mes Lots
   async function accepterTransfert(id: number, code: string) {
     try {
@@ -985,6 +1037,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
   }
 
   useEffect(() => { fetchAll() }, [])
+  useEffect(() => { if (onglet === 'besoins') fetchBesoins() }, [onglet])
 
   const varietyMap: Record<number, any> = Object.fromEntries(varieties.map(v => [v.id, v]))
 
@@ -1179,7 +1232,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
     } finally { setSaving(false) }
   }
 
-  const tabBtn = (key: 'catalogue'|'meslots', icon: React.ReactNode, label: string, count?: number) => (
+  const tabBtn = (key: 'catalogue'|'meslots'|'besoins', icon: React.ReactNode, label: string, count?: number) => (
     <button
       onClick={() => setOnglet(key)}
       style={{
@@ -1378,6 +1431,7 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
             </span>
           )}
         </button>
+        {tabBtn('besoins', <ClipboardList size={14} />, 'Exprimer un besoin', mesBesoins.filter(b => b.statut !== 'ANNULEE').length || undefined)}
       </div>
 
       {/* ── Onglet Catalogue G3 — Vue agrégée par variété ──────── */}
@@ -2221,6 +2275,141 @@ function VueLotsMultiplicateur({ setToast }: { setToast: (t: { msg: string; type
               {saving ? 'Envoi…' : `Soumettre la demande (${cart.length})`}
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── Onglet Exprimer un besoin ──────────────────────────────── */}
+      {onglet === 'besoins' && (
+        <div className="card" style={{ borderRadius: '0 0 var(--radius) var(--radius)', borderTop: 'none' }}>
+          <div className="card-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+              <span className="card-title">
+                <span className="card-title-icon"><Leaf size={15} /></span>
+                Toutes les variétés disponibles
+                <span className="badge badge-gray" style={{ marginLeft: 6, fontSize: 11 }}>{varieties.length}</span>
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '0 10px', height: 32 }}>
+                <Search size={12} color="var(--text-muted)" />
+                <input value={searchBesoins} onChange={e => setSearchBesoins(e.target.value)} placeholder="Variété, espèce…" style={{ border: 'none', background: 'none', outline: 'none', fontSize: 12.5, fontFamily: 'var(--font-sans)', width: 160 }} />
+                {searchBesoins && <button onClick={() => setSearchBesoins('')} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex' }}><X size={12} /></button>}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', background: 'var(--surface-2)', borderRadius: 6, padding: '8px 12px' }}>
+              <ClipboardList size={12} style={{ marginRight: 6, verticalAlign: 'middle' }} />
+              Déclarez vos besoins en semences pour une campagne à venir — même si le stock est épuisé. L'UPSemCL (CNRA) utilisera ces informations pour planifier la production.
+            </div>
+          </div>
+
+          {/* Formulaire de déclaration de besoin */}
+          {besoinFormVariete && (
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', background: '#f0fdf4' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 12, color: 'var(--green-700)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ClipboardList size={14} />
+                Déclarer un besoin — <span style={{ fontWeight: 400 }}>{besoinFormVariete.nomVariete}</span>
+              </div>
+              <form onSubmit={submitBesoin}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10, marginBottom: 10 }}>
+                  <Field label="Campagne cible" required>
+                    <FormSelect value={besoinForm.campagneCible} onChange={e => setBesoinForm(f => ({ ...f, campagneCible: e.target.value }))} required>
+                      <option value="">— Campagne —</option>
+                      {campagnes.map((c: any) => <option key={c.id} value={c.codeCampagne}>{c.libelle}</option>)}
+                    </FormSelect>
+                  </Field>
+                  <Field label="Quantité souhaitée (kg)" required>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <FormInput type="number" value={besoinForm.quantiteSouhaitee} onChange={e => setBesoinForm(f => ({ ...f, quantiteSouhaitee: e.target.value }))} placeholder="500" min="0.01" step="0.01" required style={{ flex: 1 }} />
+                      <FormSelect value={besoinForm.unite} onChange={e => setBesoinForm(f => ({ ...f, unite: e.target.value }))} style={{ width: 70 }}>
+                        <option value="kg">kg</option><option value="t">t</option>
+                      </FormSelect>
+                    </div>
+                  </Field>
+                </div>
+                <Field label="Observations (zone de production, qualité requise…)">
+                  <textarea value={besoinForm.observations} onChange={e => setBesoinForm(f => ({ ...f, observations: e.target.value }))} rows={2}
+                    style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border-strong)', borderRadius: 6, fontSize: 13, fontFamily: 'var(--font-sans)', resize: 'vertical', outline: 'none', background: 'var(--surface)', color: 'var(--text-primary)' }}
+                    placeholder="Ex : zone de Fatick, variété certifiée…" />
+                </Field>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <button type="button" className="btn btn-ghost" onClick={() => { setBesoinFormVariete(null); setBesoinForm(BESOIN_FORM_INIT) }} style={{ height: 34 }}>Annuler</button>
+                  <button type="submit" className="btn btn-primary" disabled={savingBesoin} style={{ height: 34, gap: 6 }}>
+                    <ClipboardList size={13} />
+                    {savingBesoin ? 'Envoi…' : 'Soumettre la déclaration'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+          {/* Liste toutes variétés */}
+          <div style={{ padding: '0 0 8px' }}>
+            {(() => {
+              const q = searchBesoins.toLowerCase()
+              const filtered = varieties.filter((v: any) =>
+                !q || v.nomVariete?.toLowerCase().includes(q) || v.espece?.nomEspece?.toLowerCase().includes(q) || v.espece?.codeEspece?.toLowerCase().includes(q)
+              )
+              if (filtered.length === 0) return (
+                <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                  <Leaf size={28} style={{ marginBottom: 8, opacity: 0.3 }} /><br />Aucune variété trouvée
+                </div>
+              )
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 0 }}>
+                  {filtered.map((v: any) => {
+                    const alreadyDeclared = mesBesoins.some(b => b.idVariete === v.id && b.statut !== 'ANNULEE')
+                    return (
+                      <div key={v.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 20px', borderBottom: '1px solid var(--border)', gap: 10 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v.nomVariete}</div>
+                          <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{v.espece?.nomEspece ?? ''}</div>
+                        </div>
+                        <button
+                          className={alreadyDeclared ? 'btn btn-secondary' : 'btn btn-primary'}
+                          style={{ height: 30, fontSize: 11.5, padding: '0 12px', gap: 5, flexShrink: 0,
+                            ...(alreadyDeclared ? { background: '#f0fdf4', color: '#15803d', border: '1px solid #86efac' } : {}) }}
+                          onClick={() => { setBesoinFormVariete(alreadyDeclared ? null : v); if (!alreadyDeclared) { window.scrollTo({ top: 0, behavior: 'smooth' }) } }}
+                        >
+                          {alreadyDeclared
+                            ? <><CheckCircle2 size={12} /> Déclaré</>
+                            : <><Plus size={12} /> Déclarer</>
+                          }
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Mes déclarations */}
+          {mesBesoins.length > 0 && (
+            <div style={{ borderTop: '2px solid var(--border)', marginTop: 8, padding: '0 20px 12px' }}>
+              <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--text-secondary)', margin: '12px 0 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <ClipboardList size={13} /> Mes déclarations {loadingBesoins && <RefreshCw size={11} style={{ animation: 'spin 0.8s linear infinite' }} />}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {mesBesoins.map((eb: any) => {
+                  const statutColor = eb.statut === 'PRISE_EN_COMPTE' ? '#15803d' : eb.statut === 'ANNULEE' ? '#9ca3af' : '#1d4ed8'
+                  const statutBg    = eb.statut === 'PRISE_EN_COMPTE' ? '#f0fdf4' : eb.statut === 'ANNULEE' ? '#f9fafb' : '#eff6ff'
+                  const statutLabel = eb.statut === 'PRISE_EN_COMPTE' ? 'Prise en compte' : eb.statut === 'ANNULEE' ? 'Annulée' : 'Soumise'
+                  return (
+                    <div key={eb.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: '1px solid var(--border)', opacity: eb.statut === 'ANNULEE' ? 0.5 : 1 }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{eb.nomVariete} <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 11.5 }}>· {eb.codeEspece}</span></div>
+                        <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>Campagne : {eb.campagneCible} · {eb.quantiteSouhaitee?.toLocaleString('fr-FR')} {eb.unite}</div>
+                      </div>
+                      <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, fontWeight: 700, background: statutBg, color: statutColor }}>{statutLabel}</span>
+                      {eb.statut === 'SOUMISE' && (
+                        <button className="btn btn-ghost" style={{ height: 28, padding: '0 8px', fontSize: 11, color: '#ef4444' }} onClick={() => annulerBesoin(eb)}>
+                          <XCircle size={12} /> Annuler
+                        </button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
