@@ -22,6 +22,7 @@ import sn.isra.seed.order_service.entity.ReceptionEcart;
 import sn.isra.seed.order_service.entity.enums.StatutCommande;
 import sn.isra.seed.order_service.entity.enums.StatutLigne;
 import sn.isra.seed.order_service.kafka.OrderEventProducer;
+import sn.isra.seed.order_service.entity.UserAuditLog;
 import sn.isra.seed.order_service.repo.AllocationRepo;
 import sn.isra.seed.order_service.repo.BordereauRepo;
 import sn.isra.seed.order_service.repo.CommandeRepo;
@@ -33,6 +34,7 @@ import sn.isra.seed.order_service.repo.PropositionLigneRepo;
 import sn.isra.seed.order_service.repo.ReceptionCommandeRepo;
 import sn.isra.seed.order_service.repo.StockOrderRepo;
 import sn.isra.seed.order_service.repo.TransfertLotOrderRepo;
+import sn.isra.seed.order_service.repo.UserAuditLogRepo;
 import sn.isra.seed.order_service.service.FactureGenerationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
@@ -81,6 +83,19 @@ public class OrderController {
   private final FactureGenerationService factureGenerationService;
   private final OrderEventProducer producer;
   private final ObjectMapper om;
+  private final UserAuditLogRepo auditRepo;
+
+  private void logAudit(String username, String actionType, String description, String entityRef) {
+    if (username == null) return;
+    try {
+      auditRepo.save(UserAuditLog.builder()
+          .username(username)
+          .actionType(actionType)
+          .description(description)
+          .entityRef(entityRef)
+          .build());
+    } catch (Exception ignored) {}
+  }
 
   /** Badge d'alerte — commandes SOUMISE en attente d'action selon le rôle */
   @GetMapping("/alerts/count")
@@ -298,6 +313,9 @@ public class OrderController {
     }
 
     producer.orderCreated(om.writeValueAsString(saved));
+    logAudit(username, "COMMANDE_SOUMISE",
+        "Commande " + saved.getCodeCommande() + " soumise",
+        saved.getCodeCommande());
     return saved;
   }
 
@@ -320,16 +338,20 @@ public class OrderController {
           ". Valeurs acceptées : SOUMISE, ACCEPTEE, EN_PREPARATION, LIVREE, ANNULEE");
     }
 
+    String username = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
     return commandeRepo.findById(id).map(c -> {
       c.setStatut(nouveauStatut);
       if (req.observations() != null) c.setObservations(req.observations());
       Commande saved = commandeRepo.save(c);
 
       if (nouveauStatut == StatutCommande.LIVREE && c.getIdOrganisationAcheteur() != null) {
-        String emetteur = jwt != null ? jwt.getClaimAsString("preferred_username") : "upsemcl";
+        String emetteur = username != null ? username : "upsemcl";
         appliquerMouvementStock(saved, emetteur);
       }
 
+      logAudit(username, "COMMANDE_" + nouveauStatut.name(),
+          "Commande " + saved.getCodeCommande() + " → " + nouveauStatut.name(),
+          saved.getCodeCommande());
       return ResponseEntity.ok(saved);
     }).orElse(ResponseEntity.notFound().build());
   }
@@ -439,7 +461,8 @@ public class OrderController {
   @PatchMapping("/{id}/accepter-proposition")
   public ResponseEntity<Commande> accepterProposition(
       @PathVariable Long id,
-      @RequestBody(required = false) java.util.Map<String, Object> body) {
+      @RequestBody(required = false) java.util.Map<String, Object> body,
+      @AuthenticationPrincipal Jwt jwt) {
 
     Commande commande = commandeRepo.findById(id)
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Commande #" + id + " introuvable"));
@@ -454,7 +477,12 @@ public class OrderController {
     }
 
     commande.setStatut(StatutCommande.ACCEPTEE);
-    return ResponseEntity.ok(commandeRepo.save(commande));
+    Commande saved = commandeRepo.save(commande);
+    String username = jwt != null ? jwt.getClaimAsString("preferred_username") : null;
+    logAudit(username, "COMMANDE_ACCEPTEE",
+        "Proposition acceptée pour " + saved.getCodeCommande(),
+        saved.getCodeCommande());
+    return ResponseEntity.ok(saved);
   }
 
   /**
