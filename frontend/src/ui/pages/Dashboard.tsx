@@ -14,7 +14,8 @@ import { SelectorAnalytics }        from './SelectorAnalytics'
 import { MultiplicateurAnalytics }  from './MultiplicateurAnalytics'
 import { UPSemCLAnalytics }         from './UPSemCLAnalytics'
 import { AdminHealthPanel }         from './AdminHealthPanel'
-import { PendingDeliveries } from '../components/PendingDeliveries'
+import { PendingDeliveries }  from '../components/PendingDeliveries'
+import { RecentActivity }     from '../components/RecentActivity'
 import { MapSemences }     from '../components/MapSemences'
 import { TD as D }         from '../../lib/tokens'
 import { downloadXlsx, formatDateForExport, type XlsxSheet } from '../../lib/exportUtils'
@@ -2589,6 +2590,9 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
           </div>
         </div>
       )}
+
+      {/* ═══════════════ ACTIVITÉ RÉCENTE ═══════════════ */}
+      <RecentActivity />
 
       {/* ═══════════════ SECTIONS RÔLE-SPÉCIFIQUES ═══════════════ */}
       {['seed-upsemcl','seed-multiplicator'].includes(roleKey) && (

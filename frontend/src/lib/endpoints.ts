@@ -180,6 +180,9 @@ export const endpoints = {
     order:   `${BASE}:18084/swagger-ui/index.html`,
   },
 
+  // ── Audit activité utilisateur (order-service :18084) ──
+  auditMonActivite: `${ORDER}/audit/mon-activite`,
+
   // ── Actuator Health (admin — publics, sans token) ──
   health: {
     catalog: `${BASE}:18081/actuator/health`,
