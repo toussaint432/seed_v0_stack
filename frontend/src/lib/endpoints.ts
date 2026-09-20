@@ -178,5 +178,13 @@ export const endpoints = {
     lot:     `${BASE}:18082/swagger-ui/index.html`,
     stock:   `${BASE}:18083/swagger-ui/index.html`,
     order:   `${BASE}:18084/swagger-ui/index.html`,
-  }
+  },
+
+  // ── Actuator Health (admin — publics, sans token) ──
+  health: {
+    catalog: `${BASE}:18081/actuator/health`,
+    lot:     `${BASE}:18082/actuator/health`,
+    stock:   `${BASE}:18083/actuator/health`,
+    order:   `${BASE}:18084/actuator/health`,
+  },
 } as const

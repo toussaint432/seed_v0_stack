@@ -13,6 +13,7 @@ import { normalizeLot, normalizeVariete, normalizeStock, extractList } from '../
 import { SelectorAnalytics }        from './SelectorAnalytics'
 import { MultiplicateurAnalytics }  from './MultiplicateurAnalytics'
 import { UPSemCLAnalytics }         from './UPSemCLAnalytics'
+import { AdminHealthPanel }         from './AdminHealthPanel'
 import { PendingDeliveries } from '../components/PendingDeliveries'
 import { MapSemences }     from '../components/MapSemences'
 import { TD as D }         from '../../lib/tokens'
@@ -2601,6 +2602,9 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
       )}
       {roleKey === 'seed-upsemcl' && (
         <UPSemCLAnalytics />
+      )}
+      {roleKey === 'seed-admin' && (
+        <AdminHealthPanel />
       )}
 
       {/* ── Prévisions de récolte — sélectionneur seulement ── */}
