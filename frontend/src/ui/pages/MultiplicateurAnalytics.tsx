@@ -188,6 +188,7 @@ export function MultiplicateurAnalytics() {
   const [monthly,      setMonthly]      = useState<MonthlyPoint[]>([])
   const [coverageRows, setCoverageRows] = useState<CoverageRow[]>([])
   const [certifLots,   setCertifLots]   = useState<CertifLot[]>([])
+  const [sitesResume,  setSitesResume]  = useState<{ nomSite: string; codeSite: string; region: string; stockKg: number; nbEntrees: number }[]>([])
   const [alertes,      setAlertes]      = useState<{ label: string; detail: string; critical: boolean }[]>([])
   const [loading,      setLoading]      = useState(true)
   const [refreshing,   setRefreshing]   = useState(false)
@@ -197,19 +198,21 @@ export function MultiplicateurAnalytics() {
   async function fetchData(isRefresh = false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
     try {
-      const [lotsRes, ordersRes, stocksRes, certifRes, varietiesRes] = await Promise.allSettled([
+      const [lotsRes, ordersRes, stocksRes, certifRes, varietiesRes, monStockRes] = await Promise.allSettled([
         api.get(endpoints.lotsMesLots),
         api.get(`${endpoints.orders}?size=200`),
         api.get(endpoints.stocksAgrege),
         api.get(endpoints.lotsMultCertif),
         api.get(endpoints.varieties),
+        api.get(endpoints.stockMonStock),
       ])
 
-      const lotsData  = extractList(lotsRes.status    === 'fulfilled' ? lotsRes.value.data    : null).map(normalizeLot)
-      const orders    = extractList(ordersRes.status   === 'fulfilled' ? ordersRes.value.data   : null)
-      const stocks    = extractList(stocksRes.status   === 'fulfilled' ? stocksRes.value.data   : null)
-      const certifRaw = extractList(certifRes.status   === 'fulfilled' ? certifRes.value.data   : null)
-      const varieties = extractList(varietiesRes.status=== 'fulfilled' ? varietiesRes.value.data: null).map(normalizeVariete)
+      const lotsData  = extractList(lotsRes.status     === 'fulfilled' ? lotsRes.value.data     : null).map(normalizeLot)
+      const orders    = extractList(ordersRes.status    === 'fulfilled' ? ordersRes.value.data    : null)
+      const stocks    = extractList(stocksRes.status    === 'fulfilled' ? stocksRes.value.data    : null)
+      const certifRaw = extractList(certifRes.status    === 'fulfilled' ? certifRes.value.data    : null)
+      const varieties = extractList(varietiesRes.status === 'fulfilled' ? varietiesRes.value.data : null).map(normalizeVariete)
+      const monStock  = extractList(monStockRes.status  === 'fulfilled' ? monStockRes.value.data  : null)
       const varMap: Record<number, any> = Object.fromEntries(varieties.map((v: any) => [v.id, v]))
 
       /* ── KPI pipeline G3→G4→R1→R2→Commandes ── */
@@ -330,6 +333,22 @@ export function MultiplicateurAnalytics() {
         }
       })
       setAlertes(als)
+
+      /* ── Résumé sites de stockage ── */
+      const siteMap: Record<string, { nomSite: string; codeSite: string; region: string; stockKg: number; nbEntrees: number }> = {}
+      monStock.forEach((s: any) => {
+        const code = s.site?.codeSite ?? s.codeSite ?? '?'
+        if (code === '?') return
+        if (!siteMap[code]) siteMap[code] = {
+          codeSite: code,
+          nomSite:  s.site?.nomSite  ?? s.nomSite  ?? code,
+          region:   s.site?.region   ?? s.region   ?? '—',
+          stockKg: 0, nbEntrees: 0,
+        }
+        siteMap[code].stockKg  += parseFloat(s.quantiteDisponible ?? s.quantite ?? 0) || 0
+        siteMap[code].nbEntrees++
+      })
+      setSitesResume(Object.values(siteMap).sort((a, b) => b.stockKg - a.stockKg))
 
     } catch { /* silencieux */ } finally {
       setLoading(false)
@@ -572,7 +591,42 @@ export function MultiplicateurAnalytics() {
         </div>
       )}
 
-      {/* ══ ④ Alertes spécifiques ══ */}
+      {/* ══ ④ Sites de stockage ══ */}
+      {!loading && sitesResume.length > 0 && (
+        <div className="card">
+          <div className="card-header">
+            <span className="card-title">
+              <span className="card-title-icon" style={{ background: '#f0fdf4' }}>
+                <span style={{ fontSize: 13 }}>🏪</span>
+              </span>
+              Sites de stockage R2
+            </span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>
+              {sitesResume.length} site{sitesResume.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10, padding: '12px 16px 14px' }}>
+            {sitesResume.map(site => (
+              <div key={site.codeSite} style={{
+                background: 'var(--surface-2)', borderRadius: 8, padding: '10px 14px',
+                border: '1px solid var(--border)',
+              }}>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {site.nomSite}
+                </div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  {site.region} · {site.nbEntrees} entrée{site.nbEntrees > 1 ? 's' : ''}
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: GC.R2, fontVariantNumeric: 'tabular-nums' }}>
+                  {fmtT(site.stockKg)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ══ ⑤ Alertes spécifiques ══ */}
       {!loading && alertes.length > 0 && (
         <div className="card">
           <div className="card-header">

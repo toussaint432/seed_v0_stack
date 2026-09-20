@@ -535,6 +535,10 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
     [rawOrders]
   )
   const pendingCount = rawOrders.filter(o => ['SOUMISE', 'ACCEPTEE', 'EN_PREPARATION'].includes(o.statut ?? '')).length
+  const now = Date.now()
+  const overdueOrders = rawOrders.filter(o =>
+    o.statut === 'SOUMISE' && o.createdAt && (now - new Date(o.createdAt).getTime()) > 7 * 86_400_000
+  )
 
   const maxKg = especeRows[0]?.stockKg ?? 1
 
@@ -657,6 +661,22 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
       {/* ── Commandes récentes (pleine largeur) ── */}
       {rawOrders.length > 0 && (
         <div style={{ gridColumn: '1 / -1', background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+          {overdueOrders.length > 0 && (
+            <div style={{ background: '#fef2f2', borderBottom: '1px solid #fecaca', padding: '9px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#dc2626', color: '#fff', borderRadius: 4, padding: '1px 6px', flexShrink: 0 }}>
+                {overdueOrders.length} en retard
+              </span>
+              <span style={{ fontSize: 11.5, color: '#991b1b', flex: 1 }}>
+                {overdueOrders.length === 1
+                  ? 'Une commande est sans réponse depuis plus de 7 jours'
+                  : `${overdueOrders.length} commandes sans réponse depuis plus de 7 jours`}
+              </span>
+              <button onClick={() => navigate('/orders')}
+                style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: 'transparent', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+                Relancer <ArrowRight size={11} />
+              </button>
+            </div>
+          )}
           {pendingCount > 0 && (
             <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '9px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 10, fontWeight: 700, background: '#f59e0b', color: '#fff', borderRadius: 4, padding: '1px 6px', flexShrink: 0 }}>
