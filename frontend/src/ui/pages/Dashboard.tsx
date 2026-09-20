@@ -19,7 +19,7 @@ import { TD as D }         from '../../lib/tokens'
 import { downloadXlsx, formatDateForExport, type XlsxSheet } from '../../lib/exportUtils'
 import { GEN_CHART_COLORS } from '../../lib/constants'
 
-interface Props { roleKey: string; userSpecialisation?: string | null }
+interface Props { roleKey: string; userSpecialisation?: string | null; userName?: string }
 
 interface GenStat { nbLots: number; totalKg: number }
 interface Stats {
@@ -722,7 +722,7 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
 /* ══════════════════════════════════════════════════════════
    DASHBOARD
 ══════════════════════════════════════════════════════════ */
-export function Dashboard({ roleKey, userSpecialisation }: Props) {
+export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
   const navigate = useNavigate()
   const [stats, setStats] = useState<Stats>({
     lotsCount: 0, stockTotal: 0, ordersCount: 0, varietiesCount: 0,
@@ -865,9 +865,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     setFilterGens(ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2'])
   }, [roleKey])
 
-  const role     = ROLE_CFG[roleKey] || { color: '#16a34a', label: 'Tableau de bord' }
-  const accent   = role.color
-  const greeting = GREETINGS[roleKey] || { title: 'Tableau de bord', sub: "Vue d'ensemble" }
+  const role      = ROLE_CFG[roleKey] || { color: '#16a34a', label: 'Tableau de bord' }
+  const accent    = role.color
+  const greeting  = GREETINGS[roleKey] || { title: 'Tableau de bord', sub: "Vue d'ensemble" }
+  const firstName = userName && userName !== 'Utilisateur' ? userName.split(/[\s._@-]/)[0] : null
 
   const pipelineTitle = roleKey === 'seed-selector'      ? 'Production prébase · G0 → G1'
     : roleKey === 'seed-upsemcl'       ? 'Multiplication base · G1 → G3'
@@ -1219,6 +1220,11 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
           </span>
 
           {/* Titre */}
+          {firstName && (
+            <p style={{ fontFamily: D.body, fontSize: 12, color: D.muted, marginBottom: 4, fontWeight: 400, letterSpacing: '0.01em' }}>
+              Bonjour, <strong style={{ color: D.ink, fontWeight: 600 }}>{firstName}</strong>
+            </p>
+          )}
           <h1 style={{
             fontFamily: D.display, fontSize: 26, fontWeight: 700,
             letterSpacing: '-0.025em', color: D.ink,

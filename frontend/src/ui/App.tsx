@@ -742,7 +742,7 @@ function AppAuthenticated() {
         <main className="page-content">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard"      element={<Dashboard      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
+            <Route path="/dashboard"      element={<Dashboard      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} userName={user.name} />} />
             <Route path="/varieties"      element={<Varieties      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/lots"           element={<Lots           roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/stocks"         element={<Stocks         roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
@@ -761,6 +761,47 @@ function AppAuthenticated() {
             <Route path="*"              element={<Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
           </Routes>
         </main>
+
+        {/* Footer applicatif */}
+        <footer style={{
+          padding: '8px 24px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 8,
+          background: 'var(--surface)',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+              SEN JIWU v0.1
+            </span>
+            <span style={{ color: 'var(--border)' }}>·</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              © {new Date().getFullYear()} ISRA / CNRA Bambey
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            <button
+              onClick={() => navigate('/documentation')}
+              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}
+            >
+              Documentation
+            </button>
+            <button
+              onClick={() => navigate('/privacy-policy')}
+              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}
+            >
+              Confidentialité
+            </button>
+            <button
+              onClick={() => navigate('/terms')}
+              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}
+            >
+              CGU
+            </button>
+          </div>
+        </footer>
+
       </div>
     </div>
 
