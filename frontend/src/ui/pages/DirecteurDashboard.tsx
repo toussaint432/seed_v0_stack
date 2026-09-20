@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { GlobalAnalytics } from './GlobalAnalytics'
+import { GlobalAnalytics }       from './GlobalAnalytics'
+import { CampagneComparison }    from './CampagneComparison'
 
 interface Props { roleKey?: string }
 
@@ -69,8 +70,11 @@ export function DirecteurDashboard({ roleKey = 'seed-directeur' }: Props) {
         </button>
       </div>
 
-      {/* Analytics */}
+      {/* Analytics opérationnel */}
       <GlobalAnalytics roleKey={roleKey} />
+
+      {/* Comparaison inter-campagnes */}
+      <CampagneComparison lang={lang} />
     </div>
   )
 }
