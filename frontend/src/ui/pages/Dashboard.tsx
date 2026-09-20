@@ -112,23 +112,27 @@ function useCountUp(target: number, delay = 0, enabled = true) {
 }
 
 /* ────────────────── KPI Card ────────────────── */
-function KpiCard({ index, label, value, sub, accent, delay, suffix }: {
+function KpiCard({ index, label, value, sub, accent, delay, suffix, alertCount, alertColor }: {
   index: number; label: string; value: number
   sub?: string; accent: string; delay: number; suffix?: string
+  alertCount?: number; alertColor?: string
 }) {
   const [vis, setVis] = useState(false)
   useEffect(() => { const t = setTimeout(() => setVis(true), delay); return () => clearTimeout(t) }, [delay])
   const displayed = useCountUp(value, delay + 80, vis)
+  const hasAlert = (alertCount ?? 0) > 0
   return (
     <div className="kpi-card-outer">
       <div className="kpi-card-dot" />
       <div
         className="kpi-card-inner"
         style={{
-          background: '#fff',
+          background: hasAlert && alertColor ? `${alertColor}06` : '#fff',
           borderRadius: 12,
-          border: `1px solid ${D.line}`,
+          border: `1px solid ${hasAlert && alertColor ? alertColor + '40' : D.line}`,
+          borderLeft: hasAlert && alertColor ? `3px solid ${alertColor}` : `1px solid ${D.line}`,
           padding: '18px 22px 20px',
+          paddingLeft: hasAlert ? 20 : 22,
           opacity: vis ? 1 : 0,
           transform: vis ? 'translateY(0)' : 'translateY(18px)',
           transition: 'opacity 0.44s ease, transform 0.44s ease',
@@ -933,7 +937,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       accent, delay: showStats ? 160 : 0, suffix: undefined },
     ...(showOrders ? [
       { label: roleKey === 'seed-multiplicator' ? 'Cmdes reçues' : 'Commandes',
-        value: stats.ordersCount, sub: `${stats.ordersPending} en attente`, accent, delay: showStats ? 240 : 80, suffix: undefined },
+        value: stats.ordersCount, sub: `${stats.ordersPending} en attente`, accent, delay: showStats ? 240 : 80, suffix: undefined,
+        alertCount: stats.ordersPending, alertColor: '#d97706' },
     ] : []),
   ]
 
@@ -1361,6 +1366,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               <KpiCard key={i}
                 index={i} label={item.label} value={item.value}
                 sub={item.sub} accent={item.accent} delay={item.delay} suffix={item.suffix}
+                alertCount={(item as any).alertCount} alertColor={(item as any).alertColor}
               />
             ))
         }
@@ -1406,12 +1412,12 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   onClick={item.action && item.count > 0 ? () => navigate('/orders') : undefined}
                 >
                   <span style={{
-                    fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
                     background: item.count > 0 ? item.bg : D.greenSoft,
                     color: item.count > 0 ? item.clr : D.green,
                     border: `1px solid ${item.count > 0 ? item.brd : '#bbf7d0'}`,
                   }}>
-                    {item.count > 0 ? '!' : '✓'}
+                    {item.count > 0 ? (item.clr === '#dc2626' ? '✕' : '⚠') : '✓'}
                   </span>
                   {item.count} {item.label}
                   {item.action && item.count > 0 && <span style={{ fontSize: 11, opacity: 0.75 }}>→</span>}

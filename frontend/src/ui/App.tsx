@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { initKeycloak, keycloak } from '../lib/keycloak'
+import { api } from '../lib/api'
+import { endpoints } from '../lib/endpoints'
 import { LandingPage }    from './pages/LandingPage'
 import { Varieties }      from './pages/Varieties'
 import { Lots }           from './pages/Lots'
@@ -257,6 +259,7 @@ function AppAuthenticated() {
   const [cmdIdx,       setCmdIdx]       = useState(0)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [logoutModal,  setLogoutModal]  = useState(false)
+  const [campagneActive, setCampagneActive] = useState<string | null>(null)
   const notifRef   = useRef<HTMLDivElement>(null)
   const searchRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLInputElement>(null)
@@ -291,6 +294,17 @@ function AppAuthenticated() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  // ── Campagne en cours ──
+  useEffect(() => {
+    api.get(endpoints.campagnes)
+      .then((res: any) => {
+        const list: any[] = Array.isArray(res.data) ? res.data : []
+        const active = list.find((c: any) => c.statut === 'EN_COURS')
+        if (active) setCampagneActive(active.libelle ?? active.codeCampagne ?? null)
+      })
+      .catch(() => {})
   }, [])
 
   // ── Fermer search ou notif si clic à l'extérieur ──
@@ -557,6 +571,18 @@ function AppAuthenticated() {
                   : pageTitle[validPage].title}
               </span>
             </nav>
+            {campagneActive && (
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500,
+                color: '#15803d', background: '#dcfce7',
+                padding: '2px 8px', borderRadius: 999,
+                border: '1px solid #bbf7d0',
+                letterSpacing: '0.04em', flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}>
+                {campagneActive}
+              </span>
+            )}
           </div>
 
           <div className="topbar-right">
@@ -676,6 +702,22 @@ function AppAuthenticated() {
                 </div>
               )}
             </div>
+
+            {/* Avatar utilisateur */}
+            <button
+              className="topbar-icon-btn"
+              title={`${user.name} — ${user.role}`}
+              onClick={() => navigate('/profile')}
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: `linear-gradient(135deg, ${user.roleColor}, ${user.roleColor}bb)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 700, color: '#fff',
+                flexShrink: 0, border: 'none', cursor: 'pointer', padding: 0,
+              }}
+            >
+              {user.initials}
+            </button>
 
           </div>
         </header>
