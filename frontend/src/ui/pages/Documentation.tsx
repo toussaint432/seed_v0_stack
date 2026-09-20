@@ -459,7 +459,7 @@ export function Documentation() {
                 {
                   role: 'Administrateur', key: 'seed-admin', color: '#7c3aed',
                   gens: 'Accès total', institution: 'ISRA / CNRA',
-                  desc: 'Supervision globale de la plateforme. Gestion des comptes utilisateurs Keycloak et des rôles. Accès à tous les modules, tous les lots, toutes les commandes et tous les stocks.',
+                  desc: 'Supervision globale de la plateforme. Gestion des comptes utilisateurs et des droits d\'accès. Accès à tous les modules, tous les lots, toutes les commandes et tous les stocks.',
                   actions: ['Gérer les utilisateurs', 'Superviser tous les modules', 'Accès aux analytiques globaux', 'Monitoring infrastructure'],
                 },
               ].map(r => (
