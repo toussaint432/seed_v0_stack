@@ -27,6 +27,9 @@ import { Messages }            from './pages/Messages'
 import { Certifications }      from './pages/Certifications'
 import { DirecteurDashboard }  from './pages/DirecteurDashboard'
 import { BadgeProvider, useBadges } from '../lib/context/BadgeContext'
+import { Documentation }  from './pages/Documentation'
+import { PrivacyPolicy }  from './pages/PrivacyPolicy'
+import { Terms }          from './pages/Terms'
 type Page =
   | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
   | 'certifications' | 'transfers' | 'campagnes' | 'sites'
@@ -177,6 +180,13 @@ const adminTools = [
   { href: 'http://localhost:18085',          icon: Server,     label: 'Kafka UI' },
 ]
 
+function publicRoute(path: string): React.ReactElement | null {
+  if (path === '/documentation')  return <Documentation />
+  if (path === '/privacy-policy') return <PrivacyPolicy />
+  if (path === '/terms')          return <Terms />
+  return null
+}
+
 export function App() {
   const navigate   = useNavigate()
   const [ready,     setReady]     = useState(false)
@@ -215,11 +225,15 @@ export function App() {
         </div>
       )
     }
+    const pub = publicRoute(window.location.pathname)
+    if (pub) return pub
     return <LandingPage />
   }
 
   // Après init : non authentifié → landing page
   if (!keycloak.authenticated) {
+    const pub = publicRoute(window.location.pathname)
+    if (pub) return pub
     return <LandingPage />
   }
 
@@ -381,6 +395,9 @@ function AppAuthenticated() {
     ...certifNotifItems,
   ]
   const unreadNotif = notifications.filter(n => !n.read).length
+
+  const pub = publicRoute(location.pathname)
+  if (pub) return pub
 
   return (
     <>
