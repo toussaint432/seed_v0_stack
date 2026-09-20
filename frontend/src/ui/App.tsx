@@ -133,10 +133,11 @@ function getNavSections(roleKey: string): NavSection[] {
     case 'seed-directeur':
       return [
         { section: 'Décision', items: [
-          { id: 'dashboard' as Page, label: 'Tableau de bord',     icon: LayoutDashboard },
-          { id: 'lots'      as Page, label: 'Lots semenciers',    icon: Package },
-          { id: 'varieties' as Page, label: 'Variétés & Espèces', icon: Leaf },
-          { id: 'stocks'    as Page, label: 'Stocks',             icon: Warehouse },
+          { id: 'dashboard'  as Page, label: 'Tableau de bord',     icon: LayoutDashboard },
+          { id: 'directeur'  as Page, label: 'Vue nationale',       icon: BarChart2 },
+          { id: 'lots'       as Page, label: 'Lots semenciers',     icon: Package },
+          { id: 'varieties'  as Page, label: 'Variétés & Espèces',  icon: Leaf },
+          { id: 'stocks'     as Page, label: 'Stocks',              icon: Warehouse },
         ]},
       ]
 
@@ -757,7 +758,7 @@ function AppAuthenticated() {
             <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
             <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />
             <Route path="/messages"       element={<Messages roleKey={user.roleKey} username={user.name} />} />
-            <Route path="/directeur"     element={currentRole === 'seed-directeur' || currentRole === 'seed-admin' ? <DirecteurDashboard /> : <Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
+            <Route path="/directeur"     element={currentRole === 'seed-directeur' || currentRole === 'seed-admin' ? <DirecteurDashboard roleKey={currentRole} /> : <Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
             <Route path="*"              element={<Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
           </Routes>
         </main>
