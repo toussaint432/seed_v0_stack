@@ -35,7 +35,7 @@ Concevoir et déployer un **système d'information semencier** pour l'ISRA/CNRA 
 | **OS8** | Garantir des performances acceptables pour les utilisateurs | 🔄 Partiel | JVM tuning + monitoring en place, tests de charge à réaliser |
 | **OS9** | Assurer la scalabilité du système face à la croissance des données | 🔄 Partiel | Architecture prête (microservices + Kafka), orchestration à prévoir |
 | **OS10** | Déployer sur infrastructure ISRA (serveur réel, accès multi-sites) | 🔲 À venir | Architecture prête, config réseau/TLS à finaliser |
-| **OS11** | Fournir un guide d'utilisation par rôle pour les utilisateurs finaux | 🔲 À venir | Comptes de démo disponibles, guide utilisateur à rédiger |
+| **OS11** | Fournir un guide d'utilisation par rôle pour les utilisateurs finaux | 🔄 Partiel | Page Documentation publique disponible (`/documentation`), pages légales disponibles, guide utilisateur par rôle à rédiger |
 
 ---
 
@@ -49,6 +49,9 @@ Concevoir et déployer un **système d'information semencier** pour l'ISRA/CNRA 
 |---|---|
 | **Tableau de bord** | KPIs en temps réel, pipeline générationnel G0→R2, lots récents, statuts des commandes |
 | **Catalogue public** | Vitrine des espèces et variétés accessibles sans authentification (cartographie ZAE) |
+| **Documentation** | Page publique — pipeline CEDEAO/CILSS G0→R2, classification 4 niveaux, 6 rôles acteurs, glossaire |
+| **Politique de confidentialité** | Page publique — traitement des données personnelles (loi sénégalaise n°2008-12), bilingue FR/EN |
+| **Conditions d'utilisation** | Page publique — CGU bilingues FR/EN (loi n°2008-08 et n°2008-12) |
 | **Variétés & Espèces** | Référentiel variétal ISRA avec archivage traçable (commentaire + auteur + date) |
 | **Lots semenciers** | Cycle de vie G0 → R2, création de lot enfant, traçabilité lineage, certificats PDF, politique d'édition BROUILLON/CONFIRMÉ, audit trail complet |
 | **Mes Sites** | Sites de stockage personnels du multiplicateur — CRUD complet |
@@ -472,11 +475,11 @@ G0  Noyau génétique   ─┐
 G1  Pré-base            ├── Sélectionneur (ISRA)  ──►  UPSemCL
 G2  Base              ─┘
                         
-G3  Certifiée C1      ─┐
-R1  Reproductrice       ├── UPSemCL               ──►  Multiplicateur
-                      ─┘
-                        
-R2  Commerciale       ───── Multiplicateur         ──►  Quotataires / OP
+G3  Certifiée C1      ─── UPSemCL               ──►  Multiplicateur
+
+G4  Certifiée C2      ─┐
+R1  Reproductrice       ├── Multiplicateur        ──►  Quotataires / OP
+R2  Commerciale       ─┘
 ```
 
 Chaque lot conserve une référence vers son **lot parent**, permettant une traçabilité complète de l'origine génétique (vue lineage disponible dans l'interface). La génération est automatiquement proposée à la création d'un lot enfant.
@@ -588,7 +591,10 @@ seed_v0_stack/
 │           ├── App.tsx             # Layout principal, sidebar, navigation par rôle
 │           ├── components/         # Modal, ConfirmDialog, Pagination, StatusBadge, Toast
 │           └── pages/
-│               ├── LandingPage.tsx         # Page d'accueil publique Sen Jiwu
+│               ├── LandingPage.tsx         # Page d'accueil publique Sen Jiwu (WhatsApp CTA)
+│               ├── Documentation.tsx       # Documentation filière — pipeline CEDEAO/CILSS, glossaire
+│               ├── PrivacyPolicy.tsx       # Politique de confidentialité FR/EN (loi 2008-12)
+│               ├── Terms.tsx               # CGU FR/EN (loi 2008-08 et 2008-12)
 │               ├── CataloguePublic.tsx     # Catalogue accessible sans auth + carte Leaflet
 │               ├── Dashboard.tsx           # KPIs, pipeline générationnel
 │               ├── Varieties.tsx           # Espèces & variétés + archivage traçable
@@ -820,6 +826,11 @@ triggers {
 - [x] Audit trail complet des lots — historique champ par champ de toutes les modifications (qui, quoi, avant, après, quand)
 - [x] Dashboard décisionnel Directeur CNRA — KPIs, pipeline G0→R2, certifications, politique d'édition, top variétés, matrice espèce×génération
 - [x] Rôle `seed-directeur` — lecture seule de l'ensemble de la chaîne semencière, navigation dédiée
+- [x] Page Documentation publique — classification CEDEAO/CILSS 4 niveaux (G0→R2), acteurs de la filière, glossaire R1/R2 distincts, accessibles sans authentification
+- [x] Pages légales publiques — Politique de confidentialité et CGU bilingues FR/EN (loi sénégalaise n°2008-12 et n°2008-08), conformes CDP
+- [x] Routes publiques `/documentation`, `/privacy-policy`, `/terms` — accessibles avant et après authentification
+- [x] WhatsApp intégré dans la landing page — topbar (lien cliquable) et section CTA (bouton secondaire)
+- [x] Corrections landing page : R1 labellisé "Reproductrice" (seul R2 est commercial), compteur rôles acteurs corrigé à 6
 - [x] Monitoring : Prometheus, Grafana, Alertmanager, Kafka UI
 - [x] 72+ migrations Flyway — schéma base de données entièrement versionné
 - [x] Schema per Service — 6 schémas PostgreSQL distincts (catalog, lot, stock, orders, shared, geo)
@@ -1196,6 +1207,9 @@ ports:
 |---|---|---|
 | README technique (ce fichier) | Développeurs, administrateurs système | ✅ Complet |
 | Comptes de démo configurés | Formateurs, jury de soutenance | ✅ Disponible |
+| Page Documentation (`/documentation`) | Tout public — pipeline CEDEAO/CILSS, rôles, glossaire | ✅ Disponible |
+| Politique de confidentialité (`/privacy-policy`) | Utilisateurs de la plateforme | ✅ Disponible |
+| Conditions d'utilisation (`/terms`) | Utilisateurs de la plateforme | ✅ Disponible |
 | Guide utilisateur par rôle | Utilisateurs finaux ISRA/CNRA | 🔲 À rédiger |
 | Manuel administrateur Keycloak | Administrateur ISRA | 🔲 À rédiger |
 | Vidéos de démonstration | Investisseurs, jury | 🔲 À envisager |
