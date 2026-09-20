@@ -37,6 +37,7 @@ spring:
     schemas: orders
     default-schema: orders
     baseline-on-migrate: true
+    baseline-version: 0
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
     producer:
