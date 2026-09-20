@@ -43,7 +43,7 @@ const I18N: Record<Lang, Record<string, string>> = {
     heroScroll: 'En savoir plus',
     missionEyebrow: 'Notre mission',
     missionTitle: 'Assurer la qualité et la traçabilité des semences au Sénégal',
-    missionP1: "Sen Jiwu est le système d'information national de la filière semencière, développé par l'ISRA et le CNRA de Bambey. Il numérise l'ensemble de la chaîne — de la sélection variétale à la commercialisation — pour garantir la qualité et l'authenticité des semences certifiées.",
+    missionP1: "Sen Jiwu est le système d'information national de la filière semencière. Il numérise l'ensemble de la chaîne — de la sélection variétale à la commercialisation — pour garantir la qualité et l'authenticité des semences certifiées.",
     missionP2: "La plateforme gère les lots générationnels (G0 → R2), la certification officielle, les stocks multi-sites, les commandes entre acteurs et le suivi de campagne agricole.",
     missionB1: 'Traçabilité générationnelle G0 → R2',
     missionB2: 'Certification officielle intégrée',
