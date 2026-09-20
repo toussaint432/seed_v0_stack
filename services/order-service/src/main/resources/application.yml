@@ -32,9 +32,11 @@ spring:
       hibernate:
         "[default_batch_fetch_size]": 20
         "[default_schema]": orders
-  # Flyway désactivé — schéma géré par catalog-service
   flyway:
-    enabled: false
+    enabled: true
+    schemas: orders
+    default-schema: orders
+    baseline-on-migrate: true
   kafka:
     bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
     producer:
