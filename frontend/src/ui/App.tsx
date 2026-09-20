@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { initKeycloak, keycloak } from '../lib/keycloak'
+import { api } from '../lib/api'
+import { endpoints } from '../lib/endpoints'
 import { LandingPage }    from './pages/LandingPage'
 import { Varieties }      from './pages/Varieties'
 import { Lots }           from './pages/Lots'
@@ -131,10 +133,11 @@ function getNavSections(roleKey: string): NavSection[] {
     case 'seed-directeur':
       return [
         { section: 'Décision', items: [
-          { id: 'dashboard' as Page, label: 'Tableau de bord',     icon: LayoutDashboard },
-          { id: 'lots'      as Page, label: 'Lots semenciers',    icon: Package },
-          { id: 'varieties' as Page, label: 'Variétés & Espèces', icon: Leaf },
-          { id: 'stocks'    as Page, label: 'Stocks',             icon: Warehouse },
+          { id: 'dashboard'  as Page, label: 'Tableau de bord',     icon: LayoutDashboard },
+          { id: 'directeur'  as Page, label: 'Vue nationale',       icon: BarChart2 },
+          { id: 'lots'       as Page, label: 'Lots semenciers',     icon: Package },
+          { id: 'varieties'  as Page, label: 'Variétés & Espèces',  icon: Leaf },
+          { id: 'stocks'     as Page, label: 'Stocks',              icon: Warehouse },
         ]},
       ]
 
@@ -257,6 +260,7 @@ function AppAuthenticated() {
   const [cmdIdx,       setCmdIdx]       = useState(0)
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [logoutModal,  setLogoutModal]  = useState(false)
+  const [campagneActive, setCampagneActive] = useState<string | null>(null)
   const notifRef   = useRef<HTMLDivElement>(null)
   const searchRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLInputElement>(null)
@@ -291,6 +295,17 @@ function AppAuthenticated() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
+  }, [])
+
+  // ── Campagne en cours ──
+  useEffect(() => {
+    api.get(endpoints.campagnes)
+      .then((res: any) => {
+        const list: any[] = Array.isArray(res.data) ? res.data : []
+        const active = list.find((c: any) => c.statut === 'EN_COURS')
+        if (active) setCampagneActive(active.libelle ?? active.codeCampagne ?? null)
+      })
+      .catch(() => {})
   }, [])
 
   // ── Fermer search ou notif si clic à l'extérieur ──
@@ -557,6 +572,18 @@ function AppAuthenticated() {
                   : pageTitle[validPage].title}
               </span>
             </nav>
+            {campagneActive && (
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 10, fontWeight: 500,
+                color: '#15803d', background: '#dcfce7',
+                padding: '2px 8px', borderRadius: 999,
+                border: '1px solid #bbf7d0',
+                letterSpacing: '0.04em', flexShrink: 0,
+                whiteSpace: 'nowrap',
+              }}>
+                {campagneActive}
+              </span>
+            )}
           </div>
 
           <div className="topbar-right">
@@ -677,6 +704,22 @@ function AppAuthenticated() {
               )}
             </div>
 
+            {/* Avatar utilisateur */}
+            <button
+              className="topbar-icon-btn"
+              title={`${user.name} — ${user.role}`}
+              onClick={() => navigate('/profile')}
+              style={{
+                width: 28, height: 28, borderRadius: '50%',
+                background: `linear-gradient(135deg, ${user.roleColor}, ${user.roleColor}bb)`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 700, color: '#fff',
+                flexShrink: 0, border: 'none', cursor: 'pointer', padding: 0,
+              }}
+            >
+              {user.initials}
+            </button>
+
           </div>
         </header>
 
@@ -700,7 +743,7 @@ function AppAuthenticated() {
         <main className="page-content">
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard"      element={<Dashboard      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
+            <Route path="/dashboard"      element={<Dashboard      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} userName={user.name} />} />
             <Route path="/varieties"      element={<Varieties      roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/lots"           element={<Lots           roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
             <Route path="/stocks"         element={<Stocks         roleKey={user.roleKey} userSpecialisation={user.userSpecialisation} />} />
@@ -715,10 +758,51 @@ function AppAuthenticated() {
             <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
             <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />
             <Route path="/messages"       element={<Messages roleKey={user.roleKey} username={user.name} />} />
-            <Route path="/directeur"     element={currentRole === 'seed-directeur' || currentRole === 'seed-admin' ? <DirecteurDashboard /> : <Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
+            <Route path="/directeur"     element={currentRole === 'seed-directeur' || currentRole === 'seed-admin' ? <DirecteurDashboard roleKey={currentRole} /> : <Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
             <Route path="*"              element={<Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
           </Routes>
         </main>
+
+        {/* Footer applicatif */}
+        <footer style={{
+          padding: '8px 24px',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 8,
+          background: 'var(--surface)',
+          flexShrink: 0,
+        }}>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: '0.06em' }}>
+              SEN JIWU v0.1
+            </span>
+            <span style={{ color: 'var(--border)' }}>·</span>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              © {new Date().getFullYear()} ISRA / CNRA Bambey
+            </span>
+          </div>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
+            <button
+              onClick={() => navigate('/documentation')}
+              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}
+            >
+              Documentation
+            </button>
+            <button
+              onClick={() => navigate('/privacy-policy')}
+              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}
+            >
+              Confidentialité
+            </button>
+            <button
+              onClick={() => navigate('/terms')}
+              style={{ fontSize: 11, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontFamily: 'var(--font-body)' }}
+            >
+              CGU
+            </button>
+          </div>
+        </footer>
+
       </div>
     </div>
 

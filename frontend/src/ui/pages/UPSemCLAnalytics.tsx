@@ -219,31 +219,36 @@ function G3CoverageBar({ rows }: { rows: CoverageRow[] }) {
 }
 
 export function UPSemCLAnalytics() {
-  const [kpi,          setKpi]         = useState({ g1Kg:0, g2Kg:0, g3Kg:0, g3TransfKg:0, cmdG3:0 })
-  const [g3Bars,       setG3Bars]      = useState<G3BarEntry[]>([])
-  const [coverageRows, setCoverageRows]= useState<CoverageRow[]>([])
-  const [transferts,   setTransferts]  = useState<TransfertRow[]>([])
-  const [alertes,     setAlertes]     = useState<{label:string;detail:string;critical:boolean}[]>([])
-  const [loading,     setLoading]     = useState(true)
-  const [refreshing,  setRefreshing]  = useState(false)
+  const [kpi,           setKpi]          = useState({ g1Kg:0, g2Kg:0, g3Kg:0, g3TransfKg:0, cmdG3:0 })
+  const [g3Bars,        setG3Bars]       = useState<G3BarEntry[]>([])
+  const [coverageRows,  setCoverageRows] = useState<CoverageRow[]>([])
+  const [transferts,    setTransferts]   = useState<TransfertRow[]>([])
+  const [alertes,       setAlertes]      = useState<{label:string;detail:string;critical:boolean}[]>([])
+  const [campagneActive,setCampagneActive]= useState<{libelle:string;dateDebut:string;dateFin:string}|null>(null)
+  const [loading,       setLoading]      = useState(true)
+  const [refreshing,    setRefreshing]   = useState(false)
   const timer = useRef<ReturnType<typeof setInterval>|null>(null)
 
   async function fetchData(isRefresh=false) {
     isRefresh ? setRefreshing(true) : setLoading(true)
     try {
-      const [lotsRes, stocksRes, ordersRes, transfertsRes, varietiesRes] = await Promise.allSettled([
+      const [lotsRes, stocksRes, ordersRes, transfertsRes, varietiesRes, campagnesRes] = await Promise.allSettled([
         api.get(endpoints.lotsMesLots),
         api.get(endpoints.stocksAgrege),
         api.get(`${endpoints.orders}?size=200`),
         api.get(endpoints.transfertsLot),
         api.get(endpoints.varieties),
+        api.get(endpoints.campagnes),
       ])
 
-      const lotsData  = extractList(lotsRes.status       ==='fulfilled'?lotsRes.value.data      :null).map(normalizeLot)
-      const stocks    = extractList(stocksRes.status      ==='fulfilled'?stocksRes.value.data    :null)
-      const orders    = extractList(ordersRes.status      ==='fulfilled'?ordersRes.value.data    :null)
-      const transRaw  = extractList(transfertsRes.status  ==='fulfilled'?transfertsRes.value.data:null)
-      const varieties = extractList(varietiesRes.status   ==='fulfilled'?varietiesRes.value.data :null).map(normalizeVariete)
+      const lotsData  = extractList(lotsRes.status        ==='fulfilled'?lotsRes.value.data       :null).map(normalizeLot)
+      const stocks    = extractList(stocksRes.status       ==='fulfilled'?stocksRes.value.data    :null)
+      const orders    = extractList(ordersRes.status       ==='fulfilled'?ordersRes.value.data    :null)
+      const transRaw  = extractList(transfertsRes.status   ==='fulfilled'?transfertsRes.value.data:null)
+      const varieties = extractList(varietiesRes.status    ==='fulfilled'?varietiesRes.value.data :null).map(normalizeVariete)
+      const campagnes = extractList(campagnesRes.status    ==='fulfilled'?campagnesRes.value.data :null)
+      const actif = campagnes.find((c:any)=>c.statut==='EN_COURS') ?? null
+      setCampagneActive(actif ? { libelle: actif.libelle??actif.codeCampagne, dateDebut: actif.dateDebut??'', dateFin: actif.dateFin??'' } : null)
       const varMap: Record<number,any> = Object.fromEntries(varieties.map((v:any)=>[v.id,v]))
 
       /* ── KPI pipeline G1→G2→G3 ── */
@@ -406,6 +411,35 @@ export function UPSemCLAnalytics() {
           </button>
         </div>
       </div>
+
+      {/* ══ ⓪ Campagne active + avancement G3 ══ */}
+      {!loading && campagneActive && (() => {
+        const distRate = kpi.g3Kg > 0 ? Math.min(100, Math.round((kpi.g3TransfKg / kpi.g3Kg) * 100)) : 0
+        const fmtDate = (s: string) => s ? new Date(s).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '—'
+        return (
+          <div style={{ background: '#f0fdf4', borderRadius: 10, border: '1px solid #bbf7d0', padding: '12px 18px', display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap', marginBottom: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 160 }}>
+              <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#15803d' }}>Campagne en cours</span>
+              <span style={{ fontSize: 13.5, fontWeight: 700, color: '#14532d' }}>{campagneActive.libelle}</span>
+              <span style={{ fontSize: 10.5, color: '#16a34a' }}>
+                {fmtDate(campagneActive.dateDebut)} → {fmtDate(campagneActive.dateFin)}
+              </span>
+            </div>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: '#15803d' }}>G3 distribué aux multiplicateurs</span>
+                <span style={{ fontSize: 11, fontWeight: 700, color: '#15803d', fontVariantNumeric: 'tabular-nums' }}>{distRate}%</span>
+              </div>
+              <div style={{ height: 7, background: '#dcfce7', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${distRate}%`, background: '#16a34a', borderRadius: 99, transition: 'width 0.7s ease' }} />
+              </div>
+              <div style={{ fontSize: 10, color: '#15803d', marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
+                {fmtT(kpi.g3TransfKg)} / {fmtT(kpi.g3Kg)} produits
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ══ ① Pipeline KPI G1→G2→G3→Distribués→Commandes ══ */}
       <div style={{display:'flex',gap:0,borderRadius:12,overflow:'hidden',

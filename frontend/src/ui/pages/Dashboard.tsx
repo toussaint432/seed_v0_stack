@@ -19,7 +19,7 @@ import { TD as D }         from '../../lib/tokens'
 import { downloadXlsx, formatDateForExport, type XlsxSheet } from '../../lib/exportUtils'
 import { GEN_CHART_COLORS } from '../../lib/constants'
 
-interface Props { roleKey: string; userSpecialisation?: string | null }
+interface Props { roleKey: string; userSpecialisation?: string | null; userName?: string }
 
 interface GenStat { nbLots: number; totalKg: number }
 interface Stats {
@@ -112,23 +112,27 @@ function useCountUp(target: number, delay = 0, enabled = true) {
 }
 
 /* ────────────────── KPI Card ────────────────── */
-function KpiCard({ index, label, value, sub, accent, delay, suffix }: {
+function KpiCard({ index, label, value, sub, accent, delay, suffix, alertCount, alertColor }: {
   index: number; label: string; value: number
   sub?: string; accent: string; delay: number; suffix?: string
+  alertCount?: number; alertColor?: string
 }) {
   const [vis, setVis] = useState(false)
   useEffect(() => { const t = setTimeout(() => setVis(true), delay); return () => clearTimeout(t) }, [delay])
   const displayed = useCountUp(value, delay + 80, vis)
+  const hasAlert = (alertCount ?? 0) > 0
   return (
     <div className="kpi-card-outer">
       <div className="kpi-card-dot" />
       <div
         className="kpi-card-inner"
         style={{
-          background: '#fff',
+          background: hasAlert && alertColor ? `${alertColor}06` : '#fff',
           borderRadius: 12,
-          border: `1px solid ${D.line}`,
+          border: `1px solid ${hasAlert && alertColor ? alertColor + '40' : D.line}`,
+          borderLeft: hasAlert && alertColor ? `3px solid ${alertColor}` : `1px solid ${D.line}`,
           padding: '18px 22px 20px',
+          paddingLeft: hasAlert ? 20 : 22,
           opacity: vis ? 1 : 0,
           transform: vis ? 'translateY(0)' : 'translateY(18px)',
           transition: 'opacity 0.44s ease, transform 0.44s ease',
@@ -531,6 +535,10 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
     [rawOrders]
   )
   const pendingCount = rawOrders.filter(o => ['SOUMISE', 'ACCEPTEE', 'EN_PREPARATION'].includes(o.statut ?? '')).length
+  const now = Date.now()
+  const overdueOrders = rawOrders.filter(o =>
+    o.statut === 'SOUMISE' && o.createdAt && (now - new Date(o.createdAt).getTime()) > 7 * 86_400_000
+  )
 
   const maxKg = especeRows[0]?.stockKg ?? 1
 
@@ -653,6 +661,22 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
       {/* ── Commandes récentes (pleine largeur) ── */}
       {rawOrders.length > 0 && (
         <div style={{ gridColumn: '1 / -1', background: '#fff', borderRadius: 14, border: `1px solid ${D.line}`, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.04)' }}>
+          {overdueOrders.length > 0 && (
+            <div style={{ background: '#fef2f2', borderBottom: '1px solid #fecaca', padding: '9px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, background: '#dc2626', color: '#fff', borderRadius: 4, padding: '1px 6px', flexShrink: 0 }}>
+                {overdueOrders.length} en retard
+              </span>
+              <span style={{ fontSize: 11.5, color: '#991b1b', flex: 1 }}>
+                {overdueOrders.length === 1
+                  ? 'Une commande est sans réponse depuis plus de 7 jours'
+                  : `${overdueOrders.length} commandes sans réponse depuis plus de 7 jours`}
+              </span>
+              <button onClick={() => navigate('/orders')}
+                style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: 'transparent', border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}>
+                Relancer <ArrowRight size={11} />
+              </button>
+            </div>
+          )}
           {pendingCount > 0 && (
             <div style={{ background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '9px 20px', display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 10, fontWeight: 700, background: '#f59e0b', color: '#fff', borderRadius: 4, padding: '1px 6px', flexShrink: 0 }}>
@@ -718,7 +742,7 @@ function QuotataireHome({ accent, navigate, rawOrders }: {
 /* ══════════════════════════════════════════════════════════
    DASHBOARD
 ══════════════════════════════════════════════════════════ */
-export function Dashboard({ roleKey, userSpecialisation }: Props) {
+export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
   const navigate = useNavigate()
   const [stats, setStats] = useState<Stats>({
     lotsCount: 0, stockTotal: 0, ordersCount: 0, varietiesCount: 0,
@@ -861,9 +885,10 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
     setFilterGens(ROLE_GENS[roleKey] ?? ['G0','G1','G2','G3','G4','R1','R2'])
   }, [roleKey])
 
-  const role     = ROLE_CFG[roleKey] || { color: '#16a34a', label: 'Tableau de bord' }
-  const accent   = role.color
-  const greeting = GREETINGS[roleKey] || { title: 'Tableau de bord', sub: "Vue d'ensemble" }
+  const role      = ROLE_CFG[roleKey] || { color: '#16a34a', label: 'Tableau de bord' }
+  const accent    = role.color
+  const greeting  = GREETINGS[roleKey] || { title: 'Tableau de bord', sub: "Vue d'ensemble" }
+  const firstName = userName && userName !== 'Utilisateur' ? userName.split(/[\s._@-]/)[0] : null
 
   const pipelineTitle = roleKey === 'seed-selector'      ? 'Production prébase · G0 → G1'
     : roleKey === 'seed-upsemcl'       ? 'Multiplication base · G1 → G3'
@@ -933,7 +958,8 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
       accent, delay: showStats ? 160 : 0, suffix: undefined },
     ...(showOrders ? [
       { label: roleKey === 'seed-multiplicator' ? 'Cmdes reçues' : 'Commandes',
-        value: stats.ordersCount, sub: `${stats.ordersPending} en attente`, accent, delay: showStats ? 240 : 80, suffix: undefined },
+        value: stats.ordersCount, sub: `${stats.ordersPending} en attente`, accent, delay: showStats ? 240 : 80, suffix: undefined,
+        alertCount: stats.ordersPending, alertColor: '#d97706' },
     ] : []),
   ]
 
@@ -1214,6 +1240,11 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
           </span>
 
           {/* Titre */}
+          {firstName && (
+            <p style={{ fontFamily: D.body, fontSize: 12, color: D.muted, marginBottom: 4, fontWeight: 400, letterSpacing: '0.01em' }}>
+              Bonjour, <strong style={{ color: D.ink, fontWeight: 600 }}>{firstName}</strong>
+            </p>
+          )}
           <h1 style={{
             fontFamily: D.display, fontSize: 26, fontWeight: 700,
             letterSpacing: '-0.025em', color: D.ink,
@@ -1361,6 +1392,7 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
               <KpiCard key={i}
                 index={i} label={item.label} value={item.value}
                 sub={item.sub} accent={item.accent} delay={item.delay} suffix={item.suffix}
+                alertCount={(item as any).alertCount} alertColor={(item as any).alertColor}
               />
             ))
         }
@@ -1406,12 +1438,12 @@ export function Dashboard({ roleKey, userSpecialisation }: Props) {
                   onClick={item.action && item.count > 0 ? () => navigate('/orders') : undefined}
                 >
                   <span style={{
-                    fontSize: 9.5, fontWeight: 700, padding: '1px 5px', borderRadius: 4,
+                    fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
                     background: item.count > 0 ? item.bg : D.greenSoft,
                     color: item.count > 0 ? item.clr : D.green,
                     border: `1px solid ${item.count > 0 ? item.brd : '#bbf7d0'}`,
                   }}>
-                    {item.count > 0 ? '!' : '✓'}
+                    {item.count > 0 ? (item.clr === '#dc2626' ? '✕' : '⚠') : '✓'}
                   </span>
                   {item.count} {item.label}
                   {item.action && item.count > 0 && <span style={{ fontSize: 11, opacity: 0.75 }}>→</span>}

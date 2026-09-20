@@ -485,8 +485,9 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
   const [monthly,       setMonthly]       = useState<MonthlyPoint[]>([])
   const [alerts,        setAlerts]        = useState<LotAlert[]>([])
   const [alertDetail,   setAlertDetail]   = useState<LotAlert | null>(null)
-  const [lots,          setLots]          = useState<any[]>([])
-  const [chainVarietes, setChainVarietes] = useState<ChainVariete[]>([])
+  const [lots,              setLots]              = useState<any[]>([])
+  const [brouillonNearLock, setBrouillonNearLock] = useState<any[]>([])
+  const [chainVarietes,     setChainVarietes]     = useState<ChainVariete[]>([])
   const [loading,       setLoading]       = useState(true)
   const [refreshing,    setRefreshing]    = useState(false)
   const [period,        setPeriod]        = useState<Period>('6m')
@@ -664,6 +665,20 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
           return score(b) - score(a) || a.totalG0Kg - b.totalG0Kg
         })
       setAlerts(alertsList)
+
+      /* ── Lots BROUILLON proches du verrouillage automatique (30 j) ── */
+      const nowMs2 = Date.now()
+      const nearLock = lotsData.filter((l: any) => {
+        if (l.statutEdition === 'CONFIRME') return false
+        const created = l.createdAt ? new Date(l.createdAt).getTime() : null
+        if (!created || isNaN(created)) return false
+        const ageDays = (nowMs2 - created) / 86_400_000
+        return ageDays >= 23
+      }).map((l: any) => {
+        const ageDays = (nowMs2 - new Date(l.createdAt).getTime()) / 86_400_000
+        return { ...l, ageDays: Math.round(ageDays), daysLeft: Math.max(0, 30 - Math.round(ageDays)) }
+      }).sort((a: any, b: any) => a.daysLeft - b.daysLeft)
+      setBrouillonNearLock(nearLock)
 
     } catch { /* silencieux */ } finally {
       setLoading(false); setRefreshing(false)
@@ -899,6 +914,54 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
           )}
         </div>
       </div>
+
+      {/* ── Alerte verrouillage automatique BROUILLON ── */}
+      {!loading && brouillonNearLock.length > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="card-header">
+            <span className="card-title" style={{ color: '#b45309' }}>
+              <span className="card-title-icon" style={{ background: '#fffbeb' }}>
+                <Clock size={15} color="#b45309" />
+              </span>
+              Verrouillage automatique imminent
+            </span>
+            <span style={{ fontSize: 11, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 4, padding: '1px 7px', fontWeight: 600 }}>
+              {brouillonNearLock.length} lot{brouillonNearLock.length > 1 ? 's' : ''} concerné{brouillonNearLock.length > 1 ? 's' : ''}
+            </span>
+          </div>
+          <div style={{ padding: '4px 0 8px' }}>
+            <div style={{ padding: '0 20px 8px', fontSize: 11.5, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+              Ces lots sont en BROUILLON depuis ≥ 23 jours et seront verrouillés automatiquement à 30 jours d'inactivité.
+            </div>
+            {brouillonNearLock.map((l: any, i: number) => (
+              <div key={l.id ?? i} style={{
+                display: 'flex', alignItems: 'center', gap: 12, padding: '8px 20px',
+                borderTop: '1px solid var(--border)',
+                background: l.daysLeft <= 2 ? '#fef2f2' : '#fffbeb',
+              }}>
+                <span style={{
+                  fontFamily: 'var(--font-mono)', fontSize: 11, fontWeight: 700, color: 'var(--text-primary)',
+                  minWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {l.codeLot ?? `LOT-${l.id}`}
+                </span>
+                <span style={{ fontSize: 11.5, color: 'var(--text-muted)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {l.nomVariete ?? l.codeVariete ?? '—'}
+                  {l.generation?.codeGeneration ? ` · ${l.generation.codeGeneration}` : ''}
+                </span>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
+                  background: l.daysLeft <= 2 ? '#fecaca' : '#fde68a',
+                  color: l.daysLeft <= 2 ? '#dc2626' : '#92400e',
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}>
+                  {l.daysLeft === 0 ? 'Verrouillage aujourd\'hui' : `J−${l.daysLeft}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── Alertes G0 : stock critique / faible / ancienneté ── */}
       {!loading && alerts.length > 0 && (
