@@ -5,7 +5,7 @@ import {
   RefreshCw, Plus, Database, ArrowRight,
   Search, Filter, X, TrendingUp,
   Navigation, MapPin, Clock, Download,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Printer,
 } from 'lucide-react'
 import { api }             from '../../lib/api'
 import { endpoints }       from '../../lib/endpoints'
@@ -20,6 +20,7 @@ import { MapSemences }     from '../components/MapSemences'
 import { TD as D }         from '../../lib/tokens'
 import { downloadXlsx, formatDateForExport, type XlsxSheet } from '../../lib/exportUtils'
 import { GEN_CHART_COLORS } from '../../lib/constants'
+import { CampagneComparison } from './CampagneComparison'
 
 interface Props { roleKey: string; userSpecialisation?: string | null; userName?: string }
 
@@ -765,6 +766,7 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
   const [demandPeriod, setDemandPeriod] = useState<'1m' | '3m' | '6m' | '1a'>('3m')
   const [demandGen,    setDemandGen]    = useState<'all' | 'G1' | 'G3' | 'R2'>('all')
   const [critPopoverCode, setCritPopoverCode] = useState<string | null>(null)
+  const [lang, setLang] = useState<'fr' | 'en'>('fr')
 
   /* Stock filters */
   const [filterEspece,   setFilterEspece]   = useState('')
@@ -1210,6 +1212,46 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
   return (
     <div>
 
+      {isDirecteur && (
+        <style>{`
+          @media print {
+            .sidebar, .topbar, footer,
+            .session-warning-banner, .no-print { display: none !important; }
+            .main { padding: 0 !important; }
+            .page-content { padding: 0 !important; overflow: visible !important; }
+            .print-header-directeur { display: block !important; }
+            @page { margin: 15mm 18mm; size: A4 portrait; }
+            body { font-size: 11pt; color: #111; }
+          }
+        `}</style>
+      )}
+
+      {isDirecteur && (
+        <div className="print-header-directeur" style={{ display: 'none' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+            <div>
+              <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#555', marginBottom: 3 }}>
+                {lang === 'fr' ? 'Institut Sénégalais de Recherches Agricoles — CNRA Bambey' : 'Senegalese Institute of Agricultural Research — CNRA Bambey'}
+              </div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: '#111' }}>
+                {lang === 'fr' ? "Vue d'ensemble nationale — Chaîne semencière ISRA/CNRA" : 'National Overview — ISRA/CNRA Seed Chain'}
+              </div>
+              <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>
+                {lang === 'fr' ? 'Tableau de bord décisionnel · Toutes générations G0 → R2' : 'Decision Dashboard · All generations G0 → R2'}
+              </div>
+            </div>
+            <div style={{ textAlign: 'right', fontSize: 9, color: '#888' }}>
+              <div style={{ fontWeight: 600 }}>Sen Jiwu v0.1</div>
+              <div>
+                {lang === 'fr' ? 'Exporté le' : 'Exported on'}{' '}
+                {new Date().toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+              </div>
+            </div>
+          </div>
+          <hr style={{ border: 'none', borderTop: '2px solid #1d4ed8', marginBottom: 16 }} />
+        </div>
+      )}
+
       {/* ═══════════════ HERO BANNIÈRE ═══════════════ */}
       <div style={{
         marginBottom: 20,
@@ -1351,6 +1393,38 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
               >
                 <Download size={12} /> Export complet .xls
               </button>
+            )}
+            {isDirecteur && (
+              <>
+                <button
+                  className="no-print"
+                  onClick={() => window.print()}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
+                    border: '1px solid #d1d5db', background: '#f9fafb',
+                    fontSize: 12, fontWeight: 600, color: '#374151', fontFamily: D.body,
+                  }}
+                  title={lang === 'fr' ? 'Exporter en PDF' : 'Export as PDF'}
+                >
+                  <Printer size={12} />
+                  {lang === 'fr' ? 'Exporter PDF' : 'Export PDF'}
+                </button>
+                <button
+                  className="no-print"
+                  onClick={() => setLang(l => l === 'fr' ? 'en' : 'fr')}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 14px', borderRadius: 8, cursor: 'pointer',
+                    border: '1px solid #bfdbfe', background: '#eff6ff',
+                    fontSize: 12, fontWeight: 700, color: '#1d4ed8', fontFamily: D.body,
+                  }}
+                  title={lang === 'fr' ? 'Switch to English for international presentations' : 'Passer en français'}
+                >
+                  <span style={{ fontSize: 13 }}>{lang === 'fr' ? '🇬🇧' : '🇫🇷'}</span>
+                  {lang === 'fr' ? 'EN' : 'FR'}
+                </button>
+              </>
             )}
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -2886,6 +2960,8 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
           </div>
         )}
       </div>
+
+      {isDirecteur && <CampagneComparison lang={lang} />}
 
       <style>{`
         @keyframes spin      { to { transform: rotate(360deg); } }

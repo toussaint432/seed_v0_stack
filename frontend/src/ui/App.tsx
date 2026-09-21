@@ -27,7 +27,6 @@ import { Users }            from './pages/Users'
 import { CataloguePublic }  from './pages/CataloguePublic'
 import { Messages }            from './pages/Messages'
 import { Certifications }      from './pages/Certifications'
-import { DirecteurDashboard }  from './pages/DirecteurDashboard'
 import { BadgeProvider, useBadges } from '../lib/context/BadgeContext'
 import { Documentation }  from './pages/Documentation'
 import { PrivacyPolicy }  from './pages/PrivacyPolicy'
@@ -36,7 +35,7 @@ type Page =
   | 'dashboard' | 'varieties' | 'lots' | 'stocks' | 'orders'
   | 'certifications' | 'transfers' | 'campagnes' | 'sites'
   | 'mes-sites' | 'programs' | 'profile' | 'users' | 'catalogue'
-  | 'messages' | 'directeur'
+  | 'messages'
 
 /* ── Auth helpers ── */
 function getUserRoles(): string[] {
@@ -134,7 +133,6 @@ function getNavSections(roleKey: string): NavSection[] {
       return [
         { section: 'Décision', items: [
           { id: 'dashboard'  as Page, label: 'Tableau de bord',     icon: LayoutDashboard },
-          { id: 'directeur'  as Page, label: 'Vue nationale',       icon: BarChart2 },
           { id: 'lots'       as Page, label: 'Lots semenciers',     icon: Package },
           { id: 'varieties'  as Page, label: 'Variétés & Espèces',  icon: Leaf },
           { id: 'stocks'     as Page, label: 'Stocks',              icon: Warehouse },
@@ -164,7 +162,6 @@ const pageTitle: Record<Page, { title: string; sub: string }> = {
   users:          { title: 'Gestion des utilisateurs',     sub: 'Comptes et rôles de la plateforme' },
   catalogue:      { title: 'Catalogue des semences',       sub: 'Stocks R1/R2 disponibles chez les multiplicateurs' },
   messages:       { title: 'Messagerie',                   sub: 'Conversations directes avec vos partenaires' },
-  directeur:      { title: 'Tableau de bord',               sub: 'Indicateurs décisionnels — chaîne semencière ISRA/CNRA' },
 }
 
 const roleDescriptions: Record<string, string> = {
@@ -758,7 +755,7 @@ function AppAuthenticated() {
             <Route path="/users"          element={<Users          roleKey={user.roleKey} />} />
             <Route path="/catalogue"      element={<CataloguePublic roleKey={user.roleKey} token={keycloak.token || ''} onContacter={() => navigate('/messages')} />} />
             <Route path="/messages"       element={<Messages roleKey={user.roleKey} username={user.name} />} />
-            <Route path="/directeur"     element={currentRole === 'seed-directeur' || currentRole === 'seed-admin' ? <DirecteurDashboard roleKey={currentRole} /> : <Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
+            <Route path="/directeur"     element={<Navigate to="/dashboard" replace />} />
             <Route path="*"              element={<Navigate to={`/${allNavItems[0]?.id || 'dashboard'}`} replace />} />
           </Routes>
         </main>
