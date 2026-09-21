@@ -2910,6 +2910,8 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
         </>
       )}
 
+      {isDirecteur && <CampagneComparison lang={lang} />}
+
       {/* ══════════════════════════════════════════════════════
           CARTE AGRO-ÉCOLOGIQUE — rétractable
       ══════════════════════════════════════════════════════ */}
@@ -2960,8 +2962,6 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
           </div>
         )}
       </div>
-
-      {isDirecteur && <CampagneComparison lang={lang} />}
 
       <style>{`
         @keyframes spin      { to { transform: rotate(360deg); } }
