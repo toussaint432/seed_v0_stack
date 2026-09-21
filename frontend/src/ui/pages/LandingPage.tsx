@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type MouseEvent } from 'react'
 import { keycloak } from '../../lib/keycloak'
 import { TL as T } from '../../lib/tokens'
 
@@ -391,8 +391,8 @@ export function LandingPage() {
             fontFamily: T.body, transition: 'background 0.2s', opacity: loggingIn ? 0.7 : 1,
             flexShrink: 0,
           }}
-            onMouseEnter={e => { if (!loggingIn) (e.currentTarget as HTMLButtonElement).style.background = C.vertFonce }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.vert }}
+            onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => { if (!loggingIn) e.currentTarget.style.background = C.vertFonce }}
+            onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = C.vert }}
           >
             {loggingIn
               ? <div style={{ width: 13, height: 13, borderRadius: '50%', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', animation: 'lp-spin 0.7s linear infinite' }} />
@@ -447,8 +447,8 @@ export function LandingPage() {
               fontFamily: T.body, transition: 'background 0.2s, transform 0.2s',
               letterSpacing: '0.01em',
             }}
-              onMouseEnter={e => { if (!loggingIn) { (e.currentTarget as HTMLButtonElement).style.background = C.vertFonce; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)' } }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.vert; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)' }}
+              onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => { if (!loggingIn) { e.currentTarget.style.background = C.vertFonce; e.currentTarget.style.transform = 'translateY(-2px)' } }}
+              onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = C.vert; e.currentTarget.style.transform = 'translateY(0)' }}
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
               {t.heroCTA}
@@ -460,8 +460,8 @@ export function LandingPage() {
               fontSize: 15, fontWeight: 500, textDecoration: 'none', fontFamily: T.body,
               transition: 'border-color 0.2s, background 0.2s',
             }}
-              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'rgba(255,255,255,0.10)'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.7)' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.background = 'transparent'; (e.currentTarget as HTMLAnchorElement).style.borderColor = 'rgba(255,255,255,0.45)' }}
+              onMouseEnter={(e: MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.background = 'rgba(255,255,255,0.10)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.7)' }}
+              onMouseLeave={(e: MouseEvent<HTMLAnchorElement>) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.45)' }}
             >
               {t.heroScroll}
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 3v8M3 9l4 4 4-4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -681,8 +681,8 @@ export function LandingPage() {
               fontSize: 15, fontWeight: 600, cursor: loggingIn ? 'default' : 'pointer',
               fontFamily: T.body, transition: 'background 0.2s, transform 0.2s',
             }}
-              onMouseEnter={e => { if (!loggingIn) { (e.currentTarget as HTMLButtonElement).style.background = C.vertFonce; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)' } }}
-              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.vert; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)' }}
+              onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => { if (!loggingIn) { e.currentTarget.style.background = C.vertFonce; e.currentTarget.style.transform = 'translateY(-2px)' } }}
+              onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = C.vert; e.currentTarget.style.transform = 'translateY(0)' }}
             >
               {t.heroCTA}
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M3 7.5h9M8 4l3.5 3.5L8 11" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -708,8 +708,8 @@ export function LandingPage() {
             fontSize: 15, fontWeight: 700, cursor: loggingIn ? 'default' : 'pointer',
             fontFamily: T.body, transition: 'background 0.2s, transform 0.2s',
           }}
-            onMouseEnter={e => { if (!loggingIn) { (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.88)'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(-2px)' } }}
-            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = '#fff'; (e.currentTarget as HTMLButtonElement).style.transform = 'translateY(0)' }}
+            onMouseEnter={(e: MouseEvent<HTMLButtonElement>) => { if (!loggingIn) { e.currentTarget.style.background = 'rgba(255,255,255,0.88)'; e.currentTarget.style.transform = 'translateY(-2px)' } }}
+            onMouseLeave={(e: MouseEvent<HTMLButtonElement>) => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.transform = 'translateY(0)' }}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
             {t.ctaBtn}
@@ -796,8 +796,8 @@ export function LandingPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
                   {(links as string[]).map(l => (
                     <a key={l} href={l === t.fl4 ? '/privacy-policy' : l === t.fl5 ? '/terms' : l === t.fl6 ? '/documentation' : '#'} style={{ color: 'rgba(255,255,255,0.52)', textDecoration: 'none', fontSize: 13.5, transition: 'color 0.2s' }}
-                      onMouseEnter={e => (e.currentTarget.style.color = '#fff')}
-                      onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.52)')}
+                      onMouseEnter={(e: MouseEvent<HTMLAnchorElement>) => (e.currentTarget.style.color = '#fff')}
+                      onMouseLeave={(e: MouseEvent<HTMLAnchorElement>) => (e.currentTarget.style.color = 'rgba(255,255,255,0.52)')}
                     >{l}</a>
                   ))}
                 </div>
