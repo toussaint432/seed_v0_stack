@@ -59,7 +59,7 @@ pipeline {
           echo "Attente du démarrage des services..."
           for service in 18081 18082 18083 18084; do
             for i in $(seq 1 12); do
-              if curl -sf "http://localhost:${service}/actuator/health" | grep -q '"status":"UP"'; then
+              if curl -sf "http://host.docker.internal:${service}/actuator/health" | grep -q '"status":"UP"'; then
                 echo "Service :${service} UP"
                 break
               fi
