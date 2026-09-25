@@ -83,7 +83,7 @@ pipeline {
                        allowEmptyArchive: true
     }
     success {
-      echo "Déploiement Sen Jiwu réussi — version $(git rev-parse --short HEAD)"
+      sh 'echo "Déploiement Sen Jiwu réussi — version $(git rev-parse --short HEAD)"'
     }
     failure {
       echo "Pipeline échoué. Consulter les logs du stage en rouge."
