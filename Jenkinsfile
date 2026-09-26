@@ -4,7 +4,7 @@ pipeline {
   environment {
     JAVA_HOME  = tool(name: 'jdk21',   type: 'jdk')
     MAVEN_HOME = tool(name: 'maven3',  type: 'maven')
-    NODE_HOME  = tool(name: 'node22',  type: 'nodejs')
+    NODE_HOME  = tool(name: 'node26',  type: 'nodejs')
     PATH       = "${env.NODE_HOME}/bin:${env.MAVEN_HOME}/bin:${env.JAVA_HOME}/bin:${env.PATH}"
   }
 
