@@ -20,6 +20,12 @@
   <!-- ══ Panneau marque (gauche) ══════════════════════════════════════════ -->
   <div class="seed-brand">
 
+    <!-- Slideshow de fond -->
+    <div class="seed-bg-slider" aria-hidden="true">
+      <div class="seed-bg-slide seed-bg-slide--1"></div>
+      <div class="seed-bg-slide seed-bg-slide--2"></div>
+    </div>
+
     <!-- Éléments décoratifs SVG de fond -->
     <svg class="seed-deco-circles" viewBox="0 0 500 600" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <circle cx="420" cy="80"  r="180" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
@@ -98,9 +104,9 @@
 
       <!-- Footer -->
       <div class="seed-brand-footer">
-        <span>© ${.now?string("yyyy")} Sen Jiwu · République du Sénégal</span>
+        <img src="${url.resourcesPath}/img/logo-isra.png" alt="ISRA" class="seed-footer-isra-logo"/>
         <span class="seed-brand-footer-sep">·</span>
-        <span>v2.0</span>
+        <span>© ${.now?string("yyyy")} Sen Jiwu · ISRA / CNRA Bambey</span>
       </div>
 
     </div>
@@ -133,24 +139,7 @@
     </div>
     </#if>
 
-    <!-- Logo Sen Jiwu en haut du panneau droit -->
-    <div class="seed-panel-logo">
-      <div class="seed-panel-logo-mark">
-        <img src="${url.resourcesPath}/img/SENJIWU.png" alt="Sen Jiwu"/>
-      </div>
-      <div class="seed-panel-logo-text">
-        <strong>Sen Jiwu</strong>
-        <span>Plateforme semencière nationale — ISRA</span>
-      </div>
-    </div>
-
     <div class="seed-form-wrap">
-
-      <!-- Badge sécurité -->
-      <div class="seed-security-badge">
-        <span class="seed-security-dot"></span>
-        <span>Connexion sécurisée · OAuth 2.0 / PKCE</span>
-      </div>
 
       <!-- Carte principale -->
       <div class="seed-card">
@@ -160,9 +149,6 @@
 
         <!-- En-tête -->
         <div class="seed-card-header">
-          <div class="seed-card-logo-sm">
-            <img src="${url.resourcesPath}/img/SENJIWU.png" alt="Sen Jiwu"/>
-          </div>
           <div class="seed-card-greeting">Bienvenue sur Sen Jiwu</div>
           <h1 class="seed-card-title">
             <#nested "header">
