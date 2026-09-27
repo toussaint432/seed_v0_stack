@@ -32,7 +32,7 @@ import java.util.Map;
  *   seed-admin / seed-selector  → première org CNRA
  *   seed-upsemcl                → première org UPSEMCL
  *   seed-multiplicator          → première org MULTIPLICATEUR
- *   seed-quotataire             → première org OP
+ *   seed-quotataire             → première org QUOTATAIRE
  */
 @Component
 @RequiredArgsConstructor
@@ -47,7 +47,7 @@ public class UserSyncFilter extends OncePerRequestFilter {
         "seed-selector",      TypeOrganisation.CNRA,
         "seed-upsemcl",       TypeOrganisation.UPSEMCL,
         "seed-multiplicator", TypeOrganisation.MULTIPLICATEUR,
-        "seed-quotataire",    TypeOrganisation.AUTRE
+        "seed-quotataire",    TypeOrganisation.QUOTATAIRE
     );
 
     @Override
