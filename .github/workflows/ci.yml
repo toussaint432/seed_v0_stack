@@ -1,0 +1,102 @@
+name: CI Sen Jiwu
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  JAVA_VERSION: '21'
+  NODE_VERSION: '22'
+
+jobs:
+
+  # ── Job 1 : Build Backend (4 services en parallèle) ───────────────────────
+  backend:
+    name: Backend — Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: temurin
+          cache: maven
+
+      - name: Install seed-common
+        run: mvn -B install -DskipTests -q -f services/seed-common/pom.xml
+
+      - name: Build services (parallèle)
+        run: |
+          mvn -B -DskipTests package -q -f services/catalog-service/pom.xml &
+          mvn -B -DskipTests package -q -f services/lot-service/pom.xml     &
+          mvn -B -DskipTests package -q -f services/stock-service/pom.xml   &
+          mvn -B -DskipTests package -q -f services/order-service/pom.xml   &
+          wait
+
+      - name: Archive JARs
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-jars
+          path: services/*/target/*.jar
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── Job 2 : Build Frontend ─────────────────────────────────────────────────
+  frontend:
+    name: Frontend — Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix frontend
+
+      - name: Build
+        run: npm run build --prefix frontend
+
+      - name: Archive dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── Job 3 : Build Docker images (après backend + frontend) ────────────────
+  docker:
+    name: Docker — Build Images
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Docker BuildKit
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache layers Docker
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-
+
+      - name: Build toutes les images
+        env:
+          DOCKER_BUILDKIT: 1
+          COMPOSE_DOCKER_CLI_BUILD: 1
+        run: docker compose build --parallel
