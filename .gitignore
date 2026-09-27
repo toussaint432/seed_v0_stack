@@ -33,3 +33,8 @@ data/uploads/
 
 # Artefacts IDE DB Client (VSCode plugin) — générés localement, ne versionner pas
 .dbclient/
+
+# Fichiers internes de développement
+PROMPT_*.md
+CLAUDE.md
+.claude/
