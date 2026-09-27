@@ -2,17 +2,30 @@ import { useState, useEffect, useRef, type MouseEvent } from 'react'
 import { keycloak } from '../../lib/keycloak'
 import { TL as T } from '../../lib/tokens'
 
-import cultivateurBg from '../images/LandingPageImages/cultivateur.jpg'
-import stockChampBg  from '../images/LandingPageImages/stock-champ.jpg'
-import arachideChamp from '../images/LandingPageImages/arachide_champ.jpg'
-import arachideImg   from '../images/LandingPageImages/arachide-3.jpg'
-import milImg        from '../images/LandingPageImages/sorgho_nature.jpg'
-import sorghoImg     from '../images/LandingPageImages/Sorgho.jpg'
-import rizImg        from '../images/LandingPageImages/riz.jpg'
-import maisImg       from '../images/LandingPageImages/maïs_2.jpg'
-import sesameImg     from '../images/LandingPageImages/Sésame.jpg'
-import bleImg        from '../images/LandingPageImages/Blé_2.jpg'
-import whatsappIcon  from '../images/LandingPageImages/whatsapp_logo_1.png'
+import cultivateurBg  from '../images/LandingPageImages/cultivateur.jpg'
+import semenceBg      from '../images/LandingPageImages/SEMENCE.jpg'
+import seedBg         from '../images/LandingPageImages/seed.jpg'
+import champSemenceBg from '../images/LandingPageImages/champ_semence.jpg'
+import stockChampBg   from '../images/LandingPageImages/stock-champ.jpg'
+import arachideChamp  from '../images/LandingPageImages/arachide_champ.jpg'
+import arachideImg    from '../images/LandingPageImages/arachide-3.jpg'
+import bleImg         from '../images/LandingPageImages/blé.jpg'
+import fonioImg       from '../images/LandingPageImages/fonio.jpg'
+import maisImg        from '../images/LandingPageImages/maïs_2.jpg'
+import milImg         from '../images/LandingPageImages/sorgho_nature.jpg'
+import niebeImg       from '../images/LandingPageImages/niébé.jpg'
+import rizImg         from '../images/LandingPageImages/riz.jpg'
+import sesameImg      from '../images/LandingPageImages/Sésame.jpg'
+import sorghoImg      from '../images/LandingPageImages/Sorgho.jpg'
+import whatsappIcon   from '../images/LandingPageImages/whatsapp_logo_1.png'
+
+/* ── Slides hero ────────────────────────────────────────────────────────── */
+const HERO_SLIDES = [
+  { img: cultivateurBg,  pos: 'center 30%', overlay: 'rgba(0,0,0,0.50)' },
+  { img: semenceBg,      pos: 'center 55%', overlay: 'rgba(0,0,0,0.32)' },
+  { img: seedBg,         pos: 'center 40%', overlay: 'rgba(0,0,0,0.42)' },
+  { img: champSemenceBg, pos: 'center 35%', overlay: 'rgba(0,0,0,0.40)' },
+] as const
 
 /* ── Palette ISRA institutionnelle ──────────────────────────────────────── */
 const C = {
@@ -52,11 +65,14 @@ const I18N: Record<Lang, Record<string, string>> = {
     especesTitle: 'Nos espèces et variétés',
     especesDesc: "L'ensemble des espèces et variétés certifiées disponibles dans la chaîne semencière nationale — du G0 génétique au R2 commercial.",
     espArachide: 'Arachide', espArachideDesc: 'Variétés : Tosset, Taaru, Sunu Gaal, SRV 1-19, Raw Gadu, Fleur 11, Yaakar',
-    espMil: 'Mil',           espMilDesc: 'Variétés : Souna 3, Thialack 2, IBV 8004, ISMI 9507, IBV 8001, IBMV 8402, Gawane',
-    espSorgho: 'Sorgho',     espSorghoDesc: 'Variétés : CE145-66, Faourou, Payenne, Nganda, Darou',
-    espRiz: 'Riz',           espRizDesc: 'Variétés : BW 248-1, BR 51-46-5, BG 90-2, Dj 11-509, Sahel 108',
+    espBle: 'Blé',           espBleDesc: 'Variétés : Alioune, Amina, Dioufissa, Diré 15, Fanaye, Haby, Hamat, Pendao',
+    espFonio: 'Fonio',       espFonioDesc: 'Variétés : Fofana, Fonio bi, Niata',
     espMais: 'Maïs',         espMaisDesc: 'Variétés : Doo Mer, Gaaw Na, Goor Yomboul, Jaboot, Noor 96, Sooror, Xéewel Gi, Yaayi Séex',
-    espSesame: 'Sésame', espSesameDesc: 'Variétés : 32-15, 38-1-7, Akdeniz, Boureima, Diouffène, Isrita,Jaalgon 128,Namsubani, Niangballo, SN-403',
+    espMil: 'Mil',           espMilDesc: 'Variétés : Souna 3, Thialack 2, IBV 8004, ISMI 9507, IBV 8001, IBMV 8402, Gawane',
+    espNiebe: 'Niébé',       espNiebeDesc: 'Variétés : Leona, Mélakh, Mougne, Ndiambour, Pakau, Sam, Yacine',
+    espRiz: 'Riz',           espRizDesc: 'Variétés : BW 248-1, BR 51-46-5, BG 90-2, Dj 11-509, Sahel 108',
+    espSesame: 'Sésame',     espSesameDesc: 'Variétés : 32-15, 38-1-7, Akdeniz, Boureima, Diouffène, Isrita, Jaalgon 128, Namsubani, Niangballo, SN-403',
+    espSorgho: 'Sorgho',     espSorghoDesc: 'Variétés : CE145-66, Faourou, Payenne, Nganda, Darou',
     statsEyebrow: 'La filière en chiffres',
     s1l: 'Espèces certifiées', s2l: 'Générations tracées',
     s3l: 'Rôles acteurs',      s4l: 'Données certifiées',
@@ -131,12 +147,15 @@ const I18N: Record<Lang, Record<string, string>> = {
     especesEyebrow: 'Catalogue',
     especesTitle: 'Our species and varieties',
     especesDesc: "All certified species and varieties available in the national seed chain — from genetic G0 to commercial R2.",
-    espArachide: 'Groundnut', espArachideDesc: 'Varieties: 55-437, GH-119-20, Fleur 11, ISRA VB',
-    espMil: 'Millet',         espMilDesc: 'Varieties: Souna III, Thialack 2, IBV8004',
-    espSorgho: 'Sorghum',     espSorghoDesc: 'Varieties: CE145-66, Faourou, Grinkan',
-    espRiz: 'Rice',           espRizDesc: 'Varieties: Sahel 108, Sahel 202, Jaya',
-    espMais: 'Maize',         espMaisDesc: 'Varieties: Nianga 1, EVDT 97, Early Yellow',
-    espSesame: 'Sesame / Wheat', espSesameDesc: 'Varieties: Niger White, Yandev 55',
+    espArachide: 'Groundnut', espArachideDesc: 'Varieties: Tosset, Taaru, Sunu Gaal, SRV 1-19, Raw Gadu, Fleur 11, Yaakar',
+    espBle: 'Wheat',          espBleDesc: 'Varieties: Alioune, Amina, Dioufissa, Diré 15, Fanaye, Haby, Hamat, Pendao',
+    espFonio: 'Fonio',        espFonioDesc: 'Varieties: Fofana, Fonio bi, Niata',
+    espMais: 'Maize',         espMaisDesc: 'Varieties: Doo Mer, Gaaw Na, Goor Yomboul, Jaboot, Noor 96, Sooror, Xéewel Gi, Yaayi Séex',
+    espMil: 'Millet',         espMilDesc: 'Varieties: Souna 3, Thialack 2, IBV 8004, ISMI 9507, IBV 8001, IBMV 8402, Gawane',
+    espNiebe: 'Cowpea',       espNiebeDesc: 'Varieties: Leona, Mélakh, Mougne, Ndiambour, Pakau, Sam, Yacine',
+    espRiz: 'Rice',           espRizDesc: 'Varieties: BW 248-1, BR 51-46-5, BG 90-2, Dj 11-509, Sahel 108',
+    espSesame: 'Sesame',      espSesameDesc: 'Varieties: 32-15, 38-1-7, Akdeniz, Boureima, Diouffène, Isrita, Jaalgon 128, Namsubani, Niangballo, SN-403',
+    espSorgho: 'Sorghum',     espSorghoDesc: 'Varieties: CE145-66, Faourou, Payenne, Nganda, Darou',
     statsEyebrow: 'The industry in figures',
     s1l: 'Certified species', s2l: 'Traced generations',
     s3l: 'Actor roles',       s4l: 'Certified data',
@@ -219,12 +238,15 @@ function useCountUp(target: number, duration = 1500, active = false) {
    Composant principal
    ══════════════════════════════════════════════════════════════════════════ */
 export function LandingPage() {
-  const [lang, setLang]           = useState<Lang>('fr')
-  const [scrolled, setScrolled]   = useState(false)
+  const [lang, setLang]                 = useState<Lang>('fr')
+  const [scrolled, setScrolled]         = useState(false)
   const [statsVisible, setStatsVisible] = useState(false)
-  const [openFAQ, setOpenFAQ]     = useState<number | null>(null)
-  const [loggingIn, setLoggingIn] = useState(false)
-  const statsRef = useRef<HTMLDivElement>(null)
+  const [openFAQ, setOpenFAQ]           = useState<number | null>(null)
+  const [loggingIn, setLoggingIn]       = useState(false)
+  const [heroSlide, setHeroSlide]       = useState(0)
+  const [heroPaused, setHeroPaused]     = useState(false)
+  const statsRef    = useRef<HTMLDivElement>(null)
+  const heroTimer   = useRef<ReturnType<typeof setInterval> | null>(null)
   const t = I18N[lang]
 
   useEffect(() => {
@@ -242,6 +264,26 @@ export function LandingPage() {
     return () => obs.disconnect()
   }, [])
 
+  useEffect(() => {
+    if (heroPaused) return
+    heroTimer.current = setInterval(
+      () => setHeroSlide(s => (s + 1) % HERO_SLIDES.length),
+      6000
+    )
+    return () => { if (heroTimer.current) clearInterval(heroTimer.current) }
+  }, [heroPaused])
+
+  const goToSlide = (i: number) => {
+    if (heroTimer.current) clearInterval(heroTimer.current)
+    setHeroSlide(i)
+    if (!heroPaused) {
+      heroTimer.current = setInterval(
+        () => setHeroSlide(s => (s + 1) % HERO_SLIDES.length),
+        6000
+      )
+    }
+  }
+
   const handleLogin = () => {
     setLoggingIn(true)
     setTimeout(() => keycloak.login(), 650)
@@ -256,7 +298,8 @@ export function LandingPage() {
         @keyframes lp-overlay-in{ from { opacity:0;transform:scale(1.02) } to { opacity:1;transform:scale(1) } }
         @keyframes lp-logo-float{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-6px) } }
         @keyframes lp-dot-pulse { 0%,80%,100%{ transform:scale(0);opacity:.4 } 40%{ transform:scale(1);opacity:1 } }
-        @keyframes lp-hero-fade { from{ opacity:0;transform:translateY(20px) } to{ opacity:1;transform:none } }
+        @keyframes lp-hero-fade  { from{ opacity:0;transform:translateY(20px) } to{ opacity:1;transform:none } }
+        @keyframes lp-ken-burns  { from{ transform:scale(1.0) } to{ transform:scale(1.07) } }
         .lp-nav-link:hover { color: ${C.vert} !important; }
         .lp-esp-card:hover .lp-esp-overlay { opacity: 1 !important; }
         .lp-esp-card:hover img { transform: scale(1.06); }
@@ -403,16 +446,29 @@ export function LandingPage() {
         </div>
       </header>
 
-      {/* ══ HERO — photo plein écran ══════════════════════════════════════ */}
-      <section style={{
-        position: 'relative',
-        minHeight: '100vh',
-        backgroundImage: `url(${cultivateurBg})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center 30%',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{ position: 'absolute', inset: 0, background: C.overlayDark }} />
+      {/* ══ HERO — slideshow plein écran ═════════════════════════════════ */}
+      <section
+        onMouseEnter={() => setHeroPaused(true)}
+        onMouseLeave={() => setHeroPaused(false)}
+        style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      >
+        {/* Couches photos crossfade + Ken Burns */}
+        {HERO_SLIDES.map((slide, i) => (
+          <div key={i} style={{ position: 'absolute', inset: 0, overflow: 'hidden', opacity: i === heroSlide ? 1 : 0, transition: 'opacity 1.4s ease-in-out' }}>
+            <div
+              key={i === heroSlide ? heroSlide : -i}
+              style={{
+                position: 'absolute', inset: 0,
+                backgroundImage: `url(${slide.img})`,
+                backgroundSize: 'cover',
+                backgroundPosition: slide.pos,
+                animation: i === heroSlide ? 'lp-ken-burns 7s ease-out both' : 'none',
+              }}
+            />
+          </div>
+        ))}
+        {/* Overlay adaptatif par slide */}
+        <div style={{ position: 'absolute', inset: 0, background: HERO_SLIDES[heroSlide].overlay, transition: 'background 1.4s ease-in-out' }} />
         <div style={{
           position: 'relative', zIndex: 2, textAlign: 'center',
           maxWidth: 820, padding: '0 28px',
@@ -468,6 +524,23 @@ export function LandingPage() {
             </a>
           </div>
         </div>
+        {/* Indicateurs de slide — barres en bas à gauche */}
+        <div style={{ position: 'absolute', bottom: 80, left: 40, display: 'flex', gap: 6, zIndex: 10 }}>
+          {HERO_SLIDES.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => goToSlide(i)}
+              aria-label={`Image ${i + 1}`}
+              style={{
+                width: i === heroSlide ? 32 : 16,
+                height: 3, padding: 0, border: 'none', borderRadius: 2, cursor: 'pointer',
+                background: i === heroSlide ? '#fff' : 'rgba(255,255,255,0.38)',
+                transition: 'width 0.35s ease, background 0.35s ease',
+              }}
+            />
+          ))}
+        </div>
+
         {/* Partenaires — bas du hero */}
         <div style={{ position: 'absolute', bottom: 32, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '10px 24px', borderRadius: 8, background: 'rgba(0,0,0,0.30)', backdropFilter: 'blur(8px)' }}>
@@ -531,11 +604,14 @@ export function LandingPage() {
           <div className="lp-esp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
             {[
               { img: arachideImg, name: t.espArachide, desc: t.espArachideDesc },
-              { img: milImg,      name: t.espMil,      desc: t.espMilDesc },
-              { img: sorghoImg,   name: t.espSorgho,   desc: t.espSorghoDesc },
-              { img: rizImg,      name: t.espRiz,      desc: t.espRizDesc },
+              { img: bleImg,      name: t.espBle,      desc: t.espBleDesc },
+              { img: fonioImg,    name: t.espFonio,    desc: t.espFonioDesc },
               { img: maisImg,     name: t.espMais,     desc: t.espMaisDesc },
+              { img: milImg,      name: t.espMil,      desc: t.espMilDesc },
+              { img: niebeImg,    name: t.espNiebe,    desc: t.espNiebeDesc },
+              { img: rizImg,      name: t.espRiz,      desc: t.espRizDesc },
               { img: sesameImg,   name: t.espSesame,   desc: t.espSesameDesc },
+              { img: sorghoImg,   name: t.espSorgho,   desc: t.espSorghoDesc },
             ].map(({ img, name, desc }) => (
               <EspeceCard key={name} img={img} name={name} desc={desc} />
             ))}
@@ -556,7 +632,7 @@ export function LandingPage() {
           <SectionLabel text={t.statsEyebrow} dark />
           <div className="lp-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 48, marginTop: 40 }}>
             {[
-              { n: 6,   suffix: '',  label: t.s1l },
+              { n: 9,   suffix: '',  label: t.s1l },
               { n: 7,   suffix: '',  label: t.s2l },
               { n: 6,   suffix: '',  label: t.s3l },
               { n: 100, suffix: '%', label: t.s4l },
