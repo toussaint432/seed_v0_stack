@@ -11,7 +11,7 @@
 [![DB](https://img.shields.io/badge/Database-PostgreSQL%2016--alpine-336791?style=flat-square&logo=postgresql)](https://postgresql.org)
 [![Broker](https://img.shields.io/badge/Broker-Apache%20Kafka%207.6-231F20?style=flat-square&logo=apachekafka)](https://kafka.apache.org)
 [![Deploy](https://img.shields.io/badge/Deploy-Docker%20Compose-2496ED?style=flat-square&logo=docker)](https://docs.docker.com/compose)
-[![CI](https://img.shields.io/badge/CI%2FCD-Jenkins%20Pipeline-D24939?style=flat-square&logo=jenkins)](https://www.jenkins.io)
+[![CI](https://github.com/toussaint432/seed_v0_stack/actions/workflows/ci.yml/badge.svg)](https://github.com/toussaint432/seed_v0_stack/actions/workflows/ci.yml)
 
 ---
 
@@ -144,7 +144,7 @@ Les migrations Flyway sont gérées exclusivement par `catalog-service` ; la tab
 | Conteneurisation | Docker + Docker Compose | Engine 26 / Compose v2 |
 | Génération PDF | iText / PDFBox (Spring) | — |
 | Monitoring | Prometheus + Grafana + Alertmanager | 2.52 / 10.4.3 |
-| CI/CD | Jenkins (Pipeline-as-Code, Jenkinsfile) | — |
+| CI/CD | GitHub Actions (`.github/workflows/ci.yml`) | — |
 
 ---
 
@@ -576,7 +576,8 @@ La formule et la norme sont affichées en rappel contextuel dans le formulaire d
 
 ```
 seed_v0_stack/
-├── Jenkinsfile                     # Pipeline CI/CD déclaratif (Pipeline-as-Code)
+├── Jenkinsfile                     # Ancien pipeline Jenkins (remplacé par GitHub Actions)
+├── .github/workflows/ci.yml       # Pipeline CI GitHub Actions — backend + frontend + docker
 ├── frontend/
 │   ├── .dockerignore               # Exclut node_modules, .git, .env du contexte Docker
 │   ├── Dockerfile                  # node:20-alpine + npm ci (build déterministe)
@@ -734,60 +735,48 @@ cd services/catalog-service && mvn spring-boot:run
 
 ---
 
-## Pipeline CI/CD — Jenkins
+## Pipeline CI/CD — GitHub Actions
 
-Le fichier `Jenkinsfile` à la racine du projet définit le pipeline de manière déclarative (**Pipeline-as-Code**) : le pipeline est versionné dans Git, auditable, et reproductible sur n'importe quel serveur Jenkins.
+Le fichier `.github/workflows/ci.yml` définit le pipeline d'intégration continue. GitHub Actions est déclenché automatiquement à chaque push ou pull request vers `main` — aucun serveur CI à maintenir.
 
-### Prérequis Jenkins
-
-- JDK 21 installé et configuré dans Jenkins sous le nom `jdk21` *(Jenkins → Manage → Tools → JDK)*
-- Docker Engine accessible depuis l'agent Jenkins (`/var/run/docker.sock` monté)
-- Node.js disponible sur l'agent (pour `npm ci`)
-
-### Stages du pipeline
+### Architecture du pipeline
 
 ```
-Checkout
-    │
-    ▼
-Install seed-common          ← séquentiel (dépendance Maven locale)
-    │
-    ▼
-Build Backend ─────────────────────────────────────────┐
-    │   catalog-service (parallel)                      │
-    │   lot-service     (parallel)                      │ mvn -B -DskipTests package
-    │   stock-service   (parallel)                      │
-    │   order-service   (parallel)  ────────────────────┘
-    │
-    ▼
-Build Frontend               ← npm ci && npm run build
-    │
-    ▼
-Docker Build                 ← docker compose build --parallel
-    │
-    ▼
-Deploy                       ← docker compose up -d
-    │
-    ▼
-Smoke Test                   ← curl /actuator/health sur :18081-18084
+push / pull_request → main
+          │
+          ├─────────────────────────────────────┐
+          ▼                                     ▼
+    Job : backend                        Job : frontend
+    (ubuntu-latest, 7 GB RAM)            (ubuntu-latest, 7 GB RAM)
+          │                                     │
+    Java 21 Temurin + cache Maven        Node 22 + cache npm
+          │                                     │
+    Install seed-common (séquentiel)     npm ci --prefix frontend
+          │                                     │
+    Build 4 services en parallèle (&)    npm run build --prefix frontend
+    catalog · lot · stock · order              │
+          │                              Archive dist/ (7 jours)
+    Archive JARs (7 jours)
+          │                                     │
+          └──────────────┬──────────────────────┘
+                         ▼
+                   Job : docker
+                   (needs: backend + frontend)
+                         │
+                   Docker BuildKit + cache layers
+                         │
+                   docker compose build --parallel
 ```
 
 **Pourquoi `seed-common` est séquentiel ?** Les 4 services en dépendent comme module Maven local (non publié sur Maven Central). Il doit être installé dans `~/.m2` avant que les builds parallèles ne démarrent — sinon chaque service échoue sur `Could not resolve dependency: sn.isra.seed:seed-common`.
 
 **Pourquoi `npm ci` et non `npm install` ?** `npm ci` échoue si `package-lock.json` est désynchronisé, garantissant que le build de CI est identique au build local (12-Factor App §IV).
 
-### Déclenchement du pipeline
+### Déclenchement
 
-En développement local, Jenkins peut interroger GitHub par **polling** (pas besoin de Ngrok) :
+Le pipeline se déclenche nativement via webhook GitHub à chaque `git push` — aucune configuration supplémentaire requise. Les artifacts (JARs + dist/) sont conservés 7 jours dans l'onglet Actions et téléchargeables.
 
-```groovy
-// À ajouter dans le Jenkinsfile si polling activé
-triggers {
-  pollSCM('H/5 * * * *')   // toutes les 5 minutes
-}
-```
-
-> En production sur un serveur public, les **webhooks GitHub** sont à privilégier pour une réaction immédiate au push (plus économe et réactif que le polling).
+> Le fichier `Jenkinsfile` est conservé à la racine pour référence historique. Le pipeline actif est `.github/workflows/ci.yml`.
 
 ---
 
@@ -851,7 +840,8 @@ triggers {
 - [x] Keycloak healthcheck sur `/health/ready:9000` (port management dédié)
 - [x] Cascade `service_healthy` : tous les services attendent Keycloak opérationnel
 - [x] `SWAGGER_ENABLED: false` sur les 4 microservices (surface d'attaque réduite)
-- [x] Jenkinsfile corrigé : `jdk21`, stage `seed-common` séquentiel, Deploy, Smoke Test fonctionnel
+- [x] Migration CI/CD Jenkins local → **GitHub Actions** (`.github/workflows/ci.yml`) — runners Ubuntu 7 GB RAM, déclenchement webhook natif, gratuit, zéro maintenance serveur
+- [x] Pipeline GitHub Actions : 3 jobs parallèles (backend Java 21 + frontend Node 22 + docker), cache Maven/npm, build services en parallèle (`&` + `wait`), artifacts archivés 7 jours
 
 ### Réalisé (Sécurité — Gestion Keycloak)
 - [x] Séparation structure / secrets : `realm-seed-v0.json` versionné sans aucun mot de passe
@@ -867,7 +857,7 @@ triggers {
 - [ ] Réseaux Docker explicites (`seed-backend`, `seed-monitoring`) — isolation réseau inter-services
 - [ ] Frontend : `nginx:alpine` + `npm run build` statique (remplace le serveur Vite de développement)
 - [ ] Keycloak : `start-dev` → `start` avec TLS activé (mode production)
-- [ ] Jenkins : `pollSCM` → webhooks GitHub (avec serveur public ou tunnel sécurisé)
+- [ ] CD GitHub Actions : push images vers ghcr.io + déploiement SSH sur serveur ISRA (après acquisition serveur)
 
 ### À venir (Performance & Scalabilité — OS8 / OS9)
 - [ ] Tests de charge formels avec k6 ou JMeter sur les endpoints critiques (< 200ms objectif)
