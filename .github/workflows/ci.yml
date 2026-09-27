@@ -1,25 +1,51 @@
+# ============================================================
+# Pipeline CI — Sen Jiwu
+# Ce fichier décrit l'intégration continue du projet.
+# GitHub lit automatiquement tous les fichiers dans
+# .github/workflows/ et exécute les jobs définis ici.
+# ============================================================
 name: CI Sen Jiwu
 
+# ------------------------------------------------------------
+# DÉCLENCHEURS : quand ce pipeline doit-il s'exécuter ?
+# ------------------------------------------------------------
 on:
   push:
-    branches: [main]
+    branches: [main]         # À chaque push sur la branche main
   pull_request:
-    branches: [main]
+    branches: [main]         # À chaque Pull Request vers main
 
+# ------------------------------------------------------------
+# VARIABLES GLOBALES : réutilisées dans tous les jobs
+# Modifier ici suffit pour changer la version partout
+# ------------------------------------------------------------
 env:
   JAVA_VERSION: '21'
   NODE_VERSION: '22'
 
+# ------------------------------------------------------------
+# JOBS : unités de travail indépendantes
+# Chaque job tourne sur une machine virtuelle Ubuntu (runner)
+# fournie par GitHub avec 7 GB de RAM — gratuit
+# ------------------------------------------------------------
 jobs:
 
-  # ── Job 1 : Build Backend (4 services en parallèle) ───────────────────────
+  # ==========================================================
+  # JOB 1 — BACKEND
+  # Compile les 4 microservices Spring Boot en JARs
+  # ==========================================================
   backend:
     name: Backend — Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest   # Machine virtuelle Ubuntu fournie par GitHub
 
     steps:
+
+      # Étape 1 : Cloner le dépôt sur la machine virtuelle
       - uses: actions/checkout@v4
 
+      # Étape 2 : Installer Java 21 (distribution Temurin = Eclipse OpenJDK)
+      # "cache: maven" conserve ~/.m2 entre les runs → évite de retélécharger
+      # les dépendances Maven à chaque exécution (gain ~1-2 min)
       - name: Setup Java ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
@@ -27,9 +53,22 @@ jobs:
           distribution: temurin
           cache: maven
 
+      # Étape 3 : Installer seed-common EN PREMIER
+      # seed-common est la librairie partagée dont dépendent les 4 services.
+      # Elle doit être dans le dépôt Maven local (~/.m2) avant de compiler
+      # les autres services, sinon Maven ne la trouve pas → erreur de build.
       - name: Install seed-common
         run: mvn -B install -DskipTests -q -f services/seed-common/pom.xml
+        # -B       : mode non-interactif (batch), adapté à la CI
+        # -DskipTests : saute les tests unitaires pour aller plus vite
+        # -q       : mode silencieux (quiet), réduit les logs
+        # -f       : spécifie le pom.xml du module à compiler
 
+      # Étape 4 : Compiler les 4 services EN PARALLÈLE
+      # Le "&" après chaque commande la lance en arrière-plan (processus fils).
+      # "wait" attend que TOUS les processus fils soient terminés.
+      # Si l'un échoue, "wait" retourne un code d'erreur → le job échoue.
+      # Résultat : les 4 builds tournent simultanément → gain de temps.
       - name: Build services (parallèle)
         run: |
           mvn -B -DskipTests package -q -f services/catalog-service/pom.xml &
@@ -38,22 +77,36 @@ jobs:
           mvn -B -DskipTests package -q -f services/order-service/pom.xml   &
           wait
 
+      # Étape 5 : Archiver les JARs produits
+      # "upload-artifact" stocke les fichiers produits pendant 7 jours.
+      # Ils seront téléchargeables depuis l'onglet Actions sur GitHub,
+      # et réutilisables par un futur job de déploiement sans recompiler.
       - name: Archive JARs
         uses: actions/upload-artifact@v4
         with:
           name: backend-jars
-          path: services/*/target/*.jar
-          if-no-files-found: error
-          retention-days: 7
+          path: services/*/target/*.jar   # Tous les JARs de tous les services
+          if-no-files-found: error        # Échoue si aucun JAR trouvé
+          retention-days: 7              # Supprimé automatiquement après 7 jours
 
-  # ── Job 2 : Build Frontend ─────────────────────────────────────────────────
+  # ==========================================================
+  # JOB 2 — FRONTEND
+  # Compile l'application React + TypeScript en fichiers statiques
+  # Ce job tourne EN PARALLÈLE avec le job backend (indépendant)
+  # ==========================================================
   frontend:
     name: Frontend — Build
     runs-on: ubuntu-latest
 
     steps:
+
+      # Étape 1 : Cloner le dépôt
       - uses: actions/checkout@v4
 
+      # Étape 2 : Installer Node.js 22
+      # "cache: npm" conserve node_modules entre les runs.
+      # "cache-dependency-path" : GitHub utilise le hash de package-lock.json
+      # comme clé de cache → si le fichier change, le cache est invalidé.
       - name: Setup Node ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
@@ -61,12 +114,24 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
+      # Étape 3 : Installer les dépendances npm
+      # "npm ci" (clean install) est préféré à "npm install" en CI :
+      # - installe exactement ce qui est dans package-lock.json
+      # - supprime node_modules avant d'installer → reproductible
+      # "--prefix frontend" : exécute la commande dans le dossier frontend/
       - name: Install dependencies
         run: npm ci --prefix frontend
 
+      # Étape 4 : Compiler le frontend
+      # Vite transpile TypeScript → JavaScript, bundlise, optimise.
+      # Le résultat est dans frontend/dist/ (fichiers HTML/CSS/JS statiques)
       - name: Build
         run: npm run build --prefix frontend
 
+      # Étape 5 : Archiver le dossier dist/
+      # Comme pour les JARs, dist/ est stocké 7 jours.
+      # Un futur job de déploiement pourra le récupérer et le servir
+      # via Nginx ou un CDN sans avoir à recompiler.
       - name: Archive dist
         uses: actions/upload-artifact@v4
         with:
@@ -75,18 +140,34 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # ── Job 3 : Build Docker images (après backend + frontend) ────────────────
+  # ==========================================================
+  # JOB 3 — DOCKER
+  # Construit toutes les images Docker du projet
+  # "needs" signifie que ce job attend que les 2 autres réussissent.
+  # Si backend OU frontend échoue → ce job est annulé automatiquement.
+  # ==========================================================
   docker:
     name: Docker — Build Images
     runs-on: ubuntu-latest
-    needs: [backend, frontend]
+    needs: [backend, frontend]   # Dépendance explicite sur les 2 jobs précédents
 
     steps:
+
+      # Étape 1 : Cloner le dépôt (chaque job repart d'une machine vierge)
       - uses: actions/checkout@v4
 
+      # Étape 2 : Activer Docker BuildKit
+      # BuildKit est le moteur de build Docker moderne.
+      # Avantages : builds en parallèle, meilleure gestion du cache,
+      # build multi-plateforme (ARM/x86). Remplace l'ancien builder Docker.
       - name: Setup Docker BuildKit
         uses: docker/setup-buildx-action@v3
 
+      # Étape 3 : Mettre en cache les layers Docker
+      # Les layers Docker sont les couches de l'image (FROM, RUN, COPY...).
+      # Les stocker évite de les reconstruire si le Dockerfile n'a pas changé.
+      # "key" : identifiant unique basé sur l'OS + le hash du commit (github.sha)
+      # "restore-keys" : si le cache exact n'existe pas, utilise le plus récent
       - name: Cache layers Docker
         uses: actions/cache@v4
         with:
@@ -95,6 +176,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-buildx-
 
+      # Étape 4 : Builder toutes les images Docker
+      # "docker compose build --parallel" construit toutes les images
+      # définies dans docker-compose.yml en parallèle.
+      # DOCKER_BUILDKIT=1 : active BuildKit pour docker compose également.
       - name: Build toutes les images
         env:
           DOCKER_BUILDKIT: 1
