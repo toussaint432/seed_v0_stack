@@ -51,7 +51,7 @@ const MAX_AUDIO_SIZE  = 2 * 1024 * 1024   // 2 Mo (audio)
 
 /* Labels rôles */
 const ROLE_LABELS: Record<string, string> = {
-  'seed-quotataire':    'Quotataire',
+  'seed-quotataire':    'Producteur agricole / OP',
   'seed-multiplicator': 'Multiplicateur',
   'seed-upsemcl':       'UPSemCL',
   'seed-selector':      'Sélectionneur',

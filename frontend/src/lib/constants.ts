@@ -29,7 +29,7 @@ export const ROLE_LABELS: Record<string, string> = {
   'seed-selector':      'Sélectionneur ISRA',
   'seed-upsemcl':       'UPSem-CL',
   'seed-multiplicator': 'Multiplicateur',
-  'seed-quotataire':    'Quotataire / OP',
+  'seed-quotataire':    'Producteur agricole / OP',
   'seed-admin':         'Administrateur ISRA',
 }
 
@@ -38,7 +38,7 @@ export const ROLE_LABELS_LONG: Record<string, string> = {
   'seed-selector':      'Sélectionneur ISRA/CNRA',
   'seed-upsemcl':       'Unité de Production UPSemCL',
   'seed-multiplicator': 'Multiplicateur Agréé',
-  'seed-quotataire':    'Distributeur / Quotataire',
+  'seed-quotataire':    'Producteur agricole / OP',
   'seed-admin':         'Administrateur',
 }
 

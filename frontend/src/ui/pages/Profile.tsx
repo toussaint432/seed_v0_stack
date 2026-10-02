@@ -16,7 +16,7 @@ const ROLE_INFO: Record<string, { label: string; color: string; bg: string; desc
   'seed-selector':      { label: 'Sélectionneur',       color: '#0369a1', bg: '#eff6ff', description: 'Gestion des variétés · création des lots G0/G1 · transfert vers UPSemCL', icon: '⬡' },
   'seed-upsemcl':       { label: 'UPSemCL',             color: '#0f766e', bg: '#f0fdfa', description: 'Réception G1 → multiplication G1→G3 → transfert G3 aux multiplicateurs', icon: '●' },
   'seed-multiplicator': { label: 'Multiplicateur',      color: '#15803d', bg: '#f0fdf4', description: 'Réception G3 → production G4→R1→R2 pour commercialisation', icon: '▲' },
-  'seed-quotataire':    { label: 'Quotataire / OP',     color: '#b45309', bg: '#fffbeb', description: 'Consultation du catalogue et passation de commandes de semences R2', icon: '■' },
+  'seed-quotataire':    { label: 'Producteur agricole / OP', color: '#b45309', bg: '#fffbeb', description: 'Consultation du catalogue et passation de commandes de semences R2', icon: '■' },
 }
 
 export function Profile({ roleKey }: Props) {
