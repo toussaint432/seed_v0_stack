@@ -113,7 +113,7 @@ const ROLE_LABELS: Record<string, string> = {
   'seed-selector':      'Sélectionneur',
   'seed-upsemcl':       'UPSemCL',
   'seed-multiplicator': 'Multiplicateur',
-  'seed-quotataire':    'Quotataire',
+  'seed-quotataire':    'Producteur agricole',
 }
 
 /* ── Icône utilisateur — personnage coloré par rôle ── */

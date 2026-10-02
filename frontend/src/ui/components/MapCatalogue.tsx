@@ -656,7 +656,7 @@ export function MapCatalogue({ catalogue, zones, selectedEspece, selectedZone, c
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>
                       {({
-                        'seed-quotataire':    'Quotataire / OP',
+                        'seed-quotataire':    'Producteur agricole / OP',
                         'seed-multiplicator': 'Multiplicateur agréé',
                         'seed-selector':      'Sélectionneur',
                         'seed-upsemcl':       'UPSemCL',

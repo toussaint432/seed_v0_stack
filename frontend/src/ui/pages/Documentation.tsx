@@ -63,7 +63,7 @@ const GENS = [
   { code: 'G3', label: 'Certif. C1',  color: '#15803d', bg: 'rgba(21,128,61,0.12)',  actor: 'UPSemCL' },
   { code: 'G4', label: 'Certif. C2',  color: '#b45309', bg: 'rgba(180,83,9,0.12)',   actor: 'Multiplicateur' },
   { code: 'R1', label: 'Reproductrice', color: '#c2410c', bg: 'rgba(194,65,12,0.12)', actor: 'Multiplicateur' },
-  { code: 'R2', label: 'Commerciale', color: '#c44536', bg: 'rgba(196,69,54,0.12)',  actor: 'Quotataire / OP' },
+  { code: 'R2', label: 'Commerciale', color: '#c44536', bg: 'rgba(196,69,54,0.12)',  actor: 'Producteur agricole / OP' },
 ]
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -278,7 +278,7 @@ export function Documentation() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 32 }}>
               {[
                 { n: '7', label: 'Générations tracées', sub: 'G0 → G1 → G2 → G3 → G4 → R1 → R2' },
-                { n: '6', label: 'Rôles acteurs', sub: 'Sélectionneur, UPSemCL, Multiplicateur, Quotataire, Directeur, Admin' },
+                { n: '6', label: 'Rôles acteurs', sub: 'Sélectionneur, UPSemCL, Multiplicateur, Producteur agricole, Directeur, Admin' },
                 { n: '17', label: 'Modules fonctionnels', sub: 'De la variété à la livraison' },
               ].map(s => (
                 <div key={s.label} style={{ padding: '20px 18px', borderRadius: 8, background: C.gris, border: `1px solid ${C.grisBord}` }}>
@@ -445,7 +445,7 @@ export function Documentation() {
                   actions: ['Gérer mes lots G4 / R1 / R2', 'Gérer mes sites de stockage', 'Suivre mon stock', 'Commandes G3 passées', 'Exprimer des besoins futurs'],
                 },
                 {
-                  role: 'Quotataire / OP', key: 'seed-quotataire', color: '#b45309',
+                  role: 'Producteur agricole / OP', key: 'seed-quotataire', color: '#b45309',
                   gens: 'R2', institution: 'OP / Distributeur',
                   desc: 'Consulte le catalogue des semences R2 certifiées disponibles (avec cartographie par zone agro-écologique). Passe des commandes directement auprès des multiplicateurs et suit leur livraison.',
                   actions: ['Consulter le catalogue R2', 'Passer des commandes R2', 'Suivre mes commandes', 'Accéder à la carte des stocks'],
@@ -495,7 +495,7 @@ export function Documentation() {
                 { mod: 'Variétés & Espèces',      icon: '🌱', desc: 'Référentiel variétal ISRA complet avec archivage traçable : chaque modification est horodatée avec l\'auteur, la raison et les valeurs avant/après.' },
                 { mod: 'Lots semenciers',         icon: '📦', desc: 'Cycle de vie complet G0→R2. Création de lot enfant depuis un lot parent, vue lineage (arbre d\'ascendance), génération de certificats PDF, audit trail.' },
                 { mod: 'Stock',                   icon: '🏭', desc: 'Inventaire par site et par organisation. Mouvements entrée / sortie / transfert. Isolation stricte : chaque acteur voit uniquement son propre stock.' },
-                { mod: 'Commandes',               icon: '🛒', desc: 'Passation de commandes G3 (UPSemCL → Multiplicateur) et R2 (Multiplicateur → Quotataire). Workflow complet : passation, confirmation, allocation, négociation, livraison, réception.' },
+                { mod: 'Commandes',               icon: '🛒', desc: 'Passation de commandes G3 (UPSemCL → Multiplicateur) et R2 (Multiplicateur → Producteur agricole). Workflow complet : passation, confirmation, allocation, négociation, livraison, réception.' },
                 { mod: 'Transferts',              icon: '🔄', desc: 'Transferts de lots entre organisations avec règles métier par génération. Création automatique du lot REC à l\'acceptation de la réception.' },
                 { mod: 'Certifications',          icon: '✅', desc: 'Contrôles qualité terrain et laboratoire. Certification officielle avec upload de document PDF. Statuts : En attente / Certifié / Rejeté.' },
                 { mod: 'Campagnes',               icon: '📅', desc: 'Gestion des campagnes agricoles (hivernale, contre-saison, irriguée). Les lots sont rattachés à une campagne pour le suivi annuel.' },

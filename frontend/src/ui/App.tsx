@@ -54,7 +54,7 @@ function getUserInfo() {
     'seed-selector':      { label: 'Sélectionneur',       color: '#0369a1' },
     'seed-upsemcl':        { label: 'UPSemCL',             color: '#0f766e' },
     'seed-multiplicator': { label: 'Multiplicateur',      color: '#15803d' },
-    'seed-quotataire':    { label: 'Quotataire / OP',     color: '#b45309' },
+    'seed-quotataire':    { label: 'Producteur agricole / OP', color: '#b45309' },
   }
   const roleKey  = Object.keys(roleMap).find(r => roles.includes(r)) || ''
   const roleInfo = roleMap[roleKey] || { label: 'Utilisateur', color: '#6b7280' }

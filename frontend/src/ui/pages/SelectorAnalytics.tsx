@@ -1296,7 +1296,7 @@ export function SelectorAnalytics({ userSpecialisation }: Props) {
                             <div style={{ flex: 1 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                                 <span style={{ fontSize: 10.5, fontWeight: 700, color: v.demandesR2.length > 0 ? C.R2 : 'var(--text-muted)' }}>R2</span>
-                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>→ Quotataires</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>→ Producteurs agricoles</span>
                                 {r2Total > 0 && (
                                   <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, color: C.R2, fontVariantNumeric: 'tabular-nums' }}>
                                     {fmtT(r2Total)}

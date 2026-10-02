@@ -20,7 +20,7 @@ const ROLES_PLATFORM = [
   { value: 'seed-selector',      label: 'Sélectionneur',       color: '#0369a1' },
   { value: 'seed-upsemcl',       label: 'UPSemCL',             color: '#0f766e' },
   { value: 'seed-multiplicator', label: 'Multiplicateur',      color: '#15803d' },
-  { value: 'seed-quotataire',    label: 'Quotataire / OP',     color: '#b45309' },
+  { value: 'seed-quotataire',    label: 'Producteur agricole / OP', color: '#b45309' },
 ]
 
 interface KcEvent {

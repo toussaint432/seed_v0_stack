@@ -48,7 +48,7 @@ const ROLE_CFG: Record<string, { color: string; label: string }> = {
   'seed-selector':      { color: '#0369a1', label: 'Sélectionneur' },
   'seed-upsemcl':       { color: '#0f766e', label: 'UPSemCL' },
   'seed-multiplicator': { color: '#15803d', label: 'Multiplicateur' },
-  'seed-quotataire':    { color: '#b45309', label: 'Quotataire / OP' },
+  'seed-quotataire':    { color: '#b45309', label: 'Producteur agricole / OP' },
 }
 
 /* ── Couleurs par génération ── */
@@ -86,7 +86,7 @@ const GREETINGS: Record<string, { title: string; sub: string }> = {
   'seed-selector':      { title: 'Vos lots G0 et G1',         sub: 'Gérez les semences génétiques avant transfert vers UPSemCL' },
   'seed-upsemcl':       { title: 'Centre de multiplication',  sub: 'Suivi des lots G1→G3 et gestion des stocks UPSemCL' },
   'seed-multiplicator': { title: 'Production G3→R2',          sub: 'Vos lots de multiplication et stocks disponibles' },
-  'seed-quotataire':    { title: 'Espace Quotataire',         sub: 'Consultez le catalogue et passez vos commandes de semences' },
+  'seed-quotataire':    { title: 'Espace Producteur agricole', sub: 'Consultez le catalogue et passez vos commandes de semences' },
 }
 
 const REFRESH_MS = 15_000
@@ -2430,7 +2430,7 @@ export function Dashboard({ roleKey, userSpecialisation, userName }: Props) {
                       {demandR2Total > 0 && (
                         <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-muted)' }}>
                           <span style={{ width: 8, height: 8, borderRadius: 2, background: GEN_COLOR.R2, display: 'inline-block', flexShrink: 0 }} />
-                          R2 → Quotataires · <strong style={{ color: GEN_COLOR.R2 }}>{fmtT(demandR2Total)}</strong>
+                          R2 → Producteurs agricoles · <strong style={{ color: GEN_COLOR.R2 }}>{fmtT(demandR2Total)}</strong>
                         </span>
                       )}
                     </>

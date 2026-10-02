@@ -258,7 +258,7 @@ export function MesSites({ roleKey }: Props) {
 
   const roleLabel = {
     'seed-multiplicator': 'Multiplicateur',
-    'seed-quotataire':    'Quotataire / OP',
+    'seed-quotataire':    'Producteur agricole / OP',
     'seed-upsemcl':       'UPSemCL',
     'seed-selector':      'Sélectionneur ISRA/CNRA',
   }[roleKey] ?? 'votre rôle'

@@ -52,7 +52,7 @@ function R2MonthChart({ data, periodLabel }: { data: MonthlyPoint[]; periodLabel
         <span style={{ fontSize: 10.5, color: 'var(--text-muted)' }}>{periodLabel}</span>
         <span style={{ fontSize: 10, background: `${GC.R2}14`, color: GC.R2,
           border: `1px solid ${GC.R2}35`, borderRadius: 99, padding: '1px 7px', fontWeight: 600 }}>
-          R2 → Quotataires
+          R2 → Producteurs agricoles
         </span>
       </div>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ overflow: 'visible', display: 'block' }}>
@@ -401,7 +401,7 @@ export function MultiplicateurAnalytics() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <TrendingUp size={16} color={GC.R2} />
           <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-            Activité commerciale R2 — Quotataires
+            Activité commerciale R2 — Producteurs agricoles
           </span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -464,7 +464,7 @@ export function MultiplicateurAnalytics() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
             <span className="card-title">
               <span className="card-title-icon"><TrendingUp size={14} /></span>
-              Commandes R2 reçues — Quotataires
+              Commandes R2 reçues — Producteurs agricoles
             </span>
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, background: 'var(--surface-2)', borderRadius: 8, padding: 3 }}>
               {(['1m','3m','6m','1a'] as const).map(p => (

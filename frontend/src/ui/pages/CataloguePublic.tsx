@@ -180,7 +180,7 @@ export function CataloguePublic({ roleKey, token, onContacter }: { roleKey: stri
   /* ── Ajout panier depuis la vue carte ── */
   function addToCartFromMap(lot: CatalogueItem, qty: number) {
     if (roleKey === 'seed-quotataire' && lot.generation !== 'R2') {
-      setOrderFeedback({ msg: 'En tant que Quotataire, vous ne pouvez commander que des semences R2. Ce lot est en ' + lot.generation + '.', type: 'error' })
+      setOrderFeedback({ msg: 'En tant que Producteur agricole, vous ne pouvez commander que des semences R2. Ce lot est en ' + lot.generation + '.', type: 'error' })
       return
     }
     if (cart.length > 0 && cart[0].organisationId && cart[0].organisationId !== lot.organisationId) {
